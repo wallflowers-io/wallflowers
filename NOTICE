@@ -1,0 +1,16 @@
+WallFlowers
+Copyright © 2026 Ralph Heward-Mills
+
+Licensed under the GNU Affero General Public License, version 3 or (at your option) any later
+version (LICENSE), except where a file or directory says otherwise. Those are:
+
+- core/vendor/mls-rs: mls-rs 0.55.4, Apache-2.0 OR MIT (LICENSE-APACHE, LICENSE-MIT); the change
+  from the published crate is in its CHANGES.
+- app/web/webapp/vendor/pdfjs: PDF.js, Apache-2.0 (its LICENSE).
+- app/web/resources/vendor: commonmark.js, BSD-2-Clause (commonmark.LICENSE).
+- app/web/webapp/brand/fonts: Asap Condensed and IBM Plex Mono, SIL Open Font License 1.1
+  (OFL-asap-condensed.txt, OFL-ibm-plex-mono.txt); app/web/docs/vendor/ibm-plex-mono, the same
+  (OFL.txt).
+
+The WallFlowers name, wordmark and icon, and the WallFlowers typeface (wallflowers-regular.woff2),
+are not licensed under the AGPL or any licence above. All rights reserved.

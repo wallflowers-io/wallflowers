@@ -1,0 +1,43 @@
+# boxoffice — the Arc's `/v1/box` plane: event-ticketing money machinery (Slice 2A).
+#
+# The central box office is STOPGAP infra by the relay precedent — nothing in the protocol
+# assumes a singleton. It registers listings (owner-signed, LWW by rev), opens rail checkout
+# sessions, verifies webhooks, and keeps the sessions/redemptions state the fulfillment
+# delegate (the embedded pacific-core node, Slice 2B) will drive. The payment rail is a SEAM
+# (`rail.rs`): Stripe first (`stripe.rs`, hand-rolled reqwest — deliberately NOT the
+# async-stripe crate, decision 7A), Toss/USDC later. See coordination/EVENT-TICKETING.txt.
+[package]
+name = "boxoffice"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "boxoffice"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.7"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# HTTPS to the rail (Stripe) — rustls, no system OpenSSL, matching the workspace transport.
+reqwest = { workspace = true }
+hex = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+# Webhook verification: HMAC-SHA256 over `{t}.{body}` (Stripe-Signature), constant-time compare.
+hmac = "0.12"
+sha2 = "0.10"
+# Owner/delegate request signatures on the signed routes (auth.rs).
+ed25519-dalek = "2"
+# PINNED TO MATCH pacific-core (see planes/land/Cargo.toml for the `links = "sqlite3"` story):
+# the workspace resolves exactly one libsqlite3-sys, so this must stay on 0.31 until
+# pacific-core moves. The pg migration is a deploy-time swap behind `store::Store`.
+rusqlite = { version = "0.31", features = ["bundled"] }
+# The deploy stamp (`boxoffice --version`). Zero deps; see lib/arc-build.
+arc-build = { workspace = true }
+
+[dev-dependencies]
+# Route-level tests drive the axum Router in-process (`oneshot`) — no sockets, no network.
+tower = { version = "0.5", features = ["util"] }

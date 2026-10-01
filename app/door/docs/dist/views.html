@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What you read · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html" aria-current="page">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>What you read</h1>
+<p class="lede"><code>GET /v2/graph</code> answers <code>{ me, objects, spine }</code>: who you are, every object you can read, and <code>spine</code>, which is always empty (<code>[]</code>) for a site.</p>
+<h2>Every object</h2>
+<table><thead><tr><th>Field</th><th></th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>The object's id, 64 hex characters.</td></tr>
+<tr><td><code>kind</code></td><td><code>group</code> (the community), <code>forum</code> (a room), <code>host</code> (its public page), <code>treasury</code>, …: see <a href="model.html">the model</a>.</td></tr>
+<tr><td><code>name</code></td><td>Its name: a room's name, the community's name.</td></tr>
+<tr><td><code>owner</code> · <code>members</code></td><td>Keys, 64 hex characters.</td></tr>
+<tr><td><code>peer</code> · <code>role</code></td><td>For a conversation between two people; <code>null</code> for everything a site reads.</td></tr>
+<tr><td><code>folds</code> · <code>why</code></td><td>Whether it could be read here, and if not, why.</td></tr>
+<tr><td><code>view</code></td><td>Its current state, by kind (below).</td></tr>
+</tbody></table>
+<p><strong>Keys.</strong> A key appears as 64 hex characters everywhere except <code>me.pk</code> (and <code>/v2/me</code>'s <code>pk</code>), which carry an <code>ed25519:</code> prefix. They are the same key: strip the prefix to compare (<code>pk.replace(/^ed25519:/, '')</code>).</p>
+<h2>An example</h2>
+<pre><code>{ "me": { "pk": "ed25519:9442…3a2e", "display_name": "Hana" },
+  "objects": [
+    { "id": "71c1…6a6c", "kind": "group", "name": "Mill Road Allotments", "owner": "9442…3a2e",
+      "members": ["9442…3a2e", "0224…b1f0"], "peer": null, "role": null, "folds": true, "why": null,
+      "view": { "display_name": "Mill Road Allotments", "shape": "community",
+                "parts": [ { "part": "3481…", "role": "room", "at": 1790600000000 } ],
+                "roles": [], "profiles": { "9442…3a2e": { "name": "Hana", "icon": null, "gen": 1 } },
+                "publication": { "slug": "mill-road", "publisher": "9442…3a2e" } } },
+    { "id": "3481…", "kind": "forum", "name": "General", "owner": "9442…3a2e",
+      "members": ["9442…3a2e", "0224…b1f0"], "peer": null, "role": null, "folds": true, "why": null,
+      "view": { "messages": [ { "author": "0224…b1f0", "gen": 1, "text": "Hello!", "ts": 1790600100000,
+                                "reply_to": null, "up": 0, "down": 0, "reactions": [] } ],
+                "parent": { "parent": "71c1…6a6c", "role": "room" } } } ],
+  "spine": [] }</code></pre>
+<div class="note"><p><code>folds: false</code> means the object couldn't be read on this device, and <code>why</code> says why. Show it as unavailable, never drop it silently.</p></div>
+<h2>The community (<code>kind: "group"</code>)</h2>
+<pre><code>{ "display_name": "Mill Road Allotments", "shape": "organisation",
+  "roles":   [ ["0224…", "admin"] ],
+  "offices": [ { "office": "treasurer", "holder": "…", "status": "accepted", "at": 1790… } ],
+  "parts":   [ { "part": "3481…", "role": "room", "at": … }, { "part": "c48a…", "role": "host", "at": … } ],
+  "membership": [ { "member": "…", "present": true, "tenures": [ … ] } ],
+  "profiles": { "&lt;member key&gt;": { "name": "Hana", "icon": { "mime": "image/webp", "data": "&lt;base64&gt;" } | null, "gen": 3 } },
+  "decisions": { … }, "face": { "look": { … }, … } | null }</code></pre>
+<p>The owner is the object's <code>owner</code>. <code>roles</code> lists who holds which role. The community's rooms are its <code>parts</code> with role <code>room</code>, in <code>at</code> order; a room that isn't in the graph isn't in the member's reach.</p>
+<h2>A room (<code>kind: "forum"</code>)</h2>
+<pre><code>{ "messages": [ { "author": "0224…", "gen": 12, "text": "…", "ts": 1790…,
+                  "reply_to": { "author": "…", "gen": 9 } | null,
+                  "up": 3, "down": 0, "reactions": [ ["❤️", 6, true], ["🌱", 3, false] ] } ],
+  "profiles": { … },
+  "parent": { "parent": "&lt;community&gt;", "role": "room" } }</code></pre>
+<p>A message is identified by <code>author</code> + <code>gen</code>. <code>ts</code> is milliseconds, 0 when not given. Each reaction is <code>[emoji, count, mine]</code>. The room's name is the object's <code>name</code>. A room's <code>profiles</code> also carries members who have left: merge it with the community's.</p>
+<h2>Names</h2>
+<p>A person's name is <code>profiles[key].name</code> from the community's or the room's view; your own is <code>me.display_name</code>. Anyone else without a card is <strong>New member</strong>. Never show a key as a name. A site reads cards and never writes one: members edit theirs at <code>https://app.wallflowers.io/#you</code>.</p>
+<h2>The page (<code>kind: "host"</code>) and the treasury</h2>
+<p>The page: <code>{ name, parent, publication, media: { mark | cover | logo | wallpaper: { mime, data } }, items }</code>. The treasury: <code>{ open, currency, balance, bands, deposits, settlements, … }</code>, amounts in the currency's smallest unit.</p>
+<p>Events and resources are linked to the community rather than part of it, so a member's session doesn't reach them: read them from the <a href="public.html">public page</a>.</p>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

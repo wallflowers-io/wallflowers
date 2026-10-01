@@ -1,0 +1,16 @@
+<h1>Start here</h1>
+<p class="lede">From nothing to a site whose members sign in, in order.</p>
+<h2>1. Make your community</h2>
+<p>At <a href="https://wallflowers.io/signup">wallflowers.io/signup</a>: what it is, its name and its address, {{SIGNUP_APP_STEP}}then your account. You are its owner. {{SIGNUP_NOTE}}</p>{{SIGNUP_APP_AFTER}}
+<p><strong>Keep your passkey safe.</strong> Save it in a synced password manager, or on your phone: a phone's passkey signs you in on any laptop, through the browser's option to use a phone (a QR code). A lost passkey can't be recovered on the web today: it means a new account.</p>
+<h2>2. Build on your machine</h2>
+{{START_LOCAL}}
+<h2>3. Put it on the web</h2>
+<p>Your site needs an <code>https</code> address. A hosting service gives you one; for a domain of your own, buy one at <a href="https://www.spaceship.com">Spaceship</a> and point it at your host. Then register that exact origin and its callback page (<a href="register.html">Register your app</a>). {{REG_TIMING}}</p>
+<h2 id="app-builders">Building with an app builder (Lovable, v0, Bolt)</h2>
+<ul>
+<li>If it lets you edit the page's code, add the <a href="signin.html">sign-in script</a> with its <code>integrity</code>, and make the calls as the <a href="quickstart.html">Quickstart</a> does.</li>
+<li>Sign in with your app open in its own tab. WallFlowers' sign-in window refuses to be shown inside a frame, and an editor's preview is a frame.</li>
+<li>The preview's address and the published one are different origins: register each one you sign in from.{{START_DEV_SCOPE}}</li>
+<li>Builders may add scripts of their own to your page (a badge, analytics). Anything on the page can use the member's session, so on pages where members sign in, keep only what you need (<a href="session.html#your-page">Your page's rules</a>).</li>
+</ul>

@@ -1,0 +1,1299 @@
+{
+ "at": "2026-09-30T09:46:28+00:00",
+ "from": "the test harness's machine",
+ "door": "38ad452c1dceee7d3d2c853fa2c370c811affe3c",
+ "where": "a rehearsal Door, a VM on the harness's machine",
+ "link": "loopback",
+ "link_detail": "direct to the VM's address",
+ "routes": [
+  {
+   "method": "GET",
+   "path": "/",
+   "n": 30,
+   "p50_ms": 0.6,
+   "p95_ms": 0.8,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.5,
+    "p95_ms": 1.9
+   },
+   "ttfb": {
+    "p50_ms": 0.5,
+    "p95_ms": 0.7
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/bundle",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "ANY",
+   "path": "/console/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "GET",
+   "path": "/door/face-mark",
+   "n": 30,
+   "p50_ms": 24.4,
+   "p95_ms": 27.8,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 15.6,
+    "p95_ms": 26.3
+   },
+   "ttfb": {
+    "p50_ms": 24.3,
+    "p95_ms": 27.6
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/face.css",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.3,
+    "p95_ms": 1.6
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/perf.js",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.2,
+    "p95_ms": 1.4
+   },
+   "ttfb": {
+    "p50_ms": 0.3,
+    "p95_ms": 0.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/pow-worker.js",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.2,
+    "p95_ms": 1.5
+   },
+   "ttfb": {
+    "p50_ms": 0.3,
+    "p95_ms": 0.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/return-path.js",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.2,
+    "p95_ms": 1.5
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/seal.js",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.2,
+    "p95_ms": 1.5
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/signin.css",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.2,
+    "p95_ms": 1.6
+   },
+   "ttfb": {
+    "p50_ms": 0.3,
+    "p95_ms": 0.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/signin.js",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.3,
+    "p95_ms": 1.5
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/wallflowers.png",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.2,
+    "p95_ms": 1.5
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/wordmark.svg",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.2,
+    "p95_ms": 1.4
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/i/bundle",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/end",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/forget",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "GET",
+   "path": "/i/key",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/open",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/prove",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/sign",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/signup",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/signup/finish",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "GET",
+   "path": "/index.html",
+   "n": 30,
+   "p50_ms": 0.6,
+   "p95_ms": 0.7,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.5,
+    "p95_ms": 1.9
+   },
+   "ttfb": {
+    "p50_ms": 0.5,
+    "p95_ms": 0.6
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/join",
+   "n": 30,
+   "p50_ms": 0.6,
+   "p95_ms": 0.8,
+   "status": 303,
+   "note": "a claim, not spent: its 303",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.4,
+    "p95_ms": 1.7
+   },
+   "ttfb": {
+    "p50_ms": 0.6,
+    "p95_ms": 0.7
+   },
+   "statuses": {
+    "303": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/signin",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.6,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.4,
+    "p95_ms": 1.6
+   },
+   "ttfb": {
+    "p50_ms": 0.3,
+    "p95_ms": 0.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/tether",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call: the Door and the Arc between themselves"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/admit",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call: the Door and the Arc between themselves"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/arc",
+   "n": 30,
+   "p50_ms": 0.8,
+   "p95_ms": 1.8,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.1,
+    "p95_ms": 2.2
+   },
+   "ttfb": {
+    "p50_ms": 0.7,
+    "p95_ms": 1.7
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v1/arcs",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "ANY",
+   "path": "/v1/box/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/bundle",
+   "n": 30,
+   "p50_ms": 20.2,
+   "p95_ms": 27.7,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 36.8,
+    "p95_ms": 46.8
+   },
+   "ttfb": {
+    "p50_ms": 20.1,
+    "p95_ms": 27.6
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "ANY",
+   "path": "/v1/console/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug",
+   "n": 30,
+   "p50_ms": 0.7,
+   "p95_ms": 3.1,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 0.8,
+    "p95_ms": 1.9
+   },
+   "ttfb": {
+    "p50_ms": 0.6,
+    "p95_ms": 3.0
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug/brand",
+   "n": 30,
+   "p50_ms": 0.8,
+   "p95_ms": 2.3,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.2,
+    "p95_ms": 2.8
+   },
+   "ttfb": {
+    "p50_ms": 0.7,
+    "p95_ms": 1.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug/door",
+   "n": 30,
+   "p50_ms": 1.1,
+   "p95_ms": 1.9,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.5,
+    "p95_ms": 4.1
+   },
+   "ttfb": {
+    "p50_ms": 0.9,
+    "p95_ms": 1.8
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug/escape",
+   "n": 30,
+   "p50_ms": 0.5,
+   "p95_ms": 1.3,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 0.9,
+    "p95_ms": 6.7
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 1.2
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug/items",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.6,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 0.7,
+    "p95_ms": 0.9
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug/m/:slot",
+   "n": 30,
+   "p50_ms": 42.7,
+   "p95_ms": 56.9,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 46.9,
+    "p95_ms": 65.4
+   },
+   "ttfb": {
+    "p50_ms": 42.6,
+    "p95_ms": 56.8
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v1/health",
+   "n": 30,
+   "p50_ms": 1.0,
+   "p95_ms": 1.2,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.3,
+    "p95_ms": 2.6
+   },
+   "ttfb": {
+    "p50_ms": 0.9,
+    "p95_ms": 1.1
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "ANY",
+   "path": "/v1/land/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/relay",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/signup",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call: the Door and the Arc between themselves"
+  },
+  {
+   "method": "ANY",
+   "path": "/v1/systems/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/version",
+   "n": 30,
+   "p50_ms": 0.6,
+   "p95_ms": 0.8,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.0,
+    "p95_ms": 2.4
+   },
+   "ttfb": {
+    "p50_ms": 0.5,
+    "p95_ms": 0.7
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "ANY",
+   "path": "/v1/wake/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "loopback",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "POST",
+   "path": "/v2/add",
+   "n": 5,
+   "p50_ms": 628.0,
+   "p95_ms": 665.2,
+   "status": 200,
+   "note": "the Arc added to a fresh object (minted before the clock); the add waits on that mint's write tail",
+   "auth": "cookie",
+   "link": "loopback",
+   "cold": {
+    "n": 2,
+    "p50_ms": 666.8,
+    "p95_ms": 718.2
+   },
+   "ttfb": {
+    "p50_ms": 628.0,
+    "p95_ms": 665.1
+   },
+   "statuses": {
+    "200": 7
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/apply",
+   "n": 30,
+   "p50_ms": 33.9,
+   "p95_ms": 37.4,
+   "status": 200,
+   "note": "forum.post in a room, by a site's token",
+   "auth": "dpop",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 34.2,
+    "p95_ms": 38.8
+   },
+   "ttfb": {
+    "p50_ms": 33.8,
+    "p95_ms": 37.3
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/batch",
+   "n": 10,
+   "p50_ms": 546.4,
+   "p95_ms": 586.2,
+   "status": 200,
+   "note": "a batch that mints pays its cost once per batch; measured on the webapp's session; a site's token reaches the same handler",
+   "auth": "cookie",
+   "link": "loopback",
+   "cold": {
+    "n": 3,
+    "p50_ms": 56.6,
+    "p95_ms": 561.1
+   },
+   "ttfb": {
+    "p50_ms": 546.3,
+    "p95_ms": 586.2
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/draft/:kind",
+   "n": 30,
+   "p50_ms": 0.7,
+   "p95_ms": 0.9,
+   "status": 200,
+   "note": "kind forum",
+   "auth": "dpop",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.7,
+    "p95_ms": 2.1
+   },
+   "ttfb": {
+    "p50_ms": 0.7,
+    "p95_ms": 0.9
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/events",
+   "n": 30,
+   "p50_ms": 1.7,
+   "p95_ms": 1.8,
+   "status": 200,
+   "note": "the stream, timed to its headers; a stream's connection closes with it, so each warm call opens one too",
+   "auth": "dpop",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.6,
+    "p95_ms": 1.9
+   },
+   "ttfb": {
+    "p50_ms": 1.7,
+    "p95_ms": 1.8
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/graph",
+   "n": 30,
+   "p50_ms": 4.2,
+   "p95_ms": 6.7,
+   "status": 200,
+   "note": "",
+   "auth": "dpop",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 5.7,
+    "p95_ms": 10.7
+   },
+   "ttfb": {
+    "p50_ms": 4.0,
+    "p95_ms": 5.1
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/icd",
+   "n": 30,
+   "p50_ms": 0.5,
+   "p95_ms": 0.6,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.4,
+    "p95_ms": 2.0
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/icd/:hash",
+   "n": 30,
+   "p50_ms": 0.5,
+   "p95_ms": 0.8,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.4,
+    "p95_ms": 1.7
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/join",
+   "n": 5,
+   "p50_ms": 420.1,
+   "p95_ms": 2300.4,
+   "status": 200,
+   "note": "each a new account with a fresh claim, made before the clock; the time is the Arc's admit (/v1/admit): about 0.4 s, or 2 to 3.4 s when it meets the Arc node's sync pass",
+   "auth": "cookie",
+   "link": "loopback",
+   "cold": {
+    "n": 2,
+    "p50_ms": 375.9,
+    "p95_ms": 449.0
+   },
+   "ttfb": {
+    "p50_ms": 420.0,
+    "p95_ms": 2300.4
+   },
+   "statuses": {
+    "200": 7
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/kinds",
+   "n": 30,
+   "p50_ms": 0.8,
+   "p95_ms": 1.0,
+   "status": 200,
+   "note": "",
+   "auth": "dpop",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.8,
+    "p95_ms": 2.1
+   },
+   "ttfb": {
+    "p50_ms": 0.7,
+    "p95_ms": 0.9
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/me",
+   "n": 30,
+   "p50_ms": 3.3,
+   "p95_ms": 3.6,
+   "status": 200,
+   "note": "",
+   "auth": "dpop",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 4.4,
+    "p95_ms": 4.7
+   },
+   "ttfb": {
+    "p50_ms": 3.3,
+    "p95_ms": 3.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/mint",
+   "n": 30,
+   "p50_ms": 279.7,
+   "p95_ms": 417.7,
+   "status": 200,
+   "note": "a group, by a site's token; a mint's cost grows with the objects the account already holds: make many objects in one /v2/batch, or send them concurrently, not one awaited mint after another",
+   "auth": "dpop",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 422.1,
+    "p95_ms": 573.7
+   },
+   "ttfb": {
+    "p50_ms": 279.6,
+    "p95_ms": 417.6
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signin",
+   "n": 10,
+   "p50_ms": 2.1,
+   "p95_ms": 2.8,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 3,
+    "p50_ms": 2.4,
+    "p95_ms": 2.8
+   },
+   "ttfb": {
+    "p50_ms": 2.1,
+    "p95_ms": 2.8
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/signin.js",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.3,
+    "p95_ms": 1.6
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signin/finish",
+   "n": 10,
+   "p50_ms": 189.0,
+   "p95_ms": 205.9,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 3,
+    "p50_ms": 178.9,
+    "p95_ms": 196.9
+   },
+   "ttfb": {
+    "p50_ms": 188.9,
+    "p95_ms": 205.7
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signout",
+   "n": 10,
+   "p50_ms": 52.4,
+   "p95_ms": 62.4,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; measured on the webapp's session; a site's token reaches the same handler; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 3,
+    "p50_ms": 52.3,
+    "p95_ms": 53.2
+   },
+   "ttfb": {
+    "p50_ms": 52.3,
+    "p95_ms": 62.3
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signup",
+   "n": 10,
+   "p50_ms": 6.0,
+   "p95_ms": 7.6,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 3,
+    "p50_ms": 6.2,
+    "p95_ms": 6.8
+   },
+   "ttfb": {
+    "p50_ms": 6.0,
+    "p95_ms": 7.5
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signup/continue",
+   "n": 10,
+   "p50_ms": 1.4,
+   "p95_ms": 1.9,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 3,
+    "p50_ms": 1.6,
+    "p95_ms": 2.3
+   },
+   "ttfb": {
+    "p50_ms": 1.3,
+    "p95_ms": 1.8
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signup/finish",
+   "n": 10,
+   "p50_ms": 114.4,
+   "p95_ms": 125.5,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 3,
+    "p50_ms": 109.5,
+    "p95_ms": 117.1
+   },
+   "ttfb": {
+    "p50_ms": 114.3,
+    "p95_ms": 125.4
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/site/address",
+   "n": 5,
+   "p50_ms": 532.6,
+   "p95_ms": 555.2,
+   "status": 200,
+   "note": "a fresh slug on a fresh Host (minted before the clock); measured on the webapp's session; a site's token reaches the same handler; the claim waits on that Host's write tail",
+   "auth": "cookie",
+   "link": "loopback",
+   "cold": {
+    "n": 2,
+    "p50_ms": 570.0,
+    "p95_ms": 611.5
+   },
+   "ttfb": {
+    "p50_ms": 532.6,
+    "p95_ms": 555.2
+   },
+   "statuses": {
+    "200": 7
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/token",
+   "n": 10,
+   "p50_ms": 1.9,
+   "p95_ms": 2.1,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 3,
+    "p50_ms": 1.8,
+    "p95_ms": 2.3
+   },
+   "ttfb": {
+    "p50_ms": 1.8,
+    "p95_ms": 2.1
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/work",
+   "n": 30,
+   "p50_ms": 0.4,
+   "p95_ms": 0.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "loopback",
+   "cold": {
+    "n": 10,
+    "p50_ms": 1.2,
+    "p95_ms": 1.5
+   },
+   "ttfb": {
+    "p50_ms": 0.4,
+    "p95_ms": 0.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  }
+ ]
+}

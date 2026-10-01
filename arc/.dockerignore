@@ -1,0 +1,21 @@
+# Keep the Arc image build context lean. Context root = arc/.
+.git/
+**/target/
+**/node_modules/
+**/.venv/
+**/.build/
+**/.pytest_cache/
+# Not image planes: src/node needs pacific-core (cross-repo); src/arc is the OS lib;
+# studio is a dev cockpit. The image builds only relay + console.
+src/arc/
+src/node/
+src/console/studio/
+library/
+# Research / prototype / heavy fixtures.
+_prototype/
+_futures/
+_research/
+docs_pacific/
+src/relay/research/
+src/console/dist/
+Van_Gogh_Color_Pie_Chart.jpg

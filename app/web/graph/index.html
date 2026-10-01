@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WallFlowers · the graph</title>
+<link rel="icon" href="brand/wallflowers-icon.svg">
+<!--
+  THE GRAPH — every node here came out of the core.
+
+  WallFlowers is a graph. Each node is an MLS GroupObject; each edge is a
+  relationship both of its objects declare. A person's WallFlowers is the
+  subgraph they are a member of. This page draws that graph and nothing else:
+  the nodes, the edges, the people, the actions and the refusals are all read
+  from `core-wasm` at runtime.
+
+  WHAT THIS PAGE MAY NOT DO, and does not:
+    · fold anything itself. `fold_archive` in the core folds; this draws.
+    · name a kind, an op, an opId or an authority of its own. Kinds come from
+      `ops_on()`, ops and their authority from the ICD-generated bindings.
+    · invent a node. With no archive loaded the graph holds ZERO nodes and says
+      so, because that is the true number today.
+-->
+<style>
+/* ── The type and the palette are the brand's, not this page's ─────────────
+   The marker face and the doorways palette are copied beside this page the way
+   mobile/ carries its own: same origin, one copy each, never edited here. The
+   family string stays "Wallflowers" because that is what @font-face declares and
+   the two have to agree. */
+@font-face{
+  font-family:"Wallflowers";
+  src:url("brand/wallflowers-regular.woff2") format("woff2");
+  font-weight:100 900; font-style:normal; font-display:swap;
+}
+:root{
+  /* doorways */
+  --rose:#E57D8B; --red:#EE826E; --amber:#E79D51; --yellow:#BEB34D;
+  --green:#469C48; --cyan:#418CB2; --blue:#0D6AAE; --magenta:#CF84A8;
+  --paper:#F0F0F2; --mist:#E5E4E2; --slate:#D6D6D8; --shadow:#CDCCCA;
+  --cream:#F7F4EC; --white:#FFFFFF;
+  --ink:#15181C; --ink2:#5C646E; --mute:#9AA1A9; --rule:#E4E6EA; --tint:#F4F6F8;
+
+  --marker:"Wallflowers",system-ui,sans-serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  /* the kinds take the doorways in order; graph.js reads these by name so the
+     palette lives in the brand's stylesheet and not in the script */
+  --k1:var(--blue); --k2:var(--green); --k3:var(--magenta); --k4:var(--amber);
+  --k5:var(--cyan); --k6:var(--rose); --k7:var(--yellow); --k8:var(--red);
+  --gold:#F2B314;              /* the brand's gold, for the one act that makes a person */
+
+  --line:var(--rule); --dim:var(--ink2); --fainter:var(--mute);
+  --ok:var(--green); --warn:var(--amber); --danger:var(--red);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--cream);color:var(--ink);overflow:hidden}
+body{font:400 12.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:var(--white);border:1px solid var(--rule);
+       border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--ink2);background:var(--tint)}
+button:disabled{cursor:not-allowed;opacity:.5}
+h2{font:400 15px var(--marker);letter-spacing:.02em;color:var(--ink);
+   margin:0;padding:10px 14px 8px;border-bottom:1px solid var(--rule);position:sticky;top:0;
+   background:var(--paper);z-index:2}
+h2 .n{float:right;color:var(--mute);font:400 11px var(--mono)}
+
+#app{display:grid;height:100%;
+     grid-template-columns:232px minmax(0,1fr) 336px;
+     grid-template-rows:auto minmax(0,1fr) auto;
+     grid-template-areas:"head head head" "people canvas fold" "actions actions actions"}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+header{grid-area:head;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+       padding:9px 14px;border-bottom:1px solid var(--rule);background:var(--white)}
+header .mark{display:block;height:19px;width:auto}
+header .grow{flex:1}
+header .sel{color:var(--ink2);font:400 12px var(--mono)}
+header .sel b{color:var(--blue);font:400 11px var(--marker);margin-right:4px}
+
+/* ── rails ──────────────────────────────────────────────────────────────── */
+#people{grid-area:people;border-right:1px solid var(--rule);background:var(--paper);overflow:auto}
+#fold{grid-area:fold;border-left:1px solid var(--rule);background:var(--paper);overflow:auto}
+#actions{grid-area:actions;border-top:1px solid var(--rule);background:var(--paper);
+         display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);max-height:31vh}
+#actions .half{overflow:auto;min-width:0}
+#actions .half + .half{border-left:1px solid var(--rule)}
+#actions h2 .n{font-size:10px}
+#creates{display:flex;flex-wrap:wrap;gap:7px;padding:11px 14px}
+.mk{display:inline-flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;
+    border:1px solid var(--rule);background:var(--white);border-radius:8px;padding:6px 10px;max-width:100%}
+.mk:hover:not(:disabled){border-color:var(--green);background:#F2F8F2}
+.mk .op{color:var(--ink);font:400 13px var(--marker)}
+.mk .why{font:400 10.5px var(--mono);color:var(--mute)}
+.mk:disabled{background:var(--tint)}
+.mk:disabled .op{color:var(--mute)}
+#canvasWrap{grid-area:canvas;position:relative;overflow:hidden;background:var(--cream)}
+#scroller{position:absolute;inset:0;overflow-x:auto;overflow-y:hidden}
+#overlay{position:absolute;inset:0;pointer-events:none}
+#overlay .anchor,#overlay .edgehit{pointer-events:auto}
+
+.row{display:flex;align-items:center;gap:10px;width:100%;
+     border-bottom:1px solid var(--rule);padding:8px 14px}
+.row:hover{background:var(--white)}
+.row.on{background:var(--white);box-shadow:inset 3px 0 0 var(--blue)}
+.row.tgt{box-shadow:inset 3px 0 0 var(--cyan)}
+.row .ego{flex:0 0 auto;width:15px;height:15px;border:1.5px solid var(--rule);border-radius:50%;
+     background:var(--white);padding:0;cursor:pointer}
+.row .ego:hover{border-color:var(--blue)}
+.row .ego[aria-checked="true"]{border-color:var(--blue);
+     background:radial-gradient(circle,var(--blue) 0 3.5px,var(--white) 4px)}
+.row .who{flex:1 1 auto;text-align:left;border:0;background:none;padding:0;cursor:pointer;
+     min-width:0}
+.row .nm{color:var(--ink);font:400 14px var(--marker)}
+.row .nm.anon{color:var(--mute);font-style:italic}
+.row .tail{color:var(--mute);font:400 11px var(--mono)}
+.row .sub{color:var(--ink2);font-size:11px}
+.badge{color:var(--ink2);font:400 12px var(--marker);margin-left:4px}
+
+.empty{padding:14px;color:var(--mute);font:400 12px var(--mono)}
+.mint{padding:10px 14px;border-bottom:1px solid var(--rule)}
+.mintrow{display:flex;gap:6px}
+button.gold{background:var(--gold);border-color:var(--gold);color:var(--ink);
+            font:400 14px var(--marker);padding:6px 14px;width:100%}
+button.gold:hover:not(:disabled){background:#E0A50F;border-color:#E0A50F}
+#sheet.person #sheetmint{background:var(--gold);border-color:var(--gold);color:var(--ink)}
+#sheet.person #sheetmint:hover:not(:disabled){background:#E0A50F;border-color:#E0A50F}
+.mint input{flex:1;min-width:0;background:var(--white);border:1px solid var(--rule);
+            border-radius:6px;color:var(--ink);font:inherit;padding:5px 8px}
+.mint input:focus{outline:none;border-color:var(--blue)}
+.minthint{color:var(--mute);font-size:10.5px;line-height:1.5;margin-top:7px}
+.words{font:400 11.5px/1.7 var(--mono);color:var(--ink);word-spacing:.15em}
+.note code{background:var(--tint);border-radius:3px;padding:0 4px}
+
+/* ── canvas ─────────────────────────────────────────────────────────────── */
+svg.field{display:block}
+svg#g{height:100%;cursor:grab}
+svg#g.drag{cursor:grabbing}
+.field .edge{stroke:rgba(21,24,28,.22);stroke-width:1;fill:none}
+.field .edge.member{stroke-dasharray:2 3}
+.field .edge.spine{stroke:rgba(13,106,174,.45)}
+.field .edge.lit{stroke:var(--blue);stroke-width:1.6}
+.field .edge.out{stroke:rgba(21,24,28,.07)}
+#pinned .edge{stroke:rgba(13,106,174,.4)}
+.field .node{cursor:pointer}
+.field .node .ring{fill:none;stroke-width:2;fill-opacity:0}
+.field .ring.ego{stroke:var(--blue)}
+.field .ring.target{stroke:var(--cyan)}
+.field .obj{stroke:var(--white);stroke-width:1.5}
+.field .obj.local{stroke:var(--ink);stroke-dasharray:3 2}
+.field .person{fill:var(--white);stroke:var(--ink2);stroke-width:1.3}
+.field .person.minted{stroke:var(--amber);stroke-dasharray:3 2.5}
+.field .anchor{fill:var(--ink2);stroke:var(--cream);stroke-width:2;cursor:pointer}
+.field .anchor.ego{fill:var(--blue)}
+.field .anchor.target{fill:var(--cyan)}
+.field .anchor.off{fill-opacity:.35}
+.field .bad{fill:rgba(238,130,110,.14);stroke:var(--red);stroke-width:1.4;stroke-dasharray:4 3}
+.field .lbl{font:400 13px var(--marker);fill:var(--ink);text-anchor:middle;pointer-events:none}
+.field .lbl.small{font:400 10px var(--mono);fill:var(--ink2)}
+.field .out{opacity:.22}
+.field .edgehit{cursor:pointer}
+.field .hit{stroke:transparent;stroke-width:12}
+
+#hud{position:absolute;left:14px;bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#legend{position:absolute;right:14px;top:12px;display:flex;flex-direction:column;gap:5px;
+        align-items:flex-end;pointer-events:none}
+#legend span{display:inline-flex;align-items:center;gap:7px;color:var(--ink2);font:400 12px var(--marker)}
+#legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+/* ── fold rail ──────────────────────────────────────────────────────────── */
+.kv{display:grid;grid-template-columns:82px minmax(0,1fr);gap:4px 10px;padding:10px 14px;
+    border-bottom:1px solid var(--rule)}
+.kv dt{color:var(--ink2);font-size:11px}
+.kv dd{margin:0;color:var(--ink);word-break:break-all;font:400 11.5px var(--mono)}
+.sect{padding:10px 14px;border-bottom:1px solid var(--rule)}
+.sect .cap{font:400 12px var(--marker);color:var(--ink2);margin-bottom:6px}
+pre{margin:0;white-space:pre-wrap;word-break:break-word;color:var(--ink);font:400 11.5px var(--mono)}
+.refusal{color:var(--red)}
+.note{color:var(--ink2);padding:10px 14px;border-bottom:1px solid var(--rule);font-size:11.5px}
+.note b{color:var(--ink)}
+h2.tabs{display:flex;gap:2px;padding:0 8px;align-items:stretch;background:var(--paper)}
+.tab{border:0;border-radius:0;background:none;border-bottom:2px solid transparent;
+     padding:9px 8px 7px;font:400 14px var(--marker);color:var(--ink2)}
+.tab:hover{background:none;color:var(--ink)}
+.tab.on{color:var(--ink);border-bottom-color:var(--blue)}
+h2.tabs .n{margin-left:auto;align-self:center}
+#loglines{overflow:auto;padding:8px 14px 12px;font:400 11px/1.55 var(--mono)}
+.ln{display:grid;grid-template-columns:52px 148px 86px minmax(0,1fr);gap:10px;white-space:nowrap}
+.ln .t{color:var(--mute)}
+.ln .fn{color:var(--ink)}
+.ln .io{color:var(--ink2)}
+.ln .rs{color:var(--ink2);overflow:hidden;text-overflow:ellipsis}
+.ln.err .fn,.ln.err .rs{color:var(--red)}
+
+/* ── action rail ────────────────────────────────────────────────────────── */
+#acts{display:flex;flex-wrap:wrap;gap:7px;padding:11px 14px}
+.act{display:inline-flex;flex-direction:column;gap:2px;border:1px solid rgba(70,156,72,.5);
+     background:#F3F8F3;border-radius:8px;padding:6px 10px;max-width:290px}
+.act.refused{border-color:rgba(231,157,81,.55);background:#FDF6EC}
+.act.refused .op{color:#B9762F}
+.act .op{color:var(--green);font:400 12px var(--mono)}
+.act .why{font-size:10.5px;color:var(--ink2)}
+.grp{flex:0 0 100%;font:400 10px var(--mono);letter-spacing:.09em;text-transform:uppercase;
+     color:var(--mute);margin:5px 0 -2px}
+.grp:first-child{margin-top:0}
+
+/* ── the mint sheet ─────────────────────────────────────────────────────── */
+#modal{position:fixed;inset:0;background:rgba(21,24,28,.38);display:flex;align-items:center;
+       justify-content:center;z-index:9;padding:24px}
+#modal[hidden]{display:none}
+#sheet{background:var(--white);border:1px solid var(--rule);border-radius:12px;width:420px;
+       max-width:100%;max-height:86vh;overflow:auto;padding:18px 20px 16px;
+       box-shadow:0 18px 50px rgba(21,24,28,.18)}
+#sheet h3{font:400 22px var(--marker);color:var(--ink);margin:0 0 4px}
+.fld{margin:12px 0 0}
+.fld label{display:block;color:var(--ink2);font-size:11px;margin:0 0 4px}
+.fld label b{color:var(--ink);font:400 13px var(--marker)}
+.fld .req{color:var(--blue);font:400 12px var(--marker);margin-left:6px}
+.fld input,.fld select{width:100%;background:var(--white);border:1px solid var(--rule);
+  border-radius:6px;color:var(--ink);font:inherit;padding:6px 8px}
+.fld input:focus,.fld select:focus{outline:none;border-color:var(--blue)}
+.fld.off input{opacity:.5;background:var(--tint)}
+.fld .hint{color:var(--mute);font-size:10px;margin-top:3px}
+.sheetgo{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+#sheetmint{background:var(--blue);border-color:var(--blue);color:var(--white)}
+#sheetmint:hover:not(:disabled){background:#0B5C97}
+#sheetwhy{color:var(--red);font-size:11.5px;margin-top:10px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <img class="mark" src="brand/wallflowers-wordmark.svg" alt="WallFlowers">
+    <span class="sel" id="sel"></span>
+    <span class="grow"></span>
+    <button id="clear">Clear</button>
+  </header>
+
+  <section id="people">
+    <div class="mint">
+      <button id="mint" class="gold">+ Person</button>
+    </div>
+    <div id="plist"></div>
+  </section>
+
+  <div id="canvasWrap">
+    <div id="scroller">
+      <svg id="g" class="field"><g id="view"><g id="edges"></g><g id="nodes"></g></g></svg>
+    </div>
+    <svg id="overlay" class="field"><g id="pinned"></g></svg>
+    <div id="legend"></div>
+    <div id="hud">
+      <button id="fit">Fit</button>
+    </div>
+  </div>
+
+  <section id="fold">
+    <h2 class="tabs"><button class="tab on" id="tabfold">Fold</button><button class="tab"
+      id="tabcore">core-wasm <span id="logn"></span></button><span class="n" id="foldwhose"></span></h2>
+    <div id="logpane" hidden><div id="loglines"></div></div>
+    <div id="foldbody"></div>
+  </section>
+
+  <section id="actions">
+    <div class="half">
+      <h2>Create <span class="n" id="createwho"></span></h2>
+      <div id="creates"></div>
+    </div>
+    <div class="half">
+      <h2>Actions <span class="n" id="actcount"></span></h2>
+      <div id="acts"></div>
+    </div>
+  </section>
+
+  <div id="modal" hidden>
+    <form id="sheet" autocomplete="off">
+      <h3 id="sheettitle"></h3>
+      <div id="sheetfields"></div>
+      <div id="sheetwhy"></div>
+      <div class="sheetgo">
+        <button type="button" id="sheetcancel">Cancel</button>
+        <button type="submit" id="sheetmint">Mint</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="../account/pacific-account.js"></script>
+<script src="../shared/wallflowers-fold.js"></script>
+<script src="../shared/wallflowers-ops.js"></script>
+<script src="graph.js"></script>
+</body>
+</html>

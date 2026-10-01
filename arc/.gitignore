@@ -1,0 +1,8 @@
+/target
+# Linux cross-compile output (regenerable build artifacts; never commit)
+/target-linux
+
+# local secrets (BWS access token, etc.)
+.env
+
+arc.env

@@ -1,0 +1,2 @@
+Changed from mls-rs 0.55.4 as published on crates.io: Cargo.toml drops the "js" feature from one
+feature list, so the crate builds for this project's targets. No source file is changed.

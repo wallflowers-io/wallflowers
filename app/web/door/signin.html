@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- DR-4, the sign-in window (mdr/door.md §4, §5). Served by the Door with its own
+     scripts only, under a strict CSP; the rp id is the Door's (D-33). A Site's sign-in
+     wears that Site's Face: its look, mark and name (Ralph, 29 Sep), and no WallFlowers
+     mark (30 Sep); the Door fills __TOP__ and __LINKS__ for the window it serves. -->
+<html lang="en"__MODE__>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="rp-id" content="__RP_ID__">
+<title>__TITLE__</title>
+<link rel="stylesheet" href="/door/signin.css">__LINKS__
+</head>
+<body>
+<main>
+  __TOP__
+  <section id="start">
+    <input id="name" type="text" autocomplete="username webauthn" maxlength="64" placeholder="Your name" aria-label="Your name" hidden>
+    <button id="in" class="primary" type="button" disabled>Sign in with a passkey</button>
+    <button id="new" type="button" disabled>Create an account</button>
+    <button id="deny" class="quiet" type="button" hidden disabled>Cancel</button>
+  </section>
+  <section id="words" hidden>
+    <button id="saved" class="primary" type="button" disabled>Create the passkey</button>
+  </section>
+  <section id="shown" hidden>
+    <h1>Recovery words</h1>
+    <ol id="list"></ol>
+    <button id="done" class="primary" type="button">Continue</button>
+  </section>
+  <p id="status" role="status" aria-live="polite" hidden></p>
+</main>
+<script src="/door/perf.js"></script>
+<script src="/door/seal.js"></script>
+<script src="/door/return-path.js"></script>
+<script src="/door/signin.js"></script>
+</body>
+</html>

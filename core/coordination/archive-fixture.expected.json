@@ -1,0 +1,38 @@
+{
+  "display_name": "Ada",
+  "exported_by": "8ce6ea2fa7e3c4328552b51539197afef85794390a00caa6b4bbb8ed89485873",
+  "groups": {
+    "2a1d3f7295c39588214468978b22c3312998e7644945e5d8e792db80b110f885": {
+      "deltas": 18,
+      "digest": "f457b3ee6e423f075acbc62307123102df3cc0861738b0b358985accee8d66e8",
+      "kind": "connection",
+      "messages": 0
+    },
+    "54681ee47b5d211d058187fed8177217951ed1e1b3ca10c468a67a264585bdc9": {
+      "deltas": 23,
+      "digest": "a968abe8981b793000b90fced8b6355d7cba4185080aac1164baa9b7ee299fa3",
+      "kind": "connection",
+      "messages": 3
+    },
+    "97065898c3bcfe1c2a06e11ba7cad9b78a7f2327c6d95f6b20820cdf6f9854f4": {
+      "deltas": 1,
+      "digest": "50cfeba04119b0625f0bd1def6e1f644f9ec681f44a1238c918c5d76f23bf369",
+      "kind": "group",
+      "messages": null
+    },
+    "ddae081f97773c38c16b3661eabeb4b4e4234187bbb77ba78d64f57bdfe9bf2c": {
+      "deltas": 7,
+      "digest": "906150b329f0a2031a9105403aa530c6996c4cb87b12bb4d27ceb257f23fc445",
+      "kind": "forum",
+      "messages": 4
+    },
+    "e17890897c5e5d5f0b25b00b7697b9cdb22aedf11ec258117afa6f0a6974bb25": {
+      "deltas": 1,
+      "digest": "0124df25b3df48208ea0c83d1daff0601690f3ba8350496db0c089fafd8e2132",
+      "kind": "group",
+      "messages": null
+    }
+  },
+  "peers": 2,
+  "v": 2
+}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Limits · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html" aria-current="page">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>Limits</h1>
+<table><tbody>
+<tr><td>Request body</td><td>1 MiB</td></tr>
+<tr><td>Batch</td><td>1 to 16 steps</td></tr>
+<tr><td>Proof of work</td><td>20 bits, at the start of a sign-up or sign-in: a few seconds in the browser, done by WallFlowers' window</td></tr>
+<tr><td>Argument values</td><td>text or integer</td></tr>
+<tr><td>A message</td><td>no length of its own: bounded by the request body (1 MiB). Pick a limit that suits your page.</td></tr>
+<tr><td>The public page's items</td><td>its 8 most recent resources, and its events</td></tr>
+<tr><td>Page document (face)</td><td>16,384 bytes</td></tr>
+<tr><td>A picture</td><td>156,000 base64 characters; PNG, JPEG or WebP</td></tr>
+<tr><td>A link</td><td>2,048 characters</td></tr>
+<tr><td>A member's card</td><td>16,384 bytes, picture included</td></tr>
+<tr><td>What WallFlowers keeps</td><td>What members write through the Door, as a backup</td></tr>
+</tbody></table>
+<h2>The Door's configuration</h2>
+<p>These are set by each WallFlowers deployment; the values below are the current ones.</p>
+<table><tbody>
+<tr><td>Session</td><td>one hour; ends after 15 minutes without a request, or at <code>session.signOut()</code></td></tr>
+<tr><td>Sessions held at once</td><td>112, for all of WallFlowers together, not per site: past it, every sign-in anywhere is refused (<code>503</code>) until some end. So sign out what you open (<code>session.signOut()</code>), and have scripts and tests sign out as they exit. A page that only shows the public page's items needs no session at all.</td></tr>
+<tr><td>Proof clock</td><td>each call's proof within 60 s of WallFlowers' clock</td></tr>
+<tr><td>Sign-ins in progress</td><td>32 per address; each has 1 minute to finish, a new account 5 minutes</td></tr>
+</tbody></table>
+<p>Measured latencies for every route are on <a href="routes.html">Routes</a>.</p>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

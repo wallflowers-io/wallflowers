@@ -1,0 +1,21 @@
+<h1>The session</h1>
+<table><thead><tr><th>Member</th><th></th></tr></thead><tbody>
+<tr><td><code>session.fetch(path, init)</code></td><td>Like <code>fetch</code>, to <code>{{DOOR}}</code> + path. It adds the member's token and a proof signed with a key your page can't read. A request with a body gets <code>content-type: application/json</code> unless you set one: pass <code>JSON.stringify(…)</code>.</td></tr>
+<tr><td><code>session.events(onChanged, onEnded)</code></td><td>Calls <code>onChanged(version)</code> when something your session can read changes: <code>version</code> is a string you need not read, and <code>''</code> after the stream opened again from a gap. Either way, read <code>/v2/graph</code> again. Returns <code>stop()</code>. Opens again by itself after a gap; <code>onEnded</code> gets the refusal when the session is over.</td></tr>
+<tr><td><code>session.signOut()</code></td><td>Ends the session here and at WallFlowers. Call it whenever you're done: see below.</td></tr>
+<tr><td><code>session.site</code></td><td>The community's id.</td></tr>
+<tr><td><code>session.client</code></td><td>Your client id.</td></tr>
+</tbody></table>
+<div class="note warn"><p><strong>Sign out every session you open.</strong> Call <code>session.signOut()</code> (<code>POST /v2/signout</code>) when you're done, and have scripts and tests sign out as they exit. Otherwise WallFlowers holds the session until it has been idle for {{IDLE}}, and once it holds {{SESSIONS}} sessions, everyone's sign-in is refused with <code>503 "the Door is at its session limit; try again shortly"</code>, yours and every other team's.</p></div>
+<ul>
+<li>A session lasts <strong>{{TOKEN}}</strong>, and ends after <strong>{{IDLE}} without a request</strong>. An open change stream does not count as a request. There is no refresh: when a call answers <code>401</code>, or <code>400 "not signed in"</code>, the member is signed out. Show your Sign in button again (it calls <code>WallFlowers.signIn</code>). If you send them to sign in yourself, do it at most once per page view, and remember that you did (in <code>sessionStorage</code>), so it can never loop.</li>
+<li>Your session reaches the community, its direct parts (rooms, page, treasury) where the member is on their roster, and whatever this session created. Never the member's other communities, private conversations, or personal record.</li>
+<li>Keep third-party scripts (chat widgets, trackers, ad tags) off pages where members are signed in. Anything running on the page can use the session.</li>
+</ul>
+<h2 id="your-page">Your page's rules</h2>
+<ul>
+<li><strong>Origins.</strong> <code>session.fetch</code> is a cross-origin call, and WallFlowers answers only the origins you registered. From any other ({{ORIGIN_EXAMPLES}}) the browser blocks the sign-in script itself (the console says CORS), and any call: <code>session.fetch</code> rejects with a network error, and your page never sees a status. Register every origin you serve from.</li>
+<li><strong>Content-Security-Policy.</strong> If your page sets one, <code>script-src</code> and <code>connect-src</code> must both allow <code>{{DOOR}}</code> (the sign-in script, then <code>session.fetch</code> and the change stream), and an inline script needs its nonce or its <code>sha256</code>.</li>
+<li><strong>Storage.</strong> The key and token live in your origin's IndexedDB: <code>localhost</code> and <code>127.0.0.1</code> are two separate sign-ins, and a private window, or clearing the site's data, signs the member out.</li>
+<li><strong>The token stays in the page.</strong> Never log it, and never send it to your own server. The key can't be exported, by design.</li>
+</ul>

@@ -1,0 +1,31 @@
+# land — the Arc's `/land` plane: UK land tenure lookup for Place anchors.
+#
+# Answers "what parcel is this coordinate on, and who owns it" from HM Land Registry's
+# published datasets. Runs Arc-side because the source data is MONTHLY BULK FILES measured
+# in gigabytes — INSPIRE Index Polygons for England & Wales are millions of polygons — which
+# is not something a phone ingests. The device asks, gets an answer with its provenance, and
+# authors it as a `LandClaim` delta on its Place (pacific-core `place.rs`).
+#
+# rusqlite `bundled`: the amalgamation ships with SQLITE_ENABLE_RTREE, so the spatial index
+# is a virtual table with no extra feature flag and no system sqlite. Point-in-polygon runs
+# as an R*Tree bbox candidate query followed by an exact ring test. No PostGIS, no separate
+# database process — a plane should deploy as one binary and one file.
+[package]
+name = "land"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "land"
+path = "src/main.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tiny_http = "0.12"
+# PINNED TO MATCH pacific-core. `libsqlite3-sys` sets `links = "sqlite3"`, and cargo permits
+# exactly one crate in the graph to link a given native library — pacific-core (reached via
+# planes/membership) is on rusqlite 0.31 / libsqlite3-sys 0.28, so this must be too. Bumping
+# it alone breaks the whole workspace resolve, not just this plane.
+rusqlite = { version = "0.31", features = ["bundled"] }

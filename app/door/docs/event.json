@@ -1,0 +1,12 @@
+{
+  "repository": "",
+  "door": {
+    "DOOR_MAX_SESSIONS": 112,
+    "DOOR_ATTEMPTS_PER_ADDR": 32
+  },
+  "register_html": "",
+  "event_html": "",
+  "contact_codes": true,
+  "signup_app": true,
+  "register_publishes": true
+}

@@ -1,0 +1,151 @@
+{
+  "site": "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
+  "me": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+  "can_define": false,
+  "members": [
+    {
+      "key": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "name": "Hana",
+      "icon": {
+        "mime": "image/webp",
+        "data": "UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA="
+      },
+      "role": "owner",
+      "about": {
+        "bio": "Sound artist and organiser.\n<img src=x onerror=alert(1)>",
+        "links": [
+          "https://hana.example/work",
+          "javascript:alert(1)",
+          "http://plain.example/"
+        ],
+        "gen": 3
+      },
+      "answers": {
+        "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:4": {
+          "text": "Collaborators for a sound walk",
+          "choices": []
+        },
+        "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:5": {
+          "text": "Field recording",
+          "choices": [0, 2]
+        },
+        "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:3": {
+          "text": "an answer to a retired question",
+          "choices": []
+        }
+      },
+      "intentions": ["financial"]
+    },
+    {
+      "key": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "name": "Ade",
+      "icon": null,
+      "role": "admin",
+      "about": null,
+      "answers": null,
+      "intentions": []
+    },
+    {
+      "key": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "name": "Kofi",
+      "icon": null,
+      "role": "member",
+      "about": {
+        "bio": "Carpenter.",
+        "links": ["https://kofi.example/"],
+        "gen": 1
+      },
+      "answers": {
+        "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:5": {
+          "text": "Joinery",
+          "choices": [1]
+        },
+        "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:2": {
+          "text": null,
+          "choices": [1]
+        }
+      },
+      "intentions": ["resources", "skills"]
+    },
+    {
+      "key": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
+      "name": null,
+      "icon": null,
+      "role": "member",
+      "about": null,
+      "answers": null,
+      "intentions": ["skills", "vip"]
+    },
+    {
+      "key": "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6",
+      "name": "   ",
+      "icon": null,
+      "role": "member",
+      "about": null,
+      "answers": null,
+      "intentions": null
+    }
+  ],
+  "questions": [
+    {
+      "id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:3",
+      "text": "An old question",
+      "hint": null,
+      "options": null,
+      "multi": false,
+      "max": null,
+      "free": true,
+      "textMax": null,
+      "retired": true,
+      "tally": null
+    },
+    {
+      "id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:4",
+      "text": "SEEK",
+      "hint": "What are you looking for?",
+      "options": null,
+      "multi": false,
+      "max": null,
+      "free": true,
+      "textMax": 180,
+      "retired": false,
+      "tally": null
+    },
+    {
+      "id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:5",
+      "text": "OFFER",
+      "hint": "Up to two",
+      "options": ["TECH / AI", "MAKING / PRODUCTION", "SOUND", "CARE"],
+      "multi": true,
+      "max": 2,
+      "free": true,
+      "textMax": 120,
+      "retired": false,
+      "tally": [1, 1, 1, 0]
+    },
+    {
+      "id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1:6",
+      "text": "IMAGINE",
+      "hint": null,
+      "options": null,
+      "multi": false,
+      "max": null,
+      "free": true,
+      "textMax": null,
+      "retired": false,
+      "tally": null
+    },
+    {
+      "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2:2",
+      "text": "Which night?",
+      "hint": null,
+      "options": ["Friday", "Saturday"],
+      "multi": false,
+      "max": null,
+      "free": false,
+      "textMax": null,
+      "retired": false,
+      "tally": [0, 1]
+    }
+  ]
+}

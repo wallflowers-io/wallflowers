@@ -1,0 +1,209 @@
+{
+  "icd": "newitem",
+  "version": "1.0.0",
+  "info": {
+    "title": "The newitem modal — the contract between a GroupObject type and its `+`",
+    "summary": "What a kind asks for when you create one, written from the surface that asks it.",
+    "description": [
+      "ONE component serves every mint (app/ui/App/Design/New.swift). It contains no `switch kind`:",
+      "the TYPE declares its initialisation fields (pacific-core/src/mint.rs) and the surface renders",
+      "them. This document is the contract between those two halves — what a declaration may say, and",
+      "what the surface guarantees in return.",
+      "",
+      "It exists because the two used to be independent statements of one fact and had drifted in four",
+      "places at once, each of them a field you could type into and have silently dropped."
+    ]
+  },
+  "surface": {
+    "summary": "What the modal is, independent of kind.",
+    "faces": {
+      "fields": "The declared fields, in declaration order.",
+      "visibility": "The audience dial, reached from GOLD. Common to every kind including the note; the gold glow swaps to cyan. The card TURNS rather than being covered."
+    },
+    "buttons": {
+      "summary": "The modal carries NO buttons of its own. Its three actions are the shell's own RED/GOLD/BLUE circles, which slide out of their neutral arrangement and become them. This is why a newitem modal is a shell overlay and never a sheet: a sheet sits above the shell and cannot borrow those circles.",
+      "red": "Cancel. Always live. Warns first when there is anything to lose.",
+      "gold": "Visibility. Always live — the audience is answerable before the object has a name.",
+      "blue": "Commit. Live exactly when every REQUIRED field is answered and no commit is in flight."
+    },
+    "dismissal": "Tapping off the canvas is the same action as RED: an empty surface goes, one with content asks first.",
+    "focus": "Nothing is selected on open, so the keyboard stays down until a field is chosen. The note is the exception — it is a single box to type in."
+  },
+  "inputs": {
+    "summary": "Each input names a CONTROL, not a kind. This is what makes the renderer total: the surface never asks which kind it is drawing.",
+    "line": {
+      "control": "one-line entry box",
+      "chrome": "the DM composer's own slot — disc-radius corner, surface2, hairline",
+      "label": "CENTRED INSIDE the box, clearing on focus and returning when emptied"
+    },
+    "multiline": {
+      "control": "2–5 line entry box",
+      "chrome": "as `line`",
+      "label": "as `line`"
+    },
+    "choice": {
+      "control": "switch over a closed vocabulary",
+      "label": "inline, leading"
+    },
+    "date": {
+      "control": "date picker",
+      "label": "inline, leading"
+    },
+    "recurrence": {
+      "control": "repeat-rule switch",
+      "label": "inline, leading"
+    },
+    "money": {
+      "control": "amount entry",
+      "label": "inline, leading"
+    },
+    "place": {
+      "control": "Place reference selector",
+      "label": "inline, TRAILING — WHERE reads from the right of its selector"
+    },
+    "fix": {
+      "control": "READOUT of the device's live coordinate, never a picker",
+      "label": "above"
+    },
+    "icon": {
+      "control": "circular media slot, tap to open the camera",
+      "label": "none"
+    },
+    "banner": {
+      "control": "wide media slot, tap to open the camera",
+      "label": "none"
+    }
+  },
+  "rows": {
+    "summary": "Declaration order is row order, with exactly one grouping rule.",
+    "media": "An `icon` immediately followed by a `banner` becomes ONE media row with no caption — two slots and a camera say what they are. An unpaired icon still gets its own row; it is never dropped for want of a partner.",
+    "ceiling": "A mint is the START of an object, not a form to complete. The ceiling lives in the declaration, where the judgement belongs.",
+    "order": "NAME first, then MEDIA, then DESCRIBE, then the kind's own switches, then WHERE. Confirmed against the declaration, which is what the surface renders — this is the shape, not a coincidence of listing."
+  },
+  "vocabulary": {
+    "summary": "A `choice` field carries the REDUCER'S OWN wire values, so a picker can never mint a value the fold will reject.",
+    "narrowing": "The surface MAY offer a SUBSET of the declared values, and MAY show a different word for one. Offering fewer of the reducer's own values is always safe; the wire word is not always the word to show.",
+    "forbidden": "The surface may NOT offer a value the declaration does not carry, and may not send a word in place of a value.",
+    "examples": {
+      "thing.category": "declared artifact|skill|job; offered artifact|skill, with `artifact` shown as “Thing”",
+      "thing.stance": "offered offers|wants for a thing, has|wants for a skill; `wants` reads WANT of a thing and NEED of a skill"
+    }
+  },
+  "carriage": {
+    "summary": "Every declared field states how it reaches the object. This is the promise the contract exists to keep.",
+    "op0": "Lands in the kind's op-0 profile delta. `fields_carry_to_the_wire` proves each one arrives.",
+    "separate": "Rides its own delta after the mint — the media ops, a Place's fix, an Event's venue. Named in `every_separate_field_is_actually_delivered`, so the flag cannot become a way to silence the first test.",
+    "deferred": "SHOWN AND NOT YET SAVED. A stated fact, never a silent drop; enumerated in `deferred_fields_are_the_known_placeholders`. A required field may never be deferred — that would gate the commit on something that cannot be kept.",
+    "dependent": "A field whose delivery depends on ANOTHER field's value is only honest while the surface can actually produce that value. `thing.price` is refused by `thing.setPosture` unless the stance is ACTIVE (buying|selling), and the offered stance vocabulary is deliberately offers|wants|has — so no choice a person can make would let a price be kept. It is therefore declared `deferred`, not `separate`: the row is the design, the claim that it saves would be false. When an active stance becomes offerable it becomes `separate` and nothing else changes."
+  },
+  "commit": {
+    "summary": "BLUE's gate, stated once.",
+    "rule": "Every field the type declares `required` is answered, and no commit is in flight. Nothing else gates it.",
+    "answered": "Text is trimmed, so whitespace is not an answer. A date is answered by any NON-ZERO instant — 0 is the sentinel that minted events in 1970. A fix is answered by having one.",
+    "failure": "A commit that returns no outcome leaves the surface up with its content intact. A mint that did not happen must never look like one that did."
+  },
+  "kinds": {
+    "group": {
+      "typeId": 18,
+      "noun": "Space",
+      "fields": [
+        "Name",
+        "Icon",
+        "Banner",
+        "Describe",
+        "Kind"
+      ]
+    },
+    "forum": {
+      "typeId": 19,
+      "noun": "Channel",
+      "fields": [
+        "Name"
+      ]
+    },
+    "project": {
+      "typeId": 22,
+      "noun": "Project",
+      "fields": [
+        "Name"
+      ]
+    },
+    "thing": {
+      "typeId": 27,
+      "noun": "Listing",
+      "fields": [
+        "Name",
+        "Icon",
+        "Banner",
+        "Describe",
+        "Kind",
+        "Stance",
+        "Price"
+      ]
+    },
+    "place": {
+      "typeId": 28,
+      "noun": "Place",
+      "fields": [
+        "Name",
+        "Describe",
+        "Here"
+      ]
+    },
+    "event": {
+      "typeId": 29,
+      "noun": "Event",
+      "fields": [
+        "Name",
+        "Icon",
+        "Banner",
+        "Describe",
+        "When",
+        "Recurrence",
+        "Where"
+      ]
+    },
+    "post": {
+      "typeId": 30,
+      "noun": "Post",
+      "fields": [
+        "Name",
+        "Icon",
+        "Banner",
+        "Describe",
+        "Kind",
+        "Links to"
+      ]
+    },
+    "treasury": {
+      "typeId": 31,
+      "noun": "Treasury",
+      "fields": [
+        "Name"
+      ]
+    },
+    "note": {
+      "typeId": 32,
+      "noun": "Note",
+      "fields": [
+        "Name"
+      ]
+    },
+    "host": {
+      "typeId": 33,
+      "noun": "Host",
+      "fields": [
+        "Name"
+      ]
+    }
+  },
+  "notMinted": {
+    "summary": "Kinds with no `+`, and why — so an absence is a decision rather than an oversight.",
+    "contact": "formed by PAIRING, a double opt-in; one side cannot mint it",
+    "conversation": "formed by consuming a Contact's prekeys",
+    "system": "has a reducer but no ICD channel and no product surface",
+    "field": "declared in ObjectKind with no ObjectType impl",
+    "topic": "declared in ObjectKind with no ObjectType impl",
+    "transaction": "opened by the settler, who adds the buyer and the seller and fixes their roles; a party asks for one, and never mints it"
+  }
+}

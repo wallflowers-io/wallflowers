@@ -1,0 +1,8 @@
+[package]
+name = "pacific-geometry"
+description = "The deterministic geometry engines (the solver): calibration, spectral, chromodynamics, attitude, coarsening, transmission — ported 1:1 from PacificStore (Swift). No LLM, no I/O, no deps."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

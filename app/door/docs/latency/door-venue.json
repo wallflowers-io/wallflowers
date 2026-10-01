@@ -1,0 +1,1179 @@
+{
+ "at": "2026-09-30T10:12:19+00:00",
+ "from": "the test harness's machine",
+ "door": "38ad452c1dceee7d3d2c853fa2c370c811affe3c",
+ "where": "a rehearsal Door, a VM on the harness's machine",
+ "link": "venue",
+ "link_detail": "a delay hop at the venue's measured distance: 130 ms round trip to the Door",
+ "routes": [
+  {
+   "method": "GET",
+   "path": "/",
+   "n": 30,
+   "p50_ms": 134.9,
+   "p95_ms": 137.9,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 404.0,
+    "p95_ms": 406.4
+   },
+   "ttfb": {
+    "p50_ms": 134.8,
+    "p95_ms": 137.3
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/bundle",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "ANY",
+   "path": "/console/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "GET",
+   "path": "/door/face-mark",
+   "n": 30,
+   "p50_ms": 156.7,
+   "p95_ms": 1980.6,
+   "status": 200,
+   "note": "the Door reads the mark from the Arc on each call; the p95 is the Arc node's sync pass holding that read up to 2 s: 4 of 41 reads at the Arc, each ending as a pass ended",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 421.7,
+    "p95_ms": 2191.5
+   },
+   "ttfb": {
+    "p50_ms": 156.6,
+    "p95_ms": 1980.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/face.css",
+   "n": 30,
+   "p50_ms": 135.2,
+   "p95_ms": 135.8,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 401.9,
+    "p95_ms": 403.7
+   },
+   "ttfb": {
+    "p50_ms": 135.1,
+    "p95_ms": 135.7
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/perf.js",
+   "n": 30,
+   "p50_ms": 135.4,
+   "p95_ms": 137.8,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 402.8,
+    "p95_ms": 406.9
+   },
+   "ttfb": {
+    "p50_ms": 135.3,
+    "p95_ms": 137.6
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/pow-worker.js",
+   "n": 30,
+   "p50_ms": 135.2,
+   "p95_ms": 137.4,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 402.5,
+    "p95_ms": 408.4
+   },
+   "ttfb": {
+    "p50_ms": 135.1,
+    "p95_ms": 137.2
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/return-path.js",
+   "n": 30,
+   "p50_ms": 134.8,
+   "p95_ms": 137.6,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 403.2,
+    "p95_ms": 406.2
+   },
+   "ttfb": {
+    "p50_ms": 134.7,
+    "p95_ms": 137.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/seal.js",
+   "n": 30,
+   "p50_ms": 134.6,
+   "p95_ms": 136.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 403.2,
+    "p95_ms": 407.9
+   },
+   "ttfb": {
+    "p50_ms": 134.5,
+    "p95_ms": 136.3
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/signin.css",
+   "n": 30,
+   "p50_ms": 133.9,
+   "p95_ms": 135.4,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 401.4,
+    "p95_ms": 404.2
+   },
+   "ttfb": {
+    "p50_ms": 133.9,
+    "p95_ms": 135.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/signin.js",
+   "n": 30,
+   "p50_ms": 135.5,
+   "p95_ms": 137.7,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 402.8,
+    "p95_ms": 407.3
+   },
+   "ttfb": {
+    "p50_ms": 135.4,
+    "p95_ms": 137.3
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/wallflowers.png",
+   "n": 30,
+   "p50_ms": 134.6,
+   "p95_ms": 136.8,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 402.2,
+    "p95_ms": 409.2
+   },
+   "ttfb": {
+    "p50_ms": 134.5,
+    "p95_ms": 136.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/door/wordmark.svg",
+   "n": 30,
+   "p50_ms": 134.9,
+   "p95_ms": 136.4,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 400.4,
+    "p95_ms": 402.7
+   },
+   "ttfb": {
+    "p50_ms": 134.8,
+    "p95_ms": 136.2
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/i/bundle",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/end",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/forget",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "GET",
+   "path": "/i/key",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/open",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/prove",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/sign",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/signup",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "POST",
+   "path": "/i/signup/finish",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "internal: the Door to the person's process, inside the routes above"
+  },
+  {
+   "method": "GET",
+   "path": "/index.html",
+   "n": 30,
+   "p50_ms": 135.6,
+   "p95_ms": 137.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 402.2,
+    "p95_ms": 405.4
+   },
+   "ttfb": {
+    "p50_ms": 135.4,
+    "p95_ms": 136.9
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/join",
+   "n": 30,
+   "p50_ms": 135.6,
+   "p95_ms": 137.8,
+   "status": 303,
+   "note": "a claim, not spent: its 303",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 401.8,
+    "p95_ms": 407.4
+   },
+   "ttfb": {
+    "p50_ms": 135.6,
+    "p95_ms": 137.6
+   },
+   "statuses": {
+    "303": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/signin",
+   "n": 30,
+   "p50_ms": 134.7,
+   "p95_ms": 136.7,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 402.1,
+    "p95_ms": 404.9
+   },
+   "ttfb": {
+    "p50_ms": 134.7,
+    "p95_ms": 136.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/tether",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call: the Door and the Arc between themselves"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/admit",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call: the Door and the Arc between themselves"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/arc",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": "none",
+   "link": "venue",
+   "note": "no venue distance to the Arc measured; see door-loopback.json"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/arcs",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "ANY",
+   "path": "/v1/box/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/bundle",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": "none",
+   "link": "venue",
+   "note": "no venue distance to the Arc measured; see door-loopback.json"
+  },
+  {
+   "method": "ANY",
+   "path": "/v1/console/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": "none",
+   "link": "venue",
+   "note": "no venue distance to the Arc measured; see door-loopback.json"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug/brand",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": "none",
+   "link": "venue",
+   "note": "no venue distance to the Arc measured; see door-loopback.json"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug/door",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": "none",
+   "link": "venue",
+   "note": "no venue distance to the Arc measured; see door-loopback.json"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug/escape",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": "none",
+   "link": "venue",
+   "note": "no venue distance to the Arc measured; see door-loopback.json"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug/items",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": "none",
+   "link": "venue",
+   "note": "no venue distance to the Arc measured; see door-loopback.json"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/face/:slug/m/:slot",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": "none",
+   "link": "venue",
+   "note": "no venue distance to the Arc measured; see door-loopback.json"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/health",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": "none",
+   "link": "venue",
+   "note": "no venue distance to the Arc measured; see door-loopback.json"
+  },
+  {
+   "method": "ANY",
+   "path": "/v1/land/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/relay",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/signup",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call: the Door and the Arc between themselves"
+  },
+  {
+   "method": "ANY",
+   "path": "/v1/systems/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "GET",
+   "path": "/v1/version",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": "none",
+   "link": "venue",
+   "note": "no venue distance to the Arc measured; see door-loopback.json"
+  },
+  {
+   "method": "ANY",
+   "path": "/v1/wake/*rest",
+   "n": 0,
+   "p50_ms": null,
+   "p95_ms": null,
+   "status": null,
+   "auth": null,
+   "link": "venue",
+   "note": "not a site's call (the Arc's own consoles and planes)"
+  },
+  {
+   "method": "POST",
+   "path": "/v2/add",
+   "n": 5,
+   "p50_ms": 630.6,
+   "p95_ms": 678.8,
+   "status": 200,
+   "note": "the Arc added to a fresh object (minted before the clock); the add waits on that mint's write tail",
+   "auth": "cookie",
+   "link": "venue",
+   "cold": {
+    "n": 2,
+    "p50_ms": 661.5,
+    "p95_ms": 670.2
+   },
+   "ttfb": {
+    "p50_ms": 630.5,
+    "p95_ms": 678.8
+   },
+   "statuses": {
+    "200": 7
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/apply",
+   "n": 30,
+   "p50_ms": 153.0,
+   "p95_ms": 159.1,
+   "status": 200,
+   "note": "forum.post in a room, by a site's token",
+   "auth": "dpop",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 434.2,
+    "p95_ms": 449.9
+   },
+   "ttfb": {
+    "p50_ms": 152.9,
+    "p95_ms": 159.0
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/batch",
+   "n": 10,
+   "p50_ms": 538.0,
+   "p95_ms": 629.1,
+   "status": 200,
+   "note": "a batch that mints pays its cost once per batch; measured on the webapp's session; a site's token reaches the same handler",
+   "auth": "cookie",
+   "link": "venue",
+   "cold": {
+    "n": 3,
+    "p50_ms": 550.2,
+    "p95_ms": 606.9
+   },
+   "ttfb": {
+    "p50_ms": 537.9,
+    "p95_ms": 629.1
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/draft/:kind",
+   "n": 30,
+   "p50_ms": 136.0,
+   "p95_ms": 139.3,
+   "status": 200,
+   "note": "kind forum",
+   "auth": "dpop",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 405.2,
+    "p95_ms": 409.5
+   },
+   "ttfb": {
+    "p50_ms": 135.9,
+    "p95_ms": 139.0
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/events",
+   "n": 30,
+   "p50_ms": 403.3,
+   "p95_ms": 410.3,
+   "status": 200,
+   "note": "the stream, timed to its headers; a stream's connection closes with it, so each warm call opens one too",
+   "auth": "dpop",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 400.5,
+    "p95_ms": 404.3
+   },
+   "ttfb": {
+    "p50_ms": 403.3,
+    "p95_ms": 410.3
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/graph",
+   "n": 30,
+   "p50_ms": 140.3,
+   "p95_ms": 149.8,
+   "status": 200,
+   "note": "",
+   "auth": "dpop",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 410.1,
+    "p95_ms": 422.3
+   },
+   "ttfb": {
+    "p50_ms": 140.1,
+    "p95_ms": 149.6
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/icd",
+   "n": 30,
+   "p50_ms": 135.3,
+   "p95_ms": 136.1,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 401.1,
+    "p95_ms": 406.6
+   },
+   "ttfb": {
+    "p50_ms": 135.0,
+    "p95_ms": 135.8
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/icd/:hash",
+   "n": 30,
+   "p50_ms": 134.8,
+   "p95_ms": 136.1,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 402.7,
+    "p95_ms": 407.5
+   },
+   "ttfb": {
+    "p50_ms": 134.6,
+    "p95_ms": 135.6
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/join",
+   "n": 5,
+   "p50_ms": 3387.3,
+   "p95_ms": 3535.5,
+   "status": 200,
+   "note": "each a new account with a fresh claim, made before the clock; the time is the Arc's admit (/v1/admit), not the hop (0.13 s): 3.1 to 3.4 s each in this pass, each meeting the Arc node's sync pass",
+   "auth": "cookie",
+   "link": "venue",
+   "cold": {
+    "n": 2,
+    "p50_ms": 3309.3,
+    "p95_ms": 3362.2
+   },
+   "ttfb": {
+    "p50_ms": 3387.2,
+    "p95_ms": 3535.5
+   },
+   "statuses": {
+    "200": 7
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/kinds",
+   "n": 30,
+   "p50_ms": 136.0,
+   "p95_ms": 139.5,
+   "status": 200,
+   "note": "",
+   "auth": "dpop",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 402.3,
+    "p95_ms": 407.8
+   },
+   "ttfb": {
+    "p50_ms": 135.9,
+    "p95_ms": 138.6
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/me",
+   "n": 30,
+   "p50_ms": 139.3,
+   "p95_ms": 148.7,
+   "status": 200,
+   "note": "",
+   "auth": "dpop",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 406.4,
+    "p95_ms": 422.4
+   },
+   "ttfb": {
+    "p50_ms": 139.2,
+    "p95_ms": 148.5
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/mint",
+   "n": 30,
+   "p50_ms": 310.2,
+   "p95_ms": 403.9,
+   "status": 200,
+   "note": "a group, by a site's token; a mint's cost grows with the objects the account already holds: make many objects in one /v2/batch, or send them concurrently, not one awaited mint after another",
+   "auth": "dpop",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 446.7,
+    "p95_ms": 504.8
+   },
+   "ttfb": {
+    "p50_ms": 310.1,
+    "p95_ms": 403.8
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signin",
+   "n": 10,
+   "p50_ms": 137.7,
+   "p95_ms": 143.0,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 3,
+    "p50_ms": 141.9,
+    "p95_ms": 143.7
+   },
+   "ttfb": {
+    "p50_ms": 137.7,
+    "p95_ms": 142.8
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/signin.js",
+   "n": 30,
+   "p50_ms": 135.5,
+   "p95_ms": 140.2,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 402.5,
+    "p95_ms": 404.4
+   },
+   "ttfb": {
+    "p50_ms": 135.3,
+    "p95_ms": 140.1
+   },
+   "statuses": {
+    "200": 40
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signin/finish",
+   "n": 10,
+   "p50_ms": 335.2,
+   "p95_ms": 349.9,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 3,
+    "p50_ms": 346.5,
+    "p95_ms": 352.6
+   },
+   "ttfb": {
+    "p50_ms": 335.1,
+    "p95_ms": 349.7
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signout",
+   "n": 10,
+   "p50_ms": 206.7,
+   "p95_ms": 232.6,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; measured on the webapp's session; a site's token reaches the same handler; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 3,
+    "p50_ms": 205.1,
+    "p95_ms": 208.1
+   },
+   "ttfb": {
+    "p50_ms": 206.5,
+    "p95_ms": 232.5
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signup",
+   "n": 20,
+   "p50_ms": 140.9,
+   "p95_ms": 142.4,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 6,
+    "p50_ms": 140.0,
+    "p95_ms": 141.0
+   },
+   "ttfb": {
+    "p50_ms": 140.8,
+    "p95_ms": 142.3
+   },
+   "statuses": {
+    "200": 26
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signup/continue",
+   "n": 10,
+   "p50_ms": 137.0,
+   "p95_ms": 171.7,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 3,
+    "p50_ms": 136.5,
+    "p95_ms": 137.2
+   },
+   "ttfb": {
+    "p50_ms": 136.9,
+    "p95_ms": 171.6
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/signup/finish",
+   "n": 10,
+   "p50_ms": 253.2,
+   "p95_ms": 301.7,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 3,
+    "p50_ms": 256.5,
+    "p95_ms": 260.4
+   },
+   "ttfb": {
+    "p50_ms": 253.1,
+    "p95_ms": 301.6
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/site/address",
+   "n": 5,
+   "p50_ms": 570.7,
+   "p95_ms": 596.0,
+   "status": 200,
+   "note": "a fresh slug on a fresh Host (minted before the clock); measured on the webapp's session; a site's token reaches the same handler; the claim waits on that Host's write tail",
+   "auth": "cookie",
+   "link": "venue",
+   "cold": {
+    "n": 2,
+    "p50_ms": 578.9,
+    "p95_ms": 606.3
+   },
+   "ttfb": {
+    "p50_ms": 570.6,
+    "p95_ms": 595.9
+   },
+   "statuses": {
+    "200": 7
+   }
+  },
+  {
+   "method": "POST",
+   "path": "/v2/token",
+   "n": 10,
+   "p50_ms": 139.2,
+   "p95_ms": 144.9,
+   "status": 200,
+   "note": "each step inside a whole flow; proof of work solved before the clock; cold here: a new client per flow, its connection opened by the untimed proof-of-work fetch",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 3,
+    "p50_ms": 138.9,
+    "p95_ms": 139.2
+   },
+   "ttfb": {
+    "p50_ms": 139.0,
+    "p95_ms": 144.8
+   },
+   "statuses": {
+    "200": 13
+   }
+  },
+  {
+   "method": "GET",
+   "path": "/v2/work",
+   "n": 30,
+   "p50_ms": 134.8,
+   "p95_ms": 135.5,
+   "status": 200,
+   "note": "",
+   "auth": "none",
+   "link": "venue",
+   "cold": {
+    "n": 10,
+    "p50_ms": 401.2,
+    "p95_ms": 404.5
+   },
+   "ttfb": {
+    "p50_ms": 134.7,
+    "p95_ms": 135.4
+   },
+   "statuses": {
+    "200": 40
+   }
+  }
+ ]
+}

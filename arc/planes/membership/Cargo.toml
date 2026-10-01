@@ -1,0 +1,52 @@
+# arc-node — the Arc's membership/signup server (a PacificCore node on the VM).
+#
+# Signing up to an Arc IS the Pacific signup, and it establishes the Tether. This crate
+# depends on pacific-core (the on-device engine, from the sibling Pacific repo) because an
+# Arc is the SERVER side of Pacific: it mints an MLS identity and owner-adds each signing-up
+# user into a 2-member {user, Arc} group. Baked into the machine0 image.
+[package]
+name = "node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "node"
+path = "src/main.rs"
+
+[dependencies]
+# The on-device engine (the Arc is the server side of Pacific). Git dep so a standalone Arc
+# clone / the Docker image can build arc-node without the sibling Pacific repo on disk. Local
+# dev overrides this with a [patch] in the workspace root (../pacific/pacific-core), so
+# iteration stays on the sibling path; the Dockerfile strips the patch to fetch the git source.
+# Pinned to an exact commit, not a branch: the Docker build caches the `cargo build` layer on
+# the arc build context, so a branch that moved (a new pacific-core commit) is NOT re-fetched —
+# the image silently rebuilds against the stale commit. A rev pin makes the deployed pacific-core
+# reproducible and forces a re-fetch whenever it is bumped. Bump this to ship a pacific-core change.
+# 7d1c05a = fix(core): filter folded_group to its own type_id (unbreak membership tethers).
+# No `lode`: nothing on the Arc projects, so neither LodeDB nor OpenBLAS is linked (O-41). The
+# features postdate 47a9a82, so the image resolves them only once this rev moves (O-29).
+pacific-core = { git = "https://codeberg.org/phezman/pacific.git", rev = "47a9a82d19338436402284edb138f26ca6bf7a64", default-features = false, features = ["mls", "storage", "transport"] }
+# The /systems plane: the Nango connectors (Pacific repo) + the RAG renderer. The Arc is the
+# backend that holds the Nango secret and proxies provider calls; the device only holds a
+# connection id. Same sibling-repo path model as pacific-core above.
+nango = { path = "../systems/__nango" }
+gmail = { path = "../systems/gmail" }
+nango-rag = { path = "../systems/nango-rag" }
+tokio = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = { workspace = true }
+hex = { workspace = true }
+# A small, blocking HTTP/1.1 server — the signup endpoint is low-volume request/response.
+tiny_http = "0.12"
+# A small, blocking HTTP/1.1 client — the startup announce POSTs the Arc's signed identity
+# to the control plane. Blocking suits the fire-and-forget-with-retry announce thread.
+ureq = "3"
+# The deploy stamp (`node --version`). Zero deps; see lib/arc-build. It matters most on THIS
+# plane: node is the one that compiles in the sibling ../core checkout via the workspace
+# [patch], so the arc commit alone does not describe it — the stamp's `core` field does.
+arc-build = { workspace = true }
+# The core logs through `tracing` (targets `pacific::membership`, `pacific::mls`,
+# `pacific::sync`, ...). Without a subscriber every one of those events is dropped, which
+# is what this plane did until 19 Sep 2026. Same crate and features as the relay plane.
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

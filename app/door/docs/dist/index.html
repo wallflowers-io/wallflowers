@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./" aria-current="page">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>WallFlowers Community API</h1>
+<p class="lede">Build your own site or app on a WallFlowers community. Members sign in with their passkey in WallFlowers' window; your page then reads the community's rooms and people and writes as that member.</p>
+<div class="note"><p><strong>New here?</strong> The <a href="quickstart.html">Quickstart</a> gets a working page, signed in and posting to a room, in about ten minutes. AI coding agents: read <a href="agents.md">agents.md</a>.</p></div>
+<h2>How it works</h2>
+<ul>
+<li><strong>A community</strong> is what a person makes when they sign up at <a href="https://wallflowers.io/signup">wallflowers.io</a>: its rooms, its members, its public page. Your site is registered to one community. The API calls it the <em>Site</em> (<code>session.site</code> is its id), and the model calls its kind <code>group</code>: one thing, three names.</li>
+<li><strong>The Door</strong> is WallFlowers' API and sign-in server, <code>https://app.wallflowers.io</code>. <strong>Signing in</strong> happens in its window, with the member's passkey. Your page never sees a password, a passkey or a key. It gets a <em>session</em>.</li>
+<li><strong>Every call</strong> is <code>session.fetch('/v2/…')</code> as that member: JSON in, JSON out. Read everything at once with <code>GET /v2/graph</code>; write one change with <code>POST /v2/apply</code>; hear about changes with <code>session.events</code>.</li>
+<li><strong>What you may do</strong> is decided by the data model, which the Door serves at <code>/v2/icd</code>: every kind of object, every op, its arguments, and who may write it.</li>
+<li><strong>The public page</strong> (events, resources, pictures) is served by <code>https://arc.wallflowers.io</code> and readable by anyone at <code>/v1/face/&lt;address&gt;</code>, no session. The address is the community's <code>wallflowers.io/&lt;address&gt;</code>.</li>
+</ul>
+<h2>Where to go next</h2>
+<table><tbody>
+<tr><td><a href="start.html">Start here</a></td><td>From nothing to a site whose members sign in, in order.</td></tr>
+<tr><td><a href="quickstart.html">Quickstart</a></td><td>Two files, no build step: sign in, list rooms, post.</td></tr>
+<tr><td><a href="register.html">Register your app</a></td><td>What WallFlowers needs from you before a member can sign in.</td></tr>
+<tr><td><a href="routes.html">Routes</a></td><td>Every route, with what it answers, its refusals and its measured latency.</td></tr>
+<tr><td><a href="model.html">The model</a></td><td>Every kind and op, generated from the model version 2.3.1.</td></tr>
+<tr><td><a href="client.html">A client that holds up</a></td><td>The habits that make a page correct with many people in it.</td></tr>
+</tbody></table>
+<p>This documentation describes the WallFlowers Door production serves, named at the foot of every page, and the model version <code>2.3.1</code>. It is generated from the running system: the routes from the Door's routers, the ops from the model, the latencies from measurements.</p>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

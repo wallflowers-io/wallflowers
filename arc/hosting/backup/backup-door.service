@@ -1,0 +1,19 @@
+# backup-door.service — K-48: the seals (/var/lib/door/seals), and training_wheels' dump and spool, door-01,
+# encrypted, off the box (srr/scmp.md § 11). As root: the dump runs as postgres (runuser), into the tmpfs.
+# Its timer starts it; deploy-door.sh asks for a full set (full.next) before a new Door runs.
+[Unit]
+Description=Encrypted off-box backup (door, K-48)
+After=door.service postgresql.service
+
+[Service]
+Type=oneshot
+# The plaintext's only place: a 0700 tmpfs, removed when the run ends.
+RuntimeDirectory=backup-door
+RuntimeDirectoryMode=0700
+# The ledger's only: each store's name, sha256, size and object key (the dump's WAL position), no content.
+StateDirectory=backup-door
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/opt/backup/backup.sh door
+Nice=10
+IOSchedulingClass=idle

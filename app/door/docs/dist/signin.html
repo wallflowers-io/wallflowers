@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html" aria-current="page">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>Sign in</h1>
+<p class="lede">Load WallFlowers' sign-in script, send the member to WallFlowers' window, and take the session when they come back.</p>
+<h2>The script</h2>
+<pre><code>&lt;script src="https://app.wallflowers.io/v2/signin.js"
+        integrity="sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/"
+        crossorigin="anonymous"&gt;&lt;/script&gt;</code></pre>
+<p>Always pin it with <code>integrity</code>. The hash above is the current release's, and this is the one place it is published. It changes only when the Door itself is released; registering a site does not change it.</p>
+
+<h2>The three calls</h2>
+<table><thead><tr><th>Call</th><th>Returns</th><th></th></tr></thead><tbody>
+<tr><td><code>WallFlowers.current({client})</code></td><td>Promise → session or <code>null</code></td><td>The member already signed in on this site, if any. Call it on every page load. <code>null</code> once the session's time is up. A session that ended at WallFlowers (idle, or signed out elsewhere) is still returned: its first call answers <code>401</code>.</td></tr>
+<tr><td><code>WallFlowers.signIn({client, callback})</code></td><td>navigates away</td><td>Opens WallFlowers' window. Call it from a button.</td></tr>
+<tr><td><code>WallFlowers.finish({client, callback})</code></td><td>Promise → session or <code>null</code></td><td>On your callback page. <code>null</code> means the member cancelled.</td></tr>
+</tbody></table>
+<pre><code>const client = 'your-client-id', callback = 'http://localhost:5173/';
+const back = new URLSearchParams(location.search).has('state');
+const session = back ? await WallFlowers.finish({ client, callback }) : await WallFlowers.current({ client });
+if (!session) signInButton.onclick = () => WallFlowers.signIn({ client, callback });</code></pre>
+<h2 id="callback">Your callback page</h2>
+<ul>
+<li><code>finish()</code> takes <code>code</code> and <code>state</code> off the address as it reads them.</li>
+<li>For a site on the web, give the callback a route of its own, not your app's page: while the code is in the address, no third-party script may run and no <code>Referer</code> may leave. Serve it with a strict Content-Security-Policy, <code>Referrer-Policy: no-referrer</code> and <code>Cache-Control: no-store</code>.</li>
+<li><strong>Getting back to where they were:</strong> <code>signIn</code> always returns to the registered callback. Keep the path in <code>sessionStorage</code> before <code>signIn</code>, read it after <code>finish()</code>, and go there with a full navigation (<code>location.replace</code>), so the callback's strict policy isn't carried into your app.</li>
+</ul>
+<h2 id="pin">The pin, in practice</h2>
+<ul>
+<li>A wrong <code>integrity</code> shows only as the script's <code>onerror</code>; the browser's console says the digest didn't match. From an address WallFlowers doesn't allow, the script is refused the same way (no CORS header); the console says CORS: <a href="session.html#your-page">register the address</a>.</li>
+<li>Forget a failed load, so the next attempt loads again (<a href="client.html">A client that holds up</a>).</li>
+<li>A Door release can change the hash, and the old pin stops loading at that moment. The current one is always in <a href="baseline.json">baseline.json</a>, and releases are in the <a href="changelog.html">changelog</a>. If your build bakes the hash in (an environment variable at build time), a Door release means rebuilding and redeploying your site.</li>
+</ul>
+<h2>What the member sees</h2>
+<ul>
+<li>One page, in your community's own look (its name, mark and colours), with nothing of WallFlowers' on it, and one button: <strong>SIGN IN</strong>.</li>
+<li><strong>Someone who has signed in on this device before</strong>: the passkey is asked at once and they come straight back.</li>
+<li><strong>Anyone else</strong>: the page asks their name. A passkey they already hold is offered in the name field. Otherwise SIGN IN makes one under that name, after a few seconds of work in the browser (a proof of work that keeps robots out), and they come straight back signed in. That is one passkey prompt with iCloud Keychain (iPhone, iPad, Safari on a Mac) or Google Password Manager (Chrome on a computer), and two with other passkey providers.</li>
+<li><strong>No recovery words</strong> on this path: the passkey is the account, so a member who loses it on every device loses the account.</li>
+<li><strong>In an app's own browser</strong> (Instagram, Facebook, Messenger, Threads) a passkey cannot be made. Such browsers put <code>Instagram</code>, <code>FBAN/</code>, <code>FBAV/</code>, <code>FB_IAB</code> or <code>Barcelona</code> in the user agent. Send them to <code>https://arc.wallflowers.io/v1/face/&lt;address&gt;/escape</code>, which asks them to open the link in their real browser. The address is your community's, as in <code>wallflowers.io/&lt;address&gt;</code>. You need it before anyone signs in, so keep it in your page's configuration beside your client id. (A member's session can't read it. An owner's or admin's finds it on the community's page, its part with role <code>host</code>, as <code>view.publication.slug</code>.)</li>
+</ul>
+<p>How it's done: PKCE for the round trip, and a DPoP key your page cannot export for every call. The key and token live in your origin's IndexedDB until the token expires or the member signs out. There is no refresh token.</p>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

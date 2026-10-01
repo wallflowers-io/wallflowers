@@ -1,0 +1,13 @@
+[package]
+name = "face-render"
+version = "0.1.0"
+edition = "2021"
+description = "A site's public face, drawn from its Host's published bundle: HTML, no script."
+publish = false
+
+[dependencies]
+serde_json = { workspace = true }
+
+[dev-dependencies]
+# the vendored copies checked against their pinned digests (vendor/SOURCES, NC-69)
+sha2 = "0.10"

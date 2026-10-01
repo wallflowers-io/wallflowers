@@ -1,0 +1,517 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""arcfleet — model Arc's compute capacity on machine0 VMs.
+
+Topology: one machine0 VM = one self-contained Arc. This manages a set of INDEPENDENT
+Arcs (one per region), each recorded in `fleet.json`.
+
+It shells out to the real `machine0` CLI and fails loudly — it never fakes a VM.
+"""
+
+from __future__ import annotations
+
+import argparse
+import functools
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+FLEET_PATH = HERE / "fleet.json"
+BOOTSTRAP = HERE / "arc-node-bootstrap.sh"
+
+REGIONS = ("us-east", "us-west", "uk", "eu", "asia")
+
+# THE TWO DISCS. One Arc is two containers with two volumes, and each volume is a
+# machine0 persistent disk rather than a docker volume: a docker volume survives a
+# redeploy but dies with the VM, and `id_ed25519` dying with the VM is not a reset —
+# it is an Arc that every device that ever tethered now refuses to recognise.
+#
+#   state   /data/arc     the OPEN tier: identity, relay.db (delta blobs + commit
+#                         slots), pacific.db, models, logs. Nothing a stranger
+#                         running an Arc may not hold.
+#   kenjin  /data/kenjin  the COMMERCIAL tier: boxoffice.db (the fee ledger) and
+#                         waker.db (device push tokens — the PII the blind relay
+#                         must never learn). Secrets stay in systemd-creds, sealed
+#                         per-VM; only the tiers' STATE lands here.
+#
+# Two discs, not one, so the tiers back up, restore and get destroyed independently.
+# Quotas, size range and the GPU/NixOS exclusion are the vendor's and move with the
+# Beta — read them at docs.machine0.io/platform/disks rather than trusting a copy here.
+# What does NOT move, and is why this file is shaped the way it is:
+#   · DISCS ARE NOT BACKED UP. They survive VM destruction, which is the whole point;
+#     they do not survive `disks rm`, and nothing else is keeping a copy.
+#   · The GPU exclusion costs us little: it lands on the model/spatial planes, which
+#     are best-effort and stateless (weights re-pull from HF), so a GPU Arc without a
+#     disc loses a download, not state. The planes that must persist don't want a GPU.
+#   · A disc mounts owned by the VM's LOGIN USER, and a bind mount MASKS an image's
+#     own chown — so the containers' uid must be reconciled on the host after every
+#     attach. Nothing in this file can do that; see infra/machine0/DEPLOY.txt §2b.
+ROLE_DISCS = (
+    ("state",  "/data/arc"),
+    ("kenjin", "/data/kenjin"),
+)
+DISC_SIZE_GB = 25
+IPV4 = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
+# machine0's `get --json` shape isn't part of its public contract, so we don't hard-code
+# a field name — we search these first, then fall back to any IPv4-looking string.
+IP_KEY_HINTS = ("ip", "ipv4", "publicip", "public_ip", "staticip", "static_ip", "address", "ipaddress")
+
+
+# ── machine0 CLI plumbing ──────────────────────────────────────────────────────
+
+@functools.lru_cache(maxsize=1)
+def m0_bin() -> str:
+    """Resolve the machine0 binary or exit with install guidance. Cached: `m0()`
+    calls this on every invocation and a PATH walk per subprocess is pure waste."""
+    b = os.environ.get("MACHINE0_BIN") or shutil.which("machine0")
+    if not b:
+        die(
+            "machine0 CLI not found on PATH.\n"
+            "  Install:  curl -LsSf https://machine0.io/install.sh | sh\n"
+            "  Or set MACHINE0_BIN=/path/to/machine0"
+        )
+    return b
+
+
+def m0(*args: str, capture: bool = False, check: bool = True) -> subprocess.CompletedProcess:
+    """Invoke `machine0 <args...>`, streaming by default. Raises loudly on failure."""
+    cmd = [m0_bin(), *args]
+    if capture:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+    else:
+        print(f"» machine0 {' '.join(args)}", file=sys.stderr)
+        proc = subprocess.run(cmd, text=True)
+    if check and proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip() if capture else ""
+        die(f"`machine0 {' '.join(args)}` failed (exit {proc.returncode}). {detail}".rstrip())
+    return proc
+
+
+def require_login() -> None:
+    """Ensure we're authenticated before doing anything billable."""
+    proc = m0("whoami", capture=True, check=False)
+    if proc.returncode != 0:
+        die(
+            "Not authenticated to machine0. Either:\n"
+            "  • run `machine0 login` (browser), or\n"
+            "  • export MACHINE0_API_TOKEN=… (from https://app.machine0.io)"
+        )
+
+
+def extract_ip(vm: object) -> "str | None":
+    """Best-effort static-IP extraction from `machine0 get --json`.
+
+    Prefer keys that look like an address, then any IPv4-shaped value anywhere in the
+    structure. Returns None if nothing matches (caller decides how loud to be).
+    """
+    def walk(node, prefer: bool):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                kl = str(k).lower().replace("-", "").replace("_", "")
+                if isinstance(v, str) and IPV4.match(v.strip()):
+                    hinted = any(h.replace("_", "") in kl for h in IP_KEY_HINTS)
+                    if hinted == prefer:
+                        return v.strip()
+                found = walk(v, prefer)
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for item in node:
+                found = walk(item, prefer)
+                if found:
+                    return found
+        elif isinstance(node, str) and prefer is False and IPV4.match(node.strip()):
+            return node.strip()
+        return None
+
+    return walk(vm, prefer=True) or walk(vm, prefer=False)
+
+
+def arc_ip(name: str) -> str:
+    proc = m0("get", name, "--json", capture=True)
+    try:
+        vm = json.loads(proc.stdout)
+    except json.JSONDecodeError as e:
+        die(f"machine0 get {name} --json returned non-JSON: {e}\n{proc.stdout[:500]}")
+    ip = extract_ip(vm)
+    if not ip:
+        die(
+            f"Could not find a static IP for '{name}' in machine0's response.\n"
+            f"Raw `machine0 get {name} --json`:\n{json.dumps(vm, indent=2)[:1200]}"
+        )
+    return ip
+
+
+# ── persistent discs ────────────────────────────────────────────────────────────
+
+def disc_records() -> list:
+    """Every disc machine0 currently holds, as raw records (name, status, region,
+    attachedMachine, …). Empty list if the call fails or the payload is unreadable —
+    callers treat that as "no information", never as "no discs"."""
+    proc = m0("disks", "ls", "--json", capture=True, check=False)
+    if proc.returncode != 0:
+        return []
+    try:
+        data = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return []
+    items = data if isinstance(data, list) else data.get("disks", data.get("items", []))
+    return [d for d in items if isinstance(d, dict) and d.get("name")] if isinstance(items, list) else []
+
+
+def live_discs() -> "set[str]":
+    """Just the names — what `ensure_discs` needs to decide create-or-skip."""
+    return {d["name"] for d in disc_records()}
+
+
+def ensure_discs(arc: str, region: str, size: int, have: set) -> list:
+    """Create this Arc's missing discs and return their mount records.
+
+    A disc must live in the SAME REGION as the VM that mounts it, so the region is
+    the Arc's, never a default. `have` is the account's existing disc names, read
+    ONCE by the caller — the listing is account-wide, so re-reading it per Arc would
+    buy nothing and cost a round trip each. Names created here are added to it so a
+    later Arc in the same run sees them. If the listing was unavailable `have` is
+    empty and we attempt the create anyway, letting a duplicate-name failure surface
+    rather than silently skipping.
+    """
+    records = []
+    for role, path in ROLE_DISCS:
+        name = f"{arc}-{role}"          # one disc per (Arc, tier); never shared
+        if name in have:
+            print(f"  · disc {name} exists", file=sys.stderr)
+        else:
+            m0("disks", "new", name, "-r", region, "-s", str(size))
+            have.add(name)
+            print(f"  ✓ disc {name} created ({size}GB, {region})", file=sys.stderr)
+        records.append({"disk": name, "path": path})
+    return records
+
+
+# ── fleet.json (a set of independent Arcs) ──────────────────────────────────────
+
+def load_fleet() -> dict:
+    if not FLEET_PATH.exists():
+        die(f"No fleet.json at {FLEET_PATH}. Run `./arcfleet up` first.")
+    return json.loads(FLEET_PATH.read_text())
+
+
+def save_fleet(fleet: dict) -> None:
+    FLEET_PATH.write_text(json.dumps(fleet, indent=2) + "\n")
+    print(f"✓ wrote {FLEET_PATH.relative_to(HERE.parent)}", file=sys.stderr)
+
+
+def resolve_arcs(fleet: dict, selector: str) -> list:
+    arcs = fleet["arcs"]
+    if selector == "all":
+        return arcs
+    match = [a for a in arcs if a["name"] == selector]
+    if not match:
+        die(f"No Arc named '{selector}' in fleet.json. Have: {', '.join(a['name'] for a in arcs)}")
+    return match
+
+
+# ── commands ─────────────────────────────────────────────────────────────────────
+
+def cmd_up(a: argparse.Namespace) -> None:
+    require_login()
+    if FLEET_PATH.exists() and not a.force:
+        die(f"{FLEET_PATH} already exists. Use --force to overwrite, or `./arcfleet down` first.")
+    if a.region not in REGIONS:
+        die(f"Unknown region '{a.region}'. Choose one of: {', '.join(REGIONS)}")
+
+    # The disc listing is account-wide: read once for the whole fleet, not per Arc.
+    have = set() if a.no_discs else live_discs()
+    # Operator extras (--mount 'disk:hf-cache path:/data/hf') are parsed once, here,
+    # and from this point are indistinguishable from tier discs — same record shape,
+    # same flag, same verification. --no-discs is then just an empty tier list.
+    extras = [dict(kv.split(":", 1) for kv in spec.split() if ":" in kv) for spec in a.mount]
+    extras = [{"disk": e["disk"], "path": e["path"]} for e in extras if "disk" in e and "path" in e]
+
+    arcs = []
+    for i in range(1, a.count + 1):
+        name = f"{a.prefix}-{i:02d}"
+
+        # THE DISCS COME FIRST, so the Arc boots with its state already persistent.
+        # They CAN be added later with `machine0 disks attach` — but only to a VM
+        # created with a MANAGED key, which is why --key matters here (see below).
+        tier = [] if a.no_discs else ensure_discs(name, a.region, a.disc_size, have)
+        mounts = tier + extras
+
+        new_args = ["new", name, "-s", a.size, "-i", a.image, "-r", a.region]
+        if a.env:
+            new_args += ["-e", a.env]
+        if a.key:
+            new_args += ["-k", a.key]
+        for m in mounts:
+            new_args += ["--attach", f"disk:{m['disk']}", f"path:{m['path']}"]
+        m0(*new_args)
+        ip = arc_ip(name)
+        arcs.append({
+            "name": name,
+            "region": a.region,
+            "size": a.size,
+            "image": a.image,
+            "ip": ip,
+            # RECORDED, not just passed. An Arc's discs are part of what the Arc IS:
+            # without this a `down` + `up` brings the Arc back with no disc at all,
+            # writing id_ed25519 and relay.db to an ephemeral root filesystem while
+            # reporting success. `verify` reads this back.
+            "mounts": mounts,
+        })
+        discs = ", ".join(m["path"] for m in mounts) or "NONE (--no-discs)"
+        print(f"✓ {name}  {ip}  (independent Arc @ {ip}.mac0.io)  discs: {discs}", file=sys.stderr)
+
+    fleet = {
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "defaults": {"size": a.size, "image": a.image, "region": a.region},
+        "arcs": arcs,
+    }
+    save_fleet(fleet)
+    print(f"\n{len(arcs)} independent Arc(s) up.", file=sys.stderr)
+    if a.no_discs:
+        print("!! --no-discs: state is on the VM's ephemeral root filesystem and dies with the VM.",
+              file=sys.stderr)
+    else:
+        print("Next:  ./arcfleet verify   (prove the discs actually mounted — a mount that "
+              "silently did not land looks exactly like a working Arc until the first reboot)",
+              file=sys.stderr)
+
+
+def cmd_ls(_a: argparse.Namespace) -> None:
+    fleet = load_fleet()
+    live = {}
+    proc = m0("ls", "--json", capture=True, check=False)
+    if proc.returncode == 0:
+        try:
+            data = json.loads(proc.stdout)
+            items = data if isinstance(data, list) else data.get("vms", data.get("machines", []))
+            for vm in items if isinstance(items, list) else []:
+                nm = vm.get("name") or vm.get("id")
+                if nm:
+                    live[nm] = vm.get("status") or vm.get("state") or "?"
+        except json.JSONDecodeError:
+            pass
+    print(f"{'ARC':<16} {'REGION':<8} {'SIZE':<8} {'IP':<16} {'STATUS':<12} DISCS")
+    for a in fleet["arcs"]:
+        status = live.get(a["name"], "· (not in machine0 ls)")
+        mounts = a.get("mounts") or []
+        discs = " ".join(m["path"] for m in mounts) if mounts else "NONE — ephemeral"
+        print(f"{a['name']:<16} {a['region']:<8} {a['size']:<8} {a['ip']:<16} {status:<12} {discs}")
+
+
+def cmd_ip(a: argparse.Namespace) -> None:
+    proc = m0("get", a.arc, "--json", capture=True, check=False)
+    if proc.returncode == 0:
+        try:
+            ip = extract_ip(json.loads(proc.stdout))
+            if ip:
+                print(ip)
+                return
+        except json.JSONDecodeError:
+            pass
+    for a2 in load_fleet()["arcs"]:
+        if a2["name"] == a.arc:
+            print(a2["ip"])
+            return
+    die(f"Unknown Arc '{a.arc}'.")
+
+
+def cmd_exec(a: argparse.Namespace) -> None:
+    if not a.command:
+        die("Nothing to run. Usage: ./arcfleet exec <arc|all> -- <command...>")
+    fleet = load_fleet()
+    remote = " ".join(a.command)
+    rc = 0
+    for arc in resolve_arcs(fleet, a.selector):
+        print(f"\n── {arc['name']} ({arc['ip']}) ──", file=sys.stderr)
+        proc = m0("ssh", arc["name"], remote, check=False)
+        rc = rc or proc.returncode
+    if rc:
+        die(f"One or more Arcs returned non-zero (last exit {rc}).")
+
+
+def cmd_verify(a: argparse.Namespace) -> None:
+    """Prove every recorded disc is really attached and really mounted.
+
+    The failure this catches is invisible: a VM whose attach did not take looks
+    identical to a healthy one — same IP, same SSH, same planes starting — right up
+    until the first reboot, when the identity and the mailbox are gone.
+
+    TWO views have to agree, and they disagree in both directions:
+      machine0   which VM it believes each disc is attached to (`disks ls`)
+      the guest  whether the kernel has it mounted and writable (`mountpoint`)
+    machine0 alone would pass a VM that never mounted what it was given; the guest
+    alone would pass a plain directory on the root filesystem, which is EXACTLY the
+    bug. The disc listing is fleet-wide, so it costs one call however many Arcs.
+    """
+    fleet = load_fleet()
+    attached = {d["name"]: d.get("attachedMachine") for d in disc_records()}
+    bad = []
+    for arc in resolve_arcs(fleet, a.selector):
+        mounts = arc.get("mounts") or []
+        print(f"\n── {arc['name']} ({arc['ip']}) ──", file=sys.stderr)
+        if not mounts:
+            print("  ✗ no discs recorded in fleet.json — this Arc keeps nothing across a rebuild",
+                  file=sys.stderr)
+            bad.append(f"{arc['name']}: no discs")
+            continue
+
+        # One SSH per VM, not per disc: the handshake dwarfs the work, and every disc
+        # on this Arc lives on this one host. Per-path branches, never a && chain —
+        # a chain lets the first bad disc hide every disc after it.
+        probe = "; ".join(
+            f'if mountpoint -q {m["path"]} && touch {m["path"]}/.arcfleet-probe 2>/dev/null; then '
+            f'rm -f {m["path"]}/.arcfleet-probe; '
+            f'echo "OK {m["path"]} $(df -h --output=size,used,avail {m["path"]} | tail -1)"; '
+            f'else echo "FAIL {m["path"]}"; fi'
+            for m in mounts
+        )
+        proc = m0("ssh", arc["name"], probe, capture=True, check=False)
+        seen = {}
+        for line in proc.stdout.splitlines():
+            parts = line.split(None, 2)
+            if len(parts) >= 2 and parts[0] in ("OK", "FAIL"):
+                seen[parts[1]] = (parts[0], parts[2] if len(parts) > 2 else "")
+
+        for m in mounts:
+            path, disc = m["path"], m["disk"]
+            # machine0's own view: is THIS disc attached to THIS Arc? Comparing the
+            # disc name (not just the path) is what catches a different disc mounted
+            # at the right place.
+            if attached and attached.get(disc) not in (None, arc["name"]):
+                print(f"  ✗ {path:<14} {disc:<20} machine0 says it is attached to "
+                      f"{attached[disc]}", file=sys.stderr)
+                bad.append(f"{arc['name']}:{disc} attached elsewhere")
+                continue
+            if disc in attached and attached[disc] is None:
+                print(f"  ✗ {path:<14} {disc:<20} machine0 says it is attached to nothing",
+                      file=sys.stderr)
+                bad.append(f"{arc['name']}:{disc} unattached")
+                continue
+            status, detail = seen.get(path, ("FAIL", "no probe output"))
+            if status == "OK":
+                print(f"  ✓ {path:<14} {disc:<20} {detail}", file=sys.stderr)
+            else:
+                print(f"  ✗ {path:<14} {disc:<20} NOT a writable mountpoint", file=sys.stderr)
+                bad.append(f"{arc['name']}:{path}")
+    if bad:
+        die("discs not mounted: " + ", ".join(bad) +
+            "\n  Attach one to a RUNNING VM:  machine0 disks attach <disk> <vm> --path <path>"
+            "\n  Requires a MANAGED key — see README, 'The discs'.")
+    print("\n✓ every recorded disc is attached and mounted.", file=sys.stderr)
+
+
+def cmd_snapshot(a: argparse.Namespace) -> None:
+    require_login()
+    m0("images", "save", a.arc, a.image)
+    print(f"✓ snapshotted {a.arc} → image '{a.image}'. Clone with: machine0 new <name> -i {a.image}", file=sys.stderr)
+
+
+def cmd_bootstrap(a: argparse.Namespace) -> None:
+    if not BOOTSTRAP.exists():
+        die(f"Missing {BOOTSTRAP}")
+    fleet = load_fleet()
+    for arc in resolve_arcs(fleet, a.selector):
+        print(f"\n══ bootstrap Arc {arc['name']} ══", file=sys.stderr)
+        m0("sync", "push", str(BOOTSTRAP), f"{arc['name']}:~/arc-node-bootstrap.sh")
+        m0("ssh", arc["name"], "bash ~/arc-node-bootstrap.sh")
+    print("\n✓ Arc(s) bootstrapped.", file=sys.stderr)
+
+
+def cmd_down(a: argparse.Namespace) -> None:
+    fleet = load_fleet()
+    names = [arc["name"] for arc in fleet["arcs"]]
+    discs = [m["disk"] for arc in fleet["arcs"] for m in (arc.get("mounts") or [])]
+    if not a.yes:
+        print(f"About to REMOVE {len(names)} VM(s) and release their static IPs:\n  {', '.join(names)}")
+        if discs:
+            print(f"\nThe {len(discs)} disc(s) SURVIVE this and keep their contents "
+                  f"(identity, mailbox, ledger):\n  {', '.join(discs)}")
+        if input("Type 'yes' to confirm: ").strip() != "yes":
+            die("Aborted.")
+    require_login()
+    for name in names:
+        m0("rm", name, "--yes", check=False)
+    FLEET_PATH.unlink(missing_ok=True)
+    print(f"✓ removed {len(names)} Arc(s); deleted fleet.json", file=sys.stderr)
+    if discs:
+        # Deliberately NOT removed. Surviving VM destruction is the whole reason these
+        # are discs and not docker volumes; a fresh `up` with the same --prefix mounts
+        # them straight back and the Arc keeps its identity. Destroying one is a
+        # separate, explicit act.
+        print(f"  discs KEPT: {', '.join(discs)}", file=sys.stderr)
+        print(f"  `arcfleet up --prefix {names[0].rsplit('-', 1)[0]}` remounts them; "
+              f"`machine0 disks rm <name>` destroys one and ALL its data.", file=sys.stderr)
+
+
+def die(msg: str) -> "None":
+    print(f"error: {msg}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(prog="arcfleet", description="Model independent Arcs on machine0 VMs.")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    up = sub.add_parser("up", help="create independent Arcs and record fleet.json")
+    up.add_argument("--count", type=int, default=1, help="number of independent Arcs (regions)")
+    up.add_argument("--size", default="small")
+    up.add_argument("--region", default="uk", choices=REGIONS)
+    up.add_argument("--image", default="ubuntu-24-04-loaded")
+    up.add_argument("--prefix", default="arc")
+    up.add_argument("--env", default=None, help="machine0 env set to inject via cloud-init (e.g. one holding HF_TOKEN)")
+    up.add_argument("--key", default=None, help="machine0 SSH key name")
+    up.add_argument("--mount", action="append", default=[],
+                    help="attach an EXTRA persistent disk, repeatable: --mount 'disk:hf-cache path:/data/hf'")
+    up.add_argument("--disc-size", type=int, default=DISC_SIZE_GB, dest="disc_size",
+                    help=f"GB per tier disc (10-500, default {DISC_SIZE_GB})")
+    up.add_argument("--no-discs", action="store_true", dest="no_discs",
+                    help="do NOT create/attach the two tier discs — the Arc's identity, mailbox "
+                         "and ledger then live on the VM's ephemeral root filesystem and die with it")
+    up.add_argument("--force", action="store_true")
+    up.set_defaults(fn=cmd_up)
+
+    sub.add_parser("ls", help="show fleet.json against live machine0 state").set_defaults(fn=cmd_ls)
+
+    ip = sub.add_parser("ip", help="print an Arc's static IP")
+    ip.add_argument("arc")
+    ip.set_defaults(fn=cmd_ip)
+
+    ex = sub.add_parser("exec", help="run a command on an Arc (or 'all')")
+    ex.add_argument("selector")
+    ex.add_argument("command", nargs=argparse.REMAINDER, help="-- <command...>")
+    ex.set_defaults(fn=cmd_exec)
+
+    vf = sub.add_parser("verify", help="prove every recorded disc is mounted and writable")
+    vf.add_argument("selector", nargs="?", default="all")
+    vf.set_defaults(fn=cmd_verify)
+
+    sn = sub.add_parser("snapshot", help="freeze an Arc into a golden image")
+    sn.add_argument("arc")
+    sn.add_argument("image")
+    sn.set_defaults(fn=cmd_snapshot)
+
+    bs = sub.add_parser("bootstrap", help="run arc-node-bootstrap.sh (relay, arc-node) on an Arc (or 'all')")
+    bs.add_argument("selector", nargs="?", default="all")
+    bs.set_defaults(fn=cmd_bootstrap)
+
+    dn = sub.add_parser("down", help="remove every Arc in fleet.json")
+    dn.add_argument("--yes", action="store_true")
+    dn.set_defaults(fn=cmd_down)
+
+    a = p.parse_args()
+    # argparse.REMAINDER keeps a leading "--"; drop it.
+    if getattr(a, "command", None) and a.command and a.command[0] == "--":
+        a.command = a.command[1:]
+    a.fn(a)
+
+
+if __name__ == "__main__":
+    main()

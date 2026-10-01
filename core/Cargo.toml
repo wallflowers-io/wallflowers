@@ -1,0 +1,86 @@
+# Pacific — Rust workspace root.
+[workspace]
+resolver = "2"
+members = ["pacific-wire", "pacific-core", "pacific-ffi", "uniffi-bindgen", "pacific-geometry", "pacific-media", "media-wasm", "viz-wasm", "core-wasm"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+
+[workspace.dependencies]
+pacific-wire = { path = "pacific-wire" }
+pacific-core = { path = "pacific-core" }
+# MLS (sync — do NOT set --cfg mls_build_async). rustcrypto = no system OpenSSL dep.
+mls-rs = "0.55.2"
+mls-rs-core = "0.27.0"
+mls-rs-crypto-rustcrypto = "0.22.0"
+# identity / hashing
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+sha2 = "0.10"
+# BIP-39 English wordlist — used to render a read-aloud "verify you match" SAS as
+# 3 words (and the shared list the recovery mnemonic will reuse).
+bip39 = "2.2"
+zeroize = { version = "1.8", features = ["derive"] }
+# storage
+rusqlite = { version = "0.31", features = ["bundled"] }
+# serialization (substrate = canonical CBOR; ciborium for decode/round-trip)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_bytes = "0.11"
+ciborium = "0.2"
+base64 = "0.22"
+hex = "0.4"
+# seal
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+# transport (match the relay's tokio-tungstenite 0.24)
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+# errors
+thiserror = "2"
+# ffi bridge (the one language boundary; Swift bindings via proc-macros)
+uniffi = "0.28"
+
+# THE one source of truth for the Rust core. Extracted from the pacific monorepo so
+# every deployment — the iOS app, arc-node, the relay, the wasm shells — builds the
+# SAME crates instead of each pinning its own rev of the monorepo.
+#
+# No local-path [patch] lives here on purpose: this workspace must resolve identically
+# on a developer's laptop and in a deploy image, or the divergence this extraction
+# removes just grows back. lodedb-core resolves from its pinned tag; relay resolves
+# from its pinned arc rev. For fast local iteration against sibling checkouts, copy
+# .cargo/config.toml.example to .cargo/config.toml (untracked) — that overrides paths
+# for YOUR tree only and never reaches a build image.
+#
+# pacific-core's integration tests pull in the Arc's `relay`, which itself consumes
+# pacific-wire as a git dep on the monorepo. Left alone that would compile a SECOND,
+# older pacific-wire alongside this workspace's own — the exact drift being removed —
+# so redirect it back to the crate sitting right here.
+[patch."https://codeberg.org/phezman/pacific.git"]
+pacific-wire = { path = "pacific-wire" }
+
+# WHY WE CARRY A FORK OF mls-rs. It hard-codes getrandom `features = ["js","custom"]`
+# for wasm32, and `js` WINS getrandom's backend cascade (its lib.rs tries `js` before
+# `custom`). So on the stock crate the host-entropy hook core-wasm registers with
+# `register_custom_getrandom!` is DEAD CODE, and the module reaches into
+# `globalThis.crypto` through wasm-bindgen shims instead. This fork drops `js` and
+# keeps `custom`.
+#
+# It is safe because mls-rs never calls getrandom itself — randomness reaches it
+# through the `CryptoProvider` trait; getrandom is pulled transitively by the
+# RustCrypto stack, which only needs *a* backend on a target with no OS entropy.
+#
+# MEASURED, post-wasm-bindgen: 2,955,547 -> 2,936,429 bytes (19 KB, not the 430 KB
+# the pre-bindgen figure suggested — the CLI strips the unused describe machinery
+# either way) and imports 27 -> 3. The size is incidental; the point is that entropy
+# comes from one declared host import we control instead of 25 JS shims.
+#
+# THIS PATCH IS VERSION-PINNED AND FAILS SILENTLY. It already did once: the graph
+# moved 0.55.2 -> 0.55.4 and the patch simply stopped applying, with `js` quietly
+# back. `app/web/build-wasm.sh` asserts against that on every build. On any mls-rs
+# bump, re-vendor. The real fix is upstream making `js` optional.
+[patch.crates-io]
+mls-rs = { path = "vendor/mls-rs" }

@@ -1,0 +1,35 @@
+/* trade.css — the Trade board and a listing's page (trade.js), in the Site's palette. */
+.card.listing{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;cursor:pointer}
+.card.listing.nohold{cursor:default}
+.card.listing h3{margin:0 0 2px}
+.card.listing .ex{margin:0}
+.lthumb{width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--s1);display:block}
+.lwho{margin:2px 0 0;font-size:12px;color:var(--i3)}
+.lsite{margin:14px 2px 8px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--i3)}
+.tact{display:inline-flex;flex-direction:column;align-items:flex-end;gap:4px}
+.tbtn{height:32px;padding:0 14px;border-radius:10px;border:1px solid var(--hair);background:var(--s0);color:var(--ink);font:600 13px var(--sans);cursor:pointer}
+.tbtn:hover{background:var(--s2)}
+.tbtn.go{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.tbtn:disabled{opacity:.5;cursor:default}
+.why{max-width:28ch;font-size:12px;color:#B3261E}
+.why:empty{display:none}
+.pill.disp.reserved{color:var(--a5)}
+.pill.disp.sold{color:#B3261E}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin:12px 0}
+.gallery figure{position:relative;margin:0;aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--s1)}
+.gallery img{width:100%;height:100%;object-fit:cover;display:block}
+.gallery .tact{position:absolute;top:6px;right:6px}
+.gallery .tbtn.x{width:28px;height:28px;padding:0;border-radius:50%;background:color-mix(in srgb,var(--s0) 85%,transparent)}
+.addfig{display:grid;place-items:center;aspect-ratio:1;border:1px dashed var(--hair);border-radius:12px;color:var(--i3);font-size:28px;cursor:pointer}
+.addfig:hover{background:var(--s2)}
+.addfig input{display:none}
+.cond{margin:10px 0 0;font-size:13px;font-weight:600;color:var(--i2)}
+.desc{white-space:pre-line;margin:8px 0 12px;line-height:1.5}
+.tedit{display:grid;gap:8px;margin:16px 0;padding:12px 14px;background:var(--s1);border-radius:12px}
+.tedit select,.tedit textarea,.tedit input{font:14px var(--sans);color:var(--ink);background:var(--s0);border:1px solid var(--hair);border-radius:10px;padding:8px 10px}
+.tedit textarea{resize:vertical}
+.tedit .tact{align-items:flex-start}
+.trow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.trow .hold{display:flex;gap:8px}
+.trow .hold[hidden]{display:none}
+.tlist{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}

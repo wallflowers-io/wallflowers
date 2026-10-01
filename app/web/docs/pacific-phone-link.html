@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser → phone</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root{
+    --bg:#fbfaf8; --panel:#fff; --ink:#1a1a1c; --ink-soft:#55555c; --ink-faint:#8a8a93;
+    --rule:#e5e2dc; --accent:#1f6f5c; --accent-soft:#e8f2ef;
+    --warn:#8a5a1a; --warn-soft:#fbf1e2; --stop:#96322e; --stop-soft:#fbeceb; --code-bg:#f4f2ee;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#141416;--panel:#1c1c1f;--ink:#ecebe8;--ink-soft:#a8a7a2;--ink-faint:#78777d;
+    --rule:#2e2e33;--accent:#5fb89f;--accent-soft:#17302a;--warn:#d4a05a;--warn-soft:#2e2418;
+    --stop:#d9736d;--stop-soft:#2e1a19;--code-bg:#232327;}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);
+       -webkit-font-smoothing:antialiased;padding:34px 22px 80px}
+  .wrap{max-width:860px;margin:0 auto}
+  h1{font-size:30px;line-height:1.15;letter-spacing:-.015em;font-weight:650;margin:0 0 12px}
+  h2{font:12px/1 var(--mono);text-transform:uppercase;letter-spacing:.16em;color:var(--ink-faint);
+     font-weight:500;margin:34px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+  p.lede{color:var(--ink-soft);max-width:68ch;margin:0 0 8px}
+  code{font-family:var(--mono);font-size:.9em;background:var(--code-bg);padding:1px 5px;border-radius:3px}
+  .step{border:1px solid var(--rule);border-radius:8px;background:var(--panel);padding:15px 17px;margin:0 0 12px}
+  .step.on{border-color:var(--accent)}
+  .step h3{font:12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;margin:0 0 9px;
+           color:var(--ink-faint);font-weight:500}
+  .step.on h3{color:var(--accent)}
+  .step p{margin:0 0 9px;color:var(--ink-soft);font-size:14px}
+  button{font:12px/1 var(--mono);text-transform:uppercase;letter-spacing:.1em;background:var(--panel);
+         color:var(--ink);border:1px solid var(--rule);padding:9px 14px;border-radius:5px;cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  button:disabled{opacity:.35;cursor:default}
+  button.primary{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  input[type=text]{font:14px var(--sans);padding:9px 11px;border:1px solid var(--rule);border-radius:5px;
+        background:var(--bg);color:var(--ink);width:100%;max-width:420px}
+  .bundle{font:11px/1.5 var(--mono);background:var(--code-bg);border:1px solid var(--rule);border-radius:6px;
+          padding:11px;word-break:break-all;max-height:150px;overflow:auto;user-select:all;margin:0 0 9px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .pill{font:10px/1 var(--mono);text-transform:uppercase;letter-spacing:.1em;padding:4px 8px;border-radius:4px;
+        background:var(--code-bg);color:var(--ink-faint)}
+  .pill.ok{background:var(--accent-soft);color:var(--accent)}
+  .pill.bad{background:var(--stop-soft);color:var(--stop)}
+  #log{font:11px/1.65 var(--mono);background:var(--code-bg);border:1px solid var(--rule);border-radius:6px;
+       padding:11px 13px;max-height:300px;overflow:auto;white-space:pre-wrap;margin:0}
+  .l-ok{color:var(--accent)} .l-bad{color:var(--stop)} .l-dim{color:var(--ink-faint)}
+  .note{font-size:13px;color:var(--ink-soft);border-left:3px solid var(--warn);background:var(--warn-soft);
+        padding:10px 13px;border-radius:0 6px 6px 0;margin:12px 0}
+  .note b{color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Browser &rarr; phone</h1>
+<p class="lede">The browser stands up a real MLS identity, shows a signed contact bundle, and the phone
+scans or pastes it. That forms a genuine 1:1 connection group &mdash; the same handshake two phones use.
+Then a message typed here is sealed, published to the Arc's relay, and folded into the chat on the phone.</p>
+<p class="lede">No multi-device, no device certs: the browser pairs as its own <b>peer</b>, which is the
+path that already works end to end.</p>
+
+<div class="note">
+  <b>What this page is not.</b> The identity seed lives in this origin's <code>localStorage</code>, not
+  behind the keyholder's non-extractable key, and MLS state is held in memory &mdash; a reload re-mints
+  and you pair again. That is the persistence gap (SQLite/OPFS), deliberately not solved here.
+</div>
+
+<h2>1 &middot; This browser</h2>
+<div class="step on" id="s1">
+  <h3>Identity</h3>
+  <div class="row">
+    <button class="primary" id="boot">Start</button>
+    <span class="pill" id="p-core">wasm: idle</span>
+    <span class="pill" id="p-id">identity: none</span>
+    <span class="pill" id="p-relay">relay: offline</span>
+  </div>
+</div>
+
+<h2>2 &middot; Give this to the phone</h2>
+<div class="step" id="s2">
+  <h3>Contact bundle</h3>
+  <p>On the phone: <b>New chat &rarr; Enter a code</b>, and paste this. (Or <b>Scan a QR code</b> &mdash;
+    the scanner takes a raw bundle, so a QR of this string works too.)</p>
+  <div class="bundle" id="bundle">—</div>
+  <div class="row">
+    <button id="copy" disabled>Copy</button>
+    <span class="pill" id="p-intro">intro tag: —</span>
+  </div>
+</div>
+
+<h2>3 &middot; The phone scans it</h2>
+<div class="step" id="s3">
+  <h3>Waiting for the Welcome</h3>
+  <p>The phone creates the connection group and seals a Welcome to this browser's intro mailbox.
+    This page is subscribed to it and joins the moment it lands.</p>
+  <div class="row">
+    <span class="pill" id="p-group">group: none</span>
+    <span class="pill" id="p-epoch">epoch: —</span>
+  </div>
+</div>
+
+<h2>4 &middot; Send</h2>
+<div class="step" id="s4">
+  <h3>A message, to the phone</h3>
+  <div class="row">
+    <input type="text" id="msg" placeholder="Hello from the browser" disabled>
+    <button class="primary" id="send" disabled>Send</button>
+  </div>
+</div>
+
+<h2>What happened</h2>
+<pre id="log">ready.</pre>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* The Arc's blind public relay — the SAME default the phone dials
+     (`paths::DEFAULT_RELAY_URL`), so the two meet with no tunnel and no LAN. */
+  var RELAY    = 'wss://arc.kenjin.cc/v1/relay';
+  var CORE_URL = 'core/core_wasm_bg.wasm';
+  var SEED_KEY = 'pacific.phonelink.seed';
+
+  var $ = function (id) { return document.getElementById(id); };
+  function log(s, cls) {
+    var e = $('log'), t = new Date().toTimeString().slice(0, 8);
+    e.innerHTML += '\n<span class="' + (cls || 'l-dim') + '">' + t + '  ' +
+      String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }) +
+      '</span>';
+    e.scrollTop = e.scrollHeight;
+  }
+  function pill(id, text, cls) { var e = $(id); e.textContent = text; e.className = 'pill' + (cls ? ' ' + cls : ''); }
+  function lit(id) { $(id).classList.add('on'); }
+
+  /* ── bytes ────────────────────────────────────────────────────────────── */
+  var utf8 = function (s) { return new TextEncoder().encode(s); };
+  var text = function (b) { return new TextDecoder().decode(b); };
+  function hex(u8) { var s = ''; for (var i = 0; i < u8.length; i++) s += (u8[i] < 16 ? '0' : '') + u8[i].toString(16); return s; }
+  function unhex(h) { var u = new Uint8Array(h.length / 2); for (var i = 0; i < u.length; i++) u[i] = parseInt(h.substr(i * 2, 2), 16); return u; }
+  function b64(u8) { var s = ''; for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); }
+  function unb64(s) { var r = atob(s), u = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) u[i] = r.charCodeAt(i); return u; }
+
+  /* ── the core ─────────────────────────────────────────────────────────────
+     Instantiated by hand rather than through wasm-bindgen's glue: the module's
+     only real host import is entropy, and supplying it by name is the property
+     worth keeping — a host that cannot provide a CSPRNG cannot instantiate. */
+  var HOST = {
+    pacific_fill_random: function (at) {
+      return function (ptr, len) {
+        crypto.getRandomValues(new Uint8Array(at().exports.memory.buffer, ptr, len));
+      };
+    },
+    __wbindgen_init_externref_table: function (at) {
+      return function () {
+        var t = at().exports.__wbindgen_externrefs, off = t.grow(4);
+        t.set(0, undefined);
+        t.set(off + 0, undefined); t.set(off + 1, null);
+        t.set(off + 2, true); t.set(off + 3, false);
+      };
+    },
+    date_now: function () { return function () { return Date.now(); }; }
+  };
+
+  function loadCore() {
+    return fetch(CORE_URL).then(function (r) {
+      if (!r.ok) throw new Error(CORE_URL + ' ' + r.status + ' — run app/web/build-wasm.sh');
+      return r.arrayBuffer();
+    }).then(function (b) { return WebAssembly.compile(b); }).then(function (mod) {
+      var inst = null, at = function () { return inst; }, imports = {};
+      WebAssembly.Module.imports(mod).forEach(function (i) {
+        var make = HOST[i.name];
+        if (!make) throw new Error('unsupplied import ' + i.module + '.' + i.name);
+        (imports[i.module] = imports[i.module] || {})[i.name] = make(at);
+      });
+      return WebAssembly.instantiate(mod, imports).then(function (w) {
+        inst = w;
+        if (w.exports.__wbindgen_start) w.exports.__wbindgen_start();
+        return w.exports;
+      });
+    });
+  }
+
+  /* alloc → write → call → read. Memory is re-read after alloc because growing
+     linear memory detaches the old view; a refusal puts its reason in the same
+     out buffer with erred() set, so it surfaces as the core's own words. */
+  var E = null;
+  function call(fn, bytes) {
+    var ptr = E.alloc(bytes.length);
+    new Uint8Array(E.memory.buffer, ptr, bytes.length).set(bytes);
+    var n = fn(bytes.length);
+    if (E.erred()) throw new Error(text(new Uint8Array(E.memory.buffer, E.out_ptr(), E.out_len())));
+    return new Uint8Array(E.memory.buffer, E.out_ptr(), n).slice();
+  }
+  var callStr  = function (fn, s) { return text(call(fn, utf8(s || ''))); };
+  var callJson = function (fn, o) { return JSON.parse(callStr(fn, typeof o === 'string' ? o : JSON.stringify(o))); };
+
+  /* ── state ───────────────────────────────────────────────────────────────── */
+  var me = null, group = null, keys = null, ws = null, subbed = {}, gen = 0;
+  var seen = Object.create(null);   /* (tag,seq) already handled — see dial() */
+  var wantTags = [];                /* re-asserted after a reconnect */
+  var reconnects = 0;
+
+  function seed() {
+    var s = localStorage.getItem(SEED_KEY);
+    if (!s) { s = hex(crypto.getRandomValues(new Uint8Array(32))); localStorage.setItem(SEED_KEY, s); }
+    return s;
+  }
+
+  /* ── the relay ───────────────────────────────────────────────────────────── */
+  function dial() {
+    return new Promise(function (res, rej) {
+      var sock = new WebSocket(RELAY);
+      sock.onopen = function () {
+        pill('p-relay', 'relay: live', 'ok');
+        log('relay open · ' + RELAY, 'l-ok');
+        wantTags.forEach(function (t) {
+          sock.send(JSON.stringify({ t: 'sub', tags: [t], since: 0, v: 1 }));
+        });
+        res(sock);
+      };
+      sock.onerror = function () { pill('p-relay', 'relay: failed', 'bad'); rej(new Error('relay unreachable')); };
+      sock.onclose = function () {
+        pill('p-relay', 'relay: closed', 'bad');
+        log('relay closed — reconnecting', 'l-bad');
+        /* A closed socket is not the end of the conversation. Without this the
+           page looks alive while every send throws into a dead socket. */
+        setTimeout(function () {
+          reconnects += 1;
+          dial().then(function (s) { ws = s; log('reconnected (#' + reconnects + ')', 'l-ok'); })
+                .catch(function () { log('reconnect failed — will retry on the next close', 'l-bad'); });
+        }, 1500);
+      };
+      sock.onmessage = function (ev) {
+        var f; try { f = JSON.parse(ev.data); } catch (e) { return; }
+        if (f.t !== 'msg') return;
+        /* DEDUPE BY (tag, seq) — the phone's `inbox_cursor_v2` in miniature, and
+           not optional. The relay adds a subscriber to live fanout BEFORE it
+           replays the backlog, so a blob published in that window arrives twice.
+           MLS deletes each generation's key on first use, so the second copy
+           fails as "key not available, invalid generation N" — and if the copy
+           lost that way is a COMMIT, this page never advances its epoch and goes
+           on publishing to a mailbox the group has already left, with no error
+           anywhere. That is the shape of a message that silently never arrives. */
+        var k = f.tag + ':' + f.seq;
+        if (seen[k]) return;
+        seen[k] = 1;
+        onBlob(f.tag, f.blob);
+      };
+    });
+  }
+  function sub(tag, why) {
+    if (subbed[tag]) return;
+    subbed[tag] = true;
+    wantTags.push(tag);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ t: 'sub', tags: [tag], since: 0, v: 1 }));
+    }
+    log('subscribed ' + tag.slice(0, 16) + '… (' + why + ')');
+  }
+
+  /* Every inbound blob: the intro mailbox carries a sealed Welcome, the group
+     tag carries sealed MLS messages. They are told apart by which tag they
+     arrived on — the same way the phone tells them apart. */
+  function onBlob(tag, blob) {
+    try {
+      if (me && tag === me.introTag && !group) return joinFrom(blob);
+      if (group && keys && tag === keys.tag) { incoming(blob); return syncEpoch(); }
+      if (group && keys) log('stale blob on ' + tag.slice(0, 12) + '… (we are at epoch ' + keys.epoch + ')', 'l-dim');
+    } catch (e) {
+      log('blob dropped: ' + e.message, 'l-bad');
+      /* A blob we could not read still tells us the group may have moved, so the
+         epoch is re-checked rather than assumed. */
+      if (group) { try { syncEpoch(); } catch (e2) {} }
+    }
+  }
+
+  function joinFrom(blob) {
+    var j = callJson(E.mls_join_intro, { blob_b64: blob });
+    group = j.group_id;
+    log('joined ' + j.kind + ' "' + (j.name || '') + '" at epoch ' + j.epoch, 'l-ok');
+    log('  the Welcome named ' + j.scanner.slice(0, 16) + '… and the roster vouched for it', 'l-ok');
+    pill('p-group', 'group: ' + group.slice(0, 12) + '…', 'ok');
+    lit('s3');
+    syncEpoch();
+    $('msg').disabled = false; $('send').disabled = false; lit('s4');
+  }
+
+  /* The tag and the seal secret are per-EPOCH, and the authority on which epoch
+     we are in is the MLS state — never what last crossed the wire. Re-read after
+     EVERY inbound blob, including one that failed to decrypt: a page still
+     addressing the old mailbox looks exactly like a page with nothing to hear,
+     and its sends vanish without an error. */
+  function syncEpoch() {
+    if (!group) return;
+    var k = callJson(E.mls_epoch_keys, group);
+    if (keys && k.tag === keys.tag) return;        /* unchanged — nothing to say */
+    var was = keys ? keys.epoch : '—';
+    keys = k;
+    pill('p-epoch', 'epoch: ' + keys.epoch, 'ok');
+    if (was !== '—') log('epoch ' + was + ' → ' + keys.epoch + ' · mailbox moved to ' + keys.tag.slice(0, 12) + '…', 'l-ok');
+    sub(keys.tag, 'group tag @ epoch ' + keys.epoch);
+  }
+
+  function incoming(blob) {
+    var innerHex = callStr(E.seal_open, JSON.stringify({
+      blob: hex(unb64(blob)), tag: keys.tag, secret: keys.secret
+    }));
+    var r = callJson(E.mls_decrypt, { group_id: group, message: innerHex });
+    if (r.kind === 'own') return;
+    if (r.kind === 'handshake') { log('handshake in — the group advanced'); return; }
+    var bytes = unhex(r.delta).length;
+    log('MESSAGE IN from ' + r.sender.slice(0, 16) + '… (' + bytes + ' bytes of delta)', 'l-ok');
+    log('  rendering its text needs the fold — not wired on this page', 'l-dim');
+  }
+
+  function send() {
+    var t = $('msg').value.trim();
+    if (!t || !group || !keys) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      log('NOT SENT — the relay socket is ' + (ws ? 'closed' : 'absent') +
+          '. Waiting for the reconnect; send again in a moment.', 'l-bad');
+      return;
+    }
+    try {
+      syncEpoch();                    /* never publish where the group no longer is */
+      gen += 1;                       /* Lamport: 1 + the highest gen seen */
+      var delta = call(E.forum_post, utf8(JSON.stringify({ text: t, gen: gen, epoch: keys.epoch })));
+      var enc   = callJson(E.mls_encrypt, { group_id: group, delta: hex(delta) });
+      var sealed = callStr(E.seal_seal, JSON.stringify({
+        inner: enc.message, tag: keys.tag, secret: keys.secret
+      }));
+      var B = b64(unhex(sealed));
+      /* Signed by the epoch's key through the core; the relay refuses anything else. */
+      var s = callJson(E.relay_sign_pub, { seed: keys.address_seed, blob: B });
+      ws.send(JSON.stringify({ t: 'pub', tag: s.tag, blob: B, sig: s.sig }));
+      log('SENT "' + t + '" · gen ' + gen + ' · epoch ' + keys.epoch +
+          ' · ' + unhex(sealed).length + ' sealed bytes', 'l-ok');
+      $('msg').value = '';
+    } catch (e) { log('send failed: ' + e.message, 'l-bad'); }
+  }
+
+  /* ── boot ────────────────────────────────────────────────────────────────── */
+  $('boot').addEventListener('click', function () {
+    $('boot').disabled = true;
+    loadCore().then(function (exports) {
+      E = exports;
+      pill('p-core', 'wasm: ' + Object.keys(E).filter(function (k) { return k.indexOf('mls_') === 0; }).length + ' mls exports', 'ok');
+      me = callJson(E.mls_init, { seed: seed() });
+      /* The intro value is a SEED (18 Sep 2026): the mailbox is the relay address it
+         names, and only someone holding the value — the phone, from the bundle — can
+         publish there. Subscribe to the address; the value goes in the bundle. */
+      me.introTag = hex(call(E.relay_address, unhex(me.intro)));
+      pill('p-id', 'identity: ' + me.cred.slice(0, 12) + '…', 'ok');
+      pill('p-intro', 'intro tag: ' + me.intro.slice(0, 12) + '…');
+      log('identity ' + me.cred.slice(0, 16) + '… (seed from this origin)', 'l-ok');
+
+      var bundle = callJson(E.mls_contact_bundle, 'Browser').bundle;
+      $('bundle').textContent = bundle;
+      $('copy').disabled = false;
+      $('copy').onclick = function () {
+        navigator.clipboard.writeText(bundle).then(function () { $('copy').textContent = 'Copied'; });
+      };
+      log('contact bundle minted · ' + bundle.length + ' chars', 'l-ok');
+      lit('s2');
+
+      return dial();
+    }).then(function (sock) {
+      ws = sock;
+      sub(me.introTag, 'intro mailbox');
+      lit('s3');
+      log('waiting for the phone to scan the bundle…');
+    }).catch(function (e) {
+      $('boot').disabled = false;
+      pill('p-core', 'wasm: failed', 'bad');
+      log(e.message, 'l-bad');
+    });
+  });
+
+  $('send').addEventListener('click', send);
+  $('msg').addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
+})();
+</script>
+</body>
+</html>

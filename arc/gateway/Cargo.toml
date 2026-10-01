@@ -1,0 +1,28 @@
+# arc-gateway — the thin /v1 router: the Arc's single public origin.
+#
+# Owns /v1 routing + capability discovery, and reverse-proxies each request to the plane
+# process behind it (relay ws · systems · membership). The planes stay
+# independent processes; this is the only public port. See docs/arc-api-icd-v1.html.
+[package]
+name = "arc-gateway"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "arc-gateway"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.7", features = ["ws"] }
+face-render = { path = "../lib/face-render" }
+tokio = { workspace = true }
+tokio-tungstenite = "0.24"
+futures-util = { workspace = true }
+# `stream` so proxied response bodies pass through as they arrive instead of being buffered.
+reqwest = { workspace = true, features = ["stream"] }
+serde_json = { workspace = true }
+# Encodes the expected `Basic` header for the console gate (compare-only — never decoded).
+base64 = "0.22"
+# The deploy stamp served at GET /v1/version — compiled in, not read from a file on the box.
+arc-build = { workspace = true }

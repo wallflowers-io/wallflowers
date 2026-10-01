@@ -1,0 +1,39 @@
+[package]
+name = "core-wasm"
+description = "Wasm shell over pacific-core: the real canonical CBOR, the real DeltaId, the real SAS words. No JS reimplementation."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# no-default-features is the whole point: `storage` wants SQLite and `transport`
+# wants mio, and wasm32 has neither. What is left is the part that is arithmetic.
+# NOT `workspace = true`: cargo ignores `default-features = false` when a member
+# inherits a workspace dependency that did not itself disable them, so inheriting
+# here would silently pull tokio back in and fail in mio.
+pacific-core = { path = "../pacific-core", default-features = false, features = ["mls"] }
+# The relay's wire codecs, for `blob_unb64`: the intro-mailbox blob is decoded by
+# the SAME base64 the phone (`node::process_intro_blob`) and the relay use, not a
+# second engine configured to agree with it. A workspace member with no feature
+# gates, so it crosses to wasm32 untouched.
+pacific-wire = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ciborium = { workspace = true }
+hex = { workspace = true }
+# Entropy for the intro-mailbox tag, on EVERY target. The wasm32 block below adds
+# the `custom` backend that routes it to the host import; natively it is the OS.
+# One crate either way, so the tag is minted by one line rather than one per
+# platform. Already in the tree (0.2.17) — mls-rs's RustCrypto stack pulls it.
+getrandom = "0.2"
+
+# getrandom's `custom` backend, for wasm32 only. Without a backend getrandom
+# refuses to compile for this target ("you may need to enable the js feature");
+# WITH the js feature it drags in wasm-bindgen, which needs post-processing this
+# crate deliberately does not do. mls-rs already enables `custom` for the same
+# reason, so this follows a decision the dependency graph had already made.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["custom"] }

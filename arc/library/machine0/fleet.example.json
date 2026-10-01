@@ -1,0 +1,44 @@
+{
+  "generated_at": "2026-07-14T12:00:00+00:00",
+  "defaults": {
+    "size": "small",
+    "image": "ubuntu-24-04-loaded",
+    "region": "uk"
+  },
+  "arcs": [
+    {
+      "name": "arc-01",
+      "region": "uk",
+      "size": "small",
+      "image": "ubuntu-24-04-loaded",
+      "ip": "203.0.113.11",
+      "mounts": [
+        {
+          "disk": "arc-01-state",
+          "path": "/data/arc"
+        },
+        {
+          "disk": "arc-01-kenjin",
+          "path": "/data/kenjin"
+        }
+      ]
+    },
+    {
+      "name": "arc-02",
+      "region": "asia",
+      "size": "small",
+      "image": "ubuntu-24-04-loaded",
+      "ip": "203.0.113.12",
+      "mounts": [
+        {
+          "disk": "arc-02-state",
+          "path": "/data/arc"
+        },
+        {
+          "disk": "arc-02-kenjin",
+          "path": "/data/kenjin"
+        }
+      ]
+    }
+  ]
+}

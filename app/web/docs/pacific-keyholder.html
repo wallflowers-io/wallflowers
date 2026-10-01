@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cambridge Digital Democracy</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  /* This is a member's own page again, and this time it is hostile to the KEY
+     rather than to the stylesheet. The panel below is the attack: it runs on
+     this origin, beside the interior, and tries every route a script on a
+     member's site would actually have to the device key. All of them are
+     supposed to fail, and the panel says which did. */
+  html, body { margin: 0; }
+  body { background: #F6F3EC; color: #231F1A;
+         font: 16px/1.6 "Iowan Old Style", Palatino, Georgia, serif; }
+  main { max-width: 700px; margin: 0 auto; padding: 72px 32px 40px; }
+  h1 { font-size: 40px; line-height: 1.1; font-weight: 500; margin: 0 0 14px; }
+  p  { margin: 0 0 28px; color: #4A423A; }
+
+  .probe { border-top: 1px solid #DED6C6; padding-top: 20px; }
+  .probe h2 { font: 600 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .2em;
+              text-transform: uppercase; color: #8A7E6C; margin: 0 0 14px; }
+  table { width: 100%; border-collapse: collapse;
+          font: 12.5px/1.55 ui-monospace, Menlo, monospace; }
+  td { padding: 8px 10px 8px 0; border-bottom: 1px solid #E8E1D2; vertical-align: top; }
+  td.r { width: 84px; white-space: nowrap; }
+  .ok   { color: #2E6F4E; }
+  .no   { color: #A33427; }
+  .wait { color: #8A7E6C; }
+</style>
+</head>
+<body>
+
+<main>
+  <h1>Cambridge<br>Digital Democracy</h1>
+  <p>Open meetings, minutes, and a ballot every quarter.</p>
+
+  <div class="probe">
+    <h2>What this page can reach</h2>
+    <table id="t"><tr><td class="r wait">…</td><td>running</td></tr></table>
+  </div>
+</main>
+
+<script src="pacific.js"></script>
+<script>
+(function () {
+  'use strict';
+  var KEYHOLDER = 'http://localhost:8103/';
+  var rows = [];
+  function say(verdict, what) {
+    rows.push('<tr><td class="r ' + (verdict === 'held' ? 'ok' : 'no') + '">' +
+              (verdict === 'held' ? 'HELD' : 'LEAKED') + '</td><td>' + what + '</td></tr>');
+    document.getElementById('t').innerHTML = rows.join('');
+  }
+
+  Pacific.mount({ site: 'cambridge-dd', keyholder: KEYHOLDER, seed: Pacific.seed })
+    .then(function (api) {
+      /* The device exists and the host page knows its public half. That is the
+         part that is meant to be legible: a peer id is not a secret. */
+      say('held', 'device leaf <b>' + api.device.pk.slice(0, 24) + '…</b> · ' +
+                  api.device.agent + ' · storage persisted: ' + api.device.persisted);
+
+      /* 1. Ask for it outright. There is no method, and the one named for it
+            answers with the reason rather than the key. */
+      api.rpc.call('device.export').then(function () {
+        say('leak', 'device.export returned something');
+      }, function (e) {
+        say('held', 'device.export refused — <i>' + e.message + '</i>');
+      });
+
+      /* 2. Use it. This is allowed, and is the point: the host can obtain a
+            signature over its own bytes and can never obtain the signer. */
+      api.rpc.call('device.sign', { message: 'the ballot papers are printed' })
+        .then(function (r) { say('held', 'signed for us, key stayed put — sig ' + r.sig.slice(0, 20) + '…'); });
+
+      /* 3. Reach into the frame. Same-origin policy, not politeness. */
+      var f = document.querySelector('iframe[title="Pacific keyholder"]');
+      try {
+        var stolen = f.contentWindow.document || f.contentWindow.crypto;
+        say('leak', 'read into the keyholder document: ' + stolen);
+      } catch (e) {
+        say('held', 'cross-origin read blocked — <i>' + e.name + '</i>');
+      }
+
+      /* 4. Open the keyholder's database from here. Same name, different
+            origin, so this is a different database — and an empty one. */
+      var r = indexedDB.open('pacific.keyholder');
+      r.onsuccess = function () {
+        var names = Array.prototype.slice.call(r.result.objectStoreNames);
+        if (names.length) say('leak', 'host origin sees the keyholder store: ' + names.join(', '));
+        else say('held', 'same DB name on this origin is a different, empty database');
+        r.result.close();
+      };
+    })
+    .catch(function (e) { say('leak', 'mount failed: ' + e.message); });
+})();
+</script>
+</body>
+</html>

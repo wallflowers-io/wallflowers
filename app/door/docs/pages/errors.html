@@ -1,0 +1,14 @@
+<h1>Errors</h1>
+<p>A refusal is an HTTP status and a sentence from WallFlowers, as plain text in the body (<code>await res.text()</code>), not JSON; only a batch's 422 is JSON. There are no error codes, and the wording is not a contract: show the sentence, don't parse it. Each route's own refusals are on <a href="routes.html">Routes</a>.</p>
+<table><thead><tr><th>Status</th><th>Means</th><th>Do</th></tr></thead><tbody>
+<tr><td>401, or 400 <code>not signed in</code></td><td>Not signed in, or the session ended.</td><td>Sign in again: show the button, or send them once by yourself, never in a loop (<a href="session.html">The session</a>).</td></tr>
+<tr><td>400 "… is outside this site's scope"</td><td>That object isn't in your session's reach.</td><td>Don't offer it.</td></tr>
+<tr><td>400 · 403, other</td><td>Not allowed, a malformed argument, or a route that isn't for sites.</td><td>Show the sentence.</td></tr>
+<tr><td>A network error, no status</td><td>The browser stopped a call from a page origin that isn't registered (CORS).</td><td>Serve from a registered origin (<a href="session.html#your-page">Your page's rules</a>).</td></tr>
+<tr><td>404 "no such page"</td><td>No published page at that address (public page routes).</td><td>Check the address.</td></tr>
+<tr><td>413</td><td>The body is over {{BODY}}.</td><td>Send less.</td></tr>
+<tr><td>422</td><td>A batch stopped part-way: <code>{ made, refused: { step, why } }</code>.</td><td>Keep what was made; retry only the rest.</td></tr>
+<tr><td>429 "too many sign-ins are open from here"</td><td>{{PER_ADDR}} sign-ins already in progress from your address.</td><td>Finish or cancel one, or wait a minute.</td></tr>
+<tr><td>503 "the Door is at its session limit"</td><td>As many sessions are open as WallFlowers holds, most of them left to idle out.</td><td>Sign out every session you open; try again shortly.</td></tr>
+<tr><td>502 · 503 · no answer</td><td>Busy or unreachable.</td><td>Try again shortly.</td></tr>
+</tbody></table>

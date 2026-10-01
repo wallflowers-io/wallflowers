@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quickstart · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html" aria-current="page">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>Quickstart</h1>
+<p class="lede">A page that signs a member in, lists the community's rooms, and posts to one. Two files, no build step, no dependencies.</p>
+<div class="note warn"><p><strong>Before you start, at the hackathon:</strong></p><ul>
+<li>Sign out every session you open: 112 sessions are held for everyone together.</li>
+<li>Everyone on the venue's Wi-Fi shares one address, and 32 sign-ins can be in progress per address. <code>429 "too many sign-ins are open from here"</code> means: finish or cancel yours, or wait a minute.</li>
+<li>Test in a desktop browser on <code>localhost</code>. A phone can't reach your laptop's page: a LAN address isn't a secure context, and the sign-in needs one.</li>
+<li>Keep your computer's clock right: a proof more than 60 s off WallFlowers' clock is refused.</li>
+</ul></div>
+<h2>1. Your client id</h2>
+<p><strong>Make your community first</strong>, at <a href="https://wallflowers.io/signup">wallflowers.io/signup</a>, before you run the starter: you will own it. Signing up from the starter instead makes an account with no community, and its sign-in stops at "you are the owner or an admin of no Site". If that happened, make the community at signup, press <strong>Create my account</strong>, and on the next page choose <strong>Sign in with a passkey</strong> with that account.</p><p>Nothing to register on your machine: use the client <code>hackathon-local</code>, and serve on port 5173. When you sign in, WallFlowers asks which of your communities the page may use: pick your test community (<a href="register.html#local">On your machine</a>). To put your site on the web later, <a href="register.html">register it</a>.</p>
+<p>Made your community with <strong>Your app</strong>? Signup's last page lists its Site id, Address, Client and Callback: the starter needs only Client and Callback (<code>CONFIG.client</code>, <code>CONFIG.callback</code>); keep the Address for the public page.</p>
+<h2>2. Download the starter</h2>
+<p><a href="starter/index.html" download>index.html</a> and <a href="starter/app.js" download>app.js</a>. Put them in one folder, or from a terminal:</p>
+<pre><code>curl -O https://docs.wallflowers.io/starter/index.html -O https://docs.wallflowers.io/starter/app.js</code></pre>
+<p> At the top of <code>app.js</code>, set <code>client</code> to <code>hackathon-local</code>. The fields the starter reads from <code>/v2/graph</code> are explained on <a href="views.html">What you read</a>.</p>
+<pre><code>export const CONFIG = {
+  door: 'https://app.wallflowers.io',
+  integrity: 'sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/',
+  client: 'hackathon-local',
+  callback: location.origin + location.pathname,
+};</code></pre>
+<h2>3. Serve it</h2>
+<pre><code>python3 -m http.server 5173 --bind 127.0.0.1</code></pre>
+<p>On Windows, <code>py -m http.server 5173 --bind 127.0.0.1</code>. With Node, <code>npx http-server -p 5173 -a 127.0.0.1</code>. Open the page at its address, not by double-clicking <code>index.html</code>: as a file it cannot run.</p>
+<p><code>--bind 127.0.0.1</code> keeps the server to this machine. The address you open is still exactly <code>http://localhost:5173/</code>: not <code>127.0.0.1</code>, and not <code>/index.html</code>. The callback is the page's own address and is matched exactly. Press <em>Sign in</em>: WallFlowers' window asks for the member's passkey and brings them back. The page lists the community's rooms; pick one and post. A new community has no rooms yet: in WallFlowers, open <em>Rooms</em>, then <strong>New room</strong>; or, as its owner, press <strong>New room</strong> in the starter (it opens one as <a href="rooms.html">Rooms and threads</a> does).</p>
+<div class="note"><p><strong>Sign in as a member.</strong> The page reaches the community only for its members: at first, sign in with the account that owns it. Any other account gets, after a few seconds, "This account isn't a member of this community" (<a href="members.html#becoming-a-member">Becoming a member</a>).</p></div>
+<div class="note"><p><strong>Set your name.</strong> Pages show people by the name on their card. Until you set yours in WallFlowers (open <code>https://app.wallflowers.io/#you</code>, or the profile menu, then <em>Your card</em>), you appear as "New member" on every page, yours and everyone else's.</p></div>
+<div class="note warn"><p><strong>Sign out every session you open.</strong> Call <code>session.signOut()</code> (<code>POST /v2/signout</code>) when you're done, and have scripts and tests sign out as they exit. Otherwise WallFlowers holds the session until it has been idle for 15 minutes, and once it holds 112 sessions, everyone's sign-in is refused with <code>503 "the Door is at its session limit; try again shortly"</code>, yours and every other team's.</p></div>
+<h2>4. What it does</h2>
+<ol>
+<li>Loads the sign-in script once, pinned by its integrity hash.</li>
+<li>On load: <code>WallFlowers.finish</code> if the address carries <code>?state</code> (the member is back from WallFlowers), otherwise <code>WallFlowers.current</code>. <code>null</code> means signed out.</li>
+<li>Reads <code>GET /v2/graph</code>, finds the community (<code>session.site</code>), and lists its parts with role <code>room</code>, in order, naming people from <code>profiles</code>.</li>
+<li>Posts with <code>POST /v2/apply {object: roomId, op: 'forum.post', args: {text, ts}}</code>, then reads the graph again.</li>
+<li>Opens one change stream and re-reads the graph 300 ms after the last change, and every 15 s while the page is visible.</li>
+</ol>
+<h2>If it doesn't work</h2>
+<table><tbody>
+<tr><td>The script doesn't load (the console says CORS)</td><td>Your page's address isn't allowed yet: on <code>localhost</code>, use the client <code>hackathon-local</code> on a port it covers; any other address must be registered (<a href="register.html">Register your app</a>). WallFlowers serves the sign-in script only to the addresses it knows.</td></tr>
+<tr><td>The script doesn't load (the console says the digest didn't match)</td><td>The integrity hash is wrong, or you loaded it from somewhere else. Use the one above.</td></tr>
+<tr><td><code>… is not a callback client … registered</code></td><td>Your callback isn't registered character for character. Check the port, <code>localhost</code> against <code>127.0.0.1</code>, and the trailing slash.</td></tr>
+<tr><td>"This session reaches no community yet", or no rooms, for a few seconds</td><td>Normal for a new account or a new member: the starter reads again for up to 20 s (no community) or 15 s (no rooms).</td></tr>
+<tr><td><code>503 the Door is at its session limit</code></td><td>Too many sessions are open, many left to idle out. Sign out what you open (<code>session.signOut()</code>), and try again shortly.</td></tr>
+<tr><td><code>429 too many sign-ins are open from here</code></td><td>Finish or cancel an open sign-in, or wait a minute. At most 32 sign-ins can be in progress from one address.</td></tr>
+</tbody></table>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

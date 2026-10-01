@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pacific keyholder</title>
+<meta name="robots" content="noindex, nofollow">
+<!-- FRAMED, nothing is rendered here and nothing should ever be. This document
+     exists to BE AN ORIGIN: the one place a member's device key lives, reached
+     only over a MessagePort, by a host page that cannot read into it.
+
+     OPENED AS A WINDOW it is the sign-in and device-linking door, and it is the
+     same file because it must be the same origin — a WebAuthn ceremony needs a
+     first-party context, and the key it derives has to land in the database the
+     frame reads. Two documents would have been two places to keep that true. -->
+<style>html,body{margin:0;height:100%;background:transparent}</style>
+</head>
+<body>
+<!-- The account module first: keyholder.js calls it the moment a door is
+     opened, and it is staged here by app/web/account/stage.sh along with the
+     core it calls. Same file as kenjin.cc serves — one definition of the
+     derivation, the wrap and the challenge signature. -->
+<script src="pacific-account.js"></script>
+<!-- The op table, GENERATED from the ICD (core/coordination/gen-web-ops.py) and
+     staged here by account/stage.sh because this page names it: ops.capabilities
+     reads it rather than restating a single op. -->
+<script src="wallflowers-ops.js"></script>
+<script src="keyholder.js"></script>
+</body>
+</html>

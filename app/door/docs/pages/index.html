@@ -1,0 +1,21 @@
+<h1>WallFlowers Community API</h1>
+<p class="lede">Build your own site or app on a WallFlowers community. Members sign in with their passkey in WallFlowers' window; your page then reads the community's rooms and people and writes as that member.</p>
+<div class="note"><p><strong>New here?</strong> The <a href="quickstart.html">Quickstart</a> gets a working page, signed in and posting to a room, in about ten minutes. AI coding agents: read <a href="agents.md">agents.md</a>.</p></div>
+<h2>How it works</h2>
+<ul>
+<li><strong>A community</strong> is what a person makes when they sign up at <a href="https://wallflowers.io/signup">wallflowers.io</a>: its rooms, its members, its public page. Your site is registered to one community. The API calls it the <em>Site</em> (<code>session.site</code> is its id), and the model calls its kind <code>group</code>: one thing, three names.</li>
+<li><strong>The Door</strong> is WallFlowers' API and sign-in server, <code>{{DOOR}}</code>. <strong>Signing in</strong> happens in its window, with the member's passkey. Your page never sees a password, a passkey or a key. It gets a <em>session</em>.</li>
+<li><strong>Every call</strong> is <code>session.fetch('/v2/…')</code> as that member: JSON in, JSON out. Read everything at once with <code>GET /v2/graph</code>; write one change with <code>POST /v2/apply</code>; hear about changes with <code>session.events</code>.</li>
+<li><strong>What you may do</strong> is decided by the data model, which the Door serves at <code>/v2/icd</code>: every kind of object, every op, its arguments, and who may write it.</li>
+<li><strong>The public page</strong> (events, resources, pictures) is served by <code>{{ARC}}</code> and readable by anyone at <code>/v1/face/&lt;address&gt;</code>, no session{{PUBLISHED_INDEX}}. The address is the community's <code>wallflowers.io/&lt;address&gt;</code>.</li>
+</ul>
+<h2>Where to go next</h2>
+<table><tbody>
+<tr><td><a href="start.html">Start here</a></td><td>From nothing to a site whose members sign in, in order.</td></tr>
+<tr><td><a href="quickstart.html">Quickstart</a></td><td>Two files, no build step: sign in, list rooms, post.</td></tr>
+<tr><td><a href="register.html">Register your app</a></td><td>What WallFlowers needs from you before a member can sign in.</td></tr>
+<tr><td><a href="routes.html">Routes</a></td><td>Every route, with what it answers, its refusals and its measured latency.</td></tr>
+<tr><td><a href="model.html">The model</a></td><td>Every kind and op, generated from the model version {{ICD}}.</td></tr>
+<tr><td><a href="client.html">A client that holds up</a></td><td>The habits that make a page correct with many people in it.</td></tr>
+</tbody></table>
+<p>This documentation describes the WallFlowers Door production serves, named at the foot of every page, and the model version <code>{{ICD}}</code>. It is generated from the running system: the routes from the Door's routers, the ops from the model, the latencies from measurements.</p>

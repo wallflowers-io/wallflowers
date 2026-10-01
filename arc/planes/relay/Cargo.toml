@@ -1,0 +1,92 @@
+[package]
+name = "relay"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "semaphore"
+path = "src/main.rs"
+
+# A dumb, blind, store-and-forward WebSocket mailbox. OTS crates only.
+[dependencies]
+# Wire types (the Frame protocol) — consolidated in as `crate::wire` (was the relay-wire crate).
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+hex = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util"] }
+# Media offload (src/media.rs + src/sigv4.rs): presigned URLs for S3-compatible
+# object storage. Deliberately NOT aws-sdk-s3 — presigning is a pure function, so
+# an SDK would drag in a second HTTP/TLS stack to run four HMACs. Every crate here
+# is already in the arc lockfile via other planes, so this adds no new transitive
+# weight and keeps the workspace OpenSSL-free.
+hmac = "0.12"
+sha2 = "0.10"
+percent-encoding = "2.3"
+# `clock` for Utc::now(); default-features off to avoid the unused locale/serde tree.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+# `mailbox::Mailbox` is an async trait behind `dyn`, which native `async fn` in
+# traits cannot be (no object safety). Already a workspace dependency, so this adds
+# nothing to the lockfile.
+async-trait = { workspace = true }
+# The DURABLE mailbox. Pinned to the workspace's existing 0.31 / libsqlite3-sys 0.28
+# (waker, land, boxoffice) — two libsqlite3-sys majors cannot co-exist in one build.
+rusqlite = { version = "0.31", features = ["bundled"] }
+# THE `Frame` ENUM, since 15 Sep 2026: src/wire.rs re-exports `pacific_wire::Frame` instead
+# of vendoring a second copy of it, so the relay and the client compile the same type and cannot
+# drift into incompatible generations again (see the essay at the top of src/wire.rs).
+#
+# GIT dep, exactly like arc-node's pacific-core: the Docker build context is arc/ ONLY, so a
+# path dep into the sibling Pacific repo cannot resolve in the image (that is what broke the
+# deploy). Local dev overrides it with the [patch] in the workspace root; the Dockerfile strips
+# that patch so the image fetches this pinned rev. Bump the rev to ship a wire change.
+#
+# !! DEPLOY BLOCKER, 15 Sep 2026 !! This rev PREDATES the vocabulary work in core/pacific-wire
+# (the media variants, `V_BASE`/`V_GAP`/`V_MEDIA`, `Frame::wire_tag/dir/min_v`, the `spec`
+# module and `wire-spec.v1.json`). Local dev is fine because the [patch] points at the sibling
+# path, but an IMAGE BUILD WILL NOT COMPILE until core/pacific-wire is pushed and this rev is
+# bumped to the commit that carries it. Bump `planes/waker/Cargo.toml` to the SAME rev in the
+# same change — two different revs of this git source in one workspace means two `Frame` types
+# in one deploy, which is the drift this work exists to end.
+pacific-wire = { git = "https://codeberg.org/phezman/pacific.git", rev = "9e64f790afdfd163785c1416174aa66bbae10db7" }
+# Object-storage bodies (src/blobs.rs) and the storage usage meter (`usage_loop` in src/lib.rs):
+# HTTPS over rustls, like the rest of this OpenSSL-free workspace.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
+# Operational telemetry. This workspace is OpenSSL-free (mls-rs uses rustcrypto),
+# so Sentry must ship over a RUSTLS transport — never native-tls. We therefore turn
+# off default-features (which would pull in `transport` -> native-tls) and select
+# `reqwest` + `rustls` by hand for the HTTPS transport.
+#   * panic    — capture per-connection task panics as Sentry issues
+#   * contexts — runtime/OS context on events (NO pii; send_default_pii stays false)
+#   * backtrace— symbolicated frames on panics/errors
+#   * reqwest  — async HTTPS transport (paired with rustls below)
+#   * rustls   — TLS via rustcrypto, no system OpenSSL
+#   * logs     — Sentry structured Logs (tracing INFO+ -> Sentry Logs)
+#   * release-health — cron check-ins (monitor liveness heartbeat)
+sentry = { version = "0.48", default-features = false, features = [
+    "panic",
+    "contexts",
+    "backtrace",
+    "reqwest",
+    "rustls",
+    "logs",
+    "release-health",
+] }
+sentry-tracing = { version = "0.48", features = ["logs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# The deploy stamp (`semaphore --version`). Zero deps; see lib/arc-build.
+arc-build = { workspace = true }
+
+# Integration test (tests/smoke.rs) drives the relay over a real socket.
+# `io-util` is for tests/pluggable_storage.rs, which stands up a real
+# S3-compatible HTTP endpoint on a socket so the R2 backend can be driven for real.
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"

@@ -1,0 +1,12 @@
+[package]
+name = "media-wasm"
+description = "Wasm shell over pacific-media: the real block codec and the real slot validation, driving the browser demo suite. No JS codec, no deps."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pacific-media = { path = "../pacific-media" }

@@ -1,0 +1,6 @@
+# What vendor/ holds, and where each copy comes from. The Door serves these bytes inside
+# /v2/resources.js (main.rs, RESOURCES_JS); resources.test.mjs checks them on every run.
+# Re-vendoring changes a line here, in the same commit.
+# sha256                                                            vendored               from
+2de0f8ecbca0a6470da57c8b2ad043777ae999c5132f9abf12e8c332d4e46164  commonmark.min.js      npm commonmark@0.31.2 dist/commonmark.min.js (https://registry.npmjs.org/commonmark/-/commonmark-0.31.2.tgz, sha512-2fRLTyb9r/2835k5cwcAwOj0DEc44FARnMp5veGsJ+mEAZdi52sNopLu07ZyElQUz058H43whzlERDIaaSw4rg==)
+6cc4b9b28cf68e5bd20f9e94859a85cde35095ef4f9d0f7385b0b6166642f50b  commonmark.LICENSE     the same tarball, LICENSE

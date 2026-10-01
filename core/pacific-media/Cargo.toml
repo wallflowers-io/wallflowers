@@ -1,0 +1,8 @@
+[package]
+name = "pacific-media"
+description = "MEDIA — the one place media is described, budgeted, validated and compressed. No dependencies: this crate has to build for wasm32 as readily as for the phone."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

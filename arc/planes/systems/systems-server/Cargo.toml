@@ -1,0 +1,24 @@
+# systems-server — the deployable /systems plane, standalone.
+#
+# arc-node also serves /systems, but it depends on pacific-core (signup/Tether) and so can't
+# build outside the Pacific⟂Arc monorepo. This binary serves ONLY the connector RAG routes,
+# which need just the pacific-core-free connector crates — so it builds and deploys on its own
+# (a Railway service behind io.gopacific.ai). The Nango secret lives here (env), never on device.
+[package]
+name = "systems-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "systems-server"
+path = "src/main.rs"
+
+[dependencies]
+nango = { path = "../__nango" }
+gmail = { path = "../gmail" }
+nango-rag = { path = "../nango-rag" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"
+tokio = { version = "1", features = ["rt", "macros", "net", "time"] }

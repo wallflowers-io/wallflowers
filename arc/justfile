@@ -1,0 +1,15 @@
+# Arc — sovereign infra launcher.  Part of the workspace build/deploy harness (../justfile).
+# `up` delegates to ./arcup — the single config-driven plane supervisor.
+# target ∈ local | machine0.
+
+cargo := env_var_or_default("CARGO", "~/.cargo/bin/cargo")
+
+# show this project's recipes
+default:
+    @just --list
+
+up target='local':              # start & supervise the Arc's planes for a target
+    ARC_TARGET={{target}} ./arcup
+
+build:                          # compile the plane binaries (Rust workspace → target/release)
+    {{cargo}} build --release

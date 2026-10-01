@@ -1,0 +1,53 @@
+# waker — the Arc's `/v1/wake` plane: push WITHOUT un-blinding the relay (RINGFENCE §6).
+#
+# The third tier. relay = blind (tags + sealed blobs, knows nobody); rail = money (Stripe
+# secrets); waker = wake (token↔tag registrations + the APNs credential). The waker is JUST
+# ANOTHER RELAY CLIENT: it SUBs to the tags it was asked to watch, exactly like a phone does,
+# and pushes a CONTENT-FREE alert to the tokens registered for a tag when a blob lands. It
+# cannot decrypt (blobs are sealed), never sees a group id, and never names a sender.
+[package]
+name = "waker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "waker"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.7"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+futures-util = { workspace = true }
+# APNs is HTTP/2-ONLY, so `http2` is added to the workspace's rustls feature set (the
+# workspace default-features=false turns it off). Hand-rolled like boxoffice's stripe.rs —
+# four headers and one POST do not justify an APNs SDK.
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "http2"] }
+# ES256 provider JWT (APNS_KEY_P8 is a PKCS#8 PEM). Already in the workspace lockfile, so
+# this costs no new dependency: p256's default features carry ecdsa + pkcs8 + pem.
+p256 = "0.13"
+# The relay client. `rustls-tls-webpki-roots` is what makes `connect_async` speak wss:// —
+# the deployed relay is behind TLS (wss://arc.wallflowers.io/v1/relay).
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+# The relay Frame protocol, from the ONE crate the relay and every client share so they
+# cannot drift. GIT dep for the same reason as the relay's own (planes/relay/Cargo.toml):
+# the Docker build context is arc/ only, so a path dep into the sibling Pacific repo cannot
+# resolve in the image. Local dev overrides it with the workspace [patch]; the Dockerfile
+# strips that patch so the image fetches this pinned rev.
+pacific-wire = { git = "https://codeberg.org/phezman/pacific.git", rev = "9e64f790afdfd163785c1416174aa66bbae10db7" }
+# PINNED TO MATCH pacific-core (see planes/land + planes/boxoffice for the `links = "sqlite3"`
+# story): the workspace resolves exactly one libsqlite3-sys.
+rusqlite = { version = "0.31", features = ["bundled"] }
+# The deploy stamp (`waker --version`). Zero deps; see lib/arc-build.
+arc-build = { workspace = true }
+
+[dev-dependencies]
+# Route-level tests drive the axum Router in-process (`oneshot`) — no sockets, no network.
+tower = { version = "0.5", features = ["util"] }
+# The watch tests spawn a FAKE RELAY on loopback (like planes/relay/tests/smoke.rs).
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }

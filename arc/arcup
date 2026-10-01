@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# arcup — THE Arc launcher.
+#
+# One config-driven plane supervisor for every hosting target (local | machine0 | railway).
+# It resolves the volumes/networking/identity/secrets quartet, mints the Arc's sovereign
+# identity ONCE, then starts and supervises every enabled plane against it. Core planes
+# (relay, console) are required — if one exits the Arc dies loud; the compute plane
+# (spatial) is best-effort — if it fails the Arc logs it and stays up. This is the single
+# entry point; the old paths (bare binaries, docker/arcup.sh, per-plane systemd units, the
+# edge/cuda CMD split) are retired in favour of it.
+#
+#   Planes:
+#     relay    semaphore — blind MLS router                         [core]
+#     console  arc-node  — /arc /signup /tether /bundle /console     [core]
+#     spatial  Kenjin geometry — an operator-supplied ARC_SPATIAL_CMD   off|mlx|proxy  [best-effort]
+#     waker    APNs push (a relay CLIENT, never a relay change)          [best-effort]
+#
+# `target` is NOT a branch in the launcher body — it only selects a PROFILE of defaults and the
+# secrets provider. Config is environment (optionally sourced from $ARC_ENV_FILE, default
+# ./arc.env). See arc.env.example.
+set -uo pipefail
+
+log() { printf '» arcup: %s\n' "$*" >&2; }
+die() { printf '✗ arcup: %s\n' "$*" >&2; exit 1; }
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+
+# ── config: arc.env, then per-target profile of defaults ─────────────────────────────
+ARC_ENV_FILE="${ARC_ENV_FILE:-$HERE/arc.env}"
+if [ -f "$ARC_ENV_FILE" ]; then set -a; . "$ARC_ENV_FILE"; set +a; log "config <- $ARC_ENV_FILE"; fi
+
+ARC_TARGET="${ARC_TARGET:-local}"
+ARC_NAME="${ARC_NAME:-Arc}"
+case "$ARC_TARGET" in
+  local)    : "${ARC_STATE_DIR:=$HOME/.arc-state}"; : "${ARC_SPATIAL:=mlx}";  : "${ARC_SECRETS:=env}" ;;
+  machine0) : "${ARC_STATE_DIR:=/data/arc}";        : "${ARC_SPATIAL:=off}";  : "${ARC_SECRETS:=systemd-creds}" ;;
+  railway)  : "${ARC_STATE_DIR:=/data}";            : "${ARC_SPATIAL:=off}";  : "${ARC_SECRETS:=env}" ;;
+  *) die "unknown ARC_TARGET=$ARC_TARGET (want local|machine0|railway)" ;;
+esac
+
+# components
+: "${ARC_GATEWAY:=on}"        # on | off — the public /v1 router (fronts every plane)
+: "${ARC_RELAY:=on}"          # on | off
+: "${ARC_CONSOLE:=on}"        # on | off
+: "${ARC_SYSTEMS:=on}"        # on | off — the connectors plane (Gmail via Nango)
+: "${ARC_BOXOFFICE:=on}"      # on | off — event ticketing (needs STRIPE_* secrets for the priced path)
+: "${ARC_WAKER:=on}"          # on | off — APNs push (needs APNS_* secrets; registration works without)
+# ARC_SPATIAL comes from the profile above (off|mlx|proxy)
+
+# networking — arc-gateway is the ONE public port; planes bind internal ports behind it.
+: "${ARC_BIND:=0.0.0.0}"
+: "${ARC_GATEWAY_PORT:=8080}"   # the /v1 router — the public face (ICD §14)
+: "${ARC_RELAY_PORT:=8787}"
+: "${ARC_CONSOLE_PORT:=8790}"
+: "${ARC_SYSTEMS_PORT:=8795}"
+: "${ARC_SPATIAL_PORT:=8791}"
+: "${ARC_BOXOFFICE_PORT:=8793}"
+: "${ARC_WAKER_PORT:=8794}"      # NOT 8795 — that is the systems plane
+[ -n "${PORT:-}" ] && { ARC_GATEWAY_PORT="$PORT"; log "railway \$PORT -> gateway:$PORT"; }   # single-port hosts
+: "${ARC_PUBLIC_URL:=ws://127.0.0.1:$ARC_GATEWAY_PORT/v1/relay}"   # the route tethers carry (arc-node stamps it)
+: "${ARC_RELAY_URL:=ws://127.0.0.1:$ARC_RELAY_PORT}"        # internal relay (the gateway's upstream)
+
+# volumes + identity (id_ed25519 + pacific.db minted here on first boot — the ONE place)
+mkdir -p "$ARC_STATE_DIR" || die "cannot create state volume"
+export PACIFIC_STATE_DIR="$ARC_STATE_DIR"
+export ARC_NAME ARC_RELAY_URL ARC_PUBLIC_URL
+
+# ── secrets: resolve the provider INTO the environment before any plane starts ────────
+case "$ARC_SECRETS" in
+  env) : ;;                                     # already present (arc.env / Railway vars)
+  systemd-creds)                                # systemd drops decrypted creds, one file per name
+    if [ -n "${CREDENTIALS_DIRECTORY:-}" ]; then
+      for f in "$CREDENTIALS_DIRECTORY"/*; do [ -f "$f" ] && export "$(basename "$f")=$(cat "$f")"; done
+      log "secrets <- systemd-creds"
+    else log "ARC_SECRETS=systemd-creds but \$CREDENTIALS_DIRECTORY unset — using ambient env"; fi ;;
+  bws)                                          # Bitwarden Secrets Manager (machine-account token)
+    command -v bws >/dev/null || die "ARC_SECRETS=bws but bws not installed"
+    [ -n "${BWS_ACCESS_TOKEN:-}" ] || die "ARC_SECRETS=bws but BWS_ACCESS_TOKEN unset"
+    eval "$(bws ${BWS_SERVER_URL:+--server-url "$BWS_SERVER_URL"} secret list -o env 2>/dev/null)" \
+      && log "secrets <- bitwarden secrets manager" || log "bws secret list failed — using ambient env" ;;
+  *) die "unknown ARC_SECRETS=$ARC_SECRETS (want env|bws|systemd-creds)" ;;
+esac
+
+# ── plane binaries: image=/usr/local/bin, local=./target/{release,debug} ──────────────
+find_exec() { local n="$1" d; for d in "${ARC_BIN_DIR:-}" /usr/local/bin "$HERE/target/release" "$HERE/target/debug"; do
+  [ -n "$d" ] && [ -x "$d/$n" ] && { printf '%s' "$d/$n"; return 0; }; done; command -v "$n" 2>/dev/null; }
+
+# ── persisted logs ────────────────────────────────────────────────────────────────────
+# Every plane writes to stdout/stderr, which on a hosted target (Railway) lands only in the
+# provider's EPHEMERAL buffer — gone on redeploy, gone past the scrollback cap. That is the
+# buffer we kept failing to find a membership decision in. So each plane's output is also
+# tee'd to a file ON THE VOLUME ($ARC_STATE_DIR/logs), which survives redeploys. `tee` keeps
+# the passthrough to the container's own stdout intact, so the provider view is unchanged.
+#
+# Bounded by BOOT ROTATION rather than a rotating writer: at startup the previous run's file
+# becomes <label>.prev.log and a fresh <label>.log begins. Two files per plane, so a crash-loop
+# cannot fill the volume, and the run BEFORE the current one is always still readable — which is
+# exactly the run you want when something died on the last boot.
+LOG_DIR="$ARC_STATE_DIR/logs"
+mkdir -p "$LOG_DIR" || log "WARN: cannot create $LOG_DIR — plane logs will not be persisted"
+: "${ARC_LOG_PERSIST:=on}"   # set off to disable volume logging (pure stdout, as before)
+
+PIDS=(); NAMES=(); REQ=()   # REQ: core = die loud if it exits · opt = best-effort, Arc stays up
+# spawn LABEL REQ CMD…  — start a plane, track its pid, and (unless disabled) persist its
+# stdout+stderr to the volume. Process substitution keeps `$!` the PLANE's pid, not tee's, so
+# the supervisor's `kill -0` liveness checks below still watch the real process.
+spawn() {
+  local label="$1" req="$2"; shift 2
+  if [ "$ARC_LOG_PERSIST" = on ] && [ -d "$LOG_DIR" ]; then
+    local lf="$LOG_DIR/$label.log"
+    [ -f "$lf" ] && mv -f "$lf" "$LOG_DIR/$label.prev.log" 2>/dev/null
+    "$@" > >(tee -a "$lf") 2>&1 &
+  else
+    "$@" &
+  fi
+  PIDS+=("$!"); NAMES+=("$label"); REQ+=("$req"); log "up: $label (pid $!, $req)"
+}
+
+log "arc '$ARC_NAME'  target=$ARC_TARGET  [relay=$ARC_RELAY console=$ARC_CONSOLE spatial=$ARC_SPATIAL]"
+log "state=$ARC_STATE_DIR  bind=$ARC_BIND  public=$ARC_PUBLIC_URL  relay_url=$ARC_RELAY_URL"
+
+# relay ─ semaphore [core]
+if [ "$ARC_RELAY" = on ]; then
+  bin="${ARC_RELAY_BIN:-$(find_exec semaphore)}"
+  if [ -n "$bin" ] && [ -x "$bin" ]; then
+    export RELAY_BIND="$ARC_BIND:$ARC_RELAY_PORT"
+    # The mailbox is DURABLE and lands on the state volume by default. This has to be
+    # a volume path, not an image path: a redeploy replaces the filesystem, so a store
+    # written anywhere else is exactly as amnesiac as the old in-memory HashMap — and
+    # the amnesia costs more than lost mail, because a forgotten commit slot lets two
+    # devices win the same group-epoch and FORK the group. Set RELAY_STORE to override;
+    # set it empty to deliberately run ephemeral (the relay says so, loudly).
+    : "${RELAY_STORE=$ARC_STATE_DIR/relay.db}"
+    export RELAY_STORE
+    # Retention is a PRODUCT decision (how long may a device be offline and still
+    # catch up?) and the answer is "as long as it takes": nothing expires unless one
+    # of these is set here. Set one only against a measured volume problem — past a
+    # limit a subscriber is told with a Gap rather than silently shortchanged.
+    export RELAY_RETENTION_SECS RELAY_MAX_BLOBS_PER_TAG RELAY_SWEEP_SECS
+    spawn relay core "$bin"
+  else log "SKIP relay: semaphore not found (set ARC_RELAY_BIN)"; fi
+fi
+
+# console ─ arc-node [core]: identity, Tether, membership /verify, console. It IS the membership
+# plane the gateway gates every request on — so it is core: if it exits, the Arc has no members
+# and tears down loud. Stamps ARC_PUBLIC_URL into arc_url so tethers route back here.
+if [ "$ARC_CONSOLE" = on ]; then
+  bin="$(find_exec node)"
+  if [ -n "$bin" ]; then export ARC_SIGNUP_BIND="$ARC_BIND:$ARC_CONSOLE_PORT"; spawn console core "$bin"
+  else log "SKIP console: 'node' (arc-node) binary not found"; fi
+fi
+
+# systems ─ the connectors plane (Gmail via Nango) [best-effort]. Needs NANGO_SECRET_KEY.
+if [ "$ARC_SYSTEMS" = on ]; then
+  bin="$(find_exec systems-server)"
+  if [ -n "$bin" ]; then spawn systems opt env PORT="$ARC_SYSTEMS_PORT" "$bin"
+  else log "SKIP systems: systems-server binary not found"; fi
+fi
+
+# boxoffice ─ event ticketing money machinery [best-effort]. Fail-loud inside the plane:
+# without STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET it serves the FREE path only and priced
+# checkout answers 503 — the Arc never dies for a missing rail key.
+if [ "$ARC_BOXOFFICE" = on ]; then
+  bin="$(find_exec boxoffice)"
+  if [ -n "$bin" ]; then spawn boxoffice opt env PORT="$ARC_BOXOFFICE_PORT" ARC_STATE_DIR="$ARC_STATE_DIR" "$bin"
+  else log "SKIP boxoffice: boxoffice binary not found"; fi
+fi
+
+# waker ─ APNs push without un-blinding the relay [best-effort]. It is an ordinary relay
+# CLIENT (it SUBs for the tags it was asked to watch), so it needs ARC_RELAY_URL, not a
+# relay change. Fail-loud inside the plane: without APNS_KEY_P8/APNS_KEY_ID/APNS_TEAM_ID it
+# still accepts and STORES registrations, reports waker:false, and wakes nobody.
+if [ "$ARC_WAKER" = on ]; then
+  bin="$(find_exec waker)"
+  if [ -n "$bin" ]; then spawn waker opt env PORT="$ARC_WAKER_PORT" ARC_STATE_DIR="$ARC_STATE_DIR" ARC_RELAY_URL="$ARC_RELAY_URL" "$bin"
+  else log "SKIP waker: waker binary not found"; fi
+fi
+
+# spatial ─ Kenjin geometry [best-effort]. NO spatial server ships in the image (there is no
+# bundled proxy and no python interpreter), so mlx and proxy alike run only what the operator
+# supplies in ARC_SPATIAL_CMD.
+case "$ARC_SPATIAL" in
+  off)       : ;;
+  mlx|proxy) cmd="${ARC_SPATIAL_CMD:-}"
+             [ -n "$cmd" ] && spawn "spatial-$ARC_SPATIAL" opt bash -c "$cmd" || log "SKIP spatial=$ARC_SPATIAL: no server (set ARC_SPATIAL_CMD)" ;;
+  *) die "unknown ARC_SPATIAL=$ARC_SPATIAL (want off|mlx|proxy)" ;;
+esac
+
+# heartbeat ─ health + capacity telemetry → control plane [best-effort]
+[ -n "${ARC_HEARTBEAT_CMD:-}" ] && spawn heartbeat opt bash -c "$ARC_HEARTBEAT_CMD"
+
+# gateway ─ arc-gateway [core]: the ONE public /v1 router, fronting every plane above. Bound
+# to the public port ($PORT on Railway); it reverse-proxies to the planes on their internal
+# ports and reports honest capability at /v1/arc. If it dies, the Arc has no public face.
+if [ "$ARC_GATEWAY" = on ]; then
+  bin="$(find_exec arc-gateway)"
+  if [ -n "$bin" ]; then
+    export ARC_RELAY_UPSTREAM="ws://127.0.0.1:$ARC_RELAY_PORT"
+    export ARC_MEMBERSHIP_UPSTREAM="http://127.0.0.1:$ARC_CONSOLE_PORT"
+    export ARC_SYSTEMS_UPSTREAM="http://127.0.0.1:$ARC_SYSTEMS_PORT"
+    export ARC_BOXOFFICE_UPSTREAM="http://127.0.0.1:$ARC_BOXOFFICE_PORT"
+    export ARC_WAKER_UPSTREAM="http://127.0.0.1:$ARC_WAKER_PORT"
+    # The member-gated directory this Arc serves at GET /v1/arcs (curated JSON).
+    export ARC_ARCS_FILE="${ARC_ARCS_FILE:-$HERE/arcs.json}"
+    spawn gateway core env PORT="$ARC_GATEWAY_PORT" "$bin"
+  else log "SKIP gateway: arc-gateway binary not found"; fi
+fi
+
+[ "${#PIDS[@]}" -gt 0 ] || die "no planes started — check enabled components and binaries"
+
+# ── supervise: core plane exit → die loud; best-effort exit → log, keep the Arc up ────
+cleanup() { log "stopping: ${NAMES[*]:-none}"; kill "${PIDS[@]}" 2>/dev/null; wait 2>/dev/null; exit "${1:-0}"; }
+trap 'cleanup 0' INT TERM
+log "up — supervising: ${NAMES[*]}"
+while :; do
+  live=0
+  for i in "${!PIDS[@]}"; do
+    [ "${PIDS[$i]}" = "-" ] && continue
+    if kill -0 "${PIDS[$i]}" 2>/dev/null; then live=$((live+1))
+    elif [ "${REQ[$i]}" = core ]; then log "CORE plane '${NAMES[$i]}' exited — tearing down"; cleanup 1
+    else log "plane '${NAMES[$i]}' exited (best-effort) — Arc continues without it"; PIDS[$i]="-"; fi
+  done
+  [ "$live" -gt 0 ] || { log "no live planes left"; cleanup 1; }
+  sleep 2
+done

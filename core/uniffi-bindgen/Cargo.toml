@@ -1,0 +1,15 @@
+# uniffi-bindgen — a tiny host binary that runs UniFFI's Swift bindings
+# generator against the compiled pacific-ffi library. Its uniffi version MUST match
+# pacific-ffi's (same workspace dep), or the generated glue mismatches the runtime.
+[package]
+name = "uniffi-bindgen"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/main.rs"
+
+[dependencies]
+uniffi = { workspace = true, features = ["cli"] }

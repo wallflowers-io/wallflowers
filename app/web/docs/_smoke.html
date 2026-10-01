@@ -1,0 +1,136 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pacific · browser leg</title>
+<body style="font:13px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;padding:16px;
+             white-space:pre-wrap;background:#fbfbfa;color:#111">
+<div id="o">…</div>
+<!-- For SEED and nothing else. A script tag with no data-site mounts nothing,
+     so this loads the constant without starting an interior — and the seed has
+     to be the real one, because a delta is only authored against a world the
+     fold already accepts. -->
+<script src="pacific.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   The browser leg of the smoke run. SMOKE HARNESS ONLY.
+
+   e2e.py proves the auth service and the relay against an independent
+   implementation. It cannot prove the thing that actually ships: that
+   KEYHOLDER.JS, in a browser, derives the same channel from the same passkey
+   and seals a delta the other side can read. Two implementations agreeing is
+   the only way to catch a divergence, because either one alone is self
+   consistent by construction.
+
+   So this page is the real embedder's half of the protocol, by hand: it builds
+   the keyholder frame, takes the MessagePort, and speaks the RPC. Nothing about
+   keyholder.js is stubbed or bypassed. The frame it points at is the smoke
+   frame rather than index.html for one reason — the virtual authenticator —
+   and everything behind that is the product.
+
+   HOW THE RESULT LEAVES THIS PAGE. It does not. There is no result channel and
+   there does not need to be one: if the browser derived a different tag, the
+   delta it publishes lands on a different mailbox and the Python side, which
+   is subscribed to the tag IT derived, receives nothing at all. Silence is the
+   failure. Arrival proves the tag, the seal, the JSON encoding and the relay
+   frames all agree, in one observation.
+   ═══════════════════════════════════════════════════════════════════════════ */
+'use strict';
+
+var KEYHOLDER = 'http://localhost:8103';
+var SITE = 'cambridge-dd';
+/* The Arc advertises wss://…:8080/v1/relay because it is built to sit behind
+   TLS termination; run-arc-local.sh normally has cloudflared in front. Reached
+   directly on loopback there is no TLS, so the socket is told where to go —
+   which is what sync.start's relay override is for. */
+var RELAY = 'ws://localhost:8787';
+
+var L = [], out = document.getElementById('o');
+function say(s) { L.push(s); out.textContent = L.join('\n'); }
+function ok(label, cond, detail) {
+  say((cond ? '  ✓ ' : '  ✗ ') + label + (!cond && detail ? '   ' + detail : ''));
+  return cond;
+}
+window.onerror = function (m, s, l, c) { say('ERROR ' + m + ' @' + l + ':' + c); };
+window.addEventListener('unhandledrejection', function (e) {
+  say('REJECTED ' + (e.reason && e.reason.message || e.reason));
+});
+
+/* ---- the embedder's half of the port protocol ---------------------------- */
+function connect() {
+  return new Promise(function (res, rej) {
+    var f = document.createElement('iframe');
+    f.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
+    f.src = KEYHOLDER + '/_link-frame.html';
+    var timer = setTimeout(function () { rej(new Error('keyholder did not answer')); }, 15000);
+    f.onload = function () {
+      var ch = new MessageChannel(), n = 0, waiting = {};
+      ch.port1.onmessage = function (e) {
+        var d = e.data || {};
+        if (d.t === 'pacific.denied') { clearTimeout(timer); return rej(new Error(d.why)); }
+        if (d.t === 'pacific.ready') {
+          clearTimeout(timer);
+          return res({
+            pk: d.pk,
+            call: function (m, a) {
+              return new Promise(function (y, n2) {
+                var id = ++n; waiting[id] = [y, n2];
+                ch.port1.postMessage({ id: id, m: m, a: a || {} });
+              });
+            }
+          });
+        }
+        var w = waiting[d.id];
+        if (!w) return;
+        delete waiting[d.id];
+        d.ok ? w[0](d.v) : w[1](new Error(d.e));
+      };
+      /* Wait to be told. keyholder.js loads asynchronously behind the shim,
+         and the port can only be transferred once — an init sent before the
+         listener exists consumes it and nothing gets it back. */
+      window.addEventListener('message', function once(e) {
+        if (!e.data || e.data.t !== 'smoke.ready') return;
+        window.removeEventListener('message', once);
+        f.contentWindow.postMessage({ t: 'pacific.init', site: SITE },
+                                    new URL(KEYHOLDER).origin, [ch.port2]);
+      });
+    };
+    document.body.appendChild(f);
+  });
+}
+
+say('PACIFIC · browser leg\n');
+connect().then(function (k) {
+  ok('the keyholder answers on its own origin', !!k.pk);
+  say('    device ' + k.pk.slice(0, 16) + '…');
+
+  /* THE CALL UNDER TEST. Real options from the real service, a real assertion,
+     a real PRF, and keyholder.js's own split() over the result. */
+  return k.call('account.link').then(function (r) {
+    ok('account.link completes a passkey ceremony', !!r.tag, JSON.stringify(r));
+    say('    tag ' + r.tag);
+    say('    arc ' + r.arc);
+    return k.call('account.linked').then(function (l) {
+      ok('the channel is stored on this device', l.linked);
+      ok('recorded as derived from the account', l.from === 'account', String(l.from));
+      ok('and it is the tag the ceremony returned', l.tag === r.tag);
+      return k.call('store.load', { seed: window.Pacific.seed });
+    }).then(function (w) {
+      ok('the log opens against the seed', !!w);
+      return k.call('session.get');
+    }).then(function (s) {
+      ok('the ceremony signed this browser in', s.signedIn, JSON.stringify(s));
+      say('    uid ' + s.uid + '   via ' + (s.providers || []).join(','));
+      return k.call('sync.start', { relay: RELAY });
+    }).then(function (sy) {
+      ok('the device dials the relay', !!sy.tag, JSON.stringify(sy));
+      /* Authored through the ordinary path: append to the log, fold, seal,
+         publish. Nothing here reaches around store.commit. */
+      return k.call('store.commit', { op: { t: 'read', conv: 'c-smoke-browser' } });
+    }).then(function () {
+      ok('a delta is authored and published', true);
+      say('\n  waiting on the other implementation to read it off the relay…');
+    });
+  });
+}).catch(function (e) {
+  say('  ✗ ' + (e && e.message || e));
+});
+</script>

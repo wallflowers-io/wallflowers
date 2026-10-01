@@ -1,0 +1,81 @@
+<!doctype html><meta charset="utf-8"><body style="font:12.5px/1.75 ui-monospace,Menlo,monospace;white-space:pre-wrap;padding:16px">
+<div id="o">…</div>
+<script>
+var out=[]; function L(s){out.push(s);document.getElementById('o').textContent=out.join('\n');}
+function ok(c,s){ L((c?'  ok   ':'  FAIL ')+s); if(!c) window.__fail=1; }
+
+/* Drive the keyholder the way the host page does — over a port, from another
+   window — so the test exercises the real seam and not the internals. */
+function connect(site){
+  return new Promise(function(res,rej){
+    var f=document.createElement('iframe'); f.src='http://localhost:8103/index.html';
+    f.onload=function(){
+      var ch=new MessageChannel(), n=0, waiting={};
+      ch.port1.onmessage=function(e){
+        var d=e.data||{};
+        if(d.t==='pacific.ready') return res({call:function(m,a){
+          return new Promise(function(rs,rj){ var id=++n; waiting[id]=[rs,rj];
+            ch.port1.postMessage({id:id,m:m,a:a||{}}); }); }});
+        if(d.t==='pacific.denied') return rej(new Error(d.why));
+        if(d.id&&waiting[d.id]){ var w=waiting[d.id]; delete waiting[d.id];
+          d.ok?w[0](d.v):w[1](new Error(d.e)); }
+      };
+      f.contentWindow.postMessage({t:'pacific.init',site:site},'http://localhost:8103',[ch.port2]);
+    };
+    document.body.appendChild(f);
+  });
+}
+var SEED = { site:'t', me:'ada', sites:{t:{name:'T',kind:'Community',disc:'chat'}},
+  people:{ada:{n:'ada',home:'t',role:'Steward',joined:'x',on:1}},
+  threads:[{id:'t1',title:'T',by:'ada',when:'now',n:0,posts:[]}],
+  events:[], rsvp:{}, convs:[], links:[], pending:[] };
+
+(async function(){
+  var k = await connect('cambridge-dd');            // 8100 is registered for cambridge-dd
+  L('LOG');
+  var w = await k.call('store.load', {seed: SEED});
+  ok(w && w.threads[0].posts.length===0, 'seed becomes genesis, not a delta');
+  ok((await k.call('store.deltas')).length===0, 'genesis authors no deltas');
+
+  for (var i=0;i<5;i++) await k.call('store.commit', {op:{t:'post',thread:'t1',by:'ada',s:'m'+i}});
+  var ds = await k.call('store.deltas');
+  ok(ds.length===5, 'five commits → five deltas (was: five overwrites)');
+  ok(ds.every(function(d){return d.id && d.a && d.at;}), 'each carries id, author, time');
+  ok(ds.map(function(d){return d.seq;}).join()==='0,1,2,3,4', 'seq is per-author and monotonic');
+  var ids = ds.map(function(d){return d.id;});
+  ok(new Set(ids).size===5, 'ids are distinct');
+
+  L('\nFOLD');
+  var w2 = await k.call('store.load');
+  ok(w2.threads[0].posts.length===5, 'fold replays the log');
+  ok(w2.threads[0].posts[4].s==='m4', 'in order');
+
+  L('\nDURABILITY');
+  var k2 = await connect('cambridge-dd');           // a second port = a cold reader
+  var w3 = await k2.call('store.load');
+  ok(JSON.stringify(w3)===JSON.stringify(w2), 'a fresh reader folds to the same world');
+
+  L('\nCHECKPOINT');
+  for (var j=0;j<210;j++) await k.call('store.commit', {op:{t:'post',thread:'t1',by:'ada',s:'x'}});
+  var w4 = await k.call('store.load');
+  ok(w4.threads[0].posts.length===215, 'fold survives the checkpoint collapse');
+  ok((await k.call('store.deltas')).length===215, 'and the deltas are all still there');
+
+  L('\nSINCE');
+  var since = {}; since[ds[0].a] = 4;
+  var t2 = await k.call('store.deltas', {since: since});
+  ok(t2.length===210, 'store.deltas(since) returns only the tail');
+
+  L('\nSITES');
+  /* One device, two sites. Before the log was partitioned these shared a world:
+     whichever loaded first won, and the second silently read its graph. */
+  var k3 = await connect('example');
+  var other = await k3.call('store.load', {seed: Object.assign({}, SEED, {site:'d'})});
+  ok(other.threads[0].posts.length === 0, 'a second site starts at its own genesis');
+  var mine = await k.call('store.load');
+  ok(mine.threads[0].posts.length === 215, 'and the first site still has its 215');
+  ok((await k3.call('store.deltas')).length === 0, 'the second site sees none of the first\'s deltas');
+
+  L('\n' + (window.__fail ? 'FAILED' : 'all green'));
+})().catch(function(e){ L('THREW — '+e.message); });
+</script>

@@ -1,0 +1,10 @@
+[package]
+name = "nango"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+serde = "1"
+serde_json = "1"

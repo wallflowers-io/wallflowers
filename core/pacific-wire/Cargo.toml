@@ -1,0 +1,18 @@
+[package]
+name = "pacific-wire"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# The wire types shared by BOTH the relay and the client, so they can never drift.
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+hex.workspace = true
+# Self-certifying addresses (src/address.rs): a tag is an Ed25519 key, a Pub is signed
+# by it, and the relay and the client call the one check. HKDF turns a seed the writer
+# already holds into that key.
+ed25519-dalek.workspace = true
+hkdf.workspace = true
+sha2.workspace = true

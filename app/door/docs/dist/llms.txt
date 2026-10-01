@@ -1,0 +1,36 @@
+# WallFlowers Community API
+
+> Build on a WallFlowers community: sign in with a passkey through WallFlowers' window, read the community's rooms and people, and write as the member.
+
+## Start
+
+- [Overview](https://docs.wallflowers.io/)
+- [Start here](https://docs.wallflowers.io/start.html)
+- [Quickstart](https://docs.wallflowers.io/quickstart.html)
+- [Register your app](https://docs.wallflowers.io/register.html)
+- [Sign in](https://docs.wallflowers.io/signin.html)
+- [The session](https://docs.wallflowers.io/session.html)
+
+## Read and write
+
+- [Routes](https://docs.wallflowers.io/routes.html)
+- [What you read](https://docs.wallflowers.io/views.html)
+- [The model: kinds and ops](https://docs.wallflowers.io/model.html)
+
+## Recipes
+
+- [Rooms and threads](https://docs.wallflowers.io/rooms.html)
+- [Members and roles](https://docs.wallflowers.io/members.html)
+- [Decisions](https://docs.wallflowers.io/decisions.html)
+- [The page and its pictures](https://docs.wallflowers.io/page.html)
+- [Events and resources](https://docs.wallflowers.io/public.html)
+- [The Resources editor](https://docs.wallflowers.io/resources.html)
+- [The listings board](https://docs.wallflowers.io/trade.html)
+- [A client that holds up](https://docs.wallflowers.io/client.html)
+
+## Reference
+
+- [Errors](https://docs.wallflowers.io/errors.html)
+- [Limits](https://docs.wallflowers.io/limits.html)
+- [Model changelog](https://docs.wallflowers.io/changelog.html)
+- [For AI agents](https://docs.wallflowers.io/agents.md)

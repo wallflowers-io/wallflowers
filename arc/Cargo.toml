@@ -1,0 +1,84 @@
+# Arc — Pacific's federated compute-mesh OS. Rust workspace root.
+#
+# Arc is the commercial containerised micro-datacentre a community runs for its members:
+# the blind MLS relay, the membership tether, the push waker, the box office, UK land
+# tenure and the systems connectors, behind one /v1 gateway — and a ground station for
+# Exosat's satellite constellation. It grows from Semaphore — the blind MLS relay
+# extracted from Pacific — into the OS for the mesh.
+[workspace]
+resolver = "2"
+# Dirs mirror the unified Arc API planes (see docs/arc-api-icd-v1.html):
+#   gateway/          the thin /v1 router (the only public port)
+#   planes/relay      Semaphore — messaging          (bin: semaphore)
+#   planes/membership arc-node — identity/Tether/console (bin: node)
+#   planes/land       UK land tenure for Place anchors (bin: land)
+#   planes/boxoffice  event ticketing — the money machinery (bin: boxoffice)
+#   planes/waker      APNs push without un-blinding the relay (bin: waker)
+#   planes/systems/*  connectors + systems-server    (the /v1/systems plane)
+#   console/traffic   the wargaming cockpit (on disk, NOT a member — see `exclude` below)
+#   lib/arc-build     the deploy stamp every shipped plane compiles in (zero deps)
+members = [
+  "gateway",
+  # lib/face-render  a site's public face, drawn from its Host's bundle (no script)
+  "lib/face-render",
+  "lib/arc-build",
+  "planes/relay",
+  "planes/membership",
+  "planes/land",
+  "planes/boxoffice",
+  "planes/waker",
+  "planes/systems/__nango",
+  "planes/systems/gmail",
+  "planes/systems/nango-rag",
+  "planes/systems/systems-server",
+]
+# console/traffic is on disk but NOT a workspace member (14 Sep 2026): its dev-dependency
+# on arc-resolver was a stale path from the old tree layout, and Cargo loads every member
+# manifest, so it made the WHOLE workspace unloadable. That dev-dependency and the tunnel
+# wargame that needed it went with the inference tunnel (D-38, 26 Sep 2026); readmitting
+# the crate is its own change. The image build strips this member (Dockerfile sed) and
+# Cargo.lock was generated without it.
+exclude = [
+  "console/traffic",
+]
+
+# linear/outlook/slack are GONE (13 Sep 2026). They carried the dead pacific-core
+# "System" framework, had been excluded from the build since it was removed, and
+# were never re-wired — 874 lines and 9 tests that could not run. Deleted rather
+# than left excluded: source nothing builds is source nothing checks.
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+
+[workspace.dependencies]
+# Shared by the vendored wire crate (relay-wire) and the studio cockpit.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+hex = "0.4"
+futures-util = "0.3"
+# Shared by the planes.
+thiserror = "2"
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
+# Outbound HTTP(S) for the gateway's reverse proxy and the box office's Stripe adapter —
+# rustls (no system OpenSSL), matching the relay's sentry transport.
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+# The deploy stamp: which commit is this binary? Zero dependencies, so every plane that ships
+# can carry it. The path lives HERE rather than in five manifests — one place to move it.
+# hosting/deploy-arc.sh fills the ARC_BUILD_* env it reads; an unstamped build says so itself.
+arc-build = { path = "lib/arc-build" }
+
+# Local-dev override for arc-node's pacific-core git dep: build against the sibling Pacific
+# checkout (fast iteration, current source) instead of fetching from GitHub. The Dockerfile
+# STRIPS this block (sed) so the image build resolves pacific-core from the git source — the
+# one place the two repos meet. Marker for the sed: PATCH-STRIP-START / PATCH-STRIP-END.
+# PATCH-STRIP-START
+[patch."https://codeberg.org/phezman/pacific.git"]
+pacific-core = { path = "../core/pacific-core" }
+# The Frame protocol the relay and the waker speak — same cross-repo story as pacific-core: git
+# dep in the manifests (so the image can build), sibling path here (so local dev iterates).
+pacific-wire = { path = "../core/pacific-wire" }
+# PATCH-STRIP-END

@@ -1,0 +1,16 @@
+<h1>Register your app</h1>
+<p class="lede">Before a member can sign in on your site, WallFlowers registers it: which community it shows, where its pages are, and where sign-in returns to.</p>
+{{DEV}}
+<h2>1. Make your community</h2>
+<p>Sign up at <a href="https://wallflowers.io/signup">wallflowers.io/signup</a>: choose what it is, its name and its address, {{SIGNUP_APP_STEP}}then your account. {{SIGNUP_NOTE}} You land in WallFlowers' app, the community's owner.{{SIGNUP_APP_ID}} To find its id: while signed in, open <a href="{{DOOR}}/v2/graph" target="_blank" rel="noopener">{{DOOR}}/v2/graph</a> in a new tab; find the object with <code>"kind": "group"</code> and your community's name; its id is the <code>id</code> beside it. (Its public page, <code>"kind": "host"</code>, has the same name: not that one.) If it answers <code>not signed in</code>, sign in to WallFlowers in that browser and reload the tab. Once a member signs in on your site, the same id is <code>session.site</code>.</p>
+<h2>2. Send your registration</h2>
+<table><thead><tr><th>Field</th><th>Example</th><th></th></tr></thead><tbody>
+<tr><td>community</td><td><code>71c1…6a6c</code></td><td>The community your site shows (its id).</td></tr>
+<tr><td>callbacks</td><td><code>http://localhost:5173/</code></td><td>The page a member returns to after signing in; one or more. <strong>Matched exactly</strong>: scheme, host, port, path and trailing slash.</td></tr>
+<tr><td>origins</td><td><code>http://localhost:5173</code></td><td>Where your pages are served from. List every one: production, a preview, each local port. <code>localhost</code> and <code>127.0.0.1</code> are different origins.</td></tr>
+<tr><td>home <em>(optional)</em></td><td><code>https://your.site/community</code></td><td>Only if your community hands out join QR codes (a kiosk): where WallFlowers sends a scanned one, as <code>#join=…</code> (<a href="routes.html#post-v2-join">POST /v2/join</a>). On one of your origins.</td></tr>
+</tbody></table>
+{{REGISTER}}
+<p>WallFlowers gives you back your <strong>client id</strong>. A session from your site reaches that community and nothing else.</p>
+{{TEAMS}}
+<div class="note warn"><p>A wrong callback is refused with a <code>400</code> that begins <code>"&lt;callback&gt;" is not a callback client "&lt;client&gt;" registered</code>, and an unknown client id with one that begins <code>no client "&lt;client&gt;" is registered</code>. {{REG_TIMING}}</p></div>

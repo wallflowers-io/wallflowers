@@ -1,0 +1,91 @@
+/* members.css — W-98 Members: the page members.js draws in the pane, and the rail's control
+   that opens it. Its words are MEMBER_WORD's; its colours are the webapp's own properties,
+   so a community's palette themes it as it does the rest. */
+
+/* The right rail's "Members — n", a control while members.js is loaded. */
+.sec.go{width:100%;min-height:0;border-radius:8px;text-align:left;cursor:pointer}
+.sec.go:hover,.sec.go[aria-current="page"]{color:var(--ink);background:var(--s2)}
+
+.members{padding-bottom:40px}
+.members h3{margin:0 0 2px;font:700 16px/1.3 var(--sans);color:var(--ink)}
+.members .why{margin:8px 0 0;font-size:12.5px;color:#B42318;white-space:pre-wrap;word-break:break-word}
+.members .why:empty{display:none}
+.members .none{padding:6px 0;text-align:left}
+.members .note{margin:6px 0 0;font-size:12px;color:var(--i3)}
+
+/* Everyone: a card each, in the route's order; selected, their detail beneath it. */
+.mem-roster{margin-top:4px}
+.mem-roster h3{margin-bottom:10px}
+.mem{display:flex;align-items:center;gap:12px;width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--hair);border-radius:14px;
+  background:var(--s0);text-align:left;color:var(--ink);cursor:pointer}
+.mem:hover{border-color:var(--i3)}
+.mem[aria-expanded="true"]{background:var(--a1);border-color:var(--a3);border-radius:14px 14px 0 0}
+.mem .av{width:40px;height:40px;font-size:18px}
+.av.neutral{--t:var(--i3)}
+.mem .grow{flex:1;min-width:0}
+.mem .t{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mem .s{flex:none;font-size:12px;color:var(--i3)}
+.mrole{flex:none;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;color:var(--r);
+  background:color-mix(in srgb,var(--r) 14%,transparent)}
+.intents{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.intent{--h:var(--i3);display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;line-height:18px;
+  color:color-mix(in srgb,var(--h) 80%,var(--ink));background:color-mix(in srgb,var(--h) 14%,transparent)}
+.intent[data-i="resources"]{--h:var(--green)}
+.intent[data-i="skills"]{--h:var(--blue)}
+.intent[data-i="financial"]{--h:var(--amber)}
+.mem-detail{padding:12px 14px 14px;border:1px solid var(--a3);border-top:0;border-radius:0 0 14px 14px;background:var(--s1)}
+.mem-detail[hidden]{display:none}
+.mem-detail .intents{margin-top:10px}
+.mem-text{margin:0 0 10px;font-size:14.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.mem-links{margin:0 0 10px;padding:0;list-style:none;font-size:13.5px;word-break:break-all}
+.mem-links li+li{margin-top:2px}
+.mem-links a{color:var(--a5);font-weight:600;text-decoration:none}
+.mem-links a:hover{text-decoration:underline}
+.mem-links span{color:var(--i3)}
+.mem-ans{margin:0}
+.mem-ans dt{margin:10px 0 3px;font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--i3)}
+.mem-ans dd{margin:0}
+.mem-a .mem-text{margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.chip{display:inline-flex;align-items:center;min-height:30px;padding:3px 12px;border-radius:999px;border:1px solid var(--hair);
+  background:var(--s0);font-size:12.5px;font-weight:600;color:var(--i2)}
+button.chip{cursor:pointer}
+button.chip:hover{border-color:var(--a3)}
+.chip.on,.chip[aria-pressed="true"]{background:var(--a1);border-color:var(--a4);color:var(--a6)}
+
+/* Mine, and the questions: a section each, an editor opened in place. */
+.mem-sec{margin-top:22px;padding:16px;border:1px solid var(--hair);border-radius:16px;background:var(--s0)}
+.mem-sec h3{margin-bottom:8px}
+.mem-sec .fld textarea,.mem-sec .fld input[type="text"],.mem-sec .fld input[type="url"],.mem-sec .fld input[type="number"]{
+  display:block;width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--hair);border-radius:10px;
+  font:400 14px/1.5 var(--sans);color:var(--ink);background:var(--s0)}
+.mem-sec .fld textarea{resize:vertical}
+.mem-sec textarea:focus,.mem-sec input:focus{outline:0;border-color:var(--a4)}
+.mem-sec .fld input+input{margin-top:6px}
+.mem-sec input:disabled{opacity:.5}
+.mem-sec .ct{display:block;margin-top:3px;font-size:11px;color:var(--i3);text-align:right}
+.mem-sec .ct.over{color:#B42318;font-weight:600}
+.mem-q{padding:12px 0;border-top:1px solid var(--hair)}
+.mem-sec h3+.mem-q,.mem-sec h3+.note+.mem-q{border-top:0}
+.mem-q .qt{margin:0 0 2px;font-weight:600}
+.mem-q .qh{margin:0 0 6px;font-size:12.5px;color:var(--i2)}
+.mem-q .qmeta{display:flex;align-items:center;gap:8px;margin:0 0 4px;font-size:12px;color:var(--i3)}
+.mem-q.retired .qt{color:var(--i3)}
+.tally{display:inline-flex;align-items:center;gap:8px;padding:3px 4px 3px 12px;border-radius:999px;background:var(--s1);
+  border:1px solid var(--hair);font-size:12.5px;color:var(--i2)}
+.tally b{min-width:22px;padding:0 6px;border-radius:999px;background:var(--s3);text-align:center;color:var(--ink)}
+.mem-chk{display:flex;flex-wrap:wrap;gap:16px;margin:12px 0 0;font-size:13px;color:var(--i2)}
+.mem-chk label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.mem-nums{display:flex;flex-wrap:wrap;gap:12px}
+.mem-nums .fld{flex:1;min-width:150px}
+.mem-new{margin-top:6px;padding-top:6px;border-top:1px solid var(--hair)}
+.mem-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.mem-go{height:38px;margin-top:10px;padding:0 18px;border-radius:12px;background:var(--accent);color:var(--on-accent);font-weight:600}
+.mem-alt{height:32px;margin-top:8px;padding:0 14px;border-radius:10px;border:1px solid var(--hair);font-weight:600;color:var(--i2)}
+.mem-alt:hover{background:var(--a1);border-color:var(--a3);color:var(--ink)}
+.mem-row .mem-alt{height:38px;margin-top:10px}
+.mem-go:disabled,.mem-alt:disabled{opacity:.55}
+@media (max-width:560px){
+  .mem-sec{padding:14px 12px}
+  .mem{gap:10px;padding:10px}
+}

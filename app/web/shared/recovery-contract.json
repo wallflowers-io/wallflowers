@@ -1,0 +1,79 @@
+{
+  "_note": [
+    "THE RECOVERY SHAPE a device that has never seen the account draws: what could and",
+    "could not be got back. Agreed 22 Sep 2026 between the webapp lane, chain (product-53)",
+    "and egregore-59.",
+    "",
+    "SERVED: the per-account record, by core-wasm spine_read (7a3fdf5), pinned against its",
+    "real output by recovery-contract.test.mjs. NOT YET SERVED: the per-object record on",
+    "object.fold. It is pinned in the same test once the producer returns it. Pinned by a",
+    "test and not generated from the ICD, because this is core output, not model.",
+    "",
+    "Every value is the CORE's: Recoverability (node.rs), the spine entry's first_epoch",
+    "(spine.rs), and spine_read's index-judged recovery (head.rs). The producer copies them",
+    "out. Neither it nor any consumer re-derives one."
+  ],
+  "per_object": {
+    "where": "on each entry of `groups`, as `recovery`",
+    "fields": {
+      "named": "bool. A spine entry exists, so a recovering device can name it. Recoverability.named",
+      "speakable": "bool. The MLS state is seed-reachable, so it comes back live. Recoverability.speakable",
+      "unreadable_epochs": "int[]. Epochs with no archive key record. Recoverability.unreadable_epochs",
+      "current_epoch": "int. The epoch the object is at. Tells a hole in the middle from a missing tail. Recoverability.current_epoch",
+      "first_epoch": "int|null. From the SPINE ENTRY, not Recoverability. null exactly when named is false."
+    },
+    "today": [
+      "speakable is the constant MLS_STATE_IS_SEED_REACHABLE = false (node.rs:93), so every recovered object is read-only.",
+      "unreadable_epochs is every epoch 0..=current_epoch, pushed unconditionally. NOTHING WRITES the archive key records yet: verify_recoverability computes archive_locator and discards it.",
+      "first_epoch is 0 wherever it exists: only the mint writes a spine entry. Joining through a Welcome (process_intro_blob) and pairing (pair_scan_full) write NONE, so a late joiner is not under a floor today. It is unnamed.",
+      "The floor defect (the unreadable loop starts at 0, not first_epoch) is real in code, and chain will fix it TOGETHER with join entries, with a test whose floor is above 0 and m27 rewritten. It has no data to be tested against before then. No consumer filters it."
+    ]
+  },
+  "per_account": {
+    "where": "at the top level of the fold, as `recovery`. It is core-wasm spine_read's `recovery`, field for field (7a3fdf5, chain's lane), so no client reimplements the index logic.",
+    "supersedes": "The count-based verdict agreed earlier on 22 Sep (26fe30e). Head::check compared COUNTS, which was right for the linked chain, where a walk is always a prefix, and wrong under arithmetic addressing. One mid-chain hole read as Truncated{missing:1} with the tail intact. A hole plus a lagging head could read as Forked, an accusation. It is being reworked to check BY INDEX (head.rs).",
+    "fields": {
+      "tail": "\"intact\" | \"missing\" | \"forked\" | \"unknown\". The entry AT index position-1 against head.tail, never 'the last entry that opened'. \"missing\" is what Truncated meant. \"unknown\" while the head is a floor and not a count (see today).",
+      "holes": "int[]. Indices below position-1 that did not open. The tail index is judged on its own, by `tail`, and is never also a hole. Ordinary loss: survivable, and named.",
+      "extra": "int. Indices at or past position that opened. The head is behind, which is NORMAL (HeadBehind) and never an alarm.",
+      "found": "int, counted BY INDEX, not by entry. A person's devices share one seed and so one spine address space, and each device picks its index from its local MAX(idx), so one tag can hold two blobs. The reader opens EVERY blob at a tag."
+    },
+    "not_carried": [
+      "complete. Derivable, so it would be a second copy. And computed from a raw position today it is WRONG: every account would read complete. Consumers derive it only as tail == intact AND holes empty. extra does not count against it."
+    ],
+    "today": [
+      "THE HEAD-0 TRAP. The only head any account has is pacific-account.js writeFirstHead's: position 0, no tail, chain_gen 0. Nothing advances it, not the web and not the native drain. So position is a floor, not a count, and the core returns tail: \"unknown\" until a spine writer advances the head. The core makes that call, not the client."
+    ],
+    "open": [
+      "Index claiming. Chain proposes that devices claim spine indices through the relay's first-writer-wins (publish_commit returns None to the loser, who takes i+1). Until then, one index can hold several blobs. Not yet checked against the relay."
+    ]
+  },
+  "consumer_reading": [
+    "A missing or malformed record, or a tail value not in the list, reads as unknown, never as intact.",
+    "tail: forked is drawn as an alert in words, never as a count. Ralph ruled that an arc rollback or spoof leaves the account unable to recover its state."
+  ],
+  "exports": {
+    "_note": "The two core-wasm exports behind it (7a3fdf5). core-wasm cannot do the network: the keyholder fetches and hands every blob in.",
+    "spine_addresses": {
+      "in": "{seed | storage_root (64 hex), gen, from, count}. count is at most one batch; over it is REFUSED, in words.",
+      "out": {
+        "addresses": "[{index, tag}]. tag is 64 hex, one unrelated address per index."
+      }
+    },
+    "spine_read": {
+      "in": "{seed | storage_root, head: {position, tail} | null, fetched: [{index, blobs: [base64 as it travelled]}]}. head is the OPENED head (head_open, with its declared-position check). Hand in every blob at every tag, not only the first.",
+      "out": {
+        "recovery": "the per_account record above",
+        "objects": "[{group_id, first_epoch}]. Per-object `named` is membership of this list. When two entries name one group, the lowest floor is kept.",
+        "left": "[{group_id, last_epoch, index}]. Raw; nothing writes a Left entry yet.",
+        "unopened": "int. Blobs at our addresses that did not open: corruption, or a wrong index. Diagnostic only, not part of the drawn contract."
+      },
+      "walk": [
+        "1. Every index below head.position from spine_addresses; drain each tag since 0; go THROUGH misses.",
+        "2. From position upward until the first tag with nothing at it.",
+        "3. Hand spine_read every blob from every tag. With no head, step 1 is empty and step 2 starts at 0."
+      ]
+    },
+    "superseded": "head_check is still count-based and is documented as wrong for arithmetic chains. The web moves to spine_read. The `chain` field of `locators` is index 0 only."
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "icd": {
+    "version": "2.3.1",
+    "sha256": "a71fb32573731ca2de99e637834c279fd44d661a947b9542c2d3b088dd10cb13"
+  },
+  "door": "e1061bb22e4c7e5c9c95bb9170f15d3e5c4303bc",
+  "signin_sri": "sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/",
+  "resources_sri": "sha384-UmvzUi9QJtE0tDexr0MptcW1xPoGQHIw24DOVTWUZgnDvpzADZU9k4X0dXswd3ml"
+}

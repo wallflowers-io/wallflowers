@@ -1,0 +1,12 @@
+[package]
+name = "viz-wasm"
+description = "Nightwater — the verified vortex engine rendered live: wasm shell over pacific-geometry plus declared demo-grade wave/spray layers. No JS physics, no deps."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pacific-geometry = { path = "../pacific-geometry" }

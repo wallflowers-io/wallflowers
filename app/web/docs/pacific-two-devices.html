@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Two devices, one person</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  body { font: 12.5px/1.75 ui-monospace, Menlo, monospace; padding: 20px; max-width: 900px;
+         background: #FBFAF8; color: #1A1A1C; }
+  h1 { font: 600 13px/1 ui-monospace, monospace; letter-spacing: .18em; text-transform: uppercase;
+       color: #8A8A93; margin: 0 0 6px; }
+  p.s { color: #55555C; margin: 0 0 20px; max-width: 62ch; }
+  pre { white-space: pre-wrap; margin: 0; }
+  .ok { color: #1F6F5C; } .no { color: #96322E; } .h { color: #8A8A93; }
+  iframe { width: 0; height: 0; border: 0; position: absolute; visibility: hidden; }
+</style>
+</head>
+<body>
+<h1>Two devices, one person</h1>
+<p class="s">Device A on :8103, device B on :8104 — two origins, so two real
+IndexedDB stores, two device keys, two logs. They pair over X25519, derive a tag
+and a seal key, and talk through the semaphore relay on :8787. A delta authored
+on A has to appear in B's fold without the relay learning anything.</p>
+<pre id="o">…</pre>
+
+<script>
+var out = [];
+function L(s){ out.push(s); document.getElementById('o').innerHTML = out.join('\n'); }
+function ok(c,s){ L((c?'<span class="ok">  ok  </span>':'<span class="no">  FAIL</span>')+' '+s); if(!c) window.__fail=1; }
+function head(s){ L('<span class="h">'+s+'</span>'); }
+
+function connect(origin, site){
+  return new Promise(function(res, rej){
+    var f = document.createElement('iframe');
+    f.src = origin + '/index.html';
+    f.onload = function(){
+      var ch = new MessageChannel(), n = 0, waiting = {}, pushes = [];
+      ch.port1.onmessage = function(e){
+        var d = e.data || {};
+        if (d.t === 'pacific.ready') return res({
+          pk: d.pk,
+          call: function(m,a){ return new Promise(function(rs,rj){
+            var id = ++n; waiting[id] = [rs,rj]; ch.port1.postMessage({id:id,m:m,a:a||{}}); }); },
+          onPush: function(fn){ pushes.push(fn); }
+        });
+        if (d.t === 'pacific.denied') return rej(new Error(d.why));
+        if (d.t === 'pacific.push') return pushes.forEach(function(fn){ fn(d.v); });
+        if (d.id && waiting[d.id]) { var w = waiting[d.id]; delete waiting[d.id];
+          d.ok ? w[0](d.v) : w[1](new Error(d.e)); }
+      };
+      f.contentWindow.postMessage({t:'pacific.init', site:'cambridge-dd'}, origin, [ch.port2]);
+    };
+    document.body.appendChild(f);
+  });
+}
+var SEED = { site:'t', me:'ada', sites:{t:{name:'T',kind:'Community',disc:'chat'}},
+  people:{ada:{n:'ada',home:'t',role:'Steward',joined:'x',on:1}},
+  threads:[], events:[], rsvp:{},
+  convs:[{id:'c1', with:'grace', unread:0, msgs:[]}], links:[], pending:[] };
+
+var wait = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
+
+(async function(){
+  head('DEVICES');
+  var A = await connect('http://localhost:8103');
+  var B = await connect('http://localhost:8104');
+  ok(A.pk && B.pk, 'both minted a device key');
+  ok(A.pk !== B.pk, 'and they are different devices — ' + A.pk.slice(0,12) + '… / ' + B.pk.slice(0,12) + '…');
+
+  await A.call('store.load', {seed: SEED});
+  await B.call('store.load', {seed: SEED});
+
+  head('\nPAIRING');
+  var offer = await A.call('pair.offer');          // the QR
+  var a = await A.call('pair.accept', {offer: (await B.call('pair.offer')).offer});
+  var b = await B.call('pair.accept', {offer: offer.offer});
+  ok(a.tag === b.tag, 'both derived the same tag without sending it — ' + a.tag.slice(0,16) + '…');
+
+  head('\nRELAY');
+  var sa = await A.call('sync.start', {relay:'ws://localhost:8787'});
+  var sb = await B.call('sync.start', {relay:'ws://localhost:8787'});
+  ok(sa.tag === sb.tag, 'both subscribed to that tag on semaphore');
+
+  head('\nTHE POINT');
+  var got = null;
+  B.onPush(function(w){ got = w; });
+  await A.call('store.commit', {op:{t:'say', conv:'c1', s:'ballot papers are printed'}});
+  for (var i=0; i<40 && !got; i++) await wait(100);
+
+  ok(!!got, 'device B was pushed a new world without asking');
+  var wb = await B.call('store.load');
+  ok(wb.convs[0].msgs.length === 1, 'B folded the message A authored');
+  ok(wb.convs[0].msgs[0].s === 'ballot papers are printed', '“' + (wb.convs[0].msgs[0]||{}).s + '”');
+
+  var db = await B.call('store.deltas');
+  var mine = db.filter(function(d){ return d.a === A.pk; });
+  ok(mine.length === 1, "B's log holds A's delta under A's authorship, not its own");
+
+  head('\nAND BACK');
+  var got2 = null; A.onPush(function(w){ got2 = w; });
+  await B.call('store.commit', {op:{t:'say', conv:'c1', s:'bring them Thursday'}});
+  for (var j=0; j<40 && !got2; j++) await wait(100);
+  var wa = await A.call('store.load');
+  ok(wa.convs[0].msgs.length === 2, 'A converged too — both logs hold both deltas');
+
+  L('\n' + (window.__fail ? '<span class="no">FAILED</span>' : '<span class="ok">all green</span>'));
+})().catch(function(e){ L('<span class="no">THREW</span> — ' + e.message); });
+</script>
+</body>
+</html>

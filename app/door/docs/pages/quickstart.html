@@ -1,0 +1,45 @@
+<h1>Quickstart</h1>
+<p class="lede">A page that signs a member in, lists the community's rooms, and posts to one. Two files, no build step, no dependencies.</p>
+<div class="note warn"><p><strong>Before you start, at the hackathon:</strong></p><ul>
+<li>Sign out every session you open: {{SESSIONS}} sessions are held for everyone together.</li>
+<li>Everyone on the venue's Wi-Fi shares one address, and {{PER_ADDR}} sign-ins can be in progress per address. <code>429 "too many sign-ins are open from here"</code> means: finish or cancel yours, or wait a minute.</li>
+<li>Test in a desktop browser on <code>localhost</code>. A phone can't reach your laptop's page: a LAN address isn't a secure context, and the sign-in needs one.</li>
+<li>Keep your computer's clock right: a proof more than {{SKEW}} s off WallFlowers' clock is refused.</li>
+</ul></div>
+<h2>{{QS_STEP1}}</h2>
+{{DEV_QS}}
+{{SIGNUP_APP_QS}}
+<h2>2. Download the starter</h2>
+<p><a href="starter/index.html" download>index.html</a> and <a href="starter/app.js" download>app.js</a>. Put them in one folder, or from a terminal:</p>
+<pre><code>curl -O {{SITE}}/starter/index.html -O {{SITE}}/starter/app.js</code></pre>
+<p> At the top of <code>app.js</code>, set <code>client</code> to {{QS_CLIENT}}. The fields the starter reads from <code>/v2/graph</code> are explained on <a href="views.html">What you read</a>.</p>
+<pre><code>export const CONFIG = {
+  door: '{{DOOR}}',
+  integrity: '{{SRI}}',
+  client: '{{QS_CLIENT_JS}}',
+  callback: location.origin + location.pathname,
+};</code></pre>
+<h2>3. Serve it</h2>
+<pre><code>python3 -m http.server {{QS_PORT}} --bind 127.0.0.1</code></pre>
+<p>On Windows, <code>py -m http.server {{QS_PORT}} --bind 127.0.0.1</code>. With Node, <code>npx http-server -p {{QS_PORT}} -a 127.0.0.1</code>. Open the page at its address, not by double-clicking <code>index.html</code>: as a file it cannot run.</p>
+<p><code>--bind 127.0.0.1</code> keeps the server to this machine. The address you open is still exactly <code>http://localhost:{{QS_PORT}}/</code>: not <code>127.0.0.1</code>, and not <code>/index.html</code>. The callback is the page's own address and is matched exactly. Press <em>Sign in</em>: WallFlowers' window asks for the member's passkey and brings them back. The page lists the community's rooms; pick one and post. A new community has no rooms yet: in WallFlowers, open <em>Rooms</em>, then <strong>New room</strong>; or, as its owner, press <strong>New room</strong> in the starter (it opens one as <a href="rooms.html">Rooms and threads</a> does).</p>
+<div class="note"><p><strong>Sign in as a member.</strong> The page reaches the community only for its members: at first, sign in with the account that owns it. Any other account gets, after a few seconds, "This account isn't a member of this community" (<a href="members.html#becoming-a-member">Becoming a member</a>).</p></div>
+<div class="note"><p><strong>Set your name.</strong> Pages show people by the name on their card. Until you set yours in WallFlowers (open <code>{{DOOR}}/#you</code>, or the profile menu, then <em>Your card</em>), you appear as "New member" on every page, yours and everyone else's.</p></div>
+<div class="note warn"><p><strong>Sign out every session you open.</strong> Call <code>session.signOut()</code> (<code>POST /v2/signout</code>) when you're done, and have scripts and tests sign out as they exit. Otherwise WallFlowers holds the session until it has been idle for {{IDLE}}, and once it holds {{SESSIONS}} sessions, everyone's sign-in is refused with <code>503 "the Door is at its session limit; try again shortly"</code>, yours and every other team's.</p></div>
+<h2>4. What it does</h2>
+<ol>
+<li>Loads the sign-in script once, pinned by its integrity hash.</li>
+<li>On load: <code>WallFlowers.finish</code> if the address carries <code>?state</code> (the member is back from WallFlowers), otherwise <code>WallFlowers.current</code>. <code>null</code> means signed out.</li>
+<li>Reads <code>GET /v2/graph</code>, finds the community (<code>session.site</code>), and lists its parts with role <code>room</code>, in order, naming people from <code>profiles</code>.</li>
+<li>Posts with <code>POST /v2/apply {object: roomId, op: 'forum.post', args: {text, ts}}</code>, then reads the graph again.</li>
+<li>Opens one change stream and re-reads the graph 300 ms after the last change, and every 15 s while the page is visible.</li>
+</ol>
+<h2>If it doesn't work</h2>
+<table><tbody>
+<tr><td>The script doesn't load (the console says CORS)</td><td>Your page's address isn't allowed yet: {{QS_ORIGIN_FIX}}. WallFlowers serves the sign-in script only to the addresses it knows.</td></tr>
+<tr><td>The script doesn't load (the console says the digest didn't match)</td><td>The integrity hash is wrong, or you loaded it from somewhere else. Use the one above.</td></tr>
+<tr><td><code>… is not a callback client … registered</code></td><td>Your callback isn't registered character for character. Check the port, <code>localhost</code> against <code>127.0.0.1</code>, and the trailing slash.</td></tr>
+<tr><td>"This session reaches no community yet", or no rooms, for a few seconds</td><td>Normal for a new account or a new member: the starter reads again for up to 20 s (no community) or 15 s (no rooms).</td></tr>
+<tr><td><code>503 the Door is at its session limit</code></td><td>Too many sessions are open, many left to idle out. Sign out what you open (<code>session.signOut()</code>), and try again shortly.</td></tr>
+<tr><td><code>429 too many sign-ins are open from here</code></td><td>Finish or cancel an open sign-in, or wait a minute. At most {{PER_ADDR}} sign-ins can be in progress from one address.</td></tr>
+</tbody></table>

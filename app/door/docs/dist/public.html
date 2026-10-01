@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Events and resources · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html" aria-current="page">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>Events and resources</h1>
+<p class="lede">A community's events and resources are published on its public page. Read them from anywhere, with no session: they're the same for everyone.</p>
+<div class="note warn"><p><strong>Published at signup.</strong> A community made at <a href="https://wallflowers.io/signup">wallflowers.io/signup</a> is published as it is made: its page and these routes answer within a minute. One made before 1 October, 14:00 KST, may still be unpublished and answer <code>404</code> here: ask the organisers to publish it. Signed in, your page also reads, in <code>/v2/graph</code>, the events and resources its own session created.</p></div>
+<p><code>mill-road</code> above is the community's address, as in <code>wallflowers.io/mill-road</code> (<code>:slug</code> on <a href="routes.html">Routes</a>). A member's session can't read it: put it in your app's configuration, as signup showed it or as it was chosen at Register.</p>
+<pre><code>const { items } = await (await fetch('https://arc.wallflowers.io/v1/face/mill-road/items')).json();
+for (const [key, item] of Object.entries(items)) {
+  if (key.startsWith('event:')) drawEvent(item);     // title, startMs, endMs, venue, descriptor
+  if (key.startsWith('post:'))  drawResource(item);  // title, form, link, body, …
+}</code></pre>
+<ul>
+<li>Items are keyed <code>event:&lt;id&gt;</code> and <code>post:&lt;id&gt;</code>, each with its op's arguments by the model's names, plus <code>at</code>.</li>
+<li>An event given by dates alone runs from midnight to 23:59 on its last day: show dates, not times.</li>
+<li>Read it when the page loads, and again when something changes (<code>session.events</code>, on a signed-in page). Never poll it faster than once every 30 s, and never in a loop: every community's page is served from it. On a server, keep it for a minute.</li>
+<li>The pictures: <code>https://arc.wallflowers.io/v1/face/&lt;address&gt;/m/mark</code> (also <code>cover</code>, <code>logo</code>, <code>wallpaper</code>).</li>
+<li>If you link PDFs for WallFlowers' viewer, serve them with <code>Access-Control-Allow-Origin: https://app.wallflowers.io</code>.</li>
+</ul>
+<h2 id="who-sees-them">Who sees them</h2>
+<p>In this release every event and every post is public: on the community's page, for anyone. The community's members also see them in WallFlowers, exactly as that page shows them: its events, where they can RSVP, and its newest 8 posts. For that, WallFlowers finds the community's page through its registered site, as yours is.</p>
+<p>The model gives each event and post a visibility (private, connections or network; network when unset), but no route yet puts another member on an event's or post's roster, so private or connections would reach only its creator: leave it at network. Members-only events and posts, and co-hosts, are not yet available.</p>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

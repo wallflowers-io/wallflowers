@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+  <!-- MEET, Ralph's glyph (28 Sep 2026, drawn in marker on squared paper): a ring, and four
+       legs leaving it about 26 degrees either side of the vertical, as long as it is wide. -->
+  <circle cx="12" cy="12" r="5.2"/>
+  <path d="M9.72 7.33L7.45 2.87M14.28 7.33l2.27-4.46M9.72 16.67l-2.27 4.46M14.28 16.67l2.27 4.46"/>
+</svg>

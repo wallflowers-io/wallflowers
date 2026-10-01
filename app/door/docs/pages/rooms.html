@@ -1,0 +1,21 @@
+<h1>Rooms and threads</h1>
+<table><thead><tr><th>To</th><th>Op, on the room</th><th>Args</th><th>Who</th></tr></thead><tbody>
+<tr><td>Post</td><td><code>forum.post</code></td><td><code>text</code>; <code>ts</code> (ms)</td><td>its members</td></tr>
+<tr><td>Reply</td><td><code>forum.post</code></td><td><code>text</code>, <code>ts</code>, <code>reply_author</code>, <code>reply_gen</code> (the parent's author and gen)</td><td>its members</td></tr>
+<tr><td>React · take it back</td><td><code>forum.react</code></td><td><code>target_author</code>, <code>target_gen</code>, <code>emoji</code>, <code>active</code>: 1 set, 0 take back</td><td>its members</td></tr>
+<tr><td>Vote</td><td><code>forum.vote</code></td><td><code>target_author</code>, <code>target_gen</code>, <code>dir</code>: 1 · -1 · 0 clears</td><td>its members</td></tr>
+<tr><td>Take back a message</td><td><code>forum.retract</code></td><td><code>target_author</code>, <code>target_gen</code></td><td>its author; the owner any</td></tr>
+</tbody></table>
+<pre><code>await session.fetch('/v2/apply', { method: 'POST', body: JSON.stringify({
+  object: roomId, op: 'forum.post',
+  args: { text: 'Welcome!', ts: Date.now(), reply_author: parent.author, reply_gen: parent.gen } }) });</code></pre>
+<h2>Open a room</h2>
+<p>The owner, in one <a href="routes.html#post-v2-batch">batch</a>: mint a <code>forum</code> with its name, <code>base.setPart</code> on the community, <code>base.setParent</code> on the room. A new room has only its owner in it; members are added in WallFlowers.</p>
+<h2 id="threads">Threads</h2>
+<p>Draw a room as threads, each reply under what it answers, the order WallFlowers' own apps use:</p>
+<ol>
+<li>A message's parent is its <code>reply_to</code>, but only if that names another message in the room. Otherwise it's top-level.</li>
+<li>Sort siblings by <code>ts</code> (the author's clock, in ms), then <code>author</code>, then <code>gen</code>. <code>gen</code> counts each author's own messages, so it is not a clock across people.</li>
+<li>Walk the tree depth-first, recording each message's depth. Anything left unvisited (a reply cycle) becomes top-level, in the same order.</li>
+</ol>
+<p>Every message appears exactly once. For a flat list, sort by <code>ts</code>.</p>

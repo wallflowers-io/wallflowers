@@ -1,0 +1,19 @@
+<h1>Events and resources</h1>
+<p class="lede">A community's events and resources are published on its public page. Read them from anywhere, with no session: they're the same for everyone.</p>
+<div class="note warn"><p>{{PUBLISHED_NOTE}}</p></div>
+<p><code>mill-road</code> above is the community's address, as in <code>wallflowers.io/mill-road</code> (<code>:slug</code> on <a href="routes.html">Routes</a>). A member's session can't read it: put it in your app's configuration, as signup showed it or as it was chosen at Register.</p>
+<pre><code>const { items } = await (await fetch('{{ARC}}/v1/face/mill-road/items')).json();
+for (const [key, item] of Object.entries(items)) {
+  if (key.startsWith('event:')) drawEvent(item);     // title, startMs, endMs, venue, descriptor
+  if (key.startsWith('post:'))  drawResource(item);  // title, form, link, body, …
+}</code></pre>
+<ul>
+<li>Items are keyed <code>event:&lt;id&gt;</code> and <code>post:&lt;id&gt;</code>, each with its op's arguments by the model's names, plus <code>at</code>.</li>
+<li>An event given by dates alone runs from midnight to 23:59 on its last day: show dates, not times.</li>
+<li>Read it when the page loads, and again when something changes (<code>session.events</code>, on a signed-in page). Never poll it faster than once every 30 s, and never in a loop: every community's page is served from it. On a server, keep it for a minute.</li>
+<li>The pictures: <code>{{ARC}}/v1/face/&lt;address&gt;/m/mark</code> (also <code>cover</code>, <code>logo</code>, <code>wallpaper</code>).</li>
+<li>If you link PDFs for WallFlowers' viewer, serve them with <code>Access-Control-Allow-Origin: https://app.wallflowers.io</code>.</li>
+</ul>
+<h2 id="who-sees-them">Who sees them</h2>
+<p>In this release every event and every post is public: on the community's page, for anyone. The community's members also see them in WallFlowers, exactly as that page shows them: its events, where they can RSVP, and its newest 8 posts. For that, WallFlowers finds the community's page through its registered site, as yours is.</p>
+<p>The model gives each event and post a visibility (private, connections or network; network when unset), but no route yet puts another member on an event's or post's roster, so private or connections would reach only its creator: leave it at network. Members-only events and posts, and co-hosts, are not yet available.</p>

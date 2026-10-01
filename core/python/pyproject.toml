@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wallflowers"
+version = "0.0.1"
+description = "Key management for a WallFlowers Node: the OS secure store, fail-closed."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "WallFlowers" }]
+keywords = ["wallflowers", "keychain", "keyring", "secrets", "macos"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Security :: Cryptography",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://wallflowers.io"
+
+[tool.setuptools]
+packages = ["wallflowers"]
+
+[tool.setuptools.package-data]
+wallflowers = ["py.typed"]

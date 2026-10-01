@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pacific://schemas/feed-dataset-1",
+  "title": "Pacific feed QA dataset",
+  "description": "GroupObject-shaped rows for exercising the Active Scroll Feed and the typed lists (FEED-TRANSMISSION 0-ANSWER-G). QA FIXTURE ONLY — I-A (real-ops only) governs shipping surfaces; this set loads through the dev harness, never seeds production folds. Derived from docs/feed-simulation-highschool.html (the Ha-eun persona).",
+  "type": "object",
+  "required": ["version", "persona", "nowMs", "objects"],
+  "properties": {
+    "version": { "const": "feed-sim-1" },
+    "persona": { "type": "string" },
+    "nowMs": { "type": "integer", "description": "The dataset's fixed 'now' — no runtime clocks." },
+    "objects": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/object" }
+    }
+  },
+  "$defs": {
+    "object": {
+      "type": "object",
+      "required": ["id", "kind", "title", "provenance", "edges"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^(group|event|place|person|listing):[a-z0-9-]+$" },
+        "kind": { "enum": ["group", "event", "place", "person", "listing"] },
+        "title": { "type": "string", "minLength": 1 },
+        "descriptor": { "type": "string" },
+        "provenance": {
+          "enum": ["member", "system", "hop"],
+          "description": "member = residue of an own fold; system = hydrated by a System (kind 21); hop = arrived over connections"
+        },
+        "system": { "type": "string", "description": "Hydrating System when provenance=system, e.g. ra.seoul, artrabbit.seoul, schoolcal" },
+        "hops": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } },
+        "startMs": { "type": "integer", "description": "event only" },
+        "endMs": { "type": "integer", "description": "event only; 0 = no stated end" },
+        "audience": { "enum": ["all", "19+"], "description": "event only — the F-1 facet the simulation surfaced" },
+        "category": { "enum": ["music", "art", "dance", "school", "sport", "family", "market", "civic"] },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "area": { "type": "string", "description": "neighbourhood slug: mapo, hongdae, mangwon, hapjeong, itaewon, seogyo" },
+        "posture": { "enum": ["has", "wants", "offers"], "description": "listing only — KnotSwap barter postures, never a price" },
+        "shape": { "enum": ["individual", "team", "organisation"], "description": "group only" },
+        "media": {
+          "type": "object",
+          "description": "Multimedia riding the fold, cap-enforced there: event banner ≤700KB b64 (+≤6 photos ≤500KB, clip ≤1.5MB), thing/listing photo ≤500KB b64, group card photo, profile photo+clip. Files live beside the dataset in media/; manifest.json carries source+license.",
+          "additionalProperties": false,
+          "properties": {
+            "banner": { "type": "string", "description": "JPEG filename in media/" },
+            "photos": { "type": "array", "items": { "type": "string" }, "maxItems": 6 },
+            "clip": { "type": "string", "description": "MP4 filename in media/" }
+          }
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["rel", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "rel": { "enum": ["member_of", "happens_at", "organised_by", "located_in", "offers", "wants", "affiliated_with", "invited", "going"] },
+        "target": { "type": "string", "description": "an object id present in this dataset" }
+      }
+    }
+  }
+}

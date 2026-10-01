@@ -1,0 +1,6 @@
+# What vendor/ holds, and where each copy comes from (NC-69). face-render's tests check
+# these bytes on every checkout, and, beside the website, the website's own copies
+# against them. Re-vendoring changes a line here, in the same commit.
+# sha256                                                            vendored        website path                               from
+2429eb7c74f95282796e51b1eb50014dfc3212628186e59641f255ab07e78d96  escape.html     site/escape.html                           f62054d
+55c9ba4a2a1163fd0977fde078ba07dad1ee9e8553f23df19feeb9a8577a4b7a  face-assets.js  site/assets/face/vendor/face-assets.js     f62054d

@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#F7F4EC">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>WallFlowers</title>
+<!--
+  THE WEBAPP — the interior, one engine for desktop and mobile. Signed out it is
+  nothing: the Door's window (DR-4), which comes back here (Ralph, 28 Sep: "its only
+  purpose is as a sign in portal"). The public face of a Site is its Host's.
+
+  The interior is laid out as /demo's Discord-shaped one was; narrow, the same
+  engine folds to rail and pane. A site embeds it with embed.js, an anchor that
+  opens it.
+
+  THE BROWSER HOLDS A SESSION AND NOTHING ELSE (ruled 23 September 2026). The
+  door — app/door — holds the seed and runs the native Node; this page holds an
+  HttpOnly cookie for it and cannot read that either.
+
+  `data-state="inside"` on <html> draws the interior; without it, nothing is
+  drawn but the boot line, so a signed-out page never half-renders.
+
+  WHAT IS REAL HERE.  Everything behind the door. The words open the account in
+  the door; every object in the interior is folded there by `Node::object_view`
+  and served at /v1/graph. This page performs no cryptography and models no
+  state — it asks the door and draws the answer.
+
+  A GROUP THIS PAGE CANNOT REACH IS NAMED, NEVER SKIPPED.  The interior draws
+  what it folded and, beside it, what it could not — an unreachable Arc, an
+  object that would not fold, an epoch with no key. A shorter list with nothing
+  said is the one failure this whole design exists to refuse.
+-->
+<link rel="icon" href="brand/wallflowers-icon.svg">
+<link rel="stylesheet" href="brand/fonts.css">
+<link rel="stylesheet" href="trade.css">
+<link rel="stylesheet" href="events-page.css">
+<link rel="stylesheet" href="events-edit.css">
+<style>
+/* ── The type and the palette are the brand's, not this page's ───────────── */
+@font-face{
+  font-family:"Wallflowers";
+  src:url("brand/wallflowers-regular.woff2") format("woff2");
+  font-weight:100 900; font-style:normal; font-display:swap;
+}
+:root{
+  /* doorways, from brand/kenjin-palette-doorways.css */
+  --rose:#E57D8B; --red:#EE826E; --amber:#E79D51; --yellow:#BEB34D;
+  --green:#469C48; --cyan:#418CB2; --blue:#0D6AAE; --magenta:#CF84A8;
+  --paper:#F0F0F2; --mist:#E5E4E2; --slate:#D6D6D8; --shadow:#CDCCCA;
+
+  --cream:#F7F4EC;          /* the ground, as the deck shows it */
+  --white:#FFFFFF;
+  --ink:#15181C;
+  --ink2:#5C646E;
+  --mute:#9AA1A9;
+  --rule:#E4E6EA;
+  --tint:#F4F6F8;
+
+  --marker:"Wallflowers",system-ui,sans-serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  /* The one measurement a phone page cannot do without. */
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  box-sizing:border-box;
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%}
+body{
+  margin:0;background:var(--cream);color:var(--ink);
+  font:400 16px/1.5 var(--sans);
+  -webkit-font-smoothing:antialiased;
+  -webkit-tap-highlight-color:transparent;
+  overscroll-behavior-y:none;
+}
+/* Inside, or nothing. */
+[data-screen]{display:none}
+html[data-state="inside"] [data-screen="inside"]{display:flex}
+
+/* Every tap target is a thumb's worth. 44px is the floor, 48 the habit. */
+button,.tap{font:inherit;color:inherit;background:none;border:0;cursor:pointer;
+  min-height:48px;touch-action:manipulation}
+
+/* ── INSIDE ──────────────────────────────────────────────────────────
+   A top bar over three columns: the rail for the tab, the pane, the people. The
+   bar's two ends are the rails' own columns, so the Site's icon sits over the left
+   rail and the menus over the right, whatever width each is dragged to (Pacific's
+   TopAppBar and rails, Ralph 28 Sep). Narrow, the tabs take a row of their own
+   and the rails are drawers. */
+html[data-state="inside"],html[data-state="inside"] body{background:var(--white);overflow:hidden}
+[data-screen="inside"]{
+  --bar-h:56px;
+  /* The palette (palette.js), Paper's until theme() writes the Site's over it. */
+  --s0:#FDFCF9;--s1:#F9F7F2;--s2:#EDEBE6;--s3:#E2DFDA;--hair:#DFDEDA;
+  --ink:#14181E;--i2:#505359;--i3:#7D8086;--title:#14181E;--accent:#546CAC;--on-accent:#FFFFFF;
+  --a1:#EAEDF2;--a2:#D3DBEE;--a3:#ACBADB;--a4:#546CAC;--a5:#3F517E;--a6:#2F3C59;
+  --bar:color-mix(in srgb,#F9F7F2 86%,transparent);
+  --lw:256px;--rw:256px;--rwh:var(--rw);
+  --caps:"Asap Condensed","Arial Narrow",system-ui,sans-serif;
+  display:grid;height:100svh;width:100%;position:relative;
+  grid-template-rows:auto minmax(0,1fr);
+  grid-template-columns:var(--lw) minmax(0,1fr) var(--rw);
+  font:400 14px/1.5 var(--sans);color:var(--ink);background:var(--s0);
+  transition:grid-template-columns .2s}
+html[data-state="inside"] [data-screen="inside"]{display:grid}
+[data-screen="inside"].resizing,[data-screen="inside"].resizing .top,
+[data-screen="inside"].still,[data-screen="inside"].still .top{transition:none}
+:where([data-screen="inside"]) button{min-height:0;font:inherit}
+/* The Face editor's colour picker (Coloris) is appended to <body>, outside the screen: its swatches keep their own size. */
+.clr-picker button{min-height:0}
+.ic{display:inline-block;width:18px;height:18px;flex:none;color:inherit}
+.ic svg{display:block;width:100%;height:100%}
+
+/* THE TOP BAR. Its columns are the page's: the left one is the left rail's width,
+   the right one the right rail's (or its buttons', when that rail is folded). */
+.top{grid-column:1/-1;grid-row:1;position:relative;z-index:20;display:grid;
+  grid-template-columns:var(--lw) minmax(0,1fr) var(--rwh);align-items:center;
+  height:calc(var(--bar-h) + var(--safe-t));padding-top:var(--safe-t);
+  background:var(--bar);-webkit-backdrop-filter:saturate(1.6) blur(20px);backdrop-filter:saturate(1.6) blur(20px);
+  border-bottom:1px solid var(--hair);transition:grid-template-columns .2s}
+/* The brand is at least the left rail's width and may run on over the centre, never past
+   the first tab (placeBrand sets its max-width); the role keeps to its right-hand end. */
+.brand{justify-self:start;width:max-content;min-width:100%;display:flex;align-items:center;gap:8px;
+  padding:0 10px 0 12px;position:relative;z-index:2}
+.siteBtn{flex:0 1 auto;display:flex;align-items:center;gap:10px;min-width:0;height:40px;padding:0 8px 0 4px;border-radius:12px}
+.siteBtn .nm{min-width:0}
+.siteRole{margin-left:auto;flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%}
+.siteRole:hover,.siteRole[aria-expanded="true"]{background:var(--s2)}
+.siteRole[hidden]{display:none}
+.siteBtn:hover,.siteBtn[aria-expanded="true"]{background:var(--s2)}
+.siteBtn .nm{font:600 15px/1.2 var(--sans);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.siteBtn .chev{width:14px;height:14px;color:var(--i3)}
+.mark{width:32px;height:32px;border-radius:9px;flex:none;display:grid;place-items:center;overflow:hidden;
+  background:var(--t,#fff);color:var(--tf,#fff);font:400 17px/1 var(--marker);box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+.mark img{width:100%;height:100%;object-fit:cover;display:block}
+.mark.home{background:none;box-shadow:none}
+.tabs{display:flex;align-items:center;gap:2px;min-width:0;overflow-x:auto;scrollbar-width:none;padding:0 8px}
+.tabs::-webkit-scrollbar{display:none}
+.tab:first-child{margin-left:auto}.tab:last-child{margin-right:auto}   /* centred, and never clipped when they overflow */
+.tab{flex:none;height:34px;padding:0 12px;border-radius:9px;font:500 14px var(--sans);color:var(--i2);white-space:nowrap}
+.tab:hover{color:var(--ink);background:var(--s2)}
+.tab[aria-current="page"]{color:var(--a6);background:var(--a1)}
+.util{display:flex;align-items:center;justify-content:flex-end;gap:18px;padding:0 24px 0 12px;position:relative}
+.round{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:var(--i2)}
+.round:hover,.round[aria-expanded="true"]{background:var(--s2);color:var(--ink)}
+.round .ic{width:20px;height:20px}
+.meBtn{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--t);color:#fff;
+  font:400 16px var(--marker);box-shadow:0 0 0 2px var(--s0)}
+.meBtn{transition:transform .5s cubic-bezier(.22,.9,.25,1),box-shadow .15s,filter .15s;will-change:transform}
+.resizing .meBtn,.still .meBtn{transition:none}
+.meBtn:hover,.meBtn[aria-expanded="true"]{filter:brightness(1.08);box-shadow:0 0 0 2px var(--s0),0 0 0 4px var(--t)}
+
+/* MEET: the glyph where the hamburger was. Opened, a bar grows round it and it slides to
+   the bar's centre, its arms moving to the horizontal, heavier and deeper; pressing the bar
+   hides it. NOTHING HERE ANIMATES LAYOUT: .meet is placed once over both the circle and the
+   bar (placeMeet), the bar is revealed by clip-path, and the glyph moves by transform alone,
+   so no frame re-lays the header or snaps an edge to a pixel. Hued from the palette (--a*). */
+.meetSlot{width:36px;height:36px;flex:none}
+.meet{position:absolute;z-index:3;left:0;top:0;width:36px;height:36px;pointer-events:none;color:var(--a4);
+  --ease-m:cubic-bezier(.22,.9,.25,1)}
+.meetEdge,.meetFill{position:absolute;inset:0;opacity:0;will-change:clip-path}
+.meetEdge{background:var(--a2);clip-path:var(--c0)}
+.meetFill{background:var(--a1);clip-path:var(--f0)}
+.meet.anim .meetEdge,.meet.anim .meetFill{transition:clip-path .5s var(--ease-m),opacity .14s}
+.meet.anim:not(.open) .meetEdge,.meet.anim:not(.open) .meetFill{transition:clip-path .5s var(--ease-m),opacity .16s .36s}
+.meet:not(.open):has(.meetGo:hover) .meetFill{opacity:1}
+.meet.open .meetEdge{clip-path:var(--c1);opacity:1}
+.meet.open .meetFill{clip-path:var(--f1);opacity:1}
+.meet.open.typing .meetEdge{background:var(--a3)}
+.meetGo{position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:inherit;z-index:1;
+  pointer-events:auto;transform:translate3d(var(--gx0),var(--gy0),0);will-change:transform;transition:opacity .2s,color .5s}
+.meet.anim .meetGo{transition:transform .5s var(--ease-m),opacity .2s,color .5s}
+.meet.open .meetGo{transform:translate3d(var(--gx1),var(--gy1),0);color:var(--a6);pointer-events:none}
+.glyph{width:24px;height:24px;display:block;stroke-width:1.9;overflow:visible;
+  transition:stroke-width .5s var(--ease-m),transform .3s var(--ease-m)}
+.glyph .leg{transform-box:view-box;transform-origin:12px 12px;transform:rotate(var(--from));
+  transition:transform .5s var(--ease-m)}
+.meet.open .glyph .leg{transform:rotate(var(--to))}
+.meet.open .glyph{stroke-width:2.3}
+.meet.typing .meetGo{opacity:0}
+.meet.typing .glyph{transform:scale(.7)}
+.meet input{position:absolute;left:var(--ox);top:var(--oy);width:var(--ow);height:var(--oh);padding:0 18px;border:0;outline:0;background:none;
+  font:400 15px var(--sans);color:var(--ink);opacity:0;pointer-events:none;-webkit-appearance:none;appearance:none;border-radius:14px}
+.meet input::-webkit-search-cancel-button{display:none}
+.meet.open input{opacity:1;pointer-events:auto;caret-color:var(--a5)}
+.tabs{transition:opacity .22s,transform .35s cubic-bezier(.22,.9,.25,1)}
+.top.meeting .tabs{opacity:0;transform:scale(.96);pointer-events:none}
+.top.meeting .util .menu{right:auto;left:50%;transform:translateX(-50%)}
+
+/* MENUS: the Site switcher and the profile, as Pacific's dropdowns. */
+.menu{position:absolute;top:calc(100% - 4px);z-index:40;min-width:232px;max-width:min(320px,92vw);max-height:70svh;overflow:auto;
+  background:var(--s0);border:1px solid var(--hair);border-radius:16px;padding:6px;box-shadow:0 18px 50px rgba(20,24,30,.18)}
+.menu[hidden]{display:none}
+.brand .menu{left:10px}.util .menu{right:12px}
+.menu .mi{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:6px 10px;border-radius:10px;text-align:left;color:var(--ink)}
+.menu .mi:hover,.menu .mi:focus-visible{background:var(--s2);outline:0}
+.menu .mi.on{background:var(--a1);font-weight:600}
+.menu .mi .ic{color:var(--i3)}
+.menu .mi .mark{width:28px;height:28px;border-radius:8px;font-size:15px}
+.menu .mi .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu .mi .nmrole{display:flex;align-items:center;gap:7px}
+.menu .mi .nmt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* YOUR ROLE in a Site: a small circle beside its name, in the top bar and the switcher. */
+.role{width:18px;height:18px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--r);color:#fff;
+  box-shadow:0 0 0 1.5px var(--s0)}
+.role svg{width:11px;height:11px;display:block}
+
+.menu .mi .ct{font-size:12px;color:var(--i3)}
+.menu .sep{height:1px;background:var(--hair);margin:6px 4px}
+.menu .who{display:flex;align-items:center;gap:12px;padding:10px 10px 12px}
+.menu .who .meBtn{width:40px;height:40px;box-shadow:none;cursor:default}
+.menu .who b{display:block;font-size:15px}
+.menu .who span{font-size:12px;color:var(--i3)}
+.menu .mi.out{color:#B42318}.menu .mi.out .ic{color:inherit}
+
+/* THE RAILS. A drag on the inner edge resizes (200px to 30% of the window); a click
+   there matches the other rail; the chevron folds it to 48px. */
+.rail{grid-row:2;position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:var(--s1)}
+.rail.l{grid-column:1;border-right:1px solid var(--hair)}
+.rail.r{grid-column:3;border-left:1px solid var(--hair)}
+.rhead{flex:none;display:flex;align-items:center;gap:8px;height:48px;padding:0 8px 0 14px}
+.rail.r .rhead{padding:0 14px 0 8px}
+.rhead h3{flex:1;min-width:0;margin:0;display:flex;align-items:center;gap:8px;font:600 13px var(--sans);color:var(--i2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rhead h3 .tile{width:22px;height:22px;flex:none;display:block}
+.rhead h3 .name{height:16px;width:auto;image-rendering:pixelated;display:block}
+.fold{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--i3);flex:none}
+.fold:hover{background:var(--s2);color:var(--ink)}
+.fold .ic{width:16px;height:16px}
+.rbody{flex:1;min-height:0;overflow-y:auto;padding:0 8px 16px}
+.grip{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize;z-index:5;touch-action:none}
+.rail.l .grip{right:-3px}.rail.r .grip{left:-3px}
+.grip::after{content:"";position:absolute;top:50%;left:3px;width:2px;height:44px;margin-top:-22px;border-radius:2px;background:var(--hair);transition:background .15s}
+.grip:hover::after,.resizing .grip::after{background:var(--i3)}
+.grip:hover{background:rgba(20,24,30,.04)}
+.rail.folded .rhead{justify-content:center;padding:0}
+.rail.folded .rhead h3,.rail.folded .rbody,.rail.folded .grip{display:none}
+
+.sec{display:flex;align-items:center;gap:8px;padding:14px 8px 6px;font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--i3)}
+.sec .grow{flex:1}
+.sec .add{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--i3);font:400 17px/1 var(--sans);text-transform:none}
+.sec .add:hover{background:var(--s3);color:var(--ink)}
+.newbtn{display:flex;align-items:center;gap:8px;width:100%;height:36px;margin:2px 0 6px;padding:0 10px;border-radius:10px;
+  color:var(--i2);font-weight:500;border:1px dashed var(--hair)}
+.newbtn:hover{color:var(--ink);background:var(--s2);border-style:solid}
+.it{display:flex;align-items:center;gap:10px;width:100%;min-height:36px;padding:6px 8px;margin:1px 0;border-radius:10px;text-align:left;color:var(--i2)}
+.it:hover{background:var(--s2);color:var(--ink)}
+.it.on{background:var(--a1);color:var(--ink)}
+.it.on .t{font-weight:600}
+.it .grow{flex:1;min-width:0}
+.it .t{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:inherit}
+.it .s{display:block;font-size:12px;color:var(--i3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it .ct{font-size:11px;color:var(--i3);flex:none}
+.it .hash{width:18px;text-align:center;color:var(--i3);font-weight:600;flex:none}
+.it .mark{width:30px;height:30px;border-radius:8px;font-size:16px}
+.it>.ic{width:18px;height:18px;color:var(--i3)}
+.date{width:38px;flex:none;border-radius:8px;background:var(--s0);border:1px solid var(--hair);text-align:center;line-height:1.1;padding:3px 0}
+.date b{display:block;font-size:15px;color:var(--ink)}
+.date i{display:block;font-style:normal;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--i3)}
+.pill{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--i2);
+  background:var(--s3);border-radius:6px;padding:1px 6px;flex:none}
+.av{width:32px;height:32px;border-radius:50%;background:var(--t);flex:none;display:grid;place-items:center;
+  color:#fff;font:400 15px var(--marker)}
+.av.anon{background:color-mix(in srgb,var(--t) 28%,var(--s0));color:var(--t)}
+.av.anon .ic{width:62%;height:62%}
+.welcome .av{width:56px;height:56px;font-size:26px}
+.nm{font-weight:600;color:var(--ink)}
+.none{padding:36px 10px;text-align:center;color:var(--i3);font-size:13px}
+
+/* THE PANE */
+.pane{grid-row:2;grid-column:2;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--s0)}
+.phead{flex:none;display:flex;align-items:center;gap:10px;height:56px;padding:0 16px 0 20px;border-bottom:1px solid var(--hair)}
+.phead .ttl{flex:1;min-width:0}
+.phead h2{margin:0;font:650 17px/1.2 var(--sans);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.phead p{margin:1px 0 0;font-size:12px;color:var(--i3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--i3);flex:none}
+.tb:hover{background:var(--s2);color:var(--ink)}
+.tb .ic{width:20px;height:20px}
+.tb[hidden],.narrow-only{display:none!important}
+.scroll{flex:1;min-height:0;overflow-y:auto;padding:18px 20px 28px}
+.col{max-width:760px;margin:0 auto}
+.card{display:block;width:100%;text-align:left;background:var(--s0);border:1px solid var(--hair);border-radius:14px;padding:14px 16px;margin-bottom:12px;cursor:pointer}
+.card:hover{border-color:var(--i3)}
+.meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--i3);flex-wrap:wrap}
+.meta .site{color:var(--ink);font-weight:600}
+.meta .mark{width:20px;height:20px;border-radius:6px;font-size:11px}
+.card h3{margin:8px 0 2px;font:650 17px/1.25 var(--sans);letter-spacing:-.01em}
+.card .ex{margin:4px 0 0;color:var(--i2);font-size:13.5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.quote{display:flex;gap:10px;background:var(--s1);border-radius:10px;padding:10px 12px;margin:10px 0 0}
+.quote .av{width:24px;height:24px;font-size:12px}
+.quote .who{font-weight:600;font-size:13px}
+.quote p{margin:1px 0 0;font-size:13.5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.foot{display:flex;gap:14px;font-size:12px;color:var(--i3);margin-top:8px}
+.welcome{padding:10px 0 14px;border-bottom:1px solid var(--hair);margin-bottom:8px}
+.welcome .big{width:56px;height:56px;border-radius:16px;background:var(--s2);display:grid;place-items:center;font:600 26px var(--sans);color:var(--i2)}
+.welcome h1{margin:12px 0 2px;font:700 26px/1.2 var(--sans);letter-spacing:-.02em}
+.welcome p{margin:0;color:var(--i3);font-size:13px}
+.msg{display:flex;gap:12px;padding:7px 8px;margin:0 -8px;border-radius:12px;position:relative;transition:background .3s}
+.msg:hover,.msg.on{background:var(--s1)}
+.msg.lit{background:var(--a1)}
+.msg .mb{flex:1;min-width:0}
+/* THREADS: a reply stands under what it answers, one step in per level, a line down the
+   left for each level it hangs from. */
+.msg{--step:26px;padding-left:calc(8px + var(--d,0) * var(--step))}
+.msg .rail-d{position:absolute;top:0;bottom:0;left:calc(8px + var(--i) * var(--step) + 15px);width:2px;background:var(--hair);border-radius:1px}
+.msg.reply .avb,.msg.reply .av{width:26px;height:26px}
+.msg.reply .av{font-size:12.5px}
+.msg.reply{padding-top:5px;padding-bottom:5px}
+.fold-t{display:inline-block;margin-top:4px;padding:2px 0;font-size:12px;font-weight:600;color:var(--a5)}
+.fold-t:hover{text-decoration:underline;text-underline-offset:2px}
+@media (max-width:760px){.msg{--step:16px}}
+.avb{padding:0;border-radius:50%;height:32px;flex:none}
+.msg .who{font-weight:600;font-size:14px;color:var(--ink);padding:0}
+.msg .who:hover{text-decoration:underline;text-underline-offset:2px}
+.rq{display:flex;gap:6px;align-items:baseline;max-width:100%;margin:0 0 3px;padding:2px 8px 2px 8px;border-left:2px solid var(--a3);
+  font-size:12.5px;color:var(--i3);text-align:left;border-radius:0 6px 6px 0}
+.rq:hover{background:var(--a1)}
+.rq-who{font-weight:600;color:var(--i2);flex:none}
+.rq-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* On a desktop, React and Reply on the row itself, on hover; on a phone, hold (below). */
+.acts{display:none;position:absolute;right:10px;top:6px;align-items:center;gap:2px;padding:2px;border-radius:10px;
+  background:var(--s0);border:1px solid var(--hair);box-shadow:0 2px 8px rgba(20,24,30,.08)}
+.msg:hover .acts{display:flex}
+.msg.held{background:var(--a1)}
+@media (hover:none){
+  .acts{display:none!important}
+  .msg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+}
+/* A MESSAGE'S MENU: the message lifted over a dimmed room, reactions above, actions below. */
+.mmenu{position:fixed;inset:0;z-index:74;background:rgba(10,12,16,.42);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.mmenu[hidden]{display:none}
+.mm-col{position:absolute;left:12px;right:12px;display:flex;flex-direction:column;gap:8px;max-width:520px;margin:0 auto}
+.mm-emo{align-self:flex-start;display:flex;gap:2px;padding:5px;border-radius:999px;background:var(--s0);
+  box-shadow:0 8px 28px rgba(0,0,0,.25);animation:mmIn .18s cubic-bezier(.22,.9,.25,1) both;transform-origin:left bottom}
+.mm-emo button{width:44px;height:44px;border-radius:50%;font-size:27px;line-height:1;display:grid;place-items:center}
+.mm-emo button.on{background:var(--a2)}
+.mm-emo .more{background:var(--s2);color:var(--i2)}.mm-emo .more .ic{width:20px;height:20px}
+.mm-msg{margin:0!important;padding:10px 12px!important;background:var(--s0)!important;border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,.22);
+  pointer-events:none;animation:mmLift .18s ease-out both}
+.mm-acts{align-self:flex-start;min-width:230px;background:var(--s0);border-radius:14px;overflow:hidden;
+  box-shadow:0 8px 28px rgba(0,0,0,.25);animation:mmIn .2s .03s cubic-bezier(.22,.9,.25,1) both;transform-origin:left top}
+.mm-acts button{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;height:48px;padding:0 16px;
+  font-size:16px;color:var(--ink);border-bottom:1px solid var(--hair)}
+.mm-acts button:last-child{border-bottom:0}
+.mm-acts button:hover{background:var(--s1)}
+.mm-acts .ic{width:20px;height:20px;color:var(--i2)}
+.mm-acts .del,.mm-acts .del .ic{color:var(--red)}
+@keyframes mmIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+@keyframes mmLift{from{transform:scale(.98)}to{transform:none}}
+.mi-text{margin:0 0 10px;font-size:15px;white-space:pre-wrap;word-break:break-word}
+.toast{position:fixed;left:50%;bottom:calc(var(--safe-b) + 28px);transform:translateX(-50%);z-index:90;padding:9px 16px;border-radius:999px;
+  background:var(--ink);color:var(--s0);font-size:14px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast[hidden]{display:none}
+.acts .act{width:32px;height:30px;border-radius:9px;display:grid;place-items:center;color:var(--i2)}
+.acts .act:hover{background:var(--a1);color:var(--a6)}
+.acts .act .ic{width:19px;height:19px}
+/* THE EMOJI PICKER */
+.emo{position:fixed;z-index:75;width:344px;height:372px;display:flex;flex-direction:column;background:var(--s0);color:var(--ink);
+  border:1px solid var(--hair);border-radius:18px;box-shadow:0 18px 50px rgba(20,24,30,.22);overflow:hidden}
+.emo[hidden]{display:none}
+.emo-tabs{flex:none;display:flex;gap:2px;padding:6px 6px 4px;border-bottom:1px solid var(--hair);overflow-x:auto;scrollbar-width:none}
+.emo-tabs::-webkit-scrollbar{display:none}
+.emo-tabs button{flex:none;width:34px;height:34px;border-radius:10px;font-size:18px;display:grid;place-items:center;filter:grayscale(.6);opacity:.75}
+.emo-tabs button[aria-selected="true"]{background:var(--a1);filter:none;opacity:1}
+.emo-grid{flex:1;min-height:0;overflow-y:auto;padding:6px 8px 10px}
+.emo-cat{font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--i3);padding:6px 4px}
+.emo-cells{display:grid;grid-template-columns:repeat(8,1fr);gap:2px}
+.emo-cells button{height:38px;border-radius:10px;font-size:24px;line-height:1;display:grid;place-items:center}
+.emo-cells button:hover{background:var(--a1)}
+.emo-cells button.on{background:var(--a2)}
+/* a phone: a sheet from the bottom (class `bottom`: `.sheet` is the New… overlay's) */
+.emo.bottom{left:0;right:0;bottom:0;top:auto;width:auto;height:min(52svh,420px);border-radius:20px 20px 0 0;padding-bottom:var(--safe-b);
+  box-shadow:0 -12px 40px rgba(20,24,30,.28)}
+.emo.bottom .emo-cells{grid-template-columns:repeat(auto-fill,minmax(42px,1fr))}
+.rx button{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--s1);border:1px solid var(--hair);color:var(--i2)}
+.rx button:hover{border-color:var(--a3);background:var(--a1)}
+.rx .votes{font-size:12px;color:var(--i3);padding:1px 4px}
+.replying{display:flex;align-items:center;gap:8px;margin:0 20px 6px;padding:6px 6px 6px 12px;border-left:3px solid var(--a4);
+  background:var(--a1);border-radius:0 10px 10px 0;font-size:13px}
+.replying[hidden]{display:none}
+.replying .rt{flex:1;min-width:0;display:flex;gap:8px}
+.replying .rt span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--i2)}
+.msg .when{font-size:11.5px;color:var(--i3);margin-left:6px;font-weight:400}
+.msg p{margin:1px 0 0;font-size:14.5px;white-space:pre-wrap;word-break:break-word}
+.rx{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
+
+.obj h1{margin:6px 0 6px;font:700 30px/1.15 var(--sans);letter-spacing:-.02em}
+.body{font-size:15px;line-height:1.6;white-space:pre-wrap;margin:10px 0 18px}
+dl.kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;font-size:13px;margin:14px 0;padding:12px 14px;background:var(--s1);border-radius:12px}
+dl.kv dt{color:var(--i3)}dl.kv dd{margin:0;word-break:break-word}
+.fund{padding:18px 20px;border-radius:16px;background:var(--s1);border:1px solid var(--hair);margin-bottom:14px}
+.fund .bal{font:700 36px/1.1 var(--sans);letter-spacing:-.02em;margin:4px 0}
+.fund .sub{font-size:12px;color:var(--i3)}
+.compose{flex:none;margin:0 20px calc(var(--safe-b) + 16px);display:flex;align-items:center;gap:8px;
+  border:1px solid var(--hair);border-radius:14px;padding:6px 6px 6px 14px;background:var(--s0);box-shadow:0 2px 10px rgba(20,24,30,.05)}
+.compose input{flex:1;min-width:0;border:0;outline:0;font:400 15px var(--sans);color:var(--ink);height:34px;background:transparent}
+.compose[hidden]{display:none}
+#send{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--accent);color:var(--on-accent)}
+#send .ic{width:18px;height:18px}
+.refused{margin:0 20px 6px;font-size:12px;color:#9B2C1F}
+.miss{border:1.5px dashed var(--red);border-radius:12px;padding:10px 14px;margin-bottom:12px;background:#FDF1EE}
+.miss b{display:block;font-size:13px;color:#9B2C1F}
+.miss p{margin:2px 0 0;font-size:12px;color:#7A3A2E;word-break:break-word}
+.shade{display:none}
+
+/* A SITE'S OWN: its colours arrive as the palette (palette.js) on #app, in the same
+   properties the webapp's own look uses, so no rule here restates a colour. What is the
+   Face's own beyond them is its type: the body's, and the name's. */
+[data-screen="inside"].faced{font-family:var(--font)}
+.faced .siteBtn .nm,.faced .welcome h1,.faced .obj h1{font-family:var(--name-font)}
+.siteBtn .nm{color:var(--title)}
+.dark .menu,.dark .sheet form{box-shadow:0 18px 50px rgba(0,0,0,.45)}
+.dark .card:hover{border-color:var(--i3)}
+
+/* SITE SETTINGS: a card over the page, the Site and your standing at its head. */
+.modal{position:absolute;inset:0;z-index:60;background:rgba(20,24,30,.32);display:grid;place-items:center;padding:16px}
+.modal[hidden]{display:none}
+.mcard{width:min(460px,100%);max-height:86svh;overflow:auto;background:var(--s0);color:var(--ink);border:1px solid var(--hair);
+  border-radius:20px;box-shadow:0 24px 70px rgba(20,24,30,.28)}
+.mhead{display:flex;align-items:center;gap:14px;padding:20px 20px 16px;border-bottom:1px solid var(--hair)}
+.mhead .mark{width:48px;height:48px;border-radius:13px;font-size:24px}
+.mhead h3{margin:0;font:700 19px/1.2 var(--name-font,var(--sans));color:var(--title)}
+.mhead p{margin:3px 0 0;display:flex;align-items:center;gap:7px;font-size:13px;color:var(--i2)}
+.mhead .grow{flex:1;min-width:0}
+.mbody{padding:10px 10px 14px}
+.opt{display:flex;align-items:center;gap:14px;width:100%;min-height:60px;padding:10px 12px;border-radius:14px;text-align:left;color:var(--ink)}
+.opt:hover:not(:disabled){background:var(--a1)}
+.opt:disabled{cursor:default;opacity:.55}
+.opt .oi{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;background:var(--a1);color:var(--a5)}
+.opt .oi .ic{width:20px;height:20px}
+.opt b{display:block;font-size:14.5px}
+.opt span.s{display:block;font-size:12.5px;color:var(--i3);margin-top:1px}
+.mnote{margin:8px 12px 2px;font-size:12.5px;color:var(--i3)}
+
+/* RESOURCES: a picture, a PDF's first page or an article's banner heads its card. */
+.card.res{padding:0;overflow:hidden}
+.card.res>:not(.thumb){margin-left:16px;margin-right:16px}
+.card.res .meta{margin-top:12px}
+.card.res>:last-child{margin-bottom:14px}
+.thumb{position:relative;aspect-ratio:16/9;background:var(--s2);overflow:hidden;display:grid;place-items:center}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb.pdf{aspect-ratio:16/10;background:var(--s2)}
+.thumb.pdf canvas{width:72%;height:auto;margin-top:10%;box-shadow:0 10px 30px rgba(20,24,30,.22);border-radius:2px;background:#fff;opacity:0;transition:opacity .3s}
+.thumb.pdf.drawn canvas{opacity:1}
+.thumb .badge{position:absolute;left:12px;top:12px;font:700 11px var(--sans);letter-spacing:.06em;padding:3px 8px;border-radius:6px;background:var(--accent);color:var(--on-accent)}
+.obj.resource h1{margin-top:10px}
+.obj .banner{width:100%;border-radius:14px;margin:6px 0 14px;display:block}
+.thumb video{width:100%;height:100%;object-fit:cover;display:block}
+.film{width:100%;border-radius:14px;margin:8px 0 14px;background:#000;display:block}
+.bigpic{display:block;margin:8px 0 14px;border-radius:14px;overflow:hidden;background:var(--s2)}
+.bigpic img{width:100%;height:auto;display:block}
+.pdfcover{display:block;position:relative;width:100%;margin:8px 0 14px;border-radius:14px;overflow:hidden;text-align:left}
+.pdfcover .thumb{aspect-ratio:4/3}
+.pdfcover .thumb.pdf canvas{width:56%;margin-top:6%}
+.pdfcover .read{position:absolute;right:14px;bottom:14px;padding:8px 16px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-weight:600}
+.prose{font-size:15.5px;line-height:1.65;max-width:680px}
+.prose h3{margin:22px 0 6px;font:700 17px/1.3 var(--sans);color:var(--title)}
+.prose p{margin:0 0 12px}
+.prose ul{margin:0 0 12px;padding-left:20px}
+.prose ol{margin:0 0 12px;padding-left:22px}
+.prose h1,.prose h2,.prose h4,.prose h5,.prose h6{margin:24px 0 8px;font:700 20px/1.3 var(--sans);color:var(--title)}
+.prose blockquote{margin:0 0 12px;padding-left:14px;border-left:3px solid var(--hair);color:var(--i2)}
+.prose pre{margin:0 0 12px;padding:12px;border-radius:10px;background:var(--s2);overflow-x:auto;font-size:13px}
+.prose figure{margin:0 0 14px}
+.prose img{display:block;max-width:100%;height:auto;border-radius:10px}
+.prose a{color:var(--a5)}
+.golink{display:inline-block;margin:6px 0 14px;color:var(--a5);font-weight:600;text-decoration:none}
+.golink:hover{text-decoration:underline}
+/* THE PDF VIEWER: the whole window, the pages down the middle on a dark ground. */
+.pdfv{position:fixed;inset:0;z-index:85;display:flex;flex-direction:column;background:#1B1D21;color:#EDEEF0}
+.pdfv[hidden]{display:none}
+.pdfbar{flex:none;display:flex;align-items:center;gap:8px;padding:calc(var(--safe-t) + 10px) 14px 10px 20px;background:#23262B;border-bottom:1px solid #30343A}
+.pdfbar .grow{flex:1;min-width:0}
+.pdfbar h3{margin:0;font:650 15px/1.3 var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdfbar p{margin:1px 0 0;font-size:12px;color:#A3A8B0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdfbar .tb{color:#C9CDD3}.pdfbar .tb:hover{background:#30343A;color:#fff}
+.pdffit,.pdfopen{height:32px;padding:0 12px;border-radius:9px;font:600 13px var(--sans);color:#EDEEF0;background:#30343A;display:grid;place-items:center;text-decoration:none}
+.pdfopen[hidden]{display:none}
+.pdffit:hover,.pdfopen:hover{background:#3B4047}
+.pdfpages{flex:1;min-height:0;overflow:auto;padding:20px 16px calc(var(--safe-b) + 28px);display:flex;flex-direction:column;align-items:center;gap:18px;
+  -webkit-overflow-scrolling:touch}
+.pg{position:relative;flex:none;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.45);border-radius:2px}
+.pg canvas{display:block}
+.pgn{position:absolute;right:-2px;bottom:-22px;font-size:11px;color:#80868F}
+@media (max-width:760px){ .pdffit{display:none} .pdfpages{padding:12px 8px 28px;gap:12px} }
+
+/* YOUR CARD */
+.you h3{margin:0 0 4px;font:700 20px/1.2 var(--sans)}
+.you .mnote{margin:0 0 14px}
+.you-pic{position:relative;display:grid;place-items:center;width:112px;height:112px;margin:4px auto 10px;border-radius:50%;
+  background:color-mix(in srgb,var(--t) 28%,var(--s0));color:var(--t);cursor:pointer;overflow:hidden}
+.you-pic img{width:100%;height:100%;object-fit:cover}
+.you-pic .ic{width:48px;height:48px}
+.you-pic input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.you-edit{position:absolute;left:0;right:0;bottom:0;padding:6px 0 17px;font-size:11.5px;font-weight:600;text-align:center;color:#fff;background:rgba(20,24,30,.55)}
+.you-key{margin:8px 0 0;font:500 12px var(--mono);color:var(--i3)}
+.you .why{min-height:1em;margin:8px 0 0;font-size:12.5px;color:#B42318}
+.meBtn img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.rx button.mine{border-color:var(--a4);background:var(--a1);color:var(--a6)}
+
+/* A MEMBER'S CARD */
+.pcard{position:relative;padding:22px 22px 18px;width:min(380px,100%)}
+.pc-x{position:absolute;right:12px;top:12px}
+.pc-x[hidden]{display:none}
+.pc-head{display:flex;align-items:center;gap:16px;margin-bottom:12px}
+.pc-head h3{margin:0;font:700 20px/1.2 var(--sans)}
+.pc-head p{margin:2px 0 0;font-size:13px;color:var(--i3)}
+.av.big{width:64px;height:64px;font-size:28px}
+.av img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.pc-role{display:flex;align-items:center;gap:8px}
+.pc-key{display:flex;align-items:center;gap:6px}
+.pc-key code{font:500 12.5px var(--mono);color:var(--i2)}
+.pc-key .tb{width:28px;height:28px}.pc-key .tb .ic{width:16px;height:16px}
+.pc-key .tb.done{color:var(--a5);background:var(--a1)}
+.pc-alt{width:100%;height:38px;margin-top:8px;border-radius:12px;border:1px solid var(--hair);font-weight:600;color:var(--ink)}
+.pc-alt:hover{background:var(--a1);border-color:var(--a3)}
+.pcard .why{min-height:0;margin:8px 0 0;font-size:12.5px;color:var(--i2)}
+.pc-go{width:100%;height:40px;margin-top:10px;border-radius:12px;background:var(--accent);color:var(--on-accent);font-weight:600}
+/* Your contact code: under the card, what an owner pastes to add you (W-96). */
+.you-code{margin-top:18px;padding-top:14px;border-top:1px solid var(--hair)}
+.you-code h4{margin:0 0 4px;font-size:14px}
+.you-code .pc-go.ghost{background:none;color:var(--accent);border:1px solid var(--hair)}
+.you-code textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--hair);border-radius:10px;background:var(--s1);color:var(--ink);font:11.5px/1.4 var(--mono);resize:none}
+.you-code textarea[hidden]{display:none}
+.you-code .mnote{margin:8px 0 0}
+
+/* THE FACE EDITOR: the website's, in the signup page's own light colours whatever this
+   Site's palette, so it looks here as it does on wallflowers.io. */
+.faceed{position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;background:#FFFFFF;color:#14181E;font:400 15px/1.45 var(--sans);
+  --bg:#FFFFFF;--surface:#F2F4F7;--hair:#D9DFE7;--ink:#14181E;--ink-2:#5A6470;--ink-3:#9AA4B0;--ok:#2E8F5B;--warn:#9C7215;--danger:#C2455C;
+  --ease:cubic-bezier(0.16,1,0.3,1);--box:#FFFFFF;--box-2:#F2F4F7}
+.faceed[hidden]{display:none}
+.fehead{flex:none;display:flex;align-items:center;gap:12px;padding:calc(var(--safe-t) + 12px) 24px 12px;border-bottom:1px solid #E4E8EE}
+.fettl{flex:1;min-width:0}
+.fettl h3{margin:0;font:700 18px/1.2 var(--sans)}
+.fettl p{margin:2px 0 0;font-size:12.5px;color:#5A6470}
+.fewhy{margin:0;max-width:44%;font-size:12.5px;color:#B42318;text-align:right}
+.febtn{height:38px;padding:0 18px;border-radius:12px;border:1px solid #D9DFE7;font:600 14px var(--sans);color:#14181E;background:#fff}
+.febtn.go{background:#14181E;color:#fff;border-color:#14181E}
+.febtn:disabled{opacity:.5}
+.febody{flex:1;min-height:0;overflow:auto;padding:24px}
+/* THE RESOURCES EDITOR: the Door's (/v2/resources.js), over the page, in its own colours. */
+.resed{position:fixed;inset:0;z-index:80;overflow:auto;background:#fff;padding-top:var(--safe-t);-webkit-overflow-scrolling:touch}
+.resed[hidden]{display:none}
+.obj .resedit{float:right;height:32px;padding:0 14px;border-radius:9px;border:1px solid var(--hair);font:600 13px var(--sans);color:var(--ink);background:var(--s1)}
+/* The phone is an iPhone, 390x844 shown through one scale per width band, and nothing
+   here resizes it: face-editor.css's own (website e95cedb). */
+
+/* THE SHEET: what a new room, event, article or listing asks for. */
+.cat{display:flex;align-items:center}
+#sheetTitle{display:flex;align-items:center;gap:10px}
+#sheetTitle .tile{width:44px;height:44px}
+#sheetTitle .name{height:32px;width:auto;image-rendering:pixelated}
+.sheet{position:absolute;inset:0;z-index:60;background:rgba(20,24,30,.28);display:grid;place-items:center;padding:16px}
+.sheet[hidden]{display:none}
+.sheet form{width:min(440px,100%);max-height:86svh;overflow:auto;background:var(--s0);color:var(--ink);border:1px solid var(--hair);
+  border-radius:18px;padding:20px 22px 18px;box-shadow:0 18px 50px rgba(20,24,30,.2);font-family:var(--sans)}
+.sheet h3{margin:0 0 6px;font:700 20px var(--sans)}
+.fld{display:block;margin:12px 0 0}
+.fld>span{display:block;font-size:12px;color:var(--i2);margin-bottom:4px}
+.fld b{color:var(--blue);font-weight:400}
+.fld input,.fld select{width:100%;height:38px;padding:0 10px;border:1px solid var(--hair);border-radius:10px;
+  font:400 14px var(--sans);color:var(--ink);background:var(--s0)}
+.fld input:focus,.fld select:focus{outline:0;border-color:var(--a4)}
+.sheet .why{min-height:1em;margin:10px 0 0;font-size:12px;color:#9B2C1F;white-space:pre-wrap}
+.go2{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.go2 button{height:36px;padding:0 16px;border-radius:10px;border:1px solid var(--hair)}
+#sheetGo{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+dl.kv.sheetkv{background:none;padding:0}
+
+/* NARROW: the tabs are a row of their own; the rails are drawers. */
+@media (max-width:760px){
+  [data-screen="inside"],[data-screen="inside"].resizing{grid-template-columns:minmax(0,1fr)}
+  .top{grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:var(--bar-h) 44px;height:auto;
+    grid-template-areas:"brand . util" "tabs tabs tabs"}
+  .brand{grid-area:brand;padding-left:10px;min-width:0;width:auto}
+  .siteRole{margin-left:0}
+  .util{grid-area:util;padding-right:16px;gap:14px}
+  .tabs{grid-area:tabs;justify-content:flex-start;padding:0 28px 8px 10px;gap:4px;
+    -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}
+  .tab:first-child{margin-left:0}.tab:last-child{margin-right:0}
+  .tab{height:32px;padding:0 12px;border-radius:999px;background:var(--s2);font-size:13.5px}
+  .tab[aria-current="page"]{background:var(--accent);color:var(--on-accent)}
+  .pane{grid-column:1}
+  .rail{position:fixed;top:0;bottom:0;z-index:50;width:min(320px,86vw)!important;box-shadow:0 10px 40px rgba(20,24,30,.22);
+    padding-top:var(--safe-t);transition:transform .22s ease}
+  .rail.l{left:0;transform:translateX(-102%)}
+  .rail.r{right:0;transform:translateX(102%)}
+  .rail .grip,.rail .fold{display:none}
+  .rail.folded .rhead h3{display:flex}.rail.folded .rbody{display:block}
+  [data-screen="inside"].drawer .rail.l,[data-screen="inside"].roster .rail.r{transform:none}
+  [data-screen="inside"].drawer .shade,[data-screen="inside"].roster .shade{display:block;position:fixed;inset:0;z-index:45;background:rgba(20,24,30,.28)}
+  .narrow-only{display:grid!important}
+  .phead{padding:0 10px}
+  .brand{transition:opacity .2s}
+  .top.meeting .brand{opacity:0;pointer-events:none}
+  .top.meeting .meBtn{pointer-events:none}
+  .top.meeting .tabs{opacity:1;transform:none;pointer-events:auto}   /* the bar takes the top row; the tabs keep theirs */
+  .scroll{padding:14px 14px 24px}
+  .compose{margin:0 12px calc(var(--safe-b) + 12px)}
+}
+#boot{position:fixed;inset:0;display:grid;place-items:center;background:var(--cream);
+  z-index:70;color:var(--ink2);font-size:14.5px}
+#boot[hidden]{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div id="boot">Opening the door…</div>
+
+<!-- ── INSIDE ───────────────────────────────────────────────────────── -->
+<main data-screen="inside" id="app" class="still">
+  <header class="top" id="top">
+    <div class="brand" id="brand">
+      <button class="siteBtn" id="siteBtn" type="button" aria-haspopup="menu" aria-expanded="false"></button>
+      <button class="siteRole" id="siteRole" type="button" aria-haspopup="dialog" hidden></button>
+      <div class="menu" id="siteMenu" role="menu" aria-label="Communities" hidden></div>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+    <div class="util" id="util">
+      <span class="meetSlot" id="meetSlot" aria-hidden="true"></span>
+      <button class="meBtn" id="meBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="You"></button>
+      <div class="menu" id="meMenu" role="menu" aria-label="You" hidden></div>
+    </div>
+    <div class="meet" id="meet" role="search">
+      <span class="meetEdge" aria-hidden="true"></span><span class="meetFill" aria-hidden="true"></span>
+      <input id="q" type="search" aria-label="Meet: search" tabindex="-1" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
+      <button class="meetGo" id="meetGo" type="button" aria-expanded="false" aria-label="Meet" title="Meet (⌘K)"></button>
+    </div>
+  </header>
+  <aside class="rail l" id="lrail" aria-label="Index">
+    <div class="rhead"><h3 id="lTitle"></h3><button class="fold" id="lFold" type="button"></button></div>
+    <div class="rbody" id="lbody"></div>
+    <div class="grip" id="lGrip" role="separator" aria-orientation="vertical" aria-label="Resize" title="Drag to resize · click to give the other side this width"></div>
+  </aside>
+  <section class="pane">
+    <div class="phead" id="phead">
+      <button class="tb narrow-only" id="toDrawer" type="button" aria-label="Index"></button>
+      <div class="ttl" id="pttl"></div>
+      <button class="tb narrow-only" id="toPeople" type="button" aria-label="People"></button>
+    </div>
+    <div class="scroll" id="feed"></div>
+    <p class="refused" id="refused" hidden></p>
+    <div class="replying" id="replying" hidden></div>
+    <form class="compose" id="compose" hidden autocomplete="off">
+      <input id="say" type="text" aria-label="Message">
+      <button type="submit" aria-label="Send" id="send"></button>
+    </form>
+  </section>
+  <aside class="rail r" id="people" aria-label="People">
+    <div class="rhead"><button class="fold" id="rFold" type="button"></button><h3 id="rTitle">People</h3></div>
+    <div class="rbody" id="rbody"></div>
+    <div class="grip" id="rGrip" role="separator" aria-orientation="vertical" aria-label="Resize" title="Drag to resize · click to give the other side this width"></div>
+  </aside>
+  <div class="shade" id="shade"></div>
+  <!-- SITE SETTINGS: what the role button opens. -->
+  <div class="modal" id="manage" role="dialog" aria-modal="true" aria-labelledby="manageTitle" hidden>
+    <div class="mcard">
+      <div class="mhead" id="manageHead"></div>
+      <div class="mbody" id="manageBody"></div>
+    </div>
+  </div>
+  <!-- THE PDF VIEWER -->
+  <div class="pdfv" id="pdfv" role="dialog" aria-modal="true" aria-labelledby="pdfTitle" hidden>
+    <div class="pdfbar">
+      <div class="grow"><h3 id="pdfTitle"></h3><p id="pdfSub"></p></div>
+      <button class="tb" id="pdfOut" type="button" aria-label="Smaller"></button>
+      <button class="pdffit" id="pdfFit" type="button">Fit</button>
+      <button class="tb" id="pdfIn" type="button" aria-label="Larger"></button>
+      <a class="pdfopen" id="pdfOpen" target="_blank" rel="noopener">Open</a>
+      <button class="tb" id="pdfX" type="button" aria-label="Close"></button>
+    </div>
+    <div class="pdfpages" id="pdfPages"></div>
+  </div>
+  <!-- A MESSAGE'S MENU, and the word that something was done -->
+  <div class="mmenu" id="mmenu" hidden></div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <!-- THE EMOJI PICKER -->
+  <div class="emo" id="emo" role="dialog" aria-label="React" hidden></div>
+  <!-- YOUR CARD -->
+  <div class="modal" id="you" role="dialog" aria-modal="true" aria-label="Your card" hidden>
+    <div class="mcard pcard you"><button class="tb pc-x" id="youX" type="button" aria-label="Close"></button><div id="youBody"></div></div>
+  </div>
+  <!-- A MEMBER'S CARD -->
+  <div class="modal" id="person" role="dialog" aria-modal="true" aria-label="Member" hidden>
+    <div class="mcard pcard"><button class="tb pc-x" id="personX" type="button" aria-label="Close"></button><div id="personBody"></div></div>
+  </div>
+  <!-- THE FACE EDITOR: wallflowers.io/signup's own (the website's assets/face/face.js), mounted here. -->
+  <div class="faceed" id="faceEd" role="dialog" aria-modal="true" aria-labelledby="feTitle" hidden>
+    <div class="fehead">
+      <div class="fettl"><h3 id="feTitle"></h3><p id="feSub"></p></div>
+      <p class="fewhy" id="feWhy"></p>
+      <button type="button" class="febtn" id="feCancel">Cancel</button>
+      <button type="button" class="febtn go" id="feSave">Save</button>
+    </div>
+    <div class="febody"><div id="feMount"></div></div>
+  </div>
+  <div class="resed" id="resEd" role="dialog" aria-modal="true" aria-label="Resource" hidden></div>
+  <div class="sheet" id="sheet" hidden>
+    <form id="sheetForm" autocomplete="off">
+      <h3 id="sheetTitle"></h3>
+      <div id="sheetFields"></div>
+      <p class="why" id="sheetWhy"></p>
+      <div class="go2"><button type="button" id="sheetX">Cancel</button><button type="submit" id="sheetGo">Create</button></div>
+    </form>
+  </div>
+</main>
+
+<!-- What a person waits on, timed in this tab and never sent: the Door's own. -->
+<script src="/door/perf.js"></script>
+<!-- The boards, their names and the scene are the website's, loaded, never copied. -->
+<script src="assets/tiles/tama/tama.js"></script>
+<script src="assets/tiles/tile.js"></script>
+<script src="assets/how/ceremony.js"></script>
+<script src="assets/tiles/boards.js"></script>
+<!-- A community's look: the Face editor's own renderer, and the fonts it names. -->
+<link rel="stylesheet" href="assets/face/vendor/fonts.css">
+<script src="assets/face/vendor/face-assets.js"></script>
+<script src="assets/face/look.js"></script>
+<!-- W-98 Members: the Members page, drawn through two guarded hooks in webapp.js. -->
+<link rel="stylesheet" href="members.css">
+<script src="members.js"></script>
+<script src="palette.js"></script>
+<script src="trade.js"></script>
+<!-- The Resources editor: the Door's, as a site loads it; it registers on WallFlowers. -->
+<script src="/v2/resources.js"></script>
+<script src="door-origin.js"></script>
+<script src="rooms.js"></script>
+<script src="events-icd.js"></script>
+<script src="events-page.js"></script>
+<script src="events-edit.js"></script>
+<script src="webapp.js"></script>
+</body>
+</html>

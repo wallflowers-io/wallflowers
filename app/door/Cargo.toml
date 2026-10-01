@@ -1,0 +1,54 @@
+[package]
+name = "door"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "The web client's server half: it holds the account and runs the real Node, so the browser holds no keys."
+
+# ITS OWN CRATE, AND ITS OWN WORKSPACE, on purpose. The door is not an Arc plane —
+# it holds account secrets and the Arc must not — and it is not part of the core,
+# which is the protocol. It sits beside the client it serves.
+[dependencies]
+# The deploy's stamp, compiled in: `door --version` (arc/lib/arc-build).
+arc-build = { path = "../../arc/lib/arc-build" }
+# The custom properties a Site's look may set on the sign-in window (face.rs).
+face-render = { path = "../../arc/lib/face-render" }
+# Without `lode`: the Door never projects into LodeDB, so lodedb-core, lodedb-gpu and
+# cudarc stay out of its build (O-36).
+pacific-core = { path = "../../core/pacific-core", default-features = false, features = ["mls", "storage", "transport"] }
+# ArgVal/Args live here; the door reads what a mint would carry
+pacific-media = { path = "../../core/pacific-media" }
+axum = "0.7.9"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# loopback to the session processes; TLS to the auth service
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+# the change stream the browser listens on (/v2/events)
+futures-util = "0.3"
+# the PRF output sealed to one session process (seal.rs; app/web/door/seal.js)
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+hkdf = "0.12"
+sha2 = "0.10"
+aes-gcm = "0.10"
+base64 = "0.22"
+rand_core = { version = "0.6", features = ["getrandom"] }
+zeroize = "1"
+# the session process hardens itself: no core dumps, not dumpable, no new privileges (§7)
+libc = "0.2"
+# DPoP proofs a public site signs (token.rs; RFC 9449)
+p256 = { version = "0.13", features = ["ecdsa"] }
+hex = "0.4"
+# the model served gzip-compressed, once, at start (icd.rs); miniz_oxide, pure Rust
+flate2 = "1"
+# training_wheels P0 (mdr/training-wheels.md): PostgreSQL on the local socket, and the
+# rows' time-ordered ids
+postgres = { version = "0.19", features = ["with-serde_json-1", "with-uuid-1"] }
+uuid = { version = "1", features = ["v7", "serde"] }
+
+[dev-dependencies]
+# a kiosk's claim, signed in the tests as the kiosk signs it (A-3)
+ed25519-dalek = "2"
+# a request through one layer, in-process (tw::capture's tests)
+tower = { version = "0.5", features = ["util"] }

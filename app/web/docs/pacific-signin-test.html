@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><body style="font:12.5px/1.7 monospace;white-space:pre-wrap;padding:16px">
+<h1 style="font:600 13px/1 monospace;letter-spacing:.18em;text-transform:uppercase;color:#8A8A93;margin:0 0 6px">
+The door, and which Arc is yours</h1>
+<p style="color:#55555C;max-width:66ch;margin:0 0 18px">The session is an httpOnly cookie on Pacific's
+origin. The interior runs on the member's origin and cannot read it — so it asks the keyholder, which is
+already on that origin for the device key, and gets an <em>answer</em> back rather than a credential.
+Delete <code>keyholder/auth/session</code> to see the signed-out path.</p>
+<div id="o">…</div>
+<script src="pacific.js"></script>
+<script>
+var out=[];function L(s){out.push(s);document.getElementById('o').textContent=out.join('\n');}
+Pacific.mount({site:'cambridge-dd', keyholder:'http://localhost:8103/', seed:Pacific.seed})
+ .then(function(api){
+   return api.rpc.call('session.origin',{origin:'http://localhost:8103'})
+     .then(function(o){ L('auth origin  '+JSON.stringify(o)); return api.rpc.call('session.get'); })
+     .then(function(s){
+       L('session      '+JSON.stringify(s));
+       var h=document.querySelector('[data-pacific]');
+       var me=h.shadowRoot.getElementById('me');
+       L('avatar       initial='+JSON.stringify(me.textContent)+'  signedOut='+me.classList.contains('out'));
+       L('title        '+JSON.stringify(me.title));
+       return api.rpc.call('sync.status');
+     })
+     .then(function(st){ L('sync         '+JSON.stringify(st)); });
+ })
+ .catch(function(e){ L('FAILED '+e.message); });
+</script>

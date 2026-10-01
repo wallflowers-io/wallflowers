@@ -1,0 +1,15 @@
+# arc-relay.service — the Arc's relay (S-17), in kenjin-01's shape as SCM read it on 27 Sep (D-51).
+# __ARC_USER__ is filled by deploy-arc.sh setup (ARC_USER; ubuntu on kenjin-01).
+[Unit]
+Description=Arc relay (S-17)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=__ARC_USER__
+EnvironmentFile=/etc/arc/arc.env
+WorkingDirectory=/opt/arc/state
+ExecStart=/opt/arc/bin/semaphore
+
+[Install]
+WantedBy=multi-user.target

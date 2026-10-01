@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#FFFFFF">
+<title>Escape the matrix! · WallFlowers</title>
+<meta name="robots" content="noindex, nofollow">
+
+<!-- THE WAY OUT OF AN IN-APP BROWSER. A link in an Instagram bio opens in a web
+     view Meta owns and can script, and WallFlowers holds no keys in one
+     (core/docs/instagram-in-app-browser.html in product says why). This page is
+     where a person in that position is sent: it asks them to leave, and points
+     at the way.
+
+     THE ARROW POINTS AT A MENU THAT IS NOT OURS. Instagram draws its browser's
+     "…" menu at the top right, above this page, on iOS and on Android alike —
+     "Open in external browser" is in it. There is no way to press it for them:
+     the scheme tricks that used to hand a page to Safari stopped working inside
+     Instagram in the spring of 2026, so the arrow and the words are the escape.
+     It is one stroke of the pen: it underlines the headline, runs on past it,
+     and goes up into that corner.
+
+     THIS PAGE COMES AFTER THE FACE. A member's site face is public, and public
+     is safe to show in quarantine, inside a browser Meta controls. What is not
+     safe there is signing in and the interior, so that is where the person is
+     stopped and sent here. It is a gateway to THEIR site, not ours: the site's
+     logo and name stand large at the centre of the screen, so the person knows
+     whose page they are leaving to open. Until the face hands them over, both
+     are drawn as placeholders that say what they are.
+
+     IT HOLDS NOTHING AND RUNS NOTHING. No script at all, so there is nothing for
+     the host to hook and nothing that breaks when it does. The "?" opens its
+     explanation as a popover — declarative HTML, no script — and where a browser
+     has no popover (iOS before 17) the button is simply not shown. The wordmark
+     is the static file, not wallflowers-write.svg: an <img> freezes that one on
+     its first frame, which is blank.
+
+     EVERY PATH HERE IS RELATIVE, and the face is declared below rather than
+     linked from brand/wallflowers.css. That stylesheet names its font by an
+     absolute /brand/ URL, which is right for the sites that borrow it across
+     origins and wrong for a file opened from disk, where /brand/ is the root of
+     the drive — the font and the wordmark both failed that way. A relative path
+     resolves the same at /escape, /escape.html and file://. The family name is
+     still "Wallflowers", so it agrees with the stylesheet it stands in for.
+
+     WHAT SENDS PEOPLE HERE — the step from the face to sign-in noticing it is in
+     an in-app browser — is not built yet; until it is, this page is only reached
+     by being linked. -->
+<link rel="icon" type="image/png" sizes="120x120" href="brand/wallflowers-icon-120.png">
+<link rel="icon" type="image/svg+xml" href="brand/wallflowers-icon.svg">
+<link rel="apple-touch-icon" sizes="256x256" href="brand/wallflowers-icon-256.png">
+<link rel="preload" href="brand/wallflowers-regular.woff2?v=2" as="font" type="font/woff2" crossorigin>
+<style>
+  @font-face {
+    font-family: "Wallflowers";
+    src: url("brand/wallflowers-regular.woff2?v=2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  :root {
+    --ground: #FFFFFF;
+    --ink: #14181E;                      /* the wordmark's own stroke, and the site's type */
+    --face: "Wallflowers", sans-serif;
+
+    /* The arrow is red: the palette's NOTE Red (branding.html, Discs). Each
+       stroke's first touch is the pooled ink the wordmark starts every stroke
+       with — the same colour at 0.9, which is how wallflowers-write.svg derives
+       its own (#8BA1C8 -> #7D91B4). */
+    --pen: #ED140D;
+    --pool: #D5120C;
+    /* The highlighter is the l's YELLOW, the marker the wordmark is drawn in. */
+    --marker: #EADD3E;
+
+    --ease: cubic-bezier(.42, 0, .3, 1); /* the wordmark's own stroke easing */
+
+    /* The column's content width. The hero is a fixed ratio of it, which is
+       what lets the site's block be centred on the screen without a script. */
+    --cw: calc(min(100vw, 480px) - 48px);
+    /* The foot of the page: the wordmark sits this far up from it, and the "?"
+       shares the line. --wm is the wordmark's width, which the "?" keeps clear of. */
+    --pad: max(64px, calc(env(safe-area-inset-bottom) + 40px));
+    --wm: min(54vw, 240px);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ground); color: var(--ink); }
+  body { position: relative; font-family: var(--face); -webkit-text-size-adjust: 100%; }
+
+  main {
+    position: relative;
+    min-height: 100vh; min-height: 100svh; max-width: 480px; margin: 0 auto;
+    display: flex; flex-direction: column;
+    padding: 0 max(24px, env(safe-area-inset-right)) var(--pad) max(24px, env(safe-area-inset-left));
+  }
+
+  /* ── THE HEADLINE AND ITS STROKE ────────────────────────────────────────
+     One drawing, so one coordinate system. The hero is a box of fixed ratio,
+     1000 x 550 in the SVG's units, and the headline is set in container units
+     of the same box — 16cqw is 160 units — at a fixed place, so the underline
+     is under "matrix!" at every width instead of wherever the text happened to
+     wrap. The numbers are the face's own metrics, measured from the woff2:
+     ascent .88em, descent .42em, so at line-height .95 each baseline sits .705em
+     below its line's top. With the headline's top at 190:
+
+         line 2 baseline   190 + 152 + 112.8 = 454.8
+         "matrix!" ink     ends at 3.05em = 488 across, 466.5 down
+         "Escape the" ink  ends at 4.38em = 701 across
+
+     so the underline runs at ~504 (clear of the ink by a stroke's width over
+     two and a little air), and the rise stays right of 701 until it is above
+     the first line. Change the size or the top and these move with it.
+
+     The headline sat at 470 until 19 Sep 2026, under a rise 662 units tall. It
+     came up 280 to put the site's block at the middle of the screen; the rise
+     was compressed to fit, 0.577 of its height with every x kept, so the stroke
+     is the same hand, shorter — and it now arrives at the corner at 45 degrees,
+     so the barbs were re-set about that. */
+  .hero { position: relative; container-type: inline-size; aspect-ratio: 1000 / 550; }
+  .arrow { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  h1 {
+    position: absolute; left: 0; top: 19cqw; margin: 0;
+    font: 400 16cqw/.95 var(--face); white-space: nowrap;
+  }
+
+  .arrow path { fill: none; stroke: var(--pen); stroke-width: 42; stroke-linecap: round; stroke-linejoin: round; }
+  .arrow .pool { stroke: var(--pool); }
+
+  /* Written, not shown: each stroke is a dash the length of the path (pathLength
+     1) pulled along it, one after another with the pen's travel between. The gap
+     is twice the dash so no zero-length segment is ever left for a round cap to
+     draw as a dot at the far end. */
+  .arrow .s { stroke-dasharray: 1 2; stroke-dashoffset: 1;
+              animation: write var(--d) var(--ease) var(--at) both; }
+  .arrow .pool { opacity: 0; animation: land .01s var(--at) both; }
+  .shaft { --at: .3s;   --d: 1.25s; }
+  .barb1 { --at: 1.67s; --d: .24s; }
+  .barb2 { --at: 1.99s; --d: .26s; }
+  @keyframes write { to { stroke-dashoffset: 0; } }
+  @keyframes land  { to { opacity: 1; } }
+
+  /* ── WHOSE SITE THIS IS ──────────────────────────────────────────────────
+     Their logo and name, large, at the centre of the screen: a disc 28% of the
+     window's height and its name beneath it. Centred by arithmetic rather than
+     by a script: the hero above is .55 of the column's width, so the block's
+     top margin is the centre line, less the hero, less half the block. Where
+     the window is too short for that, it keeps 12px from the headline.
+
+     The centre line is 46% down, not 50: the optical centre. A disc with its
+     name hung under it reads low when its geometric middle is at half height,
+     so it sits a little above. */
+  .site {
+    --logo: clamp(144px, 28vh, 264px); --name: clamp(32px, 5.6vh, 48px);
+    --gap: 2.4vh; --mid: 46vh;
+    margin: max(12px, calc(var(--mid) - var(--cw) * .55 - (var(--logo) + var(--gap) + 1.1 * var(--name)) / 2)) 0 0;
+    display: flex; flex-direction: column; align-items: center; gap: var(--gap);
+  }
+  @supports (height: 1svh) {
+    .site { --logo: clamp(144px, 28svh, 264px); --name: clamp(32px, 5.6svh, 48px);
+            --gap: 2.4svh; --mid: 46svh; }
+  }
+  .logo {
+    display: block; width: var(--logo); height: var(--logo);
+    border-radius: 50%; object-fit: cover;
+    box-shadow: 0 0 0 1px rgba(20,24,30,.08);  /* holds a white logo's edge on white paper */
+  }
+  .name {
+    max-width: 100%; font-size: var(--name); line-height: 1.1;
+    text-align: center; overflow-wrap: anywhere;
+  }
+  /* Until the face hands them over: a blank disc and a name that say what they
+     stand for, rather than a real site's logo standing in for everyone's. */
+  .logo.placeholder {
+    display: grid; place-items: center; background: #EDF0F4;
+    color: rgba(20,24,30,.38); font-size: calc(var(--logo) * .24);
+  }
+
+  /* ── THE WORDS ─────────────────────────────────────────────────────────── */
+  .plea {
+    margin: 10vh auto 0; margin-top: 10svh; max-width: 17em; text-align: center;
+    font-size: clamp(19px, 5.2vw, 26px); line-height: 1.38; text-wrap: balance;
+  }
+  /* The action is highlighted the way it would be by hand: a yellow marker
+     swept across it after the arrow is drawn. Cloned per line, so a wrap gets a
+     swash on each line rather than one torn in half. */
+  mark {
+    color: inherit; padding: 0 .14em; margin: 0 -.06em; border-radius: .18em;
+    background: linear-gradient(var(--marker), var(--marker)) no-repeat 0 60% / 0% 78%;
+    -webkit-box-decoration-break: clone; box-decoration-break: clone;
+    animation: sweep .55s var(--ease) 2.3s both;
+  }
+  @keyframes sweep { to { background-size: 100% 78%; } }
+
+  /* ── OURS, LAST ──────────────────────────────────────────────────────────
+     The wordmark goes home to wallflowers.io. */
+  footer { margin-top: auto; padding-top: 48px; display: flex; justify-content: center; }
+  .home { display: block; border-radius: 8px; }
+  .home img { display: block; width: var(--wm); height: auto; }
+  .home:focus-visible { outline: 2px solid var(--ink); outline-offset: 6px; }
+
+  /* ── THE "?" AND WHAT IT SAYS ────────────────────────────────────────────
+     Bottom right, on the wordmark's line: as far up from the foot of the page
+     as the wordmark is (--pad), and as far in from the right edge. It hangs off
+     body rather than main, so that edge is the window's even where the column
+     is narrower. On a narrow phone that far in would land it on the end of the
+     centred wordmark, so there it comes in only as far as leaves 16px of paper
+     between them: half the window, less half the wordmark, less its own 34px,
+     less the 16. Both insets are then 15% more than that (19 Sep 2026), so it
+     sits a touch above the wordmark's line and further into the corner; on a
+     phone the 15% takes some of the 16px, and 9-11px of paper remains.
+     The explanation is a popover: it opens in the top layer, a tap outside or
+     the button at its foot closes it, and none of that needs script. */
+  .q {
+    position: absolute; z-index: 1; bottom: calc(var(--pad) * 1.15);
+    right: calc(min(var(--pad), calc((100vw - var(--wm)) / 2 - 50px)) * 1.15);
+    width: 34px; height: 34px; padding: 0 0 2px; border-radius: 50%;
+    border: 2.5px solid var(--ink); background: var(--ground); color: var(--ink);
+    font: 400 21px/1 var(--face); display: grid; place-items: center; cursor: pointer;
+  }
+  .q:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+  #about {
+    width: min(90vw, 380px); padding: 34px 28px 28px; border: 0; border-radius: 22px;
+    background: var(--ground); color: var(--ink); font-family: var(--face);
+    box-shadow: 0 18px 60px rgba(20,24,30,.28);
+  }
+  #about::backdrop { background: rgba(20,24,30,.4); }
+  #about h2 { font: 400 32px/1.05 var(--face); margin: 0 0 10px; }
+  #about .intro { font-size: 18px; line-height: 1.4; margin: 0 0 28px; }
+  #about ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 24px; }
+  #about li { display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: start; }
+  #about li b { display: block; font-weight: 400; font-size: 19px; line-height: 1.2; margin: 1px 0 5px;
+                color: var(--ink); }
+  #about li span + span { font-size: 16.5px; line-height: 1.45; color: rgba(20,24,30,.74); }
+
+  /* The icons are drawn the way the wordmark is — round-capped strokes, no
+     fills — each on a disc in one of its letters' colours: the s's SKY, the l's
+     YELLOW, and the lilac of the disc behind the o, whose arrow is the page's
+     red pen leaving the window. */
+  .ic { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; }
+  .ic svg { width: 24px; height: 24px; fill: none; stroke: var(--ink); stroke-width: 2.2;
+            stroke-linecap: round; stroke-linejoin: round; }
+  .ic-lock { background: #A6C8E0; }
+  .ic-eye  { background: var(--marker); }
+  .ic-out  { background: #DBADCF; }
+  .ic-out .up { stroke: var(--pen); }
+
+  #about .ok {
+    display: block; margin: 32px auto 0; padding: 9px 26px 11px; border: 0; border-radius: 99px;
+    background: var(--marker); color: var(--ink); font: 400 20px/1 var(--face); cursor: pointer;
+  }
+  /* No popover, no button: better absent than a "?" that does nothing. */
+  @supports not selector(:popover-open) { .q, #about { display: none; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .arrow .s, .arrow .pool, mark { animation: none; }
+    .arrow .s { stroke-dashoffset: 0; }
+    .arrow .pool { opacity: 1; }
+    mark { background-size: 100% 78%; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <div class="hero">
+    <!-- One stroke, then the head. The shaft starts under the M, underlines
+         "matrix!", runs on past the !, hooks up clear of "the" and leans into the
+         corner at (985, 38); the barbs come out of the tip, set 33 degrees either
+         side of the line the shaft arrives on. A stroke's pooled first touch is
+         the zero-length path after it, as in the wordmark; the barbs share the
+         one at the tip. -->
+    <svg class="arrow" viewBox="0 0 1000 550" width="1000" height="550" aria-hidden="true" focusable="false">
+      <path class="s shaft" pathLength="1" d="M6 506C170 518 360 496 540 502C680 508 770 490 800 420C822 389 806 337 818 279C830 212 890 131.5 985 38"/>
+      <path class="pool shaft" d="M6 506L6 506"/>
+      <path class="s barb1" pathLength="1" d="M985 38C943 45 900 54 860 64"/>
+      <path class="pool barb1" d="M985 38L985 38"/>
+      <path class="s barb2" pathLength="1" d="M985 38C977 80 968 122 957 163"/>
+    </svg>
+    <h1>Escape the<br>matrix!</h1>
+  </div>
+
+  <!-- THE SITE BEING VISITED: the face the person came from, and where the
+       escape leads. PLACEHOLDERS until the face hands over its logo and name.
+       The real logo is an img with class "logo" and an empty alt, because the
+       name beneath it carries the label. -->
+  <figure class="site">
+    <div class="logo placeholder" role="img" aria-label="Site logo (placeholder)">logo</div>
+    <figcaption class="name">Site Name</figcaption>
+  </figure>
+
+  <p class="plea">Meta makes it impossible to run secure code in this window.
+     <mark>Open in External Browser</mark> to breathe real&nbsp;air.</p>
+
+  <footer>
+    <a class="home" href="https://wallflowers.io">
+      <img src="brand/wallflowers-wordmark.svg" alt="WallFlowers" width="3320" height="651" decoding="async">
+    </a>
+  </footer>
+
+</main>
+
+<button class="q" type="button" popovertarget="about" aria-label="Why leave this browser?">?</button>
+
+<div id="about" popover>
+  <h2>Why the escape?</h2>
+  <p class="intro">WallFlowers is a private social network.</p>
+  <ul>
+    <li>
+      <span class="ic ic-lock" aria-hidden="true"><svg viewBox="0 0 24 24">
+        <rect x="6" y="11" width="12" height="9" rx="2.2"/>
+        <path d="M8.5 11V8.2a3.5 3.5 0 0 1 7 0V11"/>
+        <path d="M12 14.6v2"/>
+      </svg></span>
+      <span><b>End-to-end encrypted</b>Sealed on your device. Only the people you
+        send to can open it — not us, not anyone in between.</span>
+    </li>
+    <li>
+      <span class="ic ic-eye" aria-hidden="true"><svg viewBox="0 0 24 24">
+        <path d="M3 12s3.3-5.5 9-5.5S21 12 21 12s-3.3 5.5-9 5.5S3 12 3 12z"/>
+        <circle cx="12" cy="12" r="2.6"/>
+        <path d="M4.5 4.5l15 15"/>
+      </svg></span>
+      <span><b>Trackers off</b>No ads. Nothing follows you around.</span>
+    </li>
+    <li>
+      <span class="ic ic-out" aria-hidden="true"><svg viewBox="0 0 24 24">
+        <path d="M17 13.5V18a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V8.5A1.5 1.5 0 0 1 6 7h4.5"/>
+        <path class="up" d="M13.5 4.5h6v6M19.5 4.5l-8 8"/>
+      </svg></span>
+      <span><b>Not in this window</b>Instagram’s browser lets Meta run code inside
+        every page. That’s no place for your keys.</span>
+    </li>
+  </ul>
+  <button class="ok" type="button" popovertarget="about" popovertargetaction="hide">Got it</button>
+</div>
+
+</body>
+</html>

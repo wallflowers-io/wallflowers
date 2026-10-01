@@ -1,0 +1,12 @@
+{
+  "arcs": [
+    {
+      "id": "arc.global.01",
+      "name": "Pacific Global",
+      "official": true,
+      "region": "Global",
+      "origin": "https://arc.wallflowers.io",
+      "relay_url": "wss://arc.wallflowers.io/v1/relay"
+    }
+  ]
+}

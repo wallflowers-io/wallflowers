@@ -1,0 +1,52 @@
+# run.sh's own scratch: server logs, recreated on every start.
+.run-*.log
+.run-pids
+
+# CAPTURED SITES — 1.7 GB, and not ours. They lived in `case_studies/` here and
+# moved OUT of this repository to the workspace's business/case_studies on
+# 18 Sep 2026; the rule stays so a copy dropped back here cannot be committed.
+# They are whole mirrors of other people's websites (stoma.games, example),
+# captured so the interior can be demonstrated over a real page rather than a mock. They are evidence, not
+# source: nothing here is authored, none of it is licensed to us to redistribute,
+# and a clone that carried them would be three orders of magnitude larger than
+# the code it exists to serve.
+#
+# `run.sh` needs them (from business/case_studies) to serve :8101 and :8102. Without them the case-study pages
+# 404 and everything else — the embed demos, the keyholder, the two-device
+# harness, the wasm tests — works untouched.
+case_studies/
+
+# BUILT BY build-wasm.sh, from core/core-wasm. Committing it would put a binary
+# in this repo whose source is in another one, so the two would drift with
+# nothing to catch it — which is the whole failure `core-wasm` exists to prevent.
+*.wasm
+docs/core/
+
+.DS_Store
+keyholder/core/
+
+# STAGED BESIDE THE CORE, by account/stage.sh, for the same reason: the source
+# is account/pacific-account.js and these are copies of it. A committed copy is
+# a copy that drifts from the original with nothing to catch it -- and the one
+# thing this file must never differ on between surfaces is a key derivation.
+docs/pacific-account.js
+# The client and what it reads, staged beside pacific.js for other sites to load
+# (account/stage.sh, SERVED_BESIDE_PACIFIC). Build artefacts: shared/ is the source.
+docs/wallflowers-client.js
+docs/wallflowers-client.d.ts
+docs/wallflowers-fold.js
+docs/wallflowers-ops.js
+docs/wallflowers-sim.json
+docs/wallflowers-sim.js
+docs/wallflowers-sim-site.json
+docs/wallflowers-sim-site.js
+keyholder/pacific-account.js
+keyholder/wallflowers-ops.js
+
+# mobile/: staged build artefacts and the generated archive fixture
+mobile/core/
+mobile/pacific-account.js
+mobile/fixture/
+mobile/wallflowers-fold.js
+mobile/wallflowers-ops.js
+demo/__pycache__/

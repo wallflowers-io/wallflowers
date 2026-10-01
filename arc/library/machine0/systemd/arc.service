@@ -1,0 +1,31 @@
+# arc.service — the ONE machine0 unit. Runs arcup, which supervises every plane
+# (relay · console · heartbeat) against a single minted identity.
+# Supersedes arc-relay/arc-messages/arc-superlink/arc-heartbeat.service (retired).
+#
+# NO INSTALLER SHIPS WITH THIS UNIT. arc-serve-bootstrap.sh, which used to substitute the
+# tokens, seal ARC_HEARTBEAT_TOKEN and `systemctl enable` it, went with the serving stack;
+# nothing else in library/machine0 installs it. Install by hand (substitute __USER__,
+# __HOME__, __CREDS_DIR__, seal the credential with `systemd-creds encrypt`), or use the
+# per-plane units the live fleet is deployed with (kenjin hosting/deploy-arc.sh).
+[Unit]
+Description=Arc — unified plane supervisor (arcup)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__HOME__
+# the whole Arc config (target, components, ports, plane commands) lives here
+EnvironmentFile=/opt/arc/arc.env
+# sealed, host-key-bound secrets — arcup lifts $CREDENTIALS_DIRECTORY/* into the env
+# for its child planes (ARC_SECRETS=systemd-creds)
+LoadCredentialEncrypted=ARC_HEARTBEAT_TOKEN:__CREDS_DIR__/arc_heartbeat_token.cred
+ExecStart=/opt/arc/arcup
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

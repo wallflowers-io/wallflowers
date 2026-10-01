@@ -1,0 +1,17 @@
+# backup-arc.service — K-48: the account store, then the Arc's state (/opt/arc/state), kenjin-01, encrypted, off the box (srr/scmp.md § 11).
+# Its timer starts it; deploy-arc.sh asks for a full set (full.next) before it changes the binaries.
+[Unit]
+Description=Encrypted off-box backup (arc, K-48)
+After=docker.service
+
+[Service]
+Type=oneshot
+# The plaintext's only place: /var/lib/backup-arc, 0700 root's, on the disk /opt/arc/state
+# already holds it on as plaintext (/run's 97 MB cannot hold the relay); its copies
+# emptied by the script on every exit and at the next run's start. Its ledger stays.
+StateDirectory=backup-arc
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/opt/backup/backup.sh arc
+Nice=10
+IOSchedulingClass=idle

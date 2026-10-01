@@ -1,0 +1,169 @@
+{
+  "spec": "semaphore-wire",
+  "version": 1,
+  "encoding": "json-text",
+  "discriminant": "t",
+  "address": {
+    "doc": [
+      "The one write rule (pacific_wire::address). A tag is an Ed25519 verifying key and a pub",
+      "carries a signature by it; a relay that checks refuses anything else. The key comes from a",
+      "32-byte seed the writer already holds. Both repos test against the vector below: the relay",
+      "through pacific-wire itself, the Python harness through its second implementation."
+    ],
+    "sig_domain": "pacific-relay-pub:v1\n",
+    "key_label": "pacific/relay/address/v1",
+    "kdf": "HKDF-SHA256(salt = key_label, ikm = seed, info = \"v1\") -> the Ed25519 signing key; the tag is its verifying key",
+    "signed": "sig_domain || tag (32 bytes) || blob as sent (the base64 string's bytes)",
+    "vectors": [
+      {
+        "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+        "blob": "aGk=",
+        "tag": "49192b6cade078f583e61a4e42293b511862c7677bd9abc2a8b769be59595e82",
+        "sig": "26f515b38e4aae7c81656fca0529f3107a96489115c0230f36cb4e832f27d3e73b5067d9f48f9d99c4cfd44e527b2b6aea5c2394d1306b7842f1d5f33391000a"
+      }
+    ]
+  },
+  "why": [
+    "This file is the Semaphore wire spec that arc/docs/arc-api-icd-v1.html §6 points at.",
+    "It exists because the relay's tests used to assert its Frame enum AGAINST ITSELF, and the",
+    "client's tests asserted its own enum against itself, so the two drifted into three",
+    "incompatible generations at once (5 variants at arc HEAD, 6 in pacific-wire, 10 on the live",
+    "box). The drift was fatal, not cosmetic: an unknown variant fails Frame::from_json, which",
+    "pacific-core/src/transport.rs maps to CoreError::Transport, which kills the sync drain.",
+    "There is now ONE enum (pacific_wire::Frame, which the relay re-exports) and this fixture is",
+    "the third party both sides are held to: pacific-wire asserts the client enum against it and",
+    "arc/planes/relay asserts the server against it. A Frame variant cannot be added, renamed or",
+    "re-encoded in either repo without this file changing too."
+  ],
+  "vocabulary": {
+    "note": [
+      "A client declares the frames it can PARSE in Sub.v, and the relay may send it nothing",
+      "above that. This is not politeness: an unknown relay->client frame is FATAL on the client,",
+      "so a relay that has learned a new frame may never simply start sending it.",
+      "Sub.v is absent on the wire when 0, so a client that predates a level is byte-identical to",
+      "what it always sent and is never handed a frame it cannot read.",
+      "min_v below is the floor for BOTH directions: the relay will not send a frame above the",
+      "connection's declared v, and will not act on an inbound request above it either (it drops",
+      "the request in silence, because every answer it could give is itself above the floor)."
+    ],
+    "levels": [
+      { "v": 0, "adds": ["pub", "sub", "msg", "ack", "eose"], "meaning": "the mailbox. Every build ever shipped." },
+      { "v": 1, "adds": ["gap"], "meaning": "retention is announced: the replayed backlog may be incomplete." },
+      { "v": 2, "adds": ["media_put", "media_get", "media_url", "media_err"], "meaning": "presigned object-storage offload. No shipping client declares this yet." }
+    ]
+  },
+  "frames": [
+    {
+      "t": "pub",
+      "dir": "to_relay",
+      "min_v": 0,
+      "doc": "Store this blob under tag and fan it out. The tag is an Ed25519 verifying key and sig is its signature over \"pacific-relay-pub:v1\\n\" || tag bytes || blob-as-sent (pacific_wire::address); a relay that checks refuses anything else. commit:true claims the tag's single commit slot.",
+      "encodings": [
+        "{\"t\":\"pub\",\"tag\":\"aa\",\"blob\":\"Zm9v\"}",
+        "{\"t\":\"pub\",\"tag\":\"aa\",\"blob\":\"Zm9v\",\"commit\":true}"
+      ],
+      "accepts": [
+        "{\"t\":\"pub\",\"tag\":\"aa\",\"blob\":\"Zm9v\",\"commit\":false}"
+      ]
+    },
+    {
+      "t": "sub",
+      "dir": "to_relay",
+      "min_v": 0,
+      "doc": "Subscribe to tags; replay seq > since, then Eose, then live. v declares the client's vocabulary.",
+      "encodings": [
+        "{\"t\":\"sub\",\"tags\":[\"aa\"],\"since\":0}",
+        "{\"t\":\"sub\",\"tags\":[\"aa\"],\"since\":5,\"v\":1}",
+        "{\"t\":\"sub\",\"tags\":[\"aa\",\"bb\"],\"since\":7,\"v\":2}"
+      ],
+      "accepts": [
+        "{\"t\":\"sub\",\"tags\":[\"aa\"]}",
+        "{\"t\":\"sub\",\"tags\":[\"aa\"],\"since\":5,\"v\":0}"
+      ]
+    },
+    {
+      "t": "msg",
+      "dir": "to_client",
+      "min_v": 0,
+      "doc": "A stored or live blob on tag, with its monotonic seq.",
+      "encodings": [
+        "{\"t\":\"msg\",\"tag\":\"aa\",\"seq\":3,\"blob\":\"YmFy\"}"
+      ],
+      "accepts": []
+    },
+    {
+      "t": "ack",
+      "dir": "to_client",
+      "min_v": 0,
+      "doc": "The verdict on a Pub. ok:false means nothing was stored. reason names why (malformed_tag, not_a_key, malformed_sig, bad_signature, too_large, rate_limited, busy, full); it is absent only when a commit lost its tag's slot, which is an instruction to rebase rather than an error.",
+      "encodings": [
+        "{\"t\":\"ack\",\"seq\":3}",
+        "{\"t\":\"ack\",\"seq\":0,\"ok\":false}",
+        "{\"t\":\"ack\",\"seq\":0,\"ok\":false,\"reason\":\"bad_signature\"}"
+      ],
+      "accepts": [
+        "{\"t\":\"ack\",\"seq\":9,\"ok\":true}"
+      ]
+    },
+    {
+      "t": "gap",
+      "dir": "to_client",
+      "min_v": 1,
+      "doc": "The backlog just replayed for tag is INCOMPLETE: blobs at or below floor were evicted.",
+      "encodings": [
+        "{\"t\":\"gap\",\"tag\":\"aa\",\"floor\":42}"
+      ],
+      "accepts": []
+    },
+    {
+      "t": "eose",
+      "dir": "to_client",
+      "min_v": 0,
+      "doc": "End of the stored backlog for the current Sub; live follows. Exactly one per Sub.",
+      "encodings": [
+        "{\"t\":\"eose\"}"
+      ],
+      "accepts": []
+    },
+    {
+      "t": "media_put",
+      "dir": "to_relay",
+      "min_v": 2,
+      "doc": "Presign an upload of key, bounded to exactly len bytes (len is signed into the URL).",
+      "encodings": [
+        "{\"t\":\"media_put\",\"key\":\"ab\",\"len\":1024}"
+      ],
+      "accepts": []
+    },
+    {
+      "t": "media_get",
+      "dir": "to_relay",
+      "min_v": 2,
+      "doc": "Presign a download of key. The relay does not check existence — a blind relay cannot.",
+      "encodings": [
+        "{\"t\":\"media_get\",\"key\":\"ab\"}"
+      ],
+      "accepts": []
+    },
+    {
+      "t": "media_url",
+      "dir": "to_client",
+      "min_v": 2,
+      "doc": "A short-lived presigned URL for key, valid only for the method it was signed for.",
+      "encodings": [
+        "{\"t\":\"media_url\",\"key\":\"ab\",\"method\":\"PUT\",\"url\":\"https://o/b/ab?X-Amz-Signature=deadbeef\",\"expires_in\":300}"
+      ],
+      "accepts": []
+    },
+    {
+      "t": "media_err",
+      "dir": "to_client",
+      "min_v": 2,
+      "doc": "The presign was refused. reason is a stable token: unconfigured | bad_key | too_large | over_budget | budget_stale.",
+      "encodings": [
+        "{\"t\":\"media_err\",\"key\":\"ab\",\"reason\":\"too_large\"}"
+      ],
+      "accepts": []
+    }
+  ]
+}

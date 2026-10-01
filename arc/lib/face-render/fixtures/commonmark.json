@@ -1,0 +1,141 @@
+[
+ {
+  "text": "# Title\n\nPara with **bold**, *em*, `code` and [a link](https://example.org/a%20b).",
+  "html": "<h1>Title</h1>\n<p>Para with <strong>bold</strong>, <em>em</em>, <code>code</code> and <a href=\"https://example.org/a%20b\">a link</a>.</p>\n"
+ },
+ {
+  "text": "## Sub\n\n> quoted **text**\n> and more\n\n- one\n- two\n  - nested\n- three",
+  "html": "<h2>Sub</h2>\n<blockquote>\n<p>quoted <strong>text</strong>\nand more</p>\n</blockquote>\n<ul>\n<li>one</li>\n<li>two\n<ul>\n<li>nested</li>\n</ul>\n</li>\n<li>three</li>\n</ul>\n"
+ },
+ {
+  "text": "1. first\n2. second\n\n- after",
+  "html": "<ol>\n<li>first</li>\n<li>second</li>\n</ol>\n<ul>\n<li>after</li>\n</ul>\n"
+ },
+ {
+  "text": "3. starts at three\n4. four",
+  "html": "<ol start=\"3\">\n<li>starts at three</li>\n<li>four</li>\n</ol>\n"
+ },
+ {
+  "text": "```js\nconst x = `y`;\n\n  indented\n```",
+  "html": "<pre><code class=\"language-js\">const x = `y`;\n\n  indented\n</code></pre>\n"
+ },
+ {
+  "text": "---",
+  "html": "<hr />\n"
+ },
+ {
+  "text": "![a cat, sitting](asset:0123456789abcdef)",
+  "html": "<p><img src=\"asset:0123456789abcdef\" alt=\"a cat, sitting\" /></p>\n"
+ },
+ {
+  "text": "line one\\\nline two",
+  "html": "<p>line one<br />\nline two</p>\n"
+ },
+ {
+  "text": "***both***",
+  "html": "<p><em><strong>both</strong></em></p>\n"
+ },
+ {
+  "text": "**_x_ y**",
+  "html": "<p><strong><em>x</em> y</strong></p>\n"
+ },
+ {
+  "text": "text with \\*escaped\\* stars, a\\_b\\_c and 5 \\* 3 \\< 4 & 1 > 0",
+  "html": "<p>text with *escaped* stars, a_b_c and 5 * 3 &lt; 4 &amp; 1 &gt; 0</p>\n"
+ },
+ {
+  "text": "- a\n\n  b\n\n- c",
+  "html": "<ul>\n<li>\n<p>a</p>\n<p>b</p>\n</li>\n<li>\n<p>c</p>\n</li>\n</ul>\n"
+ },
+ {
+  "text": "> - quoted list\n> - two",
+  "html": "<blockquote>\n<ul>\n<li>quoted list</li>\n<li>two</li>\n</ul>\n</blockquote>\n"
+ },
+ {
+  "text": "- one\n- two\n\n* three\n* four",
+  "html": "<ul>\n<li>one</li>\n<li>two</li>\n</ul>\n<ul>\n<li>three</li>\n<li>four</li>\n</ul>\n"
+ },
+ {
+  "text": "`` a ` tick ``",
+  "html": "<p><code>a ` tick</code></p>\n"
+ },
+ {
+  "text": "#### four\n\n###### six",
+  "html": "<h4>four</h4>\n<h6>six</h6>\n"
+ },
+ {
+  "text": "a [link *with* marks](mailto:a@b.org) here",
+  "html": "<p>a <a href=\"mailto:a@b.org\">link <em>with</em> marks</a> here</p>\n"
+ },
+ {
+  "text": "\\# not a heading\n\n1\\. not a list\n\n\\- not a list\n\n\\> not a quote\n\n\\<b\\>not html\\</b\\>",
+  "html": "<p># not a heading</p>\n<p>1. not a list</p>\n<p>- not a list</p>\n<p>&gt; not a quote</p>\n<p>&lt;b&gt;not html&lt;/b&gt;</p>\n"
+ },
+ {
+  "text": "Head\n===\n\nand setext\n---",
+  "html": "<h1>Head</h1>\n<h2>and setext</h2>\n"
+ },
+ {
+  "text": "a*b*c and __strong__ and _em_ and *a **b** c*",
+  "html": "<p>a<em>b</em>c and <strong>strong</strong> and <em>em</em> and <em>a <strong>b</strong> c</em></p>\n"
+ },
+ {
+  "text": "two spaces  \nbreak",
+  "html": "<p>two spaces<br />\nbreak</p>\n"
+ },
+ {
+  "text": "~~~\ntilde fence\n~~~",
+  "html": "<pre><code>tilde fence\n</code></pre>\n"
+ },
+ {
+  "text": "## closing hashes ##",
+  "html": "<h2>closing hashes</h2>\n"
+ },
+ {
+  "text": "* * *\n\n___",
+  "html": "<hr />\n<hr />\n"
+ },
+ {
+  "text": "1) paren\n2) list",
+  "html": "<ol>\n<li>paren</li>\n<li>list</li>\n</ol>\n"
+ },
+ {
+  "text": "> > nested\n> quote",
+  "html": "<blockquote>\n<blockquote>\n<p>nested\nquote</p>\n</blockquote>\n</blockquote>\n"
+ },
+ {
+  "text": "[titled](https://example.org \"a title\") and [paren](<https://example.org/a b>)",
+  "html": "<p><a href=\"https://example.org\" title=\"a title\">titled</a> and <a href=\"https://example.org/a%20b\">paren</a></p>\n"
+ },
+ {
+  "text": "![*alt* text](asset:00000000000000aa) inline",
+  "html": "<p><img src=\"asset:00000000000000aa\" alt=\"alt text\" /> inline</p>\n"
+ },
+ {
+  "text": "soft\nbreak",
+  "html": "<p>soft\nbreak</p>\n"
+ },
+ {
+  "text": "    indented code",
+  "html": "<pre><code>indented code\n</code></pre>\n"
+ },
+ {
+  "text": "- tight\n- list\n\n\n- still one list",
+  "html": "<ul>\n<li>\n<p>tight</p>\n</li>\n<li>\n<p>list</p>\n</li>\n<li>\n<p>still one list</p>\n</li>\n</ul>\n"
+ },
+ {
+  "text": "<script>alert(1)</script>",
+  "html": "<!-- raw HTML omitted -->\n",
+  "icd": true
+ },
+ {
+  "text": "[js](javascript:alert(1)) and ![far](https://x.org/c.png) and [empty]()",
+  "html": "<p><a>js</a> and <img src=\"https://x.org/c.png\" alt=\"far\" /> and <a href=\"\">empty</a></p>\n",
+  "icd": true
+ },
+ {
+  "text": "para <b>x</b>",
+  "html": "<p>para <!-- raw HTML omitted -->x<!-- raw HTML omitted --></p>\n",
+  "icd": true
+ }
+]

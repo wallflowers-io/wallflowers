@@ -1,0 +1,37 @@
+<h1>The Resources editor</h1>
+<p class="lede">WallFlowers' editor for a community's resources, in your page: write a post, add pictures and a PDF, preview it, and publish it to the community.</p>
+<h2>The script</h2>
+<pre><code>&lt;script src="{{DOOR}}/v2/resources.js"
+        integrity="{{RESOURCES_SRI}}"
+        crossorigin="anonymous"&gt;&lt;/script&gt;</code></pre>
+<p>Load it after <a href="signin.html">the sign-in script</a>, pinned by the hash above, the current release's. It changes only when the Door is released.</p>
+<h2>Mount it</h2>
+<pre><code>const session = await WallFlowers.current({ client });
+const editor = WallFlowersResources.mount(document.getElementById('editor'), {
+  fetch: session.fetch,
+  site: session.site,
+  onSaved: ({ post, published }) =&gt; { /* read /v2/graph again */ }
+});</code></pre>
+<table><thead><tr><th>Option</th><th></th></tr></thead><tbody>
+<tr><td><code>fetch</code></td><td><code>session.fetch</code>: the editor writes as the member.</td></tr>
+<tr><td><code>site</code></td><td>The community the post is published to: <code>session.site</code>.</td></tr>
+<tr><td><code>post</code></td><td>A post to edit, by id. Leave it out to write a new one.</td></tr>
+<tr><td><code>onSaved</code></td><td>Called after each save with the post's id and whether it is published.</td></tr>
+</tbody></table>
+<p><code>editor.dirty</code> is true while there are unsaved changes; <code>editor.close()</code> takes it out of the page.</p>
+<h2>What it writes</h2>
+<table><thead><tr><th>Button</th><th>Ops</th></tr></thead><tbody>
+<tr><td>Save draft</td><td>mint a <code>post</code>; <code>post.setProfile</code> (the body as <code>markdown</code>), <code>post.setMedia</code> (the cover), <code>post.setDocument</code> (the PDF), <code>post.addAsset</code> and <code>post.removeAsset</code> (its pictures)</td></tr>
+<tr><td>Publish</td><td>the same, then <code>group.setAffiliation</code> <code>{rel: created}</code> on the community and <code>base.setBacklink</code> on the post: the community names it, and it names the community</td></tr>
+<tr><td>Update</td><td>what changed</td></tr>
+<tr><td>Unpublish</td><td><code>group.clearAffiliation</code> and <code>base.clearBacklink</code>; the post stays a draft</td></tr>
+</tbody></table>
+<p>A post's body is CommonMark 0.31.2, and its pictures are its own: the body shows them as <code>asset:&lt;id&gt;</code>. Each picture, the cover and the PDF is sized to fit the model's caps before it is sent (<a href="model.html">The model</a>, <code>post</code>).</p>
+<p>A site's session reaches its community and what it made. A post made elsewhere is edited in WallFlowers.</p>
+<h2 id="in-this-release">In this release</h2>
+<ul>
+<li><strong>Every post is public.</strong> The editor offers no visibility choice: each post it publishes is on the community's public page, for anyone.</li>
+<li><strong>Large pictures and PDFs stay off the public page.</strong> On the post's public page (<code>{{ARC}}/v1/face/&lt;slug&gt;/post/&lt;id&gt;</code>, and its <code>/document</code>), a picture or PDF over 16 KB doesn't appear: a picture shows its alt text, and a large PDF has no link. Members see everything in WallFlowers.</li>
+<li><strong>The public page renders part of Markdown.</strong> Paragraphs, headings, code, rules, quotes, lists, emphasis, inline links and images are drawn. Reference-style links, entities (<code>&amp;amp;</code>), autolinks (<code>&lt;https://…&gt;</code>) and raw HTML show there as the text they are. Write links inline: <code>[text](https://…)</code>.</li>
+<li><strong>No PDF thumbnail in the editor on your site.</strong> Mounted on your site, the editor doesn't show a PDF's first-page thumbnail: the PDF renderer it loads isn't served to other sites yet.</li>
+</ul>

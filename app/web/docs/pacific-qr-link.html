@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Linking two devices by QR</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  body { font: 12.5px/1.75 ui-monospace, Menlo, monospace; padding: 20px; max-width: 980px;
+         background: #FBFAF8; color: #1A1A1C; }
+  h1 { font: 600 13px/1 ui-monospace, monospace; letter-spacing: .18em; text-transform: uppercase;
+       color: #8A8A93; margin: 0 0 6px; }
+  p.s { color: #55555C; margin: 0 0 18px; max-width: 68ch; }
+  pre { white-space: pre-wrap; margin: 0; }
+  .ok { color: #1F6F5C; } .no { color: #96322E; } .h { color: #8A8A93; } .w { color: #9C7215; }
+  iframe { width: 0; height: 0; border: 0; position: absolute; visibility: hidden; }
+  .codes { display: flex; gap: 26px; align-items: flex-start; margin: 18px 0 22px; flex-wrap: wrap; }
+  figure { margin: 0; }
+  figcaption { color: #8A8A93; margin-top: 7px; font-size: 11px;
+               letter-spacing: .12em; text-transform: uppercase; }
+  canvas { image-rendering: pixelated; border: 1px solid #D9DFE7; background: #fff; }
+  .sas { font-size: 15px; letter-spacing: .06em; color: #1A1A1C; margin-top: 4px; }
+</style>
+</head>
+<body>
+<h1>Linking two devices by QR</h1>
+<p class="s">Device A on :8103, device B on :8104 — two origins, so two real device
+keys and two logs. A draws its pairing offer as a QR; B reads that QR off the
+canvas and pairs from what it read. Nothing is handed between them but pixels.
+Then a delta authored on A has to reach B through the relay on :8787, and the
+SAS words each device shows for the other have to be the ones the CORE derives —
+computed here by <code>core_wasm.wasm</code>, not by JavaScript that agrees with
+itself.</p>
+
+<div class="codes">
+  <figure><canvas id="qa"></canvas><figcaption>A's offer</figcaption></figure>
+  <figure><canvas id="qb"></canvas><figcaption>B's offer</figcaption></figure>
+</div>
+
+<pre id="o">…</pre>
+
+<script src="qr.js"></script>
+<script>
+'use strict';
+/* THE HOST'S CSPRNG, as a declared import. The module names
+   `env.pacific_fill_random` in its import list, so a page that does not supply
+   it cannot instantiate at all — a missing CSPRNG is a load error rather than a
+   weak key found later. `crypto.getRandomValues` is the browser's, already
+   audited; the module never carries its own. */
+function wasmImports(getMemory) {
+  return { env: { pacific_fill_random: function (ptr, len) {
+    crypto.getRandomValues(new Uint8Array(getMemory().buffer, ptr, len));
+  } } };
+}
+var out = [];
+function L(s){ out.push(s); document.getElementById('o').innerHTML = out.join('\n'); }
+function ok(c,s){ L((c?'<span class="ok">  ok  </span>':'<span class="no">  FAIL</span>')+' '+s); if(!c) window.__fail=1; }
+function head(s){ L('<span class="h">'+s+'</span>'); }
+function note(s){ L('<span class="w">  note</span> '+s); }
+
+/* ── the payload ──────────────────────────────────────────────────────────
+   A SCHEME, NOT A BARE KEY. The offer itself is 64 hex characters, and a QR
+   holding only that is indistinguishable from any other hex a camera might
+   find — a wrong code would be fed to `pair.accept` as if it were an offer.
+   The prefix is what lets a scan be REFUSED with a reason.
+
+   Uppercase because QR's alphanumeric mode covers 0-9 A-Z and `:` but not
+   lowercase, and hex is case-insensitive: 79 alphanumeric characters is a
+   version-4 code, where the same payload in byte mode would need version 5.
+   The version number in the middle is there so a future format can be told
+   from this one rather than mis-parsed as it. */
+var PAIR_PREFIX = 'PACIFIC:PAIR:1:';
+
+/* The smallest world a delta can be authored against. Deliberately not a real
+   seed: this page is about the CHANNEL, and a big world would make the assert
+   about what folded harder to read, not easier. */
+var SEED = { site:'t', me:'ada', sites:{t:{name:'T',kind:'Community',disc:'chat'}},
+  people:{ada:{n:'ada',home:'t',role:'Steward',joined:'x',on:1}},
+  threads:[], events:[], rsvp:{},
+  convs:[{id:'c1', with:'grace', unread:0, msgs:[]}], links:[], pending:[],
+  wallet:null, listings:[], posts:[] };
+
+function offerToPayload(hex){ return PAIR_PREFIX + hex.toUpperCase(); }
+function payloadToOffer(s){
+  if (s.indexOf(PAIR_PREFIX) !== 0) throw new Error('not a Pacific pairing code: ' + s.slice(0, 24));
+  var hex = s.slice(PAIR_PREFIX.length);
+  if (!/^[0-9A-F]{64}$/.test(hex)) throw new Error('offer is not 32 bytes of hex');
+  return hex.toLowerCase();          /* the keyholder's `unhex` wants lowercase */
+}
+
+/* ── the keyholder client ─────────────────────────────────────────────────
+   The same handshake pacific.js performs, by hand — a frame, a MessagePort
+   taken once, typed requests over it. */
+function connect(origin, site){
+  return new Promise(function(res, rej){
+    var f = document.createElement('iframe');
+    f.src = origin + '/index.html';
+    f.onload = function(){
+      var ch = new MessageChannel(), n = 0, waiting = {}, pushes = [];
+      ch.port1.onmessage = function(e){
+        var d = e.data || {};
+        if (d.t === 'pacific.ready') return res({
+          pk: d.pk,
+          call: function(m,a){ return new Promise(function(rs,rj){
+            var id = ++n; waiting[id] = [rs,rj]; ch.port1.postMessage({id:id,m:m,a:a||{}}); }); },
+          onPush: function(fn){ pushes.push(fn); }
+        });
+        if (d.t === 'pacific.denied') return rej(new Error(d.why));
+        if (d.t === 'pacific.push') return pushes.forEach(function(fn){ fn(d.v); });
+        if (d.id && waiting[d.id]) { var w = waiting[d.id]; delete waiting[d.id];
+          d.ok ? w[0](d.v) : w[1](new Error(d.e)); }
+      };
+      f.contentWindow.postMessage({t:'pacific.init', site: site}, origin, [ch.port2]);
+    };
+    document.body.appendChild(f);
+  });
+}
+
+/* ── the core, as wasm ────────────────────────────────────────────────────
+   SAS words come from `pacific-core`, compiled. A browser that derived those
+   three words by its own route and drifted would not fail loudly — it would
+   tell two people they match when they do not, which is the one place in this
+   whole flow where a reimplementation is a vulnerability rather than a
+   duplication. So the words on screen are the core's or there are none. */
+function loadCore(){
+  return fetch('core_wasm.wasm').then(function(r){
+    if (!r.ok) throw new Error('core_wasm.wasm ' + r.status);
+    return r.arrayBuffer();
+  }).then(function(b){
+    var inst = null;
+    return WebAssembly.instantiate(b, wasmImports(function(){ return inst.exports.memory; }))
+      .then(function(w){ inst = w.instance; return w; });
+  }).then(function(w){
+    var e = w.instance.exports;
+    return {
+      sas: function(pkHex){
+        var bytes = new Uint8Array(32);
+        for (var i = 0; i < 32; i++) bytes[i] = parseInt(pkHex.substr(i*2, 2), 16);
+        var ptr = e.alloc(32);
+        new Uint8Array(e.memory.buffer, ptr, 32).set(bytes);
+        var n = e.sas_words(32);
+        var view = new Uint8Array(e.memory.buffer, e.out_ptr(), n);
+        var s = new TextDecoder().decode(view);
+        if (e.erred()) throw new Error(s);
+        return s;
+      }
+    };
+  });
+}
+
+function hexOf(u8){ return Array.prototype.map.call(u8, function(b){
+  return ('0'+b.toString(16)).slice(-2); }).join(''); }
+
+(async function(){
+  try {
+    head('── the encoder, before it is trusted with a key ──────────────────');
+    var probe = offerToPayload('ab'.repeat(32));
+    var pq = QR.encode(probe);
+    ok(pq.mode === 'alnum', 'the payload earns alphanumeric mode — v' + pq.version +
+       ', ' + pq.n + '×' + pq.n + ' (byte mode would be v' + QR.fit(probe, 'byte') + ')');
+    ok(QR.decode(pq.m, pq.n) === probe, 'a matrix round-trips through this file');
+    try { payloadToOffer('WIFI:S:cafe;T:WPA;;'); ok(false, 'a foreign code should be refused'); }
+    catch (e) { ok(true, 'a foreign code is refused with a reason — ' + e.message); }
+
+    head('── two devices ──────────────────────────────────────────────────');
+    var core = await loadCore();
+    var A = await connect('http://localhost:8103', 'cambridge-dd');
+    var B = await connect('http://localhost:8104', 'cambridge-dd');
+    /* A world both sides fold from the same genesis — a delta is only accepted
+       against a world the fold already has. */
+    await A.call('store.load', {seed: SEED});
+    await B.call('store.load', {seed: SEED});
+    ok(A.pk !== B.pk, 'two origins, two device keys — ' + A.pk.slice(0,12) + '… / ' + B.pk.slice(0,12) + '…');
+
+    /* The SAS each device would read aloud for the OTHER's key. Same three
+       words on both screens or the two people stop. */
+    var sasA = core.sas(A.pk), sasB = core.sas(B.pk);
+    L('       A reads out for B: <span class="sas">' + sasB + '</span>');
+    L('       B reads out for A: <span class="sas">' + sasA + '</span>');
+    ok(sasA !== sasB, 'the two keys give different words (they are different devices)');
+    ok(core.sas(A.pk) === sasA, 'the words are a function of the key, not of the call');
+
+    head('── the link, over pixels only ───────────────────────────────────');
+    var offerA = (await A.call('pair.offer')).offer;
+    var offerB = (await B.call('pair.offer')).offer;
+
+    var qA = QR.encode(offerToPayload(offerA));
+    var qB = QR.encode(offerToPayload(offerB));
+    var geoA = QR.draw(document.getElementById('qa'), qA, 5);
+    var geoB = QR.draw(document.getElementById('qb'), qB, 5);
+    ok(true, 'A drew its offer as a v' + qA.version + ' code, B as v' + qB.version);
+
+    /* THE LOOP. Each side reads the OTHER's code back off the canvas — pixels
+       in, payload out — and never sees the string the other computed. If the
+       encoder dropped a character the offers would differ here, and the tags
+       would differ two steps later. */
+    var readByB = QR.read(document.getElementById('qa'), geoA);
+    var readByA = QR.read(document.getElementById('qb'), geoB);
+    ok(payloadToOffer(readByB) === offerA, 'B read A\'s offer off the canvas, byte for byte');
+    ok(payloadToOffer(readByA) === offerB, 'A read B\'s offer off the canvas, byte for byte');
+
+    var a = await A.call('pair.accept', {offer: payloadToOffer(readByA)});
+    var b = await B.call('pair.accept', {offer: payloadToOffer(readByB)});
+    ok(a.tag === b.tag, 'both derived the same tag from what they SCANNED — ' + a.tag.slice(0,16) + '…');
+    ok(a.tag.length === 64, 'the tag is 32 bytes, and was never transmitted');
+
+    head('── the transport ────────────────────────────────────────────────');
+    var sa = await A.call('sync.start', {relay:'ws://localhost:8787'});
+    var sb = await B.call('sync.start', {relay:'ws://localhost:8787'});
+    ok(sa.tag === sb.tag, 'both subscribed to that tag on semaphore');
+
+    var landed = null, waited = new Promise(function(res){
+      B.onPush(function(w){ landed = w; res(w); });
+      setTimeout(function(){ res(null); }, 6000);
+    });
+
+    var mark = 'qr-linked-' + Date.now().toString(36);
+    await A.call('store.commit', {op:{t:'say', conv:'c1', s:mark}});
+
+    var got = await waited;
+    if (!got) {
+      ok(false, 'nothing reached B within 6s — is semaphore up on :8787?');
+    } else {
+      var msgs = ((got.convs || [])[0] || {}).msgs || [];
+      ok(msgs.some(function(m){ return m.s === mark; }),
+         'a delta authored on A folded into B\'s world — \u201c' + mark + '\u201d');
+      /* AUTHORSHIP, not just arrival. A delta that folded under B's own key
+         would look identical on screen and be a different fact entirely. */
+      var db = await B.call('store.deltas');
+      ok(db.some(function(d){ return d.a === A.pk; }),
+         "and it sits in B's log under A's authorship, not B's");
+    }
+
+    head('── what this did not prove ──────────────────────────────────────');
+    note('The optics. B read a CANVAS, not a camera: no lens, no angle, no glare.');
+    note('That half is proven separately and independently — tools/qr-verify.swift');
+    note('decodes the same encoder\'s output with Apple\'s CIDetector, the detector');
+    note('an iPhone camera uses and the one ContactExport.swift generates against.');
+    if (typeof BarcodeDetector === 'undefined') {
+      note('BarcodeDetector is absent in this browser (Safari has none), so there is');
+      note('no in-page camera path to offer here either.');
+    }
+
+    L('');
+    L(window.__fail ? '<span class="no">FAILED</span>' : '<span class="ok">all green</span>');
+  } catch (e) {
+    ok(false, e.message);
+    L('');
+    L('<span class="h">A: python3 -m http.server 8103 in app/web/keyholder (and 8104)</span>');
+    L('<span class="h">relay: RELAY_BIND=127.0.0.1:8787 arc/target/release/semaphore</span>');
+  }
+})();
+</script>
+</body>
+</html>

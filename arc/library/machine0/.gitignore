@@ -1,0 +1,4 @@
+# fleet.json names live, billable machine0 infrastructure (static IPs). Never commit it.
+fleet.json
+*.pem
+__pycache__/

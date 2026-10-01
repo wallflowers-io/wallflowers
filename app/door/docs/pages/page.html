@@ -1,0 +1,7 @@
+<h1>The page and its pictures</h1>
+<table><thead><tr><th>To</th><th>Op</th><th>Args</th><th>Who</th></tr></thead><tbody>
+<tr><td>Set the page's look and layout</td><td><code>group.editFace</code> on the community</td><td><code>face</code>: the page document as a JSON string, at most 16,384 bytes. Pictures don't go inside it.</td><td>owner, admins</td></tr>
+<tr><td>Set a picture</td><td><code>host.editMedia</code> on the page</td><td><code>slot</code>: mark · cover · logo · wallpaper; <code>media</code>: base64, at most 156,000 characters; <code>mediaMime</code>: image/png · image/jpeg · image/webp</td><td>owner, admins on the page</td></tr>
+</tbody></table>
+<p>An empty value clears. The easiest way to design a page is WallFlowers' own editor, in the app's community settings.</p>
+<p>Read the published page and its pictures without a session from the <a href="public.html">public page</a> routes.</p>

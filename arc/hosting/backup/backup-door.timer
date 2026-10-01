@@ -1,0 +1,11 @@
+# backup-door.timer — every 15 minutes, five minutes after the arc tick: a seal manifest restores with the newest arc manifest before it (K-48).
+[Unit]
+Description=Encrypted off-box backup (door), every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:05,20,35,50:00
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

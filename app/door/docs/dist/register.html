@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Register your app · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html" aria-current="page">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>Register your app</h1>
+<p class="lede">Before a member can sign in on your site, WallFlowers registers it: which community it shows, where its pages are, and where sign-in returns to.</p>
+<h2 id="local">On your machine: nothing to register</h2>
+<p>For local development, every team uses one shared client, <code>hackathon-local</code>. Serve your page on <code>http://localhost:&lt;port&gt;</code> or <code>http://127.0.0.1:&lt;port&gt;</code>, and use one of these as your callback, character for character:</p>
+<ul><li><code>http://localhost:&lt;port&gt;/callback</code>, for port 3000–3009</li><li><code>http://localhost:&lt;port&gt;/</code>, for port 3000–3009, 5173–5175, 8000, 8080</li></ul><p>The same on <code>127.0.0.1</code>. They are different origins: a member signed in on one is not signed in on the other.</p>
+<p>When a member signs in, WallFlowers asks which of their communities your page may use: the ones they own or administer. The session reaches that community and nothing else. Someone who owns or administers none is told so ("you are the owner or an admin of no Site"), and must make one first at <a href="https://wallflowers.io/signup">wallflowers.io/signup</a>. Already have a WallFlowers account? Press <strong>Create my account</strong>, then, on the next page, choose <strong>Sign in with a passkey</strong>, so the community is made for the account you already have. Make a test community for the hackathon and choose that one, not a community with real members: your page acts there with your full standing.</p>
+<p>This client works only on your own machine. To put your site on the web, register it as below.</p>
+<h2>1. Make your community</h2>
+<p>Sign up at <a href="https://wallflowers.io/signup">wallflowers.io/signup</a>: choose what it is, its name and its address, then, if you are building an app, <strong>Your app</strong> (its local port, callback path and deployed URL; or <em>Skip</em>), then your account. Already have a WallFlowers account? Press <strong>Create my account</strong>, then, on the next page, choose <strong>Sign in with a passkey</strong>, so the community is made for the account you already have. You land in WallFlowers' app, the community's owner. If you filled in <strong>Your app</strong>, signup shows its Site id afterwards, with <strong>Copy</strong>, and the request for a deployed URL. Without it: To find its id: while signed in, open <a href="https://app.wallflowers.io/v2/graph" target="_blank" rel="noopener">https://app.wallflowers.io/v2/graph</a> in a new tab; find the object with <code>"kind": "group"</code> and your community's name; its id is the <code>id</code> beside it. (Its public page, <code>"kind": "host"</code>, has the same name: not that one.) If it answers <code>not signed in</code>, sign in to WallFlowers in that browser and reload the tab. Once a member signs in on your site, the same id is <code>session.site</code>.</p>
+<h2>2. Send your registration</h2>
+<table><thead><tr><th>Field</th><th>Example</th><th></th></tr></thead><tbody>
+<tr><td>community</td><td><code>71c1…6a6c</code></td><td>The community your site shows (its id).</td></tr>
+<tr><td>callbacks</td><td><code>http://localhost:5173/</code></td><td>The page a member returns to after signing in; one or more. <strong>Matched exactly</strong>: scheme, host, port, path and trailing slash.</td></tr>
+<tr><td>origins</td><td><code>http://localhost:5173</code></td><td>Where your pages are served from. List every one: production, a preview, each local port. <code>localhost</code> and <code>127.0.0.1</code> are different origins.</td></tr>
+<tr><td>home <em>(optional)</em></td><td><code>https://your.site/community</code></td><td>Only if your community hands out join QR codes (a kiosk): where WallFlowers sends a scanned one, as <code>#join=…</code> (<a href="routes.html#post-v2-join">POST /v2/join</a>). On one of your origins.</td></tr>
+</tbody></table>
+<p>Send these to the hackathon's organisers.</p>
+<p>WallFlowers gives you back your <strong>client id</strong>. A session from your site reaches that community and nothing else.</p>
+<h2 id="teams">Teams: adding a teammate</h2>
+<p>A community has one owner. To build together, the owner adds each teammate to it:</p>
+<ol>
+<li>The teammate makes a WallFlowers account at <code>https://app.wallflowers.io</code> (Create an account), then opens <em>Your card</em> (the profile menu, or <code>https://app.wallflowers.io/#you</code>) and, under <em>Your contact code</em>, presses <strong>Copy a new code</strong>. They send the code to the owner.</li>
+<li>The owner opens the community in WallFlowers, then its settings (the round badge beside its name), <strong>Add by contact code</strong>, pastes it into <em>Contact code</em>, and presses <strong>Add</strong>. The teammate joins the community and up to five of its rooms, in the community's order; for each room past five, the owner's app says "<em>room</em>: needs another code".</li>
+<li>The teammate signs in on your site: they now reach the same community. On your own machine, with <code>hackathon-local</code>, the sign-in offers only communities the person owns or administers: the owner first makes the teammate an admin (their card in WallFlowers, <strong>Make admin</strong>).</li>
+</ol>
+<p>A code works once, for 30 minutes: "Used already" or "the contact code has expired" means ask for a new one.</p>
+<div class="note warn"><p>A wrong callback is refused with a <code>400</code> that begins <code>"&lt;callback&gt;" is not a callback client "&lt;client&gt;" registered</code>, and an unknown client id with one that begins <code>no client "&lt;client&gt;" is registered</code>. A registration counts within seconds of WallFlowers adding it: the Door reads its list of sites again every 2 s, with no restart, so no one is signed out. It does not change the sign-in script or its hash.</p></div>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

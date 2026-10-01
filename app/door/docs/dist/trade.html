@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The listings board · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html" aria-current="page">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>The listings board</h1>
+<p class="lede">A community's Trade board. A member lists something of theirs, every member reads the board, and the owner or an admin can take a listing down. In this release it is the board only: no deal can be opened yet, so buying and selling happen between the people, off the board.</p>
+<h2>The thing</h2>
+<p>A listing points at a <code>thing</code> the member owns. Your site mints one in a <a href="routes.html#post-v2-batch">batch</a>, and then it is in your session's reach:</p>
+<pre><code>{ "steps": [
+  { "do": "mint", "kind": "thing", "draft": { "name": "A bike" } },
+  { "do": "apply", "object": { "$step": 0 }, "op": "thing.setPosture",
+    "args": { "posture": "selling", "price": "£40", "reach": "network" } } ] }</code></pre>
+<p><code>posture</code> is one of has · wants · offers · buying · selling, and a <code>price</code> only goes with buying or selling. <code>reach</code> is network or private.</p>
+<table><thead><tr><th>To</th><th>Op, on the thing</th><th>Args</th><th>Who</th></tr></thead><tbody>
+<tr><td>Describe it</td><td><code>thing.setProfile</code></td><td><code>name</code>; <code>condition</code>: new · like_new · very_good · good · fair · for_parts; <code>description</code> (up to 5000 characters, several lines); <code>descriptor</code> (one line)</td><td>its owner</td></tr>
+<tr><td>Add a photo</td><td><code>thing.addPhoto</code></td><td><code>id</code> (16 hex, chosen by you), <code>photo</code> (base64, at most 150,000 characters) and <code>photoMime</code> (an image type), <code>at</code> (ms, the photos' order)</td><td>its owner; at most 20</td></tr>
+<tr><td>Remove a photo</td><td><code>thing.removePhoto</code></td><td><code>id</code>. A removed id stays removed.</td><td>its owner</td></tr>
+<tr><td>Reserve it · mark it sold</td><td><code>thing.setDisposition</code></td><td><code>state</code>: available · reserved · sold; with reserved, <code>for</code> (the member's key) and <code>until</code> (ms); <code>at</code> (ms)</td><td>its owner</td></tr>
+</tbody></table>
+<p>The thing is the lister's own, and they alone read its view: <code>condition</code>, <code>description</code>, <code>photos</code> (by <code>at</code>) and <code>disposition</code>, where a reservation past its <code>until</code> reads <code>available</code>. Other members don't see those: they see the listing on the board.</p>
+<h2>The board</h2>
+<table><thead><tr><th>To</th><th>Op, on the community</th><th>Args</th><th>Who</th></tr></thead><tbody>
+<tr><td>List it</td><td><code>group.publishListing</code></td><td><code>thingId</code>, <code>posture</code>, <code>title</code> (not empty), <code>reach</code>, <code>rev</code> (your revision, not negative); <code>descriptor</code>, <code>price</code>, <code>area</code>, <code>deadline</code> (ms), <code>photo</code> (base64) and <code>photoMime</code>: the row's picture, small</td><td>its members</td></tr>
+<tr><td>Change it</td><td><code>group.publishListing</code></td><td>the whole listing again: the latest stands</td><td>the lister</td></tr>
+<tr><td>Take yours down</td><td><code>group.publishListing</code></td><td>the listing again, with <code>withdrawn</code>: 1</td><td>the lister</td></tr>
+<tr><td>Take anyone's down</td><td><code>group.removeListing</code></td><td><code>author</code>, <code>thingId</code>. It stays down: listing it again is refused.</td><td>owner, admin</td></tr>
+</tbody></table>
+<p>A listing is a snapshot, and it is all other members see of the thing: its title, descriptor, price, posture, area, deadline and one photo, as the lister last listed it. Change the thing, then list it again. Read the board from the community's view in <a href="views.html"><code>GET /v2/graph</code></a>:</p>
+<pre><code>const { objects } = await (await session.fetch('/v2/graph')).json();
+const community = objects.find((o) =&gt; o.id === session.site);
+for (const l of community.view.listings ?? []) drawListing(l);
+// author, thingId, posture, title, reach, rev, site, gen;
+// when given: descriptor, price, area, deadline, photo, photoMime</code></pre>
+<p>Only live listings are there: not withdrawn, not taken down. Show <em>Take down</em> only to the owner and admins, as with <a href="members.html">roles</a>.</p>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

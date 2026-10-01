@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rooms and threads · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html" aria-current="page">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>Rooms and threads</h1>
+<table><thead><tr><th>To</th><th>Op, on the room</th><th>Args</th><th>Who</th></tr></thead><tbody>
+<tr><td>Post</td><td><code>forum.post</code></td><td><code>text</code>; <code>ts</code> (ms)</td><td>its members</td></tr>
+<tr><td>Reply</td><td><code>forum.post</code></td><td><code>text</code>, <code>ts</code>, <code>reply_author</code>, <code>reply_gen</code> (the parent's author and gen)</td><td>its members</td></tr>
+<tr><td>React · take it back</td><td><code>forum.react</code></td><td><code>target_author</code>, <code>target_gen</code>, <code>emoji</code>, <code>active</code>: 1 set, 0 take back</td><td>its members</td></tr>
+<tr><td>Vote</td><td><code>forum.vote</code></td><td><code>target_author</code>, <code>target_gen</code>, <code>dir</code>: 1 · -1 · 0 clears</td><td>its members</td></tr>
+<tr><td>Take back a message</td><td><code>forum.retract</code></td><td><code>target_author</code>, <code>target_gen</code></td><td>its author; the owner any</td></tr>
+</tbody></table>
+<pre><code>await session.fetch('/v2/apply', { method: 'POST', body: JSON.stringify({
+  object: roomId, op: 'forum.post',
+  args: { text: 'Welcome!', ts: Date.now(), reply_author: parent.author, reply_gen: parent.gen } }) });</code></pre>
+<h2>Open a room</h2>
+<p>The owner, in one <a href="routes.html#post-v2-batch">batch</a>: mint a <code>forum</code> with its name, <code>base.setPart</code> on the community, <code>base.setParent</code> on the room. A new room has only its owner in it; members are added in WallFlowers.</p>
+<h2 id="threads">Threads</h2>
+<p>Draw a room as threads, each reply under what it answers, the order WallFlowers' own apps use:</p>
+<ol>
+<li>A message's parent is its <code>reply_to</code>, but only if that names another message in the room. Otherwise it's top-level.</li>
+<li>Sort siblings by <code>ts</code> (the author's clock, in ms), then <code>author</code>, then <code>gen</code>. <code>gen</code> counts each author's own messages, so it is not a clock across people.</li>
+<li>Walk the tree depth-first, recording each message's depth. Anything left unvisited (a reply cycle) becomes top-level, in the same order.</li>
+</ol>
+<p>Every message appears exactly once. For a flat list, sort by <code>ts</code>.</p>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Community starter</title>
+  <link rel="icon" href="data:,">
+  <!-- Keep third-party scripts off this page: anything running here can use the session. -->
+  <style>
+    :root { --bg: #fbfaf7; --fg: #1d1c19; --muted: #6b675f; --line: #e3dfd6; --accent: #2f5d50; --on-accent: #fff; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #151513; --fg: #ecebe6; --muted: #a29e94; --line: #2f2e2a; --accent: #8fc7b4; --on-accent: #10201b; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 42rem; margin: 0 auto; padding: 24px 16px 48px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 1.4rem; margin: 0; }
+    h2 { font-size: 1.1rem; margin: 24px 0 8px; }
+    button { font: inherit; border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+    button.lead, button[type="submit"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    button[aria-pressed="true"] { border-color: var(--accent); font-weight: 600; }
+    #status { color: var(--muted); }
+    #who { color: var(--muted); margin: 4px 0 0; }
+    ul, ol { list-style: none; padding: 0; margin: 0; }
+    #rooms { display: flex; flex-wrap: wrap; gap: 8px; }
+    #messages li { padding: 8px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+    #messages b { margin-right: 6px; }
+    form { display: flex; gap: 8px; margin-top: 12px; }
+    input { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1 id="community">Community</h1>
+      <div>
+        <button id="signin" class="lead" type="button" hidden>Sign in with WallFlowers</button>
+        <button id="signout" type="button" hidden>Sign out</button>
+      </div>
+    </header>
+    <p id="status" role="status" hidden></p>
+
+    <div id="app" hidden>
+      <p id="who"></p>
+      <h2>Rooms</h2>
+      <ul id="rooms"></ul>
+
+      <section id="room" hidden>
+        <h2 id="room-name"></h2>
+        <ol id="messages"></ol>
+        <form id="post">
+          <input id="text" autocomplete="off" placeholder="Write a message" aria-label="Message" maxlength="2000">
+          <button id="send" type="submit">Post</button>
+        </form>
+      </section>
+    </div>
+  </main>
+  <script>
+    // Opened as a file (file://), the module below can't load: say so, rather than a blank page.
+    if (location.protocol === 'file:') {
+      var s = document.getElementById('status');
+      s.hidden = false;
+      s.textContent = 'This page has to be served, not opened as a file: see the Quickstart (serve the folder, then open http://localhost:5173/).';
+    }
+  </script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

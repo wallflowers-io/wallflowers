@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A client that holds up · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html" aria-current="page">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>A client that holds up</h1>
+<p class="lede">The habits of a page that stays right with many people in it.</p>
+<ol>
+<li><strong>One change stream per page</strong>, shared by everything on it: <code>session.events</code> once, and fan out.</li>
+<li><strong>Coalesce</strong>: re-read <code>/v2/graph</code> 300 ms after the last <code>changed</code>. A busy room changes several times a second.</li>
+<li><strong>A slow net</strong>: while a room is open and the tab visible, re-read every 15 s whatever the stream says. It covers a stream that died quietly.</li>
+<li><strong>After your own write</strong>, re-read at once, so the member sees their post.</li>
+<li><strong>A new account settles</strong>: it can read as "not a member" for a few seconds. Re-read every 2 s for up to 20 s before saying so.</li>
+<li><strong>A late joiner</strong> may see no rooms until the owner's app has admitted them. Re-read every 1.5 s for up to 15 s.</li>
+<li><strong>On a 401</strong>, show the Sign in button again. If you send them to sign in yourself, at most once per page view, never in a loop.</li>
+<li><strong>Show refusals</strong>: a <code>folds: false</code> object as unavailable, with its <code>why</code>; a refused write with WallFlowers' sentence.</li>
+<li><strong>Names</strong>: from <code>profiles</code>, else "New member". Never a key.</li>
+<li><strong>Load the sign-in script once</strong>, pinned. If it fails to load, let the next attempt try again.</li>
+<li><strong>Text only</strong>: draw members' words with <code>textContent</code>, never <code>innerHTML</code>, and make a member's link a link only if it starts with <code>http:</code> or <code>https:</code>.</li>
+</ol>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

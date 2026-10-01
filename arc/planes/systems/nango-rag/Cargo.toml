@@ -1,0 +1,16 @@
+[package]
+name = "nango-rag"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Turn a Nango connector into on-demand RAG context for the Core Loop Agent (the CLA).
+# NOT a sync: the agent calls a connector live with a query, and this crate renders the
+# hits into citable text the model reads as tool_result. Runs backend-side (on the Arc),
+# where the Nango secret lives; the device only ever calls the Arc's /systems endpoint.
+
+[dependencies]
+nango = { path = "../__nango" }
+gmail = { path = "../gmail" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

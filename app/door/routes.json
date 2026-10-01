@@ -1,0 +1,3628 @@
+[
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [],
+    "handler": "icd::current",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/icd",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [],
+    "handler": "icd::by_hash",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/icd/:hash",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "window",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "could not start a session: {e}"
+      },
+      {
+        "source": "door",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no leash for a session: {e}"
+      },
+      {
+        "source": "door",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session process did not start"
+      },
+      {
+        "source": "door",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session process did not start: {why}"
+      },
+      {
+        "source": "door",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": "the Door is at its session limit; try again shortly"
+      },
+      {
+        "source": "door",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": "too many sign-ins are open; try again shortly"
+      },
+      {
+        "source": "door",
+        "status": "TOO_MANY_REQUESTS",
+        "words": "too many sign-ins are open from here; finish one or wait"
+      }
+    ],
+    "handler": "sign_up",
+    "limits": {
+      "pow_bits": 20
+    },
+    "method": "POST",
+    "path": "/v2/signup",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "window",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": "an S256 code_challenge and a state are required"
+      },
+      {
+        "source": "door",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": "the account's process ended as this session opened; sign in again"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such attempt, or it has expired"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not a key"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "the challenge was not signed by the account's key"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "the session returned no signature"
+      }
+    ],
+    "handler": "sign_up_finish",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/signup/finish",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "window",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "the sign-up's session has ended; sign in to continue"
+      }
+    ],
+    "handler": "sign_up_continue",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/signup/continue",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "window",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "could not start a session: {e}"
+      },
+      {
+        "source": "door",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no leash for a session: {e}"
+      },
+      {
+        "source": "door",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session process did not start"
+      },
+      {
+        "source": "door",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session process did not start: {why}"
+      },
+      {
+        "source": "door",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": "the Door is at its session limit; try again shortly"
+      },
+      {
+        "source": "door",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": "too many sign-ins are open; try again shortly"
+      },
+      {
+        "source": "door",
+        "status": "TOO_MANY_REQUESTS",
+        "words": "too many sign-ins are open from here; finish one or wait"
+      }
+    ],
+    "handler": "sign_in",
+    "limits": {
+      "pow_bits": 20
+    },
+    "method": "POST",
+    "path": "/v2/signin",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "window",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": "for is signup or signin"
+      }
+    ],
+    "handler": "work",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/work",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "window",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": "an S256 code_challenge and a state are required"
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": "the handle is not base64url"
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": "the handle's host is not UTF-8"
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": "this passkey carries no host in its handle"
+      },
+      {
+        "source": "door",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": "the account's process ended as this session opened; sign in again"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such attempt, or it has expired"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not a key"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "the challenge was not signed by the account's key"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "the session returned no signature"
+      }
+    ],
+    "handler": "sign_in_finish",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/signin/finish",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      }
+    ],
+    "handler": "sign_out",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/signout",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "site",
+    "auth": "dpop",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "you are neither the owner nor an admin of that Site"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "the code's session has ended; sign in again"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "the sign-in's session has ended; sign in again"
+      }
+    ],
+    "handler": "token_exchange",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/token",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [],
+    "handler": "element_js",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/signin.js",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [],
+    "handler": "resources_js",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/resources.js",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "GET",
+    "path": "/v2/me",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "GET",
+    "path": "/v2/kinds",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "GET",
+    "path": "/v2/graph",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "name the Site: GET /v2/members/<site id>"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "session",
+        "status": "NOT_FOUND",
+        "words": null
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "GET",
+    "path": "/v2/members",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "session",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "NOT_FOUND",
+        "words": "no such Site in reach"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "GET",
+    "path": "/v2/members/:site",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "unknown object kind '{kind}'"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "GET",
+    "path": "/v2/draft/:kind",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the object was minted, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "unknown object kind '{kind}'"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "POST",
+    "path": "/v2/mint",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a {kind} has no op '{op}'"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "arg '{k}': {other} is neither text nor int"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the write was made, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{object} is outside this site's scope"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{t} (its {k}) is outside this site's scope"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "POST",
+    "path": "/v2/apply",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "webapp",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a site's token adds no one"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "an add names a bundle or a member, one of the two"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the member was added, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{m} is not a member id"
+      },
+      {
+        "source": "session",
+        "status": "GONE",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "POST",
+    "path": "/v2/add",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "webapp",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a site's token sends no history"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "POST",
+    "path": "/v2/history",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a batch is 1 to {BATCH_MAX} steps, not {}"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: \"do\" is \"mint\" or \"apply\""
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: arg '{k}': {other} is neither text nor int"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: its object is an id or {{\"$step\": n}}"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: no op"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: {e}"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: {what} names step {n}, which is not an earlier mint"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{} step(s) were made, but this Door could not keep them ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "session",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "a {kind} has no op '{op}'"
+      },
+      {
+        "source": "session",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "unknown object kind '{kind}'"
+      },
+      {
+        "source": "session",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "{object} is outside this site's scope"
+      },
+      {
+        "source": "session",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "{t} (its {k}) is outside this site's scope"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576,
+      "steps_max": 16
+    },
+    "method": "POST",
+    "path": "/v2/batch",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{host} is not a Host"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{host} is outside this site's scope"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "POST",
+    "path": "/v2/site/address",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "webapp",
+    "auth": "cookie",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": "the Arc answered {}"
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a Site's item list is the webapp's"
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "not a member of that Site"
+      },
+      {
+        "source": "door",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "NOT_FOUND",
+        "words": "that Site has no published Face"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      }
+    ],
+    "handler": "site_items",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/site/:site/items",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      }
+    ],
+    "handler": "fwd_stream",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/events",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": "not a claim"
+      },
+      {
+        "source": "door",
+        "status": "CONFLICT",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a claim for another Site"
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "NOT_FOUND",
+        "words": "no join is waiting"
+      },
+      {
+        "source": "door",
+        "status": "NOT_FOUND",
+        "words": "no join is waiting, or it has expired"
+      },
+      {
+        "source": "door",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": "the Arc answered {s}; try again"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      }
+    ],
+    "handler": "join_finish",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/join",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "webapp",
+    "auth": "cookie",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a contact code is the webapp's"
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      }
+    ],
+    "handler": "contact_code",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/bundle",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "window",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": "not a claim"
+      }
+    ],
+    "handler": "join",
+    "limits": {},
+    "method": "GET",
+    "path": "/join",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "window",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "NOT_FOUND",
+        "words": null
+      }
+    ],
+    "handler": "signin",
+    "limits": {},
+    "method": "GET",
+    "path": "/signin",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "window",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": "no Site is waiting to be chosen; sign in again"
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "you are the owner or an admin of no Site"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "the sign-in's session has ended; sign in again"
+      }
+    ],
+    "handler": "site_step",
+    "limits": {},
+    "method": "GET",
+    "path": "/signin/site",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "window",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "BAD_REQUEST",
+        "words": "no Site is waiting to be chosen; sign in again"
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "you are neither the owner nor an admin of that Site"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "the sign-in's session has ended; sign in again"
+      }
+    ],
+    "handler": "site_chosen",
+    "limits": {},
+    "method": "POST",
+    "path": "/signin/site",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [],
+    "handler": "seal_js",
+    "limits": {},
+    "method": "GET",
+    "path": "/door/seal.js",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [],
+    "handler": "signin_js",
+    "limits": {},
+    "method": "GET",
+    "path": "/door/signin.js",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [],
+    "handler": "pow_worker_js",
+    "limits": {},
+    "method": "GET",
+    "path": "/door/pow-worker.js",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [],
+    "handler": "return_path_js",
+    "limits": {},
+    "method": "GET",
+    "path": "/door/return-path.js",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [],
+    "handler": "perf_js",
+    "limits": {},
+    "method": "GET",
+    "path": "/door/perf.js",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [],
+    "handler": "signin_css",
+    "limits": {},
+    "method": "GET",
+    "path": "/door/signin.css",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [],
+    "handler": "wordmark",
+    "limits": {},
+    "method": "GET",
+    "path": "/door/wordmark.svg",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [],
+    "handler": "wallflowers_png",
+    "limits": {},
+    "method": "GET",
+    "path": "/door/wallflowers.png",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "NOT_FOUND",
+        "words": null
+      }
+    ],
+    "handler": "face_css",
+    "limits": {},
+    "method": "GET",
+    "path": "/door/face.css",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "NOT_FOUND",
+        "words": null
+      }
+    ],
+    "handler": "face_mark",
+    "limits": {},
+    "method": "GET",
+    "path": "/door/face-mark",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "webapp",
+    "auth": "none",
+    "errors": [],
+    "handler": "page",
+    "limits": {},
+    "method": "GET",
+    "path": "/",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "webapp",
+    "auth": "none",
+    "errors": [],
+    "handler": "page",
+    "limits": {},
+    "method": "GET",
+    "path": "/index.html",
+    "router": "door",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "key",
+    "limits": {},
+    "method": "GET",
+    "path": "/i/key",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "prove",
+    "limits": {},
+    "method": "POST",
+    "path": "/i/prove",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "session",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": null
+      }
+    ],
+    "handler": "open",
+    "limits": {},
+    "method": "POST",
+    "path": "/i/open",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "forget",
+    "limits": {},
+    "method": "POST",
+    "path": "/i/forget",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "sign_up",
+    "limits": {},
+    "method": "POST",
+    "path": "/i/signup",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "session",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": null
+      }
+    ],
+    "handler": "sign_up_finish",
+    "limits": {},
+    "method": "POST",
+    "path": "/i/signup/finish",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "sign",
+    "limits": {},
+    "method": "POST",
+    "path": "/i/sign",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "end",
+    "limits": {},
+    "method": "POST",
+    "path": "/i/end",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "bundle",
+    "limits": {},
+    "method": "POST",
+    "path": "/i/bundle",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "code",
+    "limits": {},
+    "method": "POST",
+    "path": "/i/code",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "me",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/me",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "kinds",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/kinds",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "unknown object kind '{kind}'"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "draft_for",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/draft/:kind",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "graph",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/graph",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "name the Site: GET /v2/members/<site id>"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "session",
+        "status": "NOT_FOUND",
+        "words": null
+      }
+    ],
+    "handler": "members",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/members",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "session",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "NOT_FOUND",
+        "words": "no such Site in reach"
+      }
+    ],
+    "handler": "members_named",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/members/:site",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the object was minted, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "unknown object kind '{kind}'"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "mint",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/mint",
+    "router": "session",
+    "writes": true
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a {kind} has no op '{op}'"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "arg '{k}': {other} is neither text nor int"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the write was made, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{object} is outside this site's scope"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{t} (its {k}) is outside this site's scope"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "apply",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/apply",
+    "router": "session",
+    "writes": true
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a site's token adds no one"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "an add names a bundle or a member, one of the two"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the member was added, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{m} is not a member id"
+      },
+      {
+        "source": "session",
+        "status": "GONE",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "add",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/add",
+    "router": "session",
+    "writes": true
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a site's token sends no history"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "history",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/history",
+    "router": "session",
+    "writes": true
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a batch is 1 to {BATCH_MAX} steps, not {}"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: \"do\" is \"mint\" or \"apply\""
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: arg '{k}': {other} is neither text nor int"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: its object is an id or {{\"$step\": n}}"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: no op"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: {e}"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "step {i}: {what} names step {n}, which is not an earlier mint"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{} step(s) were made, but this Door could not keep them ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "session",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "a {kind} has no op '{op}'"
+      },
+      {
+        "source": "session",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "unknown object kind '{kind}'"
+      },
+      {
+        "source": "session",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "{object} is outside this site's scope"
+      },
+      {
+        "source": "session",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "{t} (its {k}) is outside this site's scope"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "UNPROCESSABLE_ENTITY",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "batch",
+    "limits": {
+      "steps_max": 16
+    },
+    "method": "POST",
+    "path": "/v2/batch",
+    "router": "session",
+    "writes": true
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{host} is not a Host"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "{host} is outside this site's scope"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "address",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/site/address",
+    "router": "session",
+    "writes": true
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      }
+    ],
+    "handler": "site_of",
+    "limits": {},
+    "method": "GET",
+    "path": "/i/site/:site",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [],
+    "handler": "events",
+    "limits": {},
+    "method": "GET",
+    "path": "/v2/events",
+    "router": "session",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": "no such page"
+      }
+    ],
+    "handler": "face_page",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/face/:slug",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": "no such page"
+      }
+    ],
+    "handler": "face_items",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/face/:slug/items",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": "no such page"
+      }
+    ],
+    "handler": "face_escape",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/face/:slug/escape",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": "no such page"
+      }
+    ],
+    "handler": "face_door",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/face/:slug/door",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": "no such page"
+      }
+    ],
+    "handler": "face_brand",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/face/:slug/brand",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": "no such page"
+      }
+    ],
+    "handler": "face_media",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/face/:slug/m/:slot",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": "no such page"
+      }
+    ],
+    "handler": "face_post",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/face/:slug/post/:id",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "site",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": null
+      },
+      {
+        "source": "gateway",
+        "status": "NOT_FOUND",
+        "words": "no such page"
+      }
+    ],
+    "handler": "face_post_document",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/face/:slug/post/:id/document",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "arc",
+    "auth": "none",
+    "errors": [],
+    "handler": "health",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/health",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "arc",
+    "auth": "none",
+    "errors": [],
+    "handler": "arc_identity",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/arc",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "arc",
+    "auth": "none",
+    "errors": [],
+    "handler": "version",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/version",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "arc",
+    "auth": "none",
+    "errors": [],
+    "handler": "signup",
+    "limits": {},
+    "method": "POST",
+    "path": "/v1/signup",
+    "router": "gateway",
+    "writes": true
+  },
+  {
+    "audience": "arc",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "BAD_GATEWAY",
+        "words": "upstream_failed"
+      },
+      {
+        "source": "gateway",
+        "status": "BAD_REQUEST",
+        "words": "bad_request"
+      },
+      {
+        "source": "gateway",
+        "status": "NOT_IMPLEMENTED",
+        "words": "not_configured"
+      },
+      {
+        "source": "gateway",
+        "status": "TOO_MANY_REQUESTS",
+        "words": "rate_limited"
+      }
+    ],
+    "handler": "admit",
+    "limits": {},
+    "method": "POST",
+    "path": "/v1/admit",
+    "router": "gateway",
+    "writes": true
+  },
+  {
+    "audience": "arc",
+    "auth": "none",
+    "errors": [],
+    "handler": "bundle",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/bundle",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "arc",
+    "auth": "console",
+    "errors": [],
+    "handler": "console",
+    "limits": {},
+    "method": "ANY",
+    "path": "/console/*rest",
+    "router": "gateway",
+    "writes": true
+  },
+  {
+    "audience": "arc",
+    "auth": "console",
+    "errors": [],
+    "handler": "tether",
+    "limits": {},
+    "method": "POST",
+    "path": "/tether",
+    "router": "gateway",
+    "writes": true
+  },
+  {
+    "audience": "arc",
+    "auth": "console",
+    "errors": [],
+    "handler": "bundle",
+    "limits": {},
+    "method": "GET",
+    "path": "/bundle",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "arc",
+    "auth": "viewer",
+    "errors": [],
+    "handler": "arcs",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/arcs",
+    "router": "gateway",
+    "writes": false
+  },
+  {
+    "audience": "arc",
+    "auth": "member",
+    "errors": [],
+    "handler": "systems",
+    "limits": {},
+    "method": "ANY",
+    "path": "/v1/systems/*rest",
+    "router": "gateway",
+    "writes": true
+  },
+  {
+    "audience": "arc",
+    "auth": "member",
+    "errors": [],
+    "handler": "land",
+    "limits": {},
+    "method": "ANY",
+    "path": "/v1/land/*rest",
+    "router": "gateway",
+    "writes": true
+  },
+  {
+    "audience": "arc",
+    "auth": "none",
+    "errors": [],
+    "handler": "boxoffice",
+    "limits": {},
+    "method": "ANY",
+    "path": "/v1/box/*rest",
+    "router": "gateway",
+    "writes": true
+  },
+  {
+    "audience": "arc",
+    "auth": "none",
+    "errors": [],
+    "handler": "waker",
+    "limits": {},
+    "method": "ANY",
+    "path": "/v1/wake/*rest",
+    "router": "gateway",
+    "writes": true
+  },
+  {
+    "audience": "arc",
+    "auth": "admin",
+    "errors": [],
+    "handler": "console",
+    "limits": {},
+    "method": "ANY",
+    "path": "/v1/console/*rest",
+    "router": "gateway",
+    "writes": true
+  },
+  {
+    "audience": "arc",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "BAD_GATEWAY",
+        "words": "upstream_failed"
+      },
+      {
+        "source": "gateway",
+        "status": "BAD_REQUEST",
+        "words": "bad_request"
+      },
+      {
+        "source": "gateway",
+        "status": "NOT_IMPLEMENTED",
+        "words": "not_configured"
+      }
+    ],
+    "handler": "relay",
+    "limits": {},
+    "method": "GET",
+    "path": "/v1/relay",
+    "router": "gateway",
+    "writes": false
+  }
+]

@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The core, in the browser</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  body { font: 12.5px/1.75 ui-monospace, Menlo, monospace; padding: 22px; max-width: 960px;
+         background: #FBFAF8; color: #1A1A1C; }
+  h1 { font: 600 13px/1 ui-monospace, monospace; letter-spacing: .18em; text-transform: uppercase;
+       color: #8A8A93; margin: 0 0 8px; }
+  p.s { color: #55555C; margin: 0 0 22px; max-width: 66ch; }
+  pre { white-space: pre-wrap; word-break: break-all; margin: 0; }
+  .ok { color: #1F6F5C; } .no { color: #96322E; } .h { color: #8A8A93; }
+</style>
+</head>
+<body>
+<h1>The core, in the browser</h1>
+<p class="s">These are not values JavaScript computed. They come out of
+<code>pacific-core</code> compiled to wasm — the same canonical CBOR envelope,
+the same <code>sha256</code>, the same SAS wordlist the phone uses. The expected
+strings are pinned by a native Rust test (<code>core-wasm</code>,
+<code>vectors::fixture_is_stable</code>). If the envelope layout ever changes,
+both sides move together or one of them goes red.</p>
+<pre id="o">loading core_wasm.wasm…</pre>
+
+<script>
+/* THE HOST'S CSPRNG, as a declared import. The module names
+   `env.pacific_fill_random` in its import list, so a page that does not supply
+   it cannot instantiate at all — a missing CSPRNG is a load error rather than a
+   weak key found later. `crypto.getRandomValues` is the browser's, already
+   audited; the module never carries its own. */
+/* THE MODULE'S OWN IMPORT LIST, satisfied BY NAME — the same table
+   keyholder.js carries, for the same reason. The wasm-bindgen glue beside the
+   module is an ES module importing the bare specifier "env", which needs an
+   import map; this page is a classic script, so it reads the import list and
+   supplies each name itself. An import not in this table refuses to
+   instantiate, with the name — which is a build error found here rather than a
+   wrong key found later. */
+var HOST = {
+  /* The CSPRNG, as a declared import: a page that cannot supply one cannot
+     instantiate the module, which is the property worth having. */
+  pacific_fill_random: function (at) {
+    return function (ptr, len) {
+      crypto.getRandomValues(new Uint8Array(at().exports.memory.buffer, ptr, len));
+    };
+  },
+  /* wasm-bindgen's externref table seed, verbatim from the glue it emits. */
+  __wbindgen_init_externref_table: function (at) {
+    return function () {
+      var t = at().exports.__wbindgen_externrefs, off = t.grow(4);
+      t.set(0, undefined);
+      t.set(off + 0, undefined); t.set(off + 1, null);
+      t.set(off + 2, true); t.set(off + 3, false);
+    };
+  },
+  /* mls-rs-core's one inline snippet: the clock, for KeyPackage lifetimes. */
+  date_now: function () { return function () { return Date.now(); }; }
+};
+(function () {
+  'use strict';
+  var out = [], fails = 0;
+  window.onerror = function (m, s, l, c) {
+    document.getElementById('o').textContent += '\nERROR ' + m + ' @' + l + ':' + c;
+  };
+  window.addEventListener('unhandledrejection', function (e) {
+    document.getElementById('o').textContent += '\nREJECTED ' + (e.reason && e.reason.message || e.reason);
+  });
+  function L(s) { out.push(s); document.getElementById('o').innerHTML = out.join('\n'); }
+  function ok(c, s) { if (!c) fails++; L('  <span class="' + (c ? 'ok">ok  ' : 'no">FAIL') + '</span> ' + s); }
+
+  /* THE BUILD THIS PAGE LOADS. One module, MLS included, laid out by
+     wasm-bindgen: `core/core_wasm_bg.wasm`, written by app/web/build-wasm.sh.
+     This page used to fetch a flat `core_wasm.wasm` beside itself, which that
+     build has not written for some time \u2014 so the page sat on
+     "loading core_wasm.wasm\u2026" and reported nothing, which is the worst
+     possible way for a core test to fail. */
+  var CORE_URL = 'core/core_wasm_bg.wasm';
+
+  /* `pacific_core::archive::ARCHIVE_VERSION`, pinned here on purpose. The
+     browser's ONE core call on the ordinary path is `fold_archive`, and an
+     archive whose version this build does not read is refused outright \u2014 so a
+     shipped module at a different version means a member's history silently
+     fails to land. Pinning it means the bump turns this page red instead. */
+  var ARCHIVE_VERSION = 2;
+
+  /* Pinned by core-wasm's native test. Regenerate with:
+       cargo test -p core-wasm -- --nocapture                                  */
+  var VECTORS = [
+    { json: '{"type_id":19,"op_id":0,"op_version":1,"args":{"text":"hello"},"epoch":0,"seq":0}',
+      canon: 'a700130100020103a164746578746568656c6c6f040005000658200000000000000000000000000000000000000000000000000000000000000000',
+      id:    'cab638e7a49bb64f154e7717baee911c328dafdd41bc7ec59279d964c64e82cc' },
+    { json: '{"type_id":18,"op_id":1,"op_version":1,"args":{"name":"Cambridge Digital Democracy","shape":"community"},"epoch":7,"seq":3}',
+      canon: 'a700120101020103a2646e616d65781b43616d627269646765204469676974616c2044656d6f637261637965736861706569636f6d6d756e697479040705030658200000000000000000000000000000000000000000000000000000000000000000',
+      id:    'd95364db3424f1f88beee087257229cb74cb4320c9e7c013f107c9a32ff550f0' },
+    { json: '{"type_id":26,"op_id":2,"op_version":1,"args":{"n":42},"epoch":1,"gen":9,"prev":"1111111111111111111111111111111111111111111111111111111111111111"}',
+      canon: 'a700181a0102020103a1616e182a040106582011111111111111111111111111111111111111111111111111111111111111110709',
+      id:    'a2895744ca433d5902839474f25b26f2f2712570588e387fdeec017e931aa4e7' }
+  ];
+
+  var hex = function (b) {
+    return Array.prototype.map.call(new Uint8Array(b), function (x) {
+      return ('0' + x.toString(16)).slice(-2);
+    }).join('');
+  };
+
+  /* CBOR, enough of it to WRITE an Archive. Deliberately hand-rolled and tiny:
+     the point of the archive check below is that the BROWSER can hand the core
+     bytes the core will accept, so a library that agreed with the core by
+     construction would prove nothing. Ints, byte strings, text, arrays, maps \u2014
+     which is the whole of `archive.rs`'s shape. */
+  function cbor(v) {
+    var out = [];
+    var hdr = function (major, n) {
+      if (n < 24) out.push((major << 5) | n);
+      else if (n < 0x100) out.push((major << 5) | 24, n);
+      else if (n < 0x10000) out.push((major << 5) | 25, n >> 8, n & 0xff);
+      else out.push((major << 5) | 26, (n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff);
+    };
+    var e = function (x) {
+      if (typeof x === 'number') { hdr(0, x); return; }
+      /* A Uint8Array is serde_bytes \u2014 a CBOR byte string. A plain Array of
+         numbers is `[u8; 32]`, which serde writes as an ARRAY, not bytes. The
+         archive uses both and they are not interchangeable. */
+      if (x instanceof Uint8Array) { hdr(2, x.length); for (var i = 0; i < x.length; i++) out.push(x[i]); return; }
+      if (typeof x === 'string') { var b = new TextEncoder().encode(x); hdr(3, b.length); for (var j = 0; j < b.length; j++) out.push(b[j]); return; }
+      if (Array.isArray(x)) { hdr(4, x.length); x.forEach(e); return; }
+      if (x && typeof x === 'object') {
+        var k = Object.keys(x); hdr(5, k.length);
+        k.forEach(function (key) { e(key); e(x[key]); });
+        return;
+      }
+      throw new Error('cbor: unsupported ' + typeof x);
+    };
+    e(v);
+    return Uint8Array.from(out);
+  }
+  var bytes32 = function (fill) {
+    var a = []; for (var i = 0; i < 32; i++) a.push(fill); return a;
+  };
+
+  /* arrayBuffer rather than instantiateStreaming: streaming is fussier about
+     MIME and is missing on older engines, and a synchronous throw here happens
+     BEFORE .catch is attached — which is exactly how this page first sat on
+     "loading…" saying nothing. */
+  fetch(CORE_URL).then(function (r) {
+    if (!r.ok) throw new Error('fetch ' + CORE_URL + ' ' + r.status +
+                               ' \u2014 build it with app/web/build-wasm.sh');
+    return r.arrayBuffer();
+  }).then(function (bytes) {
+    return WebAssembly.compile(bytes);
+  }).then(function (mod) {
+    /* The module's memory is not reachable until it is instantiated, so each
+       import closes over a getter the instance fills in a moment later. */
+    var inst = null, at = function () { return inst; }, imports = {};
+    WebAssembly.Module.imports(mod).forEach(function (i) {
+      var make = HOST[i.name];
+      if (!make) {
+        throw new Error('core_wasm imports ' + i.module + '.' + i.name +
+                        ', which this page does not supply');
+      }
+      (imports[i.module] = imports[i.module] || {})[i.name] = make(at);
+    });
+    return WebAssembly.instantiate(mod, imports).then(function (w) {
+      inst = w;
+      if (w.exports.__wbindgen_start) w.exports.__wbindgen_start();
+      return w;
+    });
+  }).then(function (m) {
+    var e = m.exports;
+
+    /* alloc → write → call → read. The buffer must be re-read after alloc,
+       because growing linear memory detaches the old ArrayBuffer. */
+    function call(fn, bytes) {
+      var ptr = e.alloc(bytes.length);
+      new Uint8Array(e.memory.buffer, ptr, bytes.length).set(bytes);
+      var n = fn(bytes.length);
+      if (n === 0 && e.erred()) {
+        var why = new Uint8Array(e.memory.buffer, e.out_ptr(), e.out_len());
+        throw new Error(new TextDecoder().decode(why));
+      }
+      return new Uint8Array(e.memory.buffer, e.out_ptr(), n).slice();
+    }
+    var utf8 = function (s) { return new TextEncoder().encode(s); };
+
+    L('<span class="h">ENVELOPE — canonical CBOR, from the core</span>');
+    VECTORS.forEach(function (v, i) {
+      ok(hex(call(e.delta_canon, utf8(v.json))) === v.canon, 'vector ' + i + ' canonical bytes');
+      ok(hex(call(e.delta_id,    utf8(v.json))) === v.id,    'vector ' + i + ' DeltaId');
+    });
+
+    L('\n<span class="h">IDENTITY — the same wordlist the phone reads aloud</span>');
+    var pk = new Uint8Array(32); for (var i = 0; i < 32; i++) pk[i] = i;
+    var words = new TextDecoder().decode(call(e.sas_words, pk));
+    ok(words.split(/[\s-]+/).length === 3, 'sas_words gives three words — ' + words);
+    var round = call(e.parse_identity_key, utf8('ed25519:' + hex(pk)));
+    ok(hex(round) === hex(pk), 'parse_identity_key round-trips');
+
+    L('\n<span class="h">REFUSALS — a bad delta says why, it does not guess</span>');
+    try { call(e.delta_canon, utf8('{"type_id":1,"op_id":0,"args":{"x":1.5}}'));
+          ok(false, 'a float arg was accepted'); }
+    catch (x) { ok(/integers/.test(x.message), 'float arg refused — ' + x.message); }
+    try { call(e.delta_canon, utf8('{"type_id":1,"op_id":0,"prev":"beef"}'));
+          ok(false, 'a short prev was accepted'); }
+    catch (x) { ok(/32/.test(x.message), 'short prev refused — ' + x.message); }
+
+    /* ── THE ARCHIVE ───────────────────────────────────────────────────────
+       The one core call this browser makes on the ordinary path. A new device
+       cannot decrypt anything before the epoch it joined at, so its history
+       arrives as an Archive and `fold_archive` is what turns those bytes into
+       the world the interior draws. Three things are worth pinning, and the
+       first is the one that actually broke: the VERSION. A module built from a
+       different core refuses a current archive outright, and the member sees an
+       empty Pacific with no error anywhere. */
+    L('\n<span class="h">ARCHIVE \u2014 the fold a second device opens on</span>');
+    var ada = bytes32(0x11), ben = bytes32(0x22);
+    var mkArchive = function (v, groups) {
+      return cbor({
+        v: v,
+        exported_by: ada,
+        display_name: 'Ada',
+        groups: groups || [],
+        peers: [{ peer_id: ben, display_name: 'Ben', status: 'accepted',
+                  identity_group: new Uint8Array(0) }],
+        own_group: new Uint8Array(0)
+      });
+    };
+    var aGroup = function (id, kind) {
+      return { group_id: Uint8Array.from(bytes32(id)), kind: kind, name: 'Ben',
+               owner: ada, members: [ada, ben], log: [] };
+    };
+    var folded = JSON.parse(new TextDecoder().decode(call(e.fold_archive,
+      mkArchive(ARCHIVE_VERSION, [aGroup(0x33, 'group'), aGroup(0x44, 'arc-tether')]))));
+    ok(folded.v === ARCHIVE_VERSION,
+       'this build reads archive v' + ARCHIVE_VERSION + ' \u2014 the browser and the core agree');
+    ok(folded.exported_by === hex(Uint8Array.from(ada)), 'the exporter comes back as the core hexes it');
+    ok(folded.peers.length === 1 && folded.peers[0].name === 'Ben', 'the peer folded');
+    ok(folded.groups.length === 1, 'the group with a lens folded');
+    ok(folded.groups.length === 1 && /^[0-9a-f]{64}$/.test(folded.groups[0].digest),
+       'it carries the core\u2019s fold digest \u2014 ' +
+       (folded.groups[0] ? folded.groups[0].digest.slice(0, 16) : '?') + '\u2026');
+    ok(folded.groups.length === 1 && folded.groups[0].members.length === 2,
+       'the roster is the access control, and it survives the trip');
+    ok(folded.rejected.length === 1 && /no lens for kind 'arc-tether'/.test(folded.rejected[0].why),
+       'a kind with no lens is REJECTED BY NAME, not dropped \u2014 ' +
+       (folded.rejected[0] ? folded.rejected[0].why : '?'));
+
+    try { call(e.fold_archive, mkArchive(99, []));
+          ok(false, 'an archive from a future build was accepted'); }
+    catch (x) { ok(/archive version 99/.test(x.message),
+                   'a future archive is refused, with the version \u2014 ' + x.message); }
+    try { call(e.fold_archive, utf8('not an archive'));
+          ok(false, 'garbage decoded as an archive'); }
+    catch (x) { ok(/archive decode/.test(x.message), 'garbage is refused \u2014 ' + x.message); }
+
+    L('\n<span class="h">WHY THIS MATTERS — what the JS shortcut computed instead</span>');
+    var canonJson = function (v) {
+      if (v === null || typeof v !== 'object') return JSON.stringify(v);
+      if (Array.isArray(v)) return '[' + v.map(canonJson).join(',') + ']';
+      return '{' + Object.keys(v).sort().map(function (k) {
+        return JSON.stringify(k) + ':' + canonJson(v[k]); }).join(',') + '}';
+    };
+    var obj = JSON.parse(VECTORS[0].json);
+    crypto.subtle.digest('SHA-256', utf8(canonJson(obj))).then(function (d) {
+      var jsId = hex(d);
+      ok(jsId !== VECTORS[0].id,
+         'key-sorted JSON gives a DIFFERENT id (' + jsId.slice(0, 16) + '… vs ' +
+         VECTORS[0].id.slice(0, 16) + '…) — the drift was real, and is now gone');
+      L('\n' + (fails ? '<span class="no">' + fails + ' FAILED</span>'
+                      : '<span class="ok">all green — one implementation, two runtimes</span>'));
+    });
+  }).catch(function (err) { L('<span class="no">could not instantiate — ' + err.message + '</span>'); });
+})();
+</script>
+</body>
+</html>

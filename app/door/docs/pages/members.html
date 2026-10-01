@@ -1,0 +1,12 @@
+<h1>Members and roles</h1>
+<table><thead><tr><th>To</th><th>Op, on the community</th><th>Args</th><th>Who</th></tr></thead><tbody>
+<tr><td>Give a role</td><td><code>base.setRole</code></td><td><code>member</code> (key), <code>role</code>: admin · member · viewer · guest</td><td>owner</td></tr>
+<tr><td>Take it away</td><td><code>base.clearRole</code></td><td><code>member</code>. They stay a member.</td><td>owner</td></tr>
+<tr><td>Give a title</td><td><code>group.setOffice</code></td><td><code>office</code> (free text), <code>holder</code>, <code>status</code>: pending · accepted, <code>at</code> (ms)</td><td>owner</td></tr>
+<tr><td>Vacate a title</td><td><code>group.clearOffice</code></td><td><code>office</code></td><td>owner</td></tr>
+</tbody></table>
+<p>A role applies only to someone already on the roster. A title grants nothing. Show a button only to someone who may press it: the owner is the object's <code>owner</code>, admins are in <code>roles</code>.</p>
+<p>To list the members, with what each says about themselves, their answers, and the community's questions, read <a href="routes.html#get-v2-members"><code>GET /v2/members</code></a>.</p>
+<h2 id="becoming-a-member">Becoming a member</h2>
+<p>Your site's session reaches the community only when the person signed in is one of its members; for anyone else, <code>/v2/graph</code> has no community, and the starter says so. A person joins with a claim from your community's QR code: <a href="routes.html#post-v2-join"><code>POST /v2/join</code></a>, from your site's own session. Adding and removing members by hand, and invitations, are done in WallFlowers: a site's session is refused on <code>/v2/add</code>. {{MEMBERS_ADD}}</p>
+<p>Order people as WallFlowers does: the owner, then admins, then everyone else.</p>

@@ -1,0 +1,26 @@
+# pacific-ffi — the ONE language boundary: a UniFFI facade over pacific-core::Node.
+# Everything below this is Rust; everything above is Swift. Cross-compiled to a
+# staticlib, packaged into PacificCoreRS.xcframework, imported by the iOS app.
+[package]
+name = "pacific-ffi"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[lib]
+name = "pacific_ffi"
+# staticlib = the .a linked into the app; lib = so host tools can read metadata.
+crate-type = ["staticlib", "lib"]
+
+[dependencies]
+pacific-media = { path = "../pacific-media" }
+pacific-core = { workspace = true }
+uniffi = { workspace = true }
+thiserror = { workspace = true }
+hex = { workspace = true }
+base64 = { workspace = true }
+# async FFI: the N-member object_post publishes to the relay (uniffi tokio runtime).
+tokio = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

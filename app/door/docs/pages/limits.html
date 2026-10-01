@@ -1,0 +1,23 @@
+<h1>Limits</h1>
+<table><tbody>
+<tr><td>Request body</td><td>{{BODY}}</td></tr>
+<tr><td>Batch</td><td>1 to {{STEPS}} steps</td></tr>
+<tr><td>Proof of work</td><td>{{POW}} bits, at the start of a sign-up or sign-in: a few seconds in the browser, done by WallFlowers' window</td></tr>
+<tr><td>Argument values</td><td>text or integer</td></tr>
+<tr><td>A message</td><td>no length of its own: bounded by the request body ({{BODY}}). Pick a limit that suits your page.</td></tr>
+<tr><td>The public page's items</td><td>its 8 most recent resources, and its events</td></tr>
+<tr><td>Page document (face)</td><td>16,384 bytes</td></tr>
+<tr><td>A picture</td><td>156,000 base64 characters; PNG, JPEG or WebP</td></tr>
+<tr><td>A link</td><td>2,048 characters</td></tr>
+<tr><td>A member's card</td><td>16,384 bytes, picture included</td></tr>
+<tr><td>What WallFlowers keeps</td><td>What members write through the Door, as a backup</td></tr>
+</tbody></table>
+<h2>The Door's configuration</h2>
+<p>These are set by each WallFlowers deployment; the values below are the current ones.</p>
+<table><tbody>
+<tr><td>Session</td><td>{{TOKEN}}; ends after {{IDLE}} without a request, or at <code>session.signOut()</code></td></tr>
+<tr><td>Sessions held at once</td><td>{{SESSIONS}}, for all of WallFlowers together, not per site: past it, every sign-in anywhere is refused (<code>503</code>) until some end. So sign out what you open (<code>session.signOut()</code>), and have scripts and tests sign out as they exit. A page that only shows the public page's items needs no session at all.</td></tr>
+<tr><td>Proof clock</td><td>each call's proof within {{SKEW}} s of WallFlowers' clock</td></tr>
+<tr><td>Sign-ins in progress</td><td>{{PER_ADDR}} per address; each has {{ATTEMPT}} to finish, a new account {{SIGNUP}}</td></tr>
+</tbody></table>
+<p>Measured latencies for every route are on <a href="routes.html">Routes</a>.</p>

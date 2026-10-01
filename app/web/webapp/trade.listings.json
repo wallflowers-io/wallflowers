@@ -1,0 +1,28 @@
+[
+  {
+    "author": "0202020202020202020202020202020202020202020202020202020202020202",
+    "thingId": "0707070707070707070707070707070707070707070707070707070707070707",
+    "posture": "selling",
+    "title": "Tote",
+    "price": "£15",
+    "reach": "private",
+    "rev": 0,
+    "site": true,
+    "gen": 2
+  },
+  {
+    "author": "0303030303030303030303030303030303030303030303030303030303030303",
+    "thingId": "0909090909090909090909090909090909090909090909090909090909090909",
+    "posture": "selling",
+    "title": "A bike",
+    "descriptor": "blue, 56 cm",
+    "price": "£15",
+    "area": "gcpvj",
+    "reach": "private",
+    "rev": 0,
+    "photo": "cHJvYmU=",
+    "photoMime": "image/png",
+    "site": false,
+    "gen": 1
+  }
+]

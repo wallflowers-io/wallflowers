@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The session · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html" aria-current="page">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>The session</h1>
+<table><thead><tr><th>Member</th><th></th></tr></thead><tbody>
+<tr><td><code>session.fetch(path, init)</code></td><td>Like <code>fetch</code>, to <code>https://app.wallflowers.io</code> + path. It adds the member's token and a proof signed with a key your page can't read. A request with a body gets <code>content-type: application/json</code> unless you set one: pass <code>JSON.stringify(…)</code>.</td></tr>
+<tr><td><code>session.events(onChanged, onEnded)</code></td><td>Calls <code>onChanged(version)</code> when something your session can read changes: <code>version</code> is a string you need not read, and <code>''</code> after the stream opened again from a gap. Either way, read <code>/v2/graph</code> again. Returns <code>stop()</code>. Opens again by itself after a gap; <code>onEnded</code> gets the refusal when the session is over.</td></tr>
+<tr><td><code>session.signOut()</code></td><td>Ends the session here and at WallFlowers. Call it whenever you're done: see below.</td></tr>
+<tr><td><code>session.site</code></td><td>The community's id.</td></tr>
+<tr><td><code>session.client</code></td><td>Your client id.</td></tr>
+</tbody></table>
+<div class="note warn"><p><strong>Sign out every session you open.</strong> Call <code>session.signOut()</code> (<code>POST /v2/signout</code>) when you're done, and have scripts and tests sign out as they exit. Otherwise WallFlowers holds the session until it has been idle for 15 minutes, and once it holds 112 sessions, everyone's sign-in is refused with <code>503 "the Door is at its session limit; try again shortly"</code>, yours and every other team's.</p></div>
+<ul>
+<li>A session lasts <strong>one hour</strong>, and ends after <strong>15 minutes without a request</strong>. An open change stream does not count as a request. There is no refresh: when a call answers <code>401</code>, or <code>400 "not signed in"</code>, the member is signed out. Show your Sign in button again (it calls <code>WallFlowers.signIn</code>). If you send them to sign in yourself, do it at most once per page view, and remember that you did (in <code>sessionStorage</code>), so it can never loop.</li>
+<li>Your session reaches the community, its direct parts (rooms, page, treasury) where the member is on their roster, and whatever this session created. Never the member's other communities, private conversations, or personal record.</li>
+<li>Keep third-party scripts (chat widgets, trackers, ad tags) off pages where members are signed in. Anything running on the page can use the session.</li>
+</ul>
+<h2 id="your-page">Your page's rules</h2>
+<ul>
+<li><strong>Origins.</strong> <code>session.fetch</code> is a cross-origin call, and WallFlowers answers only the origins you registered. From any other (a <code>localhost</code> port the shared client doesn't cover, a preview address, a site not registered yet) the browser blocks the sign-in script itself (the console says CORS), and any call: <code>session.fetch</code> rejects with a network error, and your page never sees a status. Register every origin you serve from.</li>
+<li><strong>Content-Security-Policy.</strong> If your page sets one, <code>script-src</code> and <code>connect-src</code> must both allow <code>https://app.wallflowers.io</code> (the sign-in script, then <code>session.fetch</code> and the change stream), and an inline script needs its nonce or its <code>sha256</code>.</li>
+<li><strong>Storage.</strong> The key and token live in your origin's IndexedDB: <code>localhost</code> and <code>127.0.0.1</code> are two separate sign-ins, and a private window, or clearing the site's data, signs the member out.</li>
+<li><strong>The token stays in the page.</strong> Never log it, and never send it to your own server. The key can't be exported, by design.</li>
+</ul>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

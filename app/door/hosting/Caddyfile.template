@@ -1,0 +1,16 @@
+# TLS on the host, in front of the Door (mdr/door.md §8). Filled by deploy-door.sh:
+# __DOOR_HOST__ the name, __TLS__ empty for a real certificate or `tls internal` for a
+# rehearsal with no public name, __GLOBAL__ `skip_install_trust` with it.
+{
+	admin off
+	storage file_system /var/lib/door-edge
+	__GLOBAL__
+}
+
+__DOOR_HOST__ {
+	__TLS__
+	reverse_proxy 127.0.0.1:8233 {
+		# The Door's caps count the client's network: this overwrites any value a client sent.
+		header_up CF-Connecting-IP {remote_host}
+	}
+}

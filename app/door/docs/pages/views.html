@@ -1,0 +1,50 @@
+<h1>What you read</h1>
+<p class="lede"><code>GET /v2/graph</code> answers <code>{ me, objects, spine }</code>: who you are, every object you can read, and <code>spine</code>, which is always empty (<code>[]</code>) for a site.</p>
+<h2>Every object</h2>
+<table><thead><tr><th>Field</th><th></th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>The object's id, 64 hex characters.</td></tr>
+<tr><td><code>kind</code></td><td><code>group</code> (the community), <code>forum</code> (a room), <code>host</code> (its public page), <code>treasury</code>, …: see <a href="model.html">the model</a>.</td></tr>
+<tr><td><code>name</code></td><td>Its name: a room's name, the community's name.</td></tr>
+<tr><td><code>owner</code> · <code>members</code></td><td>Keys, 64 hex characters.</td></tr>
+<tr><td><code>peer</code> · <code>role</code></td><td>For a conversation between two people; <code>null</code> for everything a site reads.</td></tr>
+<tr><td><code>folds</code> · <code>why</code></td><td>Whether it could be read here, and if not, why.</td></tr>
+<tr><td><code>view</code></td><td>Its current state, by kind (below).</td></tr>
+</tbody></table>
+<p><strong>Keys.</strong> A key appears as 64 hex characters everywhere except <code>me.pk</code> (and <code>/v2/me</code>'s <code>pk</code>), which carry an <code>ed25519:</code> prefix. They are the same key: strip the prefix to compare (<code>pk.replace(/^ed25519:/, '')</code>).</p>
+<h2>An example</h2>
+<pre><code>{ "me": { "pk": "ed25519:9442…3a2e", "display_name": "Hana" },
+  "objects": [
+    { "id": "71c1…6a6c", "kind": "group", "name": "Mill Road Allotments", "owner": "9442…3a2e",
+      "members": ["9442…3a2e", "0224…b1f0"], "peer": null, "role": null, "folds": true, "why": null,
+      "view": { "display_name": "Mill Road Allotments", "shape": "community",
+                "parts": [ { "part": "3481…", "role": "room", "at": 1790600000000 } ],
+                "roles": [], "profiles": { "9442…3a2e": { "name": "Hana", "icon": null, "gen": 1 } },
+                "publication": { "slug": "mill-road", "publisher": "9442…3a2e" } } },
+    { "id": "3481…", "kind": "forum", "name": "General", "owner": "9442…3a2e",
+      "members": ["9442…3a2e", "0224…b1f0"], "peer": null, "role": null, "folds": true, "why": null,
+      "view": { "messages": [ { "author": "0224…b1f0", "gen": 1, "text": "Hello!", "ts": 1790600100000,
+                                "reply_to": null, "up": 0, "down": 0, "reactions": [] } ],
+                "parent": { "parent": "71c1…6a6c", "role": "room" } } } ],
+  "spine": [] }</code></pre>
+<div class="note"><p><code>folds: false</code> means the object couldn't be read on this device, and <code>why</code> says why. Show it as unavailable, never drop it silently.</p></div>
+<h2>The community (<code>kind: "group"</code>)</h2>
+<pre><code>{ "display_name": "Mill Road Allotments", "shape": "organisation",
+  "roles":   [ ["0224…", "admin"] ],
+  "offices": [ { "office": "treasurer", "holder": "…", "status": "accepted", "at": 1790… } ],
+  "parts":   [ { "part": "3481…", "role": "room", "at": … }, { "part": "c48a…", "role": "host", "at": … } ],
+  "membership": [ { "member": "…", "present": true, "tenures": [ … ] } ],
+  "profiles": { "&lt;member key&gt;": { "name": "Hana", "icon": { "mime": "image/webp", "data": "&lt;base64&gt;" } | null, "gen": 3 } },
+  "decisions": { … }, "face": { "look": { … }, … } | null }</code></pre>
+<p>The owner is the object's <code>owner</code>. <code>roles</code> lists who holds which role. The community's rooms are its <code>parts</code> with role <code>room</code>, in <code>at</code> order; a room that isn't in the graph isn't in the member's reach.</p>
+<h2>A room (<code>kind: "forum"</code>)</h2>
+<pre><code>{ "messages": [ { "author": "0224…", "gen": 12, "text": "…", "ts": 1790…,
+                  "reply_to": { "author": "…", "gen": 9 } | null,
+                  "up": 3, "down": 0, "reactions": [ ["❤️", 6, true], ["🌱", 3, false] ] } ],
+  "profiles": { … },
+  "parent": { "parent": "&lt;community&gt;", "role": "room" } }</code></pre>
+<p>A message is identified by <code>author</code> + <code>gen</code>. <code>ts</code> is milliseconds, 0 when not given. Each reaction is <code>[emoji, count, mine]</code>. The room's name is the object's <code>name</code>. A room's <code>profiles</code> also carries members who have left: merge it with the community's.</p>
+<h2>Names</h2>
+<p>A person's name is <code>profiles[key].name</code> from the community's or the room's view; your own is <code>me.display_name</code>. Anyone else without a card is <strong>New member</strong>. Never show a key as a name. A site reads cards and never writes one: members edit theirs at <code>{{DOOR}}/#you</code>.</p>
+<h2>The page (<code>kind: "host"</code>) and the treasury</h2>
+<p>The page: <code>{ name, parent, publication, media: { mark | cover | logo | wallpaper: { mime, data } }, items }</code>. The treasury: <code>{ open, currency, balance, bands, deposits, settlements, … }</code>, amounts in the currency's smallest unit.</p>
+<p>Events and resources are linked to the community rather than part of it, so a member's session doesn't reach them: read them from the <a href="public.html">public page</a>.</p>

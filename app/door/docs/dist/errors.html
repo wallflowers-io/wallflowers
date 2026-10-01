@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Errors · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html" aria-current="page">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>Errors</h1>
+<p>A refusal is an HTTP status and a sentence from WallFlowers, as plain text in the body (<code>await res.text()</code>), not JSON; only a batch's 422 is JSON. There are no error codes, and the wording is not a contract: show the sentence, don't parse it. Each route's own refusals are on <a href="routes.html">Routes</a>.</p>
+<table><thead><tr><th>Status</th><th>Means</th><th>Do</th></tr></thead><tbody>
+<tr><td>401, or 400 <code>not signed in</code></td><td>Not signed in, or the session ended.</td><td>Sign in again: show the button, or send them once by yourself, never in a loop (<a href="session.html">The session</a>).</td></tr>
+<tr><td>400 "… is outside this site's scope"</td><td>That object isn't in your session's reach.</td><td>Don't offer it.</td></tr>
+<tr><td>400 · 403, other</td><td>Not allowed, a malformed argument, or a route that isn't for sites.</td><td>Show the sentence.</td></tr>
+<tr><td>A network error, no status</td><td>The browser stopped a call from a page origin that isn't registered (CORS).</td><td>Serve from a registered origin (<a href="session.html#your-page">Your page's rules</a>).</td></tr>
+<tr><td>404 "no such page"</td><td>No published page at that address (public page routes).</td><td>Check the address.</td></tr>
+<tr><td>413</td><td>The body is over 1 MiB.</td><td>Send less.</td></tr>
+<tr><td>422</td><td>A batch stopped part-way: <code>{ made, refused: { step, why } }</code>.</td><td>Keep what was made; retry only the rest.</td></tr>
+<tr><td>429 "too many sign-ins are open from here"</td><td>32 sign-ins already in progress from your address.</td><td>Finish or cancel one, or wait a minute.</td></tr>
+<tr><td>503 "the Door is at its session limit"</td><td>As many sessions are open as WallFlowers holds, most of them left to idle out.</td><td>Sign out every session you open; try again shortly.</td></tr>
+<tr><td>502 · 503 · no answer</td><td>Busy or unreachable.</td><td>Try again shortly.</td></tr>
+</tbody></table>
+
+<footer class="facts">Generated from the Door at <code>e1061bb2</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

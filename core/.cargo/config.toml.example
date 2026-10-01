@@ -1,0 +1,16 @@
+# Local-dev path overrides — copy to .cargo/config.toml (untracked) to iterate against
+# sibling checkouts instead of the rev/tag pins in Cargo.toml.
+#
+#   cp .cargo/config.toml.example .cargo/config.toml
+#
+# Why it lives HERE and not in Cargo.toml: a [patch] in the manifest is committed, so it
+# ships to every consumer and every deploy image, and the "works on my laptop" build stops
+# matching the deployed one. That mismatch is what this extraction exists to remove — the
+# lodedb pin drifted exactly this way (manifest said v2.0.2, the sibling patch silently
+# built v2.0.3). Cargo reads [patch] from config.toml the same as from a manifest, so this
+# gives the same fast iteration with none of the reach.
+#
+# Adjust the paths to wherever you keep the sibling repos.
+
+# core resolves lodedb-core from the public tag (v2.0.2, ae5ac18; O-41) and arc's relay
+# by path (5f5a734); add a [patch] here only to iterate against a sibling checkout.

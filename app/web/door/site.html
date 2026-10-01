@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- R3.1 (C), the Site step: a client with no fixed Site comes here after the passkey, and its
+     person chooses one of their Sites where they are the owner or an admin. No script. -->
+<html lang="en" data-site>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>__TITLE__</title>
+<link rel="stylesheet" href="/door/signin.css">
+</head>
+<body>
+<main>
+  <header class="site"><h1 class="site-name">__TITLE__</h1></header>
+  <form method="post" action="/signin/site">
+    <section>
+      <label for="site">Site</label>
+      <select id="site" name="site">__OPTIONS__</select>
+      <button class="primary" type="submit">Allow</button>
+      <button class="quiet" type="submit" name="deny" value="1">Cancel</button>
+    </section>
+  </form>
+</main>
+</body>
+</html>

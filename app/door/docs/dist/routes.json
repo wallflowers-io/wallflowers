@@ -1,0 +1,796 @@
+{
+  "door": "https://app.wallflowers.io",
+  "model": "2.3.1",
+  "signin_integrity": "sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/",
+  "resources_integrity": "sha384-UmvzUi9QJtE0tDexr0MptcW1xPoGQHIw24DOVTWUZgnDvpzADZU9k4X0dXswd3ml",
+  "routes": [
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/signin.js",
+      "session": false,
+      "summary": "The sign-in script",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-signin-js",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 0.4,
+          "p95_ms": 0.5,
+          "first_call_p50_ms": 1.3
+        },
+        {
+          "link": "venue",
+          "n": 30,
+          "p50_ms": 135.5,
+          "p95_ms": 140.2,
+          "first_call_p50_ms": 402.5
+        },
+        {
+          "link": "an ordinary internet connection",
+          "n": 30,
+          "p50_ms": 91.5,
+          "p95_ms": 102.2,
+          "first_call_p50_ms": 300.1
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/token",
+      "session": false,
+      "summary": "Trade the sign-in code for a session (the script does this)",
+      "docs": "https://docs.wallflowers.io/routes.html#post-v2-token",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 10,
+          "p50_ms": 1.9,
+          "p95_ms": 2.1,
+          "first_call_p50_ms": 1.8
+        },
+        {
+          "link": "venue",
+          "n": 10,
+          "p50_ms": 139.2,
+          "p95_ms": 144.9,
+          "first_call_p50_ms": 138.9
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/signout",
+      "session": true,
+      "summary": "End the session",
+      "docs": "https://docs.wallflowers.io/routes.html#post-v2-signout",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 10,
+          "p50_ms": 52.4,
+          "p95_ms": 62.4,
+          "first_call_p50_ms": 52.3
+        },
+        {
+          "link": "venue",
+          "n": 10,
+          "p50_ms": 206.7,
+          "p95_ms": 232.6,
+          "first_call_p50_ms": 205.1
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/me",
+      "session": true,
+      "summary": "Who is signed in",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-me",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 3.3,
+          "p95_ms": 3.6,
+          "first_call_p50_ms": 4.4
+        },
+        {
+          "link": "venue",
+          "n": 30,
+          "p50_ms": 139.3,
+          "p95_ms": 148.7,
+          "first_call_p50_ms": 406.4
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/graph",
+      "session": true,
+      "summary": "Everything the session can read",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-graph",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 4.2,
+          "p95_ms": 6.7,
+          "first_call_p50_ms": 5.7
+        },
+        {
+          "link": "venue",
+          "n": 30,
+          "p50_ms": 140.3,
+          "p95_ms": 149.8,
+          "first_call_p50_ms": 410.1
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/members",
+      "session": true,
+      "summary": "The community's members, their about, answers and intentions",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-members",
+      "latency": []
+    },
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/members/:site",
+      "session": true,
+      "summary": "A named community's members",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-members-site",
+      "latency": []
+    },
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/events",
+      "session": true,
+      "summary": "A stream that says when something changed",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-events",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 1.7,
+          "p95_ms": 1.8,
+          "first_call_p50_ms": 1.6
+        },
+        {
+          "link": "venue",
+          "n": 30,
+          "p50_ms": 403.3,
+          "p95_ms": 410.3,
+          "first_call_p50_ms": 400.5
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/icd",
+      "session": false,
+      "summary": "The data model",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-icd",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 0.5,
+          "p95_ms": 0.6,
+          "first_call_p50_ms": 1.4
+        },
+        {
+          "link": "venue",
+          "n": 30,
+          "p50_ms": 135.3,
+          "p95_ms": 136.1,
+          "first_call_p50_ms": 401.1
+        },
+        {
+          "link": "an ordinary internet connection",
+          "n": 30,
+          "p50_ms": 105.3,
+          "p95_ms": 133.3,
+          "first_call_p50_ms": 574.4
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/icd/:hash",
+      "session": false,
+      "summary": "The data model by its hash, cached for good",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-icd-hash",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 0.5,
+          "p95_ms": 0.8,
+          "first_call_p50_ms": 1.4
+        },
+        {
+          "link": "venue",
+          "n": 30,
+          "p50_ms": 134.8,
+          "p95_ms": 136.1,
+          "first_call_p50_ms": 402.7
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/kinds",
+      "session": true,
+      "summary": "Which kinds this session may create",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-kinds",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 0.8,
+          "p95_ms": 1,
+          "first_call_p50_ms": 1.8
+        },
+        {
+          "link": "venue",
+          "n": 30,
+          "p50_ms": 136,
+          "p95_ms": 139.5,
+          "first_call_p50_ms": 402.3
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/draft/:kind",
+      "session": true,
+      "summary": "Which fields create an object of a kind",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-draft-kind",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 0.7,
+          "p95_ms": 0.9,
+          "first_call_p50_ms": 1.7
+        },
+        {
+          "link": "venue",
+          "n": 30,
+          "p50_ms": 136,
+          "p95_ms": 139.3,
+          "first_call_p50_ms": 405.2
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/join",
+      "session": true,
+      "summary": "Join the community with a claim",
+      "docs": "https://docs.wallflowers.io/routes.html#post-v2-join",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 5,
+          "p50_ms": 420.1,
+          "p95_ms": 2300.4,
+          "first_call_p50_ms": 375.9
+        },
+        {
+          "link": "venue",
+          "n": 5,
+          "p50_ms": 3387.3,
+          "p95_ms": 3535.5,
+          "first_call_p50_ms": 3309.3
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/apply",
+      "session": true,
+      "summary": "Make one change",
+      "docs": "https://docs.wallflowers.io/routes.html#post-v2-apply",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 33.9,
+          "p95_ms": 37.4,
+          "first_call_p50_ms": 34.2
+        },
+        {
+          "link": "venue",
+          "n": 30,
+          "p50_ms": 153,
+          "p95_ms": 159.1,
+          "first_call_p50_ms": 434.2
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/batch",
+      "session": true,
+      "summary": "Make several changes in order",
+      "docs": "https://docs.wallflowers.io/routes.html#post-v2-batch",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 10,
+          "p50_ms": 546.4,
+          "p95_ms": 586.2,
+          "first_call_p50_ms": 56.6
+        },
+        {
+          "link": "venue",
+          "n": 10,
+          "p50_ms": 538,
+          "p95_ms": 629.1,
+          "first_call_p50_ms": 550.2
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/mint",
+      "session": true,
+      "summary": "Create one object",
+      "docs": "https://docs.wallflowers.io/routes.html#post-v2-mint",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 279.7,
+          "p95_ms": 417.7,
+          "first_call_p50_ms": 422.1
+        },
+        {
+          "link": "venue",
+          "n": 30,
+          "p50_ms": 310.2,
+          "p95_ms": 403.9,
+          "first_call_p50_ms": 446.7
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/site/address",
+      "session": true,
+      "summary": "Claim the community's address on wallflowers.io",
+      "docs": "https://docs.wallflowers.io/routes.html#post-v2-site-address",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 5,
+          "p50_ms": 532.6,
+          "p95_ms": 555.2,
+          "first_call_p50_ms": 570
+        },
+        {
+          "link": "venue",
+          "n": 5,
+          "p50_ms": 570.7,
+          "p95_ms": 596,
+          "first_call_p50_ms": 578.9
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://app.wallflowers.io",
+      "path": "/v2/resources.js",
+      "session": false,
+      "summary": "The Resources editor",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v2-resources-js",
+      "latency": []
+    },
+    {
+      "method": "GET",
+      "origin": "https://arc.wallflowers.io",
+      "path": "/v1/face/:slug",
+      "session": false,
+      "summary": "The community's public page",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v1-face-slug",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 0.7,
+          "p95_ms": 3.1,
+          "first_call_p50_ms": 0.8
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://arc.wallflowers.io",
+      "path": "/v1/face/:slug/items",
+      "session": false,
+      "summary": "Its events and resources, as data",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v1-face-slug-items",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 0.4,
+          "p95_ms": 0.6,
+          "first_call_p50_ms": 0.7
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://arc.wallflowers.io",
+      "path": "/v1/face/:slug/m/:slot",
+      "session": false,
+      "summary": "One of its pictures",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v1-face-slug-m-slot",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 42.7,
+          "p95_ms": 56.9,
+          "first_call_p50_ms": 46.9
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://arc.wallflowers.io",
+      "path": "/v1/face/:slug/post/:id",
+      "session": false,
+      "summary": "A resource's public page",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v1-face-slug-post-id",
+      "latency": []
+    },
+    {
+      "method": "GET",
+      "origin": "https://arc.wallflowers.io",
+      "path": "/v1/face/:slug/post/:id/document",
+      "session": false,
+      "summary": "A resource's PDF",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v1-face-slug-post-id-document",
+      "latency": []
+    },
+    {
+      "method": "GET",
+      "origin": "https://arc.wallflowers.io",
+      "path": "/v1/face/:slug/brand",
+      "session": false,
+      "summary": "Its name and look, for a sign-in window",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v1-face-slug-brand",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 0.8,
+          "p95_ms": 2.3,
+          "first_call_p50_ms": 1.2
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://arc.wallflowers.io",
+      "path": "/v1/face/:slug/door",
+      "session": false,
+      "summary": "Its join page",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v1-face-slug-door",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 1.1,
+          "p95_ms": 1.9,
+          "first_call_p50_ms": 1.5
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "origin": "https://arc.wallflowers.io",
+      "path": "/v1/face/:slug/escape",
+      "session": false,
+      "summary": "Its way out of an app's own browser",
+      "docs": "https://docs.wallflowers.io/routes.html#get-v1-face-slug-escape",
+      "latency": [
+        {
+          "link": "loopback",
+          "n": 30,
+          "p50_ms": 0.5,
+          "p95_ms": 1.3,
+          "first_call_p50_ms": 0.9
+        }
+      ]
+    }
+  ],
+  "not_for_sites": [
+    {
+      "method": "GET",
+      "path": "/bundle",
+      "audience": "arc"
+    },
+    {
+      "method": "ANY",
+      "path": "/console/*rest",
+      "audience": "arc"
+    },
+    {
+      "method": "GET",
+      "path": "/door/face-mark",
+      "audience": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/door/face.css",
+      "audience": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/door/perf.js",
+      "audience": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/door/pow-worker.js",
+      "audience": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/door/return-path.js",
+      "audience": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/door/seal.js",
+      "audience": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/door/signin.css",
+      "audience": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/door/signin.js",
+      "audience": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/door/wallflowers.png",
+      "audience": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/door/wordmark.svg",
+      "audience": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "audience": "webapp"
+    },
+    {
+      "method": "POST",
+      "path": "/i/bundle",
+      "audience": "internal"
+    },
+    {
+      "method": "POST",
+      "path": "/i/code",
+      "audience": "internal"
+    },
+    {
+      "method": "POST",
+      "path": "/i/end",
+      "audience": "internal"
+    },
+    {
+      "method": "POST",
+      "path": "/i/forget",
+      "audience": "internal"
+    },
+    {
+      "method": "GET",
+      "path": "/i/key",
+      "audience": "internal"
+    },
+    {
+      "method": "POST",
+      "path": "/i/open",
+      "audience": "internal"
+    },
+    {
+      "method": "POST",
+      "path": "/i/prove",
+      "audience": "internal"
+    },
+    {
+      "method": "POST",
+      "path": "/i/sign",
+      "audience": "internal"
+    },
+    {
+      "method": "POST",
+      "path": "/i/signup/finish",
+      "audience": "internal"
+    },
+    {
+      "method": "POST",
+      "path": "/i/signup",
+      "audience": "internal"
+    },
+    {
+      "method": "GET",
+      "path": "/i/site/:site",
+      "audience": "internal"
+    },
+    {
+      "method": "GET",
+      "path": "/index.html",
+      "audience": "webapp"
+    },
+    {
+      "method": "GET",
+      "path": "/join",
+      "audience": "window"
+    },
+    {
+      "method": "GET",
+      "path": "/signin/site",
+      "audience": "window"
+    },
+    {
+      "method": "POST",
+      "path": "/signin/site",
+      "audience": "window"
+    },
+    {
+      "method": "GET",
+      "path": "/signin",
+      "audience": "window"
+    },
+    {
+      "method": "POST",
+      "path": "/tether",
+      "audience": "arc"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/admit",
+      "audience": "arc"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/arc",
+      "audience": "arc"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/arcs",
+      "audience": "arc"
+    },
+    {
+      "method": "ANY",
+      "path": "/v1/box/*rest",
+      "audience": "arc"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/bundle",
+      "audience": "arc"
+    },
+    {
+      "method": "ANY",
+      "path": "/v1/console/*rest",
+      "audience": "arc"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/health",
+      "audience": "arc"
+    },
+    {
+      "method": "ANY",
+      "path": "/v1/land/*rest",
+      "audience": "arc"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/relay",
+      "audience": "arc"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/signup",
+      "audience": "arc"
+    },
+    {
+      "method": "ANY",
+      "path": "/v1/systems/*rest",
+      "audience": "arc"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/version",
+      "audience": "arc"
+    },
+    {
+      "method": "ANY",
+      "path": "/v1/wake/*rest",
+      "audience": "arc"
+    },
+    {
+      "method": "POST",
+      "path": "/v2/add",
+      "audience": "webapp"
+    },
+    {
+      "method": "POST",
+      "path": "/v2/bundle",
+      "audience": "webapp"
+    },
+    {
+      "method": "POST",
+      "path": "/v2/history",
+      "audience": "webapp"
+    },
+    {
+      "method": "POST",
+      "path": "/v2/signin/finish",
+      "audience": "window"
+    },
+    {
+      "method": "POST",
+      "path": "/v2/signin",
+      "audience": "window"
+    },
+    {
+      "method": "POST",
+      "path": "/v2/signup/continue",
+      "audience": "window"
+    },
+    {
+      "method": "POST",
+      "path": "/v2/signup/finish",
+      "audience": "window"
+    },
+    {
+      "method": "POST",
+      "path": "/v2/signup",
+      "audience": "window"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/site/:site/items",
+      "audience": "webapp"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/work",
+      "audience": "window"
+    }
+  ]
+}

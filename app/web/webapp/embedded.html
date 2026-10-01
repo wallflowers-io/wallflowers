@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>A community's own site</title>
+<!--
+  NOT WALLFLOWERS. A host page for embed.js, and a hostile one: every rule below
+  would wreck the mark if the embed let a host's CSS in. `?site=<object id>`
+  names the site the anchor lands on.
+-->
+<style>
+  * { box-sizing: content-box; }
+  body { margin: 0; background: #F6F3EC; color: #231F1A; letter-spacing: .02em;
+         font: 17px/1.65 "Iowan Old Style", Palatino, Georgia, serif; }
+  a, img, div { transform: rotate(4deg); border: 4px double #B9382C; width: 200px !important; }
+  main { max-width: 640px; margin: 0 auto; padding: 88px 32px; transform: none; border: 0; width: auto !important; }
+  h1 { font-size: 46px; line-height: 1.08; font-weight: 500; margin: 0 0 18px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hope Street</h1>
+  <p>Our paper, our type, our words.</p>
+</main>
+<script>
+  var s = document.createElement('script');
+  s.src = 'embed.js';
+  s.dataset.site = new URLSearchParams(location.search).get('site') || '';
+  document.body.appendChild(s);
+</script>
+</body>
+</html>

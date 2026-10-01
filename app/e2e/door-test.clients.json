@@ -1,0 +1,140 @@
+{
+  "egregores-echoes.com": {
+    "callbacks": [
+      "http://localhost:3100/signin/callback"
+    ],
+    "origins": [
+      "http://localhost:3100"
+    ],
+    "site": "36625ad10052faeeb0549346048f98b44d484ee3835b5e19abba4351700ea63a"
+  },
+  "egregore-local": {
+    "name": "Egregore’s Echoes (local build)",
+    "callbacks": [
+      "http://127.0.0.1:3471/signin/callback"
+    ],
+    "origins": [
+      "http://127.0.0.1:3471"
+    ],
+    "home": "http://127.0.0.1:3471/community",
+    "site": "104b4824b32806cc31838d696f9de87c37a86fae52a94b83408c70a5ed982b8d",
+    "slug": "ja-rehearsal"
+  },
+  "wallflowers-setup-ja-rehearsal": {
+    "name": "WallFlowers setup (this Mac)",
+    "callbacks": [
+      "http://127.0.0.1:8911/callback"
+    ],
+    "origins": [],
+    "site": "104b4824b32806cc31838d696f9de87c37a86fae52a94b83408c70a5ed982b8d"
+  },
+  "starter-5173": {
+    "name": "Starter (this Mac)",
+    "callbacks": [
+      "http://localhost:5173/"
+    ],
+    "origins": [
+      "http://localhost:5173"
+    ],
+    "site": "104b4824b32806cc31838d696f9de87c37a86fae52a94b83408c70a5ed982b8d",
+    "slug": "ja-rehearsal"
+  },
+  "hackathon-local": {
+    "name": "Hackathon (local)",
+    "callbacks": [
+      "http://localhost:3000/callback",
+      "http://localhost:3001/callback",
+      "http://localhost:3002/callback",
+      "http://localhost:3003/callback",
+      "http://localhost:3004/callback",
+      "http://localhost:3005/callback",
+      "http://localhost:3006/callback",
+      "http://localhost:3007/callback",
+      "http://localhost:3008/callback",
+      "http://localhost:3009/callback",
+      "http://127.0.0.1:3000/callback",
+      "http://127.0.0.1:3001/callback",
+      "http://127.0.0.1:3002/callback",
+      "http://127.0.0.1:3003/callback",
+      "http://127.0.0.1:3004/callback",
+      "http://127.0.0.1:3005/callback",
+      "http://127.0.0.1:3006/callback",
+      "http://127.0.0.1:3007/callback",
+      "http://127.0.0.1:3008/callback",
+      "http://127.0.0.1:3009/callback",
+      "http://localhost:3000/",
+      "http://localhost:3001/",
+      "http://localhost:3002/",
+      "http://localhost:3003/",
+      "http://localhost:3004/",
+      "http://localhost:3005/",
+      "http://localhost:3006/",
+      "http://localhost:3007/",
+      "http://localhost:3008/",
+      "http://localhost:3009/",
+      "http://localhost:5173/",
+      "http://localhost:5174/",
+      "http://localhost:5175/",
+      "http://localhost:8000/",
+      "http://localhost:8080/",
+      "http://127.0.0.1:3000/",
+      "http://127.0.0.1:3001/",
+      "http://127.0.0.1:3002/",
+      "http://127.0.0.1:3003/",
+      "http://127.0.0.1:3004/",
+      "http://127.0.0.1:3005/",
+      "http://127.0.0.1:3006/",
+      "http://127.0.0.1:3007/",
+      "http://127.0.0.1:3008/",
+      "http://127.0.0.1:3009/",
+      "http://127.0.0.1:5173/",
+      "http://127.0.0.1:5174/",
+      "http://127.0.0.1:5175/",
+      "http://127.0.0.1:8000/",
+      "http://127.0.0.1:8080/"
+    ],
+    "origins": [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:3002",
+      "http://localhost:3003",
+      "http://localhost:3004",
+      "http://localhost:3005",
+      "http://localhost:3006",
+      "http://localhost:3007",
+      "http://localhost:3008",
+      "http://localhost:3009",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:3001",
+      "http://127.0.0.1:3002",
+      "http://127.0.0.1:3003",
+      "http://127.0.0.1:3004",
+      "http://127.0.0.1:3005",
+      "http://127.0.0.1:3006",
+      "http://127.0.0.1:3007",
+      "http://127.0.0.1:3008",
+      "http://127.0.0.1:3009",
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://localhost:5175",
+      "http://localhost:8000",
+      "http://localhost:8080",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:5174",
+      "http://127.0.0.1:5175",
+      "http://127.0.0.1:8000",
+      "http://127.0.0.1:8080"
+    ],
+    "site": "*"
+  },
+  "team-lantern": {
+    "name": "Team Lantern",
+    "callbacks": [
+      "http://localhost:5174/"
+    ],
+    "origins": [
+      "http://localhost:5174"
+    ],
+    "site": "37d2b48e9f9a7e6c92816bd8c658314f48eb53eb591d35f46cb8db76f521c07e"
+  }
+}

@@ -1,0 +1,95 @@
+# Secrets — never commit
+.env
+*.env
+!.env.example
+
+# Rust
+/rust/target/
+
+# Swift / Xcode build artifacts
+.build/
+**/.build/
+
+# Rust build output (regenerable; excluded to avoid bloat / 100MB limit)
+/target/
+**/target/
+
+# Python bytecode (prototype)
+__pycache__/
+*.pyc
+
+# Swift SPM local cache
+.spm/
+**/.spm/
+
+# Vendored Signal-iOS reference (1.9GB local clone, kept for UX reference only —
+# never committed; it carries its own .git and its AGPL source is upstream).
+signal/
+
+# macOS junk
+.DS_Store
+**/.DS_Store
+
+# Junk / embedded repos — keep out of history
+nova.zip
+/qa/pacific-core/
+/qa/pacific-webapp/
+
+# Xcode / SwiftPM per-user IDE state
+**/.swiftpm/xcode/xcuserdata/
+**/xcuserdata/
+
+# Sim harness run output (transient logs/clocks/captures) — one line per harness,
+# matching Aries's precedent.
+simulators/Aries/.run/
+simulators/Aries/**/*.png
+simulators/Latency/.run/
+simulators/Latency/**/*.png
+simulators/Pairing/.run/
+simulators/Pairing/**/*.png
+simulators/Chat/.run/
+simulators/Chat/**/*.png
+animations/native/OrbitCMY/build/
+
+# Reference clone: the upstream Polis system (compdemocracy/polis).
+# Read-only reference for the deliberation lenses (P13-P18); not our code.
+library/polis/
+
+# Secrets. `env/` holds the App Store Connect API key (AuthKey_*.p8 — Apple lets you
+# download it ONCE), plus local .env values. Never committed: a leaked ASC key can
+# upload builds and read your account. Rotate in App Store Connect if it ever escapes.
+env/
+*.p8
+
+# Xcode build output (ad-hoc CLI build dirs; ~4GB, and .xcarchive embeds
+# provisioning profiles with real device UDIDs)
+app/ui/build*/
+/build/
+**/*.xcresult
+**/*.xcarchive
+
+# Databases are dev fixtures — regenerate locally, never track
+*.db
+
+# Regenerable: rebuild via ArcResolverKit/scripts/package_xcframework.sh
+# (3 × 57MB static libs; same policy as apple/.gitignore)
+**/Artifacts/*.xcframework
+
+# CLIP weights provisioned via PacificStore/scripts/provision-clip.sh (~103MB)
+app/LocalStore/PacificStore/Sources/PacificStore/CLIPModels/*
+!app/LocalStore/PacificStore/Sources/PacificStore/CLIPModels/README.md
+
+# Agent scratch notes
+/qa/blackboard/
+/servers/sysiphus/
+
+# prototype build artifacts
+prototypes/profile/render
+
+# Local-only cargo path overrides (see .cargo/config.toml.example)
+.cargo/config.toml
+
+# Build output staged beside the pages that load it (app/web/build-wasm.sh, serve-docs.sh).
+# 3.6 MB of wasm, rebuilt from this repo whenever it is stale — never source.
+docs/core/
+.serve-docs.pid

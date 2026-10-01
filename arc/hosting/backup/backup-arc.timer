@@ -1,0 +1,11 @@
+# backup-arc.timer — every 15 minutes, at :00, :15, :30 and :45 (K-48).
+[Unit]
+Description=Encrypted off-box backup (arc), every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,15,30,45:00
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

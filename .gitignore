@@ -1,0 +1,10 @@
+.DS_Store
+/scratch/
+
+
+# Scratch at the repo root. hn.json is a Hacker News API dump.
+hn.json
+__pycache__/
+
+# The Flower route (D-45): a local Python virtualenv and checkpoints, never published.
+arc/library/flower/

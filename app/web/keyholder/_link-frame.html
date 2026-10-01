@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pacific keyholder (smoke)</title>
+<meta name="robots" content="noindex, nofollow">
+<!-- SMOKE HARNESS ONLY. index.html is the real keyholder frame and must never
+     load a shim. This is the same origin and the same keyholder.js, with a
+     virtual authenticator installed in front of it — the equivalent of the one
+     Chrome and Safari expose to WebDriver, which a headless WKWebView has no
+     way to reach. It exists so accountChannel() can be run UNMODIFIED against
+     the real auth service, and the channel it derives compared with the one an
+     independent implementation derives from the same passkey. -->
+<style>html,body{margin:0;height:100%;background:transparent}</style>
+</head>
+<body>
+<script src="_authn-shim.js"></script>
+<script>
+/* The credential this browser holds. Written by the smoke run after it has
+   registered the passkey for real, so both sides hold the SAME one. */
+fetch('_smoke-cred.json', { cache: 'no-store' })
+  .then(function (r) { return r.json(); })
+  .then(function (cred) { return window.installVirtualAuthenticator(cred); })
+  .then(function () {
+    /* Only now: keyholder.js takes the port on the first pacific.init it sees,
+       and a ceremony that started before the authenticator was ready would
+       fail for a reason that has nothing to do with the code under test. */
+    var s = document.createElement('script');
+    s.src = 'keyholder.js';
+    /* Tell the driver when the listener actually exists. A MessagePort can be
+       transferred exactly once, so a pacific.init that arrives early is not
+       merely ignored — it takes the only port with it, and no retry can undo
+       that. The handshake goes this way round for that reason. */
+    s.onload = function () { parent.postMessage({ t: 'smoke.ready' }, '*'); };
+    document.body.appendChild(s);
+  })
+  .catch(function (e) {
+    parent.postMessage({ t: 'smoke.shim-failed', why: String(e && e.message || e) }, '*');
+  });
+</script>
+</body>
+</html>

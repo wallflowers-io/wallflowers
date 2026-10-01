@@ -1,0 +1,21 @@
+# arc-build — the deploy stamp every Arc plane carries.
+#
+# One crate, ZERO dependencies (not even serde: it formats its own JSON), so adding it to a
+# plane costs nothing in build time or transitive weight. Its whole job is to answer, from
+# inside a binary that is already running on a box, "which commit am I?".
+#
+# The values arrive as build-time environment variables (ARC_BUILD_*) set by
+# hosting/deploy-arc.sh. build.rs turns them into plain string literals so that a stamped
+# binary answers even to `strings`, and declares rerun-if-env-changed on each so a new SHA
+# actually rebuilds the stamp instead of being served from cargo's cache.
+[package]
+name = "arc-build"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "arc_build"
+path = "src/lib.rs"
+
+[dependencies]

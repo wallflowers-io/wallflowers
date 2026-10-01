@@ -1,0 +1,108 @@
+[package]
+name = "pacific-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# The on-device client engine: identity, directory (SQLite), MLS (+ a SQLite
+# GroupStateStorage so group state survives the process-per-command CLI), the
+# metadata seal, the wss transport, the pairing handshake, and the delta coordinator.
+
+[features]
+# Everything, and the default — a native build is unchanged by this split.
+default = ["mls", "storage", "transport", "lode"]
+
+# The device's own persistence: SQLite directory, the MLS state/keypackage
+# stores, and the object store over them.
+storage = ["dep:rusqlite", "dep:rand_core"]
+
+# The union LodeDB store beside the directory (`lode_route`). Its own feature so a
+# build that never projects (the Door) does not carry lodedb-core, lodedb-gpu and
+# cudarc (O-36).
+lode = ["storage", "dep:lodedb-core"]
+
+# Dialling a relay: tokio, tungstenite, rustls.
+transport = ["dep:tokio", "dep:tokio-tungstenite", "dep:rustls", "dep:futures-util"]
+
+# The MLS engine. NO LONGER REQUIRES `storage`. It used to, because
+# `mls::build_client` opened the SQLite GroupStateStorage / KeyPackageStorage
+# itself — the one place the two were coupled, and the reason a browser leaf was
+# impossible without dragging SQLite into wasm. `build_client` is now generic
+# over those two mls-rs traits and takes them as arguments; `build_client_sqlite`
+# is the native convenience that keeps `node.rs` unchanged.
+#
+# So a new platform brings TWO trait impls (GroupStateStorage, KeyPackageStorage)
+# and gets Pacific's cipher suite, identity provider and group-name extension
+# from the one builder rather than restating them and drifting.
+#
+# Left out of a wasm build, mls-rs takes getrandom's `js` backend with it, and
+# with that wasm-bindgen: 697 KB of un-post-processed bindgen describe machinery
+# and four imports the module cannot be instantiated without.
+mls = ["dep:mls-rs", "dep:mls-rs-core", "dep:mls-rs-crypto-rustcrypto"]
+
+# WHY THIS EXISTS. wasm32 has no filesystem and no sockets, so neither SQLite nor
+# mio can cross — `cargo build --target wasm32-unknown-unknown` fails in mio with
+# "This wasm target is unsupported by mio. If using Tokio, disable the net
+# feature." Without the split, the FOLD cannot run in a browser either, and the
+# fold is the part that must not be reimplemented: media-wasm's own header says a
+# demo that reimplements the thing it is demonstrating proves nothing. The same
+# applies to a web client that reimplements the reducer.
+#
+#   cargo build -p pacific-core --no-default-features --target wasm32-unknown-unknown
+
+[dependencies]
+pacific-media = { path = "../pacific-media" }
+pacific-wire.workspace = true
+mls-rs = { workspace = true, optional = true }
+mls-rs-core = { workspace = true, optional = true }
+mls-rs-crypto-rustcrypto = { workspace = true, optional = true }
+ed25519-dalek.workspace = true
+rand_core = { workspace = true, optional = true }
+sha2.workspace = true
+bip39.workspace = true
+zeroize.workspace = true
+rusqlite = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+serde_bytes.workspace = true
+ciborium.workspace = true
+base64.workspace = true
+hex.workspace = true
+chacha20poly1305.workspace = true
+hkdf.workspace = true
+# The backup seal needs a nonce on every target; getrandom is already in the graph
+# everywhere (OS natively, the host's `pacific_fill_random` on wasm32 via `custom`).
+getrandom = "0.2"
+tokio = { workspace = true, optional = true }
+tracing = "0.1"
+# rustls (webpki roots) so the client can dial wss:// hosted relays — no OpenSSL,
+# consistent with the rest of the stack (mls-rs rustcrypto, sentry rustls).
+tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"], optional = true }
+# rustls 0.23 refuses to auto-select a CryptoProvider once both aws-lc-rs and ring are
+# unified into the dependency graph (they are). Direct-depend on rustls so we can install
+# one explicitly at startup — see transport::ensure_crypto_provider. ring is already in
+# the tree (webpki roots) and is the lightest choice for on-device (iOS) TLS.
+rustls = { version = "0.23", default-features = false, features = ["ring"], optional = true }
+futures-util = { workspace = true, optional = true }
+thiserror.workspace = true
+# The rust-direct (rust->rust) GroupObject route into the union LodeDB store: a
+# plain rlib whose engine::{CoreAppender,CoreCheckpointer} we call to append at the
+# delta_log — no C ABI. Cross-repo path dep (engram checked out beside pacific).
+# Git dep so pacific-core builds standalone (as a git dependency of arc-node / the Arc image)
+# without the sibling lode-lab checkout. Local dev overrides it with a [patch] in the workspace
+# root (../lode-lab/lodedb/crates/lodedb-core), so iteration stays on the sibling path.
+lodedb-core = { git = "https://github.com/Egoist-Machines/LodeDB.git", tag = "v2.0.2", optional = true }
+
+# THE ICD'S NUMBERS, read at build (build.rs): serde_json to parse the model.
+[build-dependencies]
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+# Integration/transport tests spin up a real in-process Semaphore relay: the Arc's, in
+# this repository since the 18 Sep 2026 join, so a path. It replaces a codeberg rev pin
+# (47e933c, gone from the remote) whose relay still compiled the inference tunnel against
+# a `pacific_wire::tunnel::CHAN_INFER` this workspace retired with D-38 (26 Sep 2026).
+# Dev-only: dev-dependencies never enter the production build, and src/transport.rs's
+# use is #[cfg(test)].
+relay = { path = "../../arc/planes/relay" }

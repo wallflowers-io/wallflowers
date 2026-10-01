@@ -1,0 +1,55 @@
+{
+  "at": "2026-09-30T09:49:15+00:00",
+  "from": "the test harness's machine",
+  "door": "production",
+  "where": "production (app.wallflowers.io)",
+  "link": "an ordinary internet connection",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/v2/icd",
+      "n": 30,
+      "p50_ms": 105.3,
+      "p95_ms": 133.3,
+      "status": 200,
+      "note": "",
+      "auth": "none",
+      "link": "an ordinary internet connection",
+      "cold": {
+        "n": 10,
+        "p50_ms": 574.4,
+        "p95_ms": 629.0
+      },
+      "ttfb": {
+        "p50_ms": 94.5,
+        "p95_ms": 114.9
+      },
+      "statuses": {
+        "200": 40
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v2/signin.js",
+      "n": 30,
+      "p50_ms": 91.5,
+      "p95_ms": 102.2,
+      "status": 200,
+      "note": "",
+      "auth": "none",
+      "link": "an ordinary internet connection",
+      "cold": {
+        "n": 10,
+        "p50_ms": 300.1,
+        "p95_ms": 348.1
+      },
+      "ttfb": {
+        "p50_ms": 91.1,
+        "p95_ms": 101.4
+      },
+      "statuses": {
+        "200": 40
+      }
+    }
+  ]
+}

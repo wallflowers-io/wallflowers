@@ -1,0 +1,74 @@
+{
+  "icd": "feed-origin",
+  "version": "1.0.0",
+  "info": {
+    "title": "Pacific Feed Origin ICD",
+    "description": "The closed contract for how an object may reach a person's feed. This is a product choice stated as schema: Pacific's feed has NO opaque algorithm, so the set of origins is closed, every feed object carries exactly one origin stamp, every stamp renders as a one-line 'why', and the refusals below are typed so that weakening any of them is a visible schema change reviewed like code — never a quiet product drift. Technical anchor: the stamp vocabulary canonicalises the provenance enum already shipped in coordination/feed-dataset.schema.json (member/system/hop) and adds the read-time 'derived' class ruled in docs/groups-events-ia.html (occurrences from event.setSchedule; market-face projections from postures). Conformance: pacific-core/src/feed_origin_icd.rs fails when this document and the code drift."
+  },
+  "origins": {
+    "member": {
+      "summary": "Residue of an own fold: the object lives in a GroupObject the person is a member of. Self-authored objects are member-origin with hops absent (your own groups include your identity record).",
+      "authority": "the MLS membership itself — presence in the roster is the read permission",
+      "stamp": { "required": ["origin", "fold_group"], "optional": ["author"] },
+      "legibility": "in {fold_group}",
+      "status": "implemented"
+    },
+    "hop": {
+      "summary": "Carried over connections: surfaced via a connection's membership or a place's log reached through discovery (contact ops 7/8). Bounded hops — distance is part of the stamp, never hidden.",
+      "authority": "the connection edge that carried it; each hop is an attributable relay",
+      "stamp": { "required": ["origin", "via_connection", "hops"], "optional": ["place"] },
+      "hops_max": 3,
+      "legibility": "via {via_connection} · {hops} hop(s)",
+      "status": "implemented"
+    },
+    "system": {
+      "summary": "Offered by a named System (kind 21): reference rows hydrated from registered feeds (ra.seoul, artrabbit.seoul, schoolcal). Always labelled with the system's name; always loses to minted objects on collision.",
+      "authority": "the System's registration; a system without a name cannot author",
+      "stamp": { "required": ["origin", "system"], "optional": [] },
+      "legibility": "offered by {system}",
+      "status": "implemented"
+    },
+    "derived": {
+      "summary": "Implied at read time by owned state — computed in the jewels' filter configs, NEVER stored (no derived truth stored as fact). A derivation cites the object and rule that imply it; deleting the source deletes the derivation with nothing to clean up.",
+      "authority": "the source object's own origin; a derivation cannot exceed its source's reach",
+      "stamp": { "required": ["origin", "source_object", "rule"], "optional": ["local_date"] },
+      "rules": {
+        "occurrence": {
+          "summary": "Upcoming occurrences computed from an event spine's weekly schedule; an occurrence becomes an object only on first RSVP (F-B hydration, keyed spine_id+local_date).",
+          "source_op": "event.setSchedule",
+          "status": "specified"
+        },
+        "market_projection": {
+          "summary": "Market-face rows projected from HOLDS/WANTS/OFFERS postures.",
+          "source_op": "thing.setPosture",
+          "status": "specified"
+        }
+      },
+      "legibility": "implied by {source_object} · {rule}",
+      "status": "specified"
+    }
+  },
+  "collision": {
+    "summary": "When two objects resolve as the same real thing (same_as / dedup key), one wins everywhere. Minted-wins, formalised: closeness to the person outranks reach.",
+    "key": "resolution identity (graph_resolution same_as / minted-wins dedup key)",
+    "precedence": ["member", "hop", "system"],
+    "derived_excluded": "a derivation never collides — it cites its source instead"
+  },
+  "ordering": {
+    "summary": "Feed order is a pure deterministic function of the stamps and the graph — reproducible from a person's own store, explainable line by line.",
+    "inputs": ["origin stamp", "bitemporal timestamps (valid_at, created_at)", "week-circle phase (schedule proximity)", "chromodynamic circle state (red/blue/gold → white)"],
+    "forbidden_inputs": ["engagement counters", "dwell time", "per-person learned weights", "remote configuration", "any signal not derivable from the person's own store"]
+  },
+  "refusals": [
+    { "name": "paid-origin", "statement": "No origin can be bought. There is no ads class, no promoted class, no pay-to-place. Money never mints reach." },
+    { "name": "learned-ranking", "statement": "No learned ranker orders the feed. Ordering is the pure function above; removing this refusal is a schema change, not a tuning decision." },
+    { "name": "ai-authored", "statement": "No AI-authored objects reach the feed. Systems relay named external feeds; they do not generate. (User-facing No-AI stance, 10 Aug positioning.)" },
+    { "name": "unstamped", "statement": "An object without a valid origin stamp does not render. There is no default origin." }
+  ],
+  "anchors": {
+    "fixture_schema": "coordination/feed-dataset.schema.json",
+    "delta_graph_icd": "coordination/delta-graph.icd.json",
+    "groups_events_ia": "docs/groups-events-ia.html",
+    "feed_ruling": "coordination/FEED-TRANSMISSION.txt (F-B hydration; jewels = filter configs)"
+  }
+}

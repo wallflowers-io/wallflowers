@@ -1,0 +1,38 @@
+# intro_emit — the E10 tripwire's emitter. DELIBERATELY OUTSIDE core/'s workspace.
+#
+# WHY IT IS NOT `core/pacific-core/examples/intro_emit.rs`. `cargo test` builds a
+# package's examples, so an example added here for one track lands on EVERY other
+# track's build path: a compile error in the adversary's helper would turn the whole
+# core suite red for people who have never heard of E10. A previous attempt did
+# exactly that. This crate is a standalone workspace (`[workspace]` below) that
+# path-depends on pacific-core, so it compiles the SAME library through the SAME
+# public API and never enters `cargo test` in core/.
+#
+# Built by harness/adversary/emitter.py; binary at ./target/debug/intro_emit.
+
+[package]
+name = "intro_emit"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Standalone: NOT a member of core/Cargo.toml's workspace.
+[workspace]
+
+[[bin]]
+name = "intro_emit"
+path = "src/main.rs"
+
+[dependencies]
+pacific-core = { path = "../../../pacific-core" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+serde_json = "1"
+hex = "0.4"
+base64 = "0.22"
+tempfile = "3"
+
+# core/Cargo.toml carries this patch at ITS workspace root; patches do not reach a
+# path dependency's consumers, so restate it here or this crate would compile a
+# DIFFERENT mls-rs than the tree does — and then it would not be the tree's bytes.
+[patch.crates-io]
+mls-rs = { path = "../../../vendor/mls-rs" }

@@ -1,0 +1,55 @@
+# door.service — the Door's supervisor (DR-2) under systemd. mdr/door.md §7, §8.
+# Every session process it starts inherits this sandbox; a uid per session and
+# seccomp are still to come (§7, step 8).
+[Unit]
+Description=WallFlowers Door (app.wallflowers.io)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=door
+Group=door
+EnvironmentFile=/opt/door/door.env
+ExecStart=/opt/door/bin/door
+Restart=on-failure
+RestartSec=2
+# A stop signals every process in the unit; each session stores its head and exits
+# within 30 s (NC-47). Past this, systemd kills what is left.
+TimeoutStopSec=45
+# /run/door is tmpfs: every session's directory lives there and nothing survives a reboot.
+RuntimeDirectory=door
+RuntimeDirectoryMode=0700
+# The refusal record (S-26's stand-in) is the one thing written to disk.
+StateDirectory=door
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+LimitCORE=0
+MemorySwapMax=0
+# NC-48: a ceiling for the Door and every session. The Door reads it back and fits its
+# caps under it. Filled by deploy-door.sh setup from DOOR_MEMORY_MAX (default 75%).
+MemoryMax=__MEMORY_MAX__
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# No debugging syscalls: no ptrace, no process_vm_readv into a session (§7, step 8).
+SystemCallFilter=~@debug
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0077
+ProtectProc=invisible
+ReadOnlyPaths=/opt/door
+# EGRESS (DV-10, step 8): localhost (the edge, and the resolver at 127.0.0.53), and the
+# prefixes DOOR_EGRESS names at setup: the relay's and the auth service's, which sit
+# behind Cloudflare, so its published ranges. Nothing else, in or out.
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=__EGRESS__
+
+[Install]
+WantedBy=multi-user.target
