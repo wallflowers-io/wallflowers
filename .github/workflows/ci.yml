@@ -30,6 +30,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0  # icd-released.py reads the newest icd/* tag's ICD
       - run: make check-icd
 
   core:
@@ -47,9 +48,10 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: core
+      - run: sudo apt-get update -q && sudo apt-get install -yq libopenblas-dev
       - run: make check-core
       - name: suite output
-        if: failure()
+        if: failure() || cancelled()
         run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
 
   arc:
@@ -68,13 +70,13 @@ jobs:
           workspaces: arc
       - run: make check-arc
       - name: suite output
-        if: failure()
+        if: failure() || cancelled()
         run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
 
   door:
     name: door
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,5 +94,5 @@ jobs:
           node-version: 24
       - run: make check-door
       - name: suite output
-        if: failure()
+        if: failure() || cancelled()
         run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
