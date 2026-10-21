@@ -48,6 +48,9 @@ jobs:
         with:
           workspaces: core
       - run: make check-core
+      - name: suite output
+        if: failure()
+        run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
 
   arc:
     name: arc
@@ -64,6 +67,9 @@ jobs:
         with:
           workspaces: arc
       - run: make check-arc
+      - name: suite output
+        if: failure()
+        run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
 
   door:
     name: door
@@ -85,3 +91,6 @@ jobs:
         with:
           node-version: 24
       - run: make check-door
+      - name: suite output
+        if: failure()
+        run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
