@@ -1,0 +1,22 @@
+# Continuous replication of the identity store to R2.
+#
+# WHY THIS FILE EXISTS. Since the Kenjin passkey door shipped, this service is
+# the sole authority for those credentials: the public keys are held nowhere
+# else, and no provider can tell us what they were. A lost volume is not a
+# lost cache, it is every passkey account gone permanently.
+#
+# WAL-AWARE ON PURPOSE. Most of the data lives in auth.db-wal between
+# checkpoints -- on the box, a 4KB auth.db sat beside a 144KB WAL -- so a cron
+# job copying auth.db would capture an almost-empty file and report success.
+# Litestream replicates the WAL, which is the only correct way to back this up
+# while it is being written.
+dbs:
+  - path: ${DB_PATH}
+    replicas:
+      - type: s3
+        endpoint: ${R2_ENDPOINT}
+        bucket: ${R2_BUCKET}
+        path: auth-db
+        region: auto
+        access-key-id: ${R2_ACCESS_KEY_ID}
+        secret-access-key: ${R2_SECRET_ACCESS_KEY}
