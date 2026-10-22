@@ -1,6 +1,7 @@
-# kenjin-auth
+# auth: the account store
 
-Accounts for kenjin.cc. An account is an **Ed25519 identity public key** — the
+Accounts for WallFlowers, served at arc.wallflowers.io/auth (the passkey RP ID is still
+`kenjin.cc`, so that name stays in code and tests). An account is an **Ed25519 identity public key** — the
 one a person owns, derived from a seed they hold and can write down as 24
 words. This service stores three sealed blobs for that key and reserves slugs
 for it. It cannot read any of them, and it never sees the passkey.
@@ -28,7 +29,11 @@ GET  /auth/users/<pk>/account        what we hold for you  signed
 PUT  /auth/users/<pk>/seals/<node>   move a seal counter   signed + CAS (D-34 (c))
 GET  /auth/users/<pk>/seals/<node>   the counter held      signed
 POST /auth/users/<pk>/sites          reserve a slug        signed
+PUT  /auth/users/<pk>/sites/<s>/host bind it to a Host     signed
 GET  /auth/site/check?slug=          is it free?           free
+POST /auth/site/hold                 hold it during signup free
+POST /auth/site/release              drop your own hold    free
+GET  /auth/site/<slug>/host          its Host              UNAUTHENTICATED (the Arc asks)
 GET  /auth/health
 GET  /.well-known/passkey-endpoints  where passkeys are    public
                                      made and managed

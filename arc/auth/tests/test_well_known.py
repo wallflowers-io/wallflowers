@@ -20,6 +20,7 @@ someone is deciding whether to press delete.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -27,11 +28,9 @@ import pytest
 
 WELL_KNOWN = "/.well-known/passkey-endpoints"
 
-# The site tree, beside the service in this repo. The service's own image does
-# not carry it, so the link-rot checks skip rather than fail there — they are
-# meaningless without the pages to look for, and a skip that says why is better
-# than a red suite that means nothing.
-SITE = Path(__file__).resolve().parents[2] / "site"
+# The website's site/ tree: another repository, beside this one in the workspace
+# (business/website), or wherever WEBSITE names. Absent, these checks skip, saying so.
+SITE = Path(os.environ.get("WEBSITE") or Path(__file__).resolve().parents[4] / "business" / "website") / "site"
 
 
 def _page_for(url: str) -> Path | None:

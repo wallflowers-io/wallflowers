@@ -14,12 +14,19 @@ was written (22 Sep 2026).
 """
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
+import pytest
+
 from app.main import _RESERVED, _SLUG_OK
 
-SITE = Path(__file__).resolve().parents[2] / "site"
+# The website's site/ tree: another repository, beside this one in the workspace
+# (business/website), or wherever WEBSITE names. Absent, these checks skip, saying so.
+SITE = Path(os.environ.get("WEBSITE") or Path(__file__).resolve().parents[4] / "business" / "website") / "site"
+pytestmark = pytest.mark.skipif(not SITE.is_dir(),
+                                reason=f"no website at {SITE}: the reserved names are UNCHECKED here")
 WEBROOT = "/usr/share/nginx/html/"
 
 
@@ -67,7 +74,8 @@ def _answered_by_nginx() -> set[str]:
 def test_the_derivation_sees_what_the_site_serves():
     """Guard the reader, or the real test could pass by reading nothing."""
     served, answered = _served_by_the_image(), _answered_by_nginx()
-    assert {"site", "collaborate", "demo", "escape", "assets", "brand"} <= served, served
+    # /demo left the site with the retired demo; it stays reserved (main.py) all the same.
+    assert {"site", "collaborate", "escape", "assets", "brand"} <= served, served
     assert {"signup", "signin", "profile", "lock", "unlock", "auth"} <= answered, answered
 
 

@@ -22,11 +22,9 @@ THE CORE IS THE DEFINITION. `pacific_core::identity` and
 `pacific_core::locator` are where these bytes are decided; this file reads them
 out of the Rust source and holds the Python and JavaScript copies against them.
 
-SKIPS RATHER THAN FAILS WHEN A TREE IS ABSENT. `core/`, `site/` and
-`app/` are separate git repos and are not always checked out beside each other.
-A missing tree is "cannot check", which is not the same as "checked and fine" --
-so it skips loudly, with the path it looked for. A tree that IS present and
-disagrees is a failure, every time.
+FAILS WHEN A FILE IS ABSENT. The service, `core/` and `app/` are one
+repository since 22 Oct 2026, so a missing file is a moved or renamed one, and
+the check must follow it rather than pass by reading nothing.
 """
 from __future__ import annotations
 
@@ -35,22 +33,15 @@ from pathlib import Path
 
 import pytest
 
-# tests/ -> auth/ -> kenjin/ -> site/ -> the working tree root
-# business/website/auth/tests/ -> website -> business -> the workspace. This has
-# moved twice: parents[4] under site/kenjin/, parents[3] under site/, and back to
-# parents[4] since the site became business/website on 18 Sep 2026. Left wrong it
-# finds no core/ and skips every check reporting "not checked out" — green, and
-# checking nothing.
-ROOT = Path(__file__).resolve().parents[4]
-PRODUCT = ROOT / "product"                # app, arc and core: one repository since 18 Sep
+# arc/auth/tests/ -> auth -> arc -> the repository root.
+PRODUCT = Path(__file__).resolve().parents[3]
 CORE = PRODUCT / "core" / "pacific-core" / "src"
 WEB = PRODUCT / "app" / "web" / "account" / "pacific-account.js"
 SMOKE = PRODUCT / "app" / "web" / "smoke" / "e2e.py"
 
 
 def _read(p: Path) -> str:
-    if not p.exists():
-        pytest.skip(f"not checked out beside this repo: {p} — domain drift UNCHECKED")
+    assert p.exists(), f"{p} is gone: follow it here, or domain drift goes unchecked"
     return p.read_text(encoding="utf-8")
 
 
