@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kenjin-auth"
+version = "0.1.0"
+description = "Accounts for kenjin.cc — a key, its wrap, and its sealed history."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "httpx>=0.28",                   # Arc discovery, and the test client
+    "cryptography>=43",              # Ed25519 verify: the whole of authentication
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[project.optional-dependencies]
+# cbor2 and PyNaCl are for ONE test and are dev-only: `tests/test_head.py` opens
+# a head sealed by the real Rust implementation, which is what pins the two
+# implementations to the same envelope. The service itself never opens a blob and
+# must never grow a crypto dependency to do so.
+dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "cbor2>=5.6", "PyNaCl>=1.5"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
