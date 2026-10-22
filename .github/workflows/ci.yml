@@ -29,12 +29,19 @@ jobs:
   icd:
     name: icd
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0  # icd-released.py reads the newest icd/* tag's ICD
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # stable, 2026-10-01
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+      - run: sudo apt-get update -q && sudo apt-get install -yq libopenblas-dev
       - run: make check-icd
 
   auth:
@@ -94,7 +101,7 @@ jobs:
   door:
     name: door
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -114,7 +121,11 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - name: PostgreSQL 16 for training_wheels' tests
+        run: test -x /usr/lib/postgresql/16/bin/initdb || { sudo apt-get update -q && sudo apt-get install -yq postgresql-16; }
       - run: make check-door
+        env:
+          PG_BIN: /usr/lib/postgresql/16/bin
       - name: suite output
         if: failure() || cancelled()
         run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
