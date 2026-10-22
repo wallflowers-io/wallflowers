@@ -117,9 +117,21 @@ export function block(r, prev) {
   return [BEGIN(r.version), head, since, ...(prev && !body.length ? ['  - no op or kind changed'] : body), END(r.version)].join('\n');
 }
 
+const blockRe = (v) => new RegExp(`${BEGIN(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${END(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+
+/* The oldest release here need not be the first: this repository's history begins at icd/2.3.1, and
+   the ICDs released before it are not in it. Where its logged block was computed against one of them,
+   those lines stand as written; its release line (tag, date, pin) is still computed. */
+function asWritten(r, text) {
+  const m = readFileSync(LOG, 'utf8').match(blockRe(r.version));
+  if (!m || !/\n- Against /.test(m[0])) return text;
+  const [begin, head] = text.split('\n');
+  return [begin, head, ...m[0].split('\n').slice(2)].join('\n');
+}
+
 function entries() {
   const rel = releases(), all = [...rel, ...drafts(rel)];
-  return all.map((r, i) => ({ r, prev: all[i - 1], text: block(r, all[i - 1]) }));
+  return all.map((r, i) => ({ r, prev: all[i - 1], text: i ? block(r, all[i - 1]) : asWritten(r, block(r)) }));
 }
 
 function baseline() {

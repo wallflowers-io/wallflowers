@@ -7,7 +7,7 @@ Read the linked pages before writing code; they are generated from the running s
 - API origin: https://app.wallflowers.io  (every call is `session.fetch('/v2/...')`, JSON in and out)
 - Sign-in script: `<script src="https://app.wallflowers.io/v2/signin.js" integrity="sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/" crossorigin="anonymous"></script>`
 - Machine-readable routes: https://docs.wallflowers.io/routes.json · the data model: https://app.wallflowers.io/v2/icd (no session needed; from a browser, only on an origin WallFlowers allows)
-- Baseline these docs describe: model 2.3.1 (sha256 a71fb32573731ca2de99e637834c279fd44d661a947b9542c2d3b088dd10cb13), the Door at e1061bb2; machine-readable: https://docs.wallflowers.io/baseline.json
+- Baseline these docs describe: model 2.3.1 (sha256 a71fb32573731ca2de99e637834c279fd44d661a947b9542c2d3b088dd10cb13), the Door at 1aab5b9f; machine-readable: https://docs.wallflowers.io/baseline.json
 - A working starter to begin from (two files, no build): https://docs.wallflowers.io/starter/index.html and https://docs.wallflowers.io/starter/app.js
 
 ## Do
