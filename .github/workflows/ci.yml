@@ -1,6 +1,6 @@
 # Every job calls a Makefile target: the Makefile is the one way to build and test.
-# Not here yet: check-auth (business/website, another repository) and check-harness
-# (red on main: the ICD has no components.messages).
+# Not here yet: check-harness (red on main: the ICD has no components.messages).
+# Checks against business/website (another repository) say NOT RUN and do not fail.
 
 name: CI
 
@@ -20,6 +20,10 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: never
+  # Tests built at opt-level 1: in debug, core's MLS suites outran an hour on 4 CPUs.
+  # Debug assertions and overflow checks are separate settings and stay on.
+  CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   icd:
@@ -32,6 +36,20 @@ jobs:
           persist-credentials: false
           fetch-depth: 0  # icd-released.py reads the newest icd/* tag's ICD
       - run: make check-icd
+
+  auth:
+    name: auth
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r arc/auth/requirements-dev.lock
+      - run: make check-auth
 
   core:
     name: core
@@ -89,6 +107,10 @@ jobs:
           workspaces: |
             arc
             app/door
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r arc/auth/requirements-dev.lock
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
