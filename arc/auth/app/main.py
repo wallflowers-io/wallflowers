@@ -777,6 +777,8 @@ _RESERVED = {
     # real pages and a real directory this list did not know about, found by
     # tests/test_reserved_names.py when a slug became a face at /<slug> (22 Sep).
     "demo", "demo-media", "escape",
+    # the site's /map and /play (9 Oct), found the same way when the service moved (22 Oct).
+    "map", "play",
 }
 # 2-32 chars, a-z 0-9 and hyphens, never a hyphen at either end. Two is the
 # floor because a one-character address is not one anybody can share aloud.
