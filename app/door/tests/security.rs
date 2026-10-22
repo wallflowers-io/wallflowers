@@ -591,13 +591,10 @@ fn workspace() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
-/// The website commit whose auth service these tests run against: the one that deploys,
-/// not whatever the workspace's checkout holds (NC-73: its main had no seal counter, and
-/// the D-34 tests failed for their environment). `DOOR_TEST_AUTH_REF` names another.
-const AUTH_REF: &str = "be38a21";
-
-/// The auth service (business/website/auth, at `AUTH_REF`) on a free port with a
-/// throwaway database, run as the end-to-end stack runs it. Its process group dies on drop.
+/// The auth service (arc/auth, in this repository since 22 Oct 2026: the one this commit
+/// deploys) on a free port with a throwaway database, run as the end-to-end stack runs it.
+/// Its process group dies on drop. `DOOR_TEST_AUTH_REF` runs it as committed at another ref.
+/// The Python is `DOOR_TEST_PYTHON`, else the workspace's .venv, else `python3`.
 struct Auth {
     child: Child,
     root: PathBuf,
@@ -613,25 +610,34 @@ impl Auth {
     /// The auth service, calling itself `public` where one is given: its address as a
     /// caller reaches it through something in front of it.
     fn start_as(public: Option<&str>) -> Auth {
-        let ws = workspace();
-        let website = ws.join("business/website");
-        let python = ws.join(".venv/bin/python");
-        assert!(website.exists() && python.exists(), "the auth service needs {} and {}", website.display(), python.display());
-        // The auth service as committed at AUTH_REF, extracted into each attempt's root.
-        let reference = std::env::var("DOOR_TEST_AUTH_REF").unwrap_or_else(|_| AUTH_REF.into());
-        let archive = Command::new("git")
-            .args(["-C", &website.to_string_lossy(), "archive", "--format=tar", &reference, "auth"])
-            .output()
-            .expect("git archive the auth service");
-        assert!(archive.status.success(), "the website has no {reference}: {}", String::from_utf8_lossy(&archive.stderr));
+        let product = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let venv = workspace().join(".venv/bin/python");
+        let python = std::env::var_os("DOOR_TEST_PYTHON")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| if venv.exists() { venv } else { PathBuf::from("python3") });
+        // The service as committed at DOOR_TEST_AUTH_REF, extracted into each attempt's root;
+        // without one, the tree's own.
+        let archive = std::env::var("DOOR_TEST_AUTH_REF").ok().map(|reference| {
+            let out = Command::new("git")
+                .args(["-C", &product.to_string_lossy(), "archive", "--format=tar", &reference, "arc/auth"])
+                .output()
+                .expect("git archive the auth service");
+            assert!(out.status.success(), "no arc/auth at {reference}: {}", String::from_utf8_lossy(&out.stderr));
+            out.stdout
+        });
         // THE PORT, TRIED UP TO THREE TIMES, as Door::launch's (795122b): another process can
         // take a free port before uvicorn binds it. The service is this one only once its own
         // line names the port.
         for attempt in 1..=3 {
             let root = std::env::temp_dir().join(format!("door-security-auth-{}", unique()));
             std::fs::create_dir_all(&root).unwrap();
-            extract(&archive.stdout, &root);
-            let dir = root.join("auth");
+            let dir = match &archive {
+                Some(tar) => {
+                    extract(tar, &root);
+                    root.join("arc/auth")
+                }
+                None => product.join("arc/auth"),
+            };
             let port = free_port();
             let url = format!("http://127.0.0.1:{port}");
             let (log, out, err) = log_beside(&root, "log");

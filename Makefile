@@ -70,7 +70,8 @@ CORE       := $(PRODUCT)/core
 WS         := $(abspath $(PRODUCT)/..)
 REPOS      := product business/website business/branding
 export PATH := $(HOME)/.cargo/bin:$(PATH)
-PY         := $(WS)/.venv/bin/python
+# The workspace's .venv where there is one; otherwise python3 (CI).
+PY         ?= $(if $(wildcard $(WS)/.venv/bin/python),$(WS)/.venv/bin/python,python3)
 PINNED     := $(PRODUCT)/tools/pinned.sh
 ARC_HOST   := https://arc.wallflowers.io
 
@@ -124,9 +125,9 @@ check: check-icd check-auth check-harness check-core check-arc check-door  ## ev
 check-icd:  ## the ICD's bytes at their pin, icd.rs conformance, the web's op bindings (O-68)
 	@$(CORE)/coordination/icd-pin.sh check
 
-check-auth:  ## the Arc account store (pytest)
+check-auth:  ## the Arc account store (pytest; a check needing the website says when it skips)
 	@printf '  auth    '
-	@$(PINNED) auth sh -c 'cd $(WS)/business/website/auth && $(PY) -m pytest -q'
+	@$(PINNED) auth sh -c 'cd $(PRODUCT)/arc/auth && $(PY) -m pytest -q -rs'
 
 check-harness:  ## the Python harness, and pinned.sh's own summary (NC-122)
 	@$(PINNED) --self-test > /dev/null || { $(PINNED) --self-test; exit 1; }
@@ -139,11 +140,15 @@ check-core:  ## pacific-core + core-wasm + pacific-ffi, and core-wasm as the bro
 
 check-arc:  ## the Arc planes
 	@printf '  arc     '
-	@$(PINNED) arc sh -c 'cd $(PRODUCT)/arc && cargo test --workspace --no-fail-fast && cargo test -p face-render -- --ignored'
+	@$(PINNED) arc sh -c 'cd $(PRODUCT)/arc && cargo test --workspace --no-fail-fast'
+	@if [ -d $(WS)/business/website/site ]; then cd $(PRODUCT)/arc && cargo test -q -p face-render -- --ignored; \
+	else echo '  arc     face-render vendored_copies_match_the_website NOT RUN: no business/website beside product'; fi
 
 check-door:  ## the Door (app/door, its own workspace), and its window's and the webapp's node tests
 	@printf '  door    '
-	@$(PINNED) door sh -c 'cd $(PRODUCT)/arc && cargo build -q -p relay && cd $(PRODUCT)/app/door && { cargo test --no-fail-fast; s=$$?; cd $(PRODUCT) && node --test app/web/door/return-path.test.mjs app/web/door/pow-worker.test.mjs app/web/door/signin.test.mjs app/web/door/element.test.mjs app/web/door/perf.test.mjs app/web/webapp/door-origin.test.mjs app/web/webapp/register.test.mjs app/web/webapp/session.test.mjs app/web/webapp/card.test.mjs app/web/webapp/create.test.mjs app/web/webapp/events.test.mjs app/web/webapp/events-icd.test.mjs app/web/webapp/events-edit.test.mjs app/web/webapp/events-page.test.mjs app/web/webapp/palette.test.mjs app/web/webapp/rooms.test.mjs app/web/webapp/members.test.mjs app/door/hosting/one-signin/one-signin-today.test.mjs app/door/hosting/one-signin/one-signin-2.1.0.test.mjs app/door/hosting/one-signin/site-setup.test.mjs app/door/hosting/one-signin/rooms-unmarked.test.mjs app/door/hosting/one-signin/hr-arc-history.test.mjs app/door/hosting/one-signin/founder-r3.test.mjs app/web/shared/wallflowers-ops.test.mjs app/door/hosting/bake.test.mjs app/web/webapp/icd.test.mjs app/door/docs/docs.test.mjs app/door/docs/icd-changelog.test.mjs app/web/resources/resources.test.mjs app/web/resources/pdf.test.mjs app/web/webapp/resources-seam.test.mjs app/web/webapp/trade.test.mjs; n=$$?; exit $$(( s | n )); }'
+	@$(PINNED) door sh -c 'cd $(PRODUCT)/arc && cargo build -q -p relay && cd $(PRODUCT)/app/door && { DOOR_TEST_PYTHON=$(PY) cargo test --no-fail-fast; s=$$?; cd $(PRODUCT) && node --test app/web/door/return-path.test.mjs app/web/door/pow-worker.test.mjs app/web/door/signin.test.mjs app/web/door/element.test.mjs app/web/door/perf.test.mjs app/web/webapp/door-origin.test.mjs app/web/webapp/register.test.mjs app/web/webapp/session.test.mjs app/web/webapp/card.test.mjs app/web/webapp/create.test.mjs app/web/webapp/events.test.mjs app/web/webapp/events-icd.test.mjs app/web/webapp/events-edit.test.mjs app/web/webapp/events-page.test.mjs app/web/webapp/palette.test.mjs app/web/webapp/rooms.test.mjs app/web/webapp/members.test.mjs app/door/hosting/one-signin/one-signin-today.test.mjs app/door/hosting/one-signin/one-signin-2.1.0.test.mjs app/door/hosting/one-signin/site-setup.test.mjs app/door/hosting/one-signin/rooms-unmarked.test.mjs app/door/hosting/one-signin/hr-arc-history.test.mjs app/door/hosting/one-signin/founder-r3.test.mjs app/web/shared/wallflowers-ops.test.mjs app/web/webapp/icd.test.mjs app/door/docs/docs.test.mjs app/door/docs/icd-changelog.test.mjs app/web/resources/resources.test.mjs app/web/resources/pdf.test.mjs app/web/webapp/resources-seam.test.mjs app/web/webapp/trade.test.mjs; n=$$?; exit $$(( s | n )); }'
+	@if [ -d $(WS)/business/website/site ]; then cd $(PRODUCT) && node --test app/door/hosting/bake.test.mjs; \
+	else echo '  door    bake.test.mjs (the deploy stage takes /assets from the website) NOT RUN: no business/website beside product'; fi
 
 e2e:  ## the WallFlowers path end to end on loopback; outside check for now
 	@printf '  e2e     '
