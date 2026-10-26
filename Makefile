@@ -77,7 +77,7 @@ ARC_HOST   := https://arc.wallflowers.io
 
 .DEFAULT_GOAL := help
 .PHONY: help status check check-icd check-core check-arc check-auth check-harness check-door e2e e2e-browser \
-        wasm serve stop deploy-arc deploy-auth deploy-site live site-setup
+        wasm serve stop deploy-arc deploy-auth deploy-site live site-setup mess tidy
 
 help:  ## this list
 	@awk 'BEGIN{FS=":.*## "} /^[a-z][a-z0-9-]*:.*## /{printf "  \033[1m%-14s\033[0m %s\n",$$1,$$2}' $(MAKEFILE_LIST)
@@ -106,6 +106,12 @@ status:  ## what is committed, what is pushed, what is live
 	@printf '    arc %-12s %s\n' "/v1/health"  "$$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 $(ARC_HOST)/v1/health || echo '—')"
 	@printf '    arc %-12s %s\n' "/auth/health" "$$(curl -s --max-time 10 $(ARC_HOST)/auth/health | head -c 100 || echo '—')"
 	@echo
+
+mess:  ## every branch and worktree in the workspace that is not an open PR
+	@$(PRODUCT)/tools/no-mess.py
+
+tidy:  ## remove clean worktrees and branches whose PR merged or closed
+	@$(PRODUCT)/tools/no-mess.py tidy $(PRODUCT)
 
 # ── the gate ────────────────────────────────────────────────────────────────
 # Everything that must be green before anything ships. Ordered cheapest-first so
