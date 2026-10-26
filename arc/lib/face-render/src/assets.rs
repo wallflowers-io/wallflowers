@@ -1,6 +1,6 @@
 //! What the face editor offers — fonts, platform icons, stickers — read from the SAME
-//! generated file the editor loads (`site/assets/face/vendor/face-assets.js`, written
-//! by the website's `scripts/vendor-face.py`), so the published face and the editor's
+//! generated file the editor loads (`app/web/webapp/assets/face/vendor/face-assets.js`,
+//! written by the website's `scripts/vendor-face.py`), so the published face and the editor's
 //! preview cannot disagree about what `font: "fraunces"` or `id: "rose"` means.
 
 use std::collections::HashMap;
@@ -8,11 +8,9 @@ use std::sync::OnceLock;
 
 /// The editor's generated asset list, compiled in — a COPY, kept in this crate.
 ///
-/// It is copied rather than included across the workspace because `product/` has to
-/// build standalone: the website is a different repository, and a clean clone of this
-/// one would not have it. `vendor/SOURCES` pins each copy's digest, checked on every
-/// checkout; `vendored_copies_match_the_website` (run by `make check-arc`) holds the
-/// website's copies to the same pins, and fails where the website is absent (NC-69).
+/// It is copied rather than included across the workspace because the Arc builds on its
+/// own. `vendor/SOURCES` pins each copy's digest, and `vendored_copies_match_the_webapp`
+/// holds the webapp's original to the same pin, both on every checkout (NC-69).
 const FACE_ASSETS_JS: &str = include_str!("../vendor/face-assets.js");
 
 pub struct Assets {
