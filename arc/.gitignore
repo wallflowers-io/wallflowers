@@ -6,3 +6,5 @@
 .env
 
 arc.env
+auth/*.db
+auth/*.db-*
