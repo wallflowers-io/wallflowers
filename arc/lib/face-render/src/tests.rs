@@ -311,17 +311,41 @@ fn vendored_copies_are_the_pinned_bytes() {
     }
 }
 
-/// The website's own copies against the same pins, and face.js against the doodles drawn
-/// here. It needs the website checked out beside product, so a product-only `cargo test`
-/// lists it as ignored rather than passing it; `make check-arc` runs it, and there the
-/// website's absence FAILS. The path is derived from this file's own location.
+/// The originals in this repository (an `app/` path) against the same pins, and face.js
+/// against the doodles drawn here. Runs on every checkout.
 #[test]
-#[ignore = "needs business/website beside product; make check-arc runs it"]
+fn vendored_copies_match_the_webapp() {
+    use sha2::Digest as _;
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let ours: Vec<_> = sources().into_iter().filter(|(_, _, theirs, _)| theirs.starts_with("app/")).collect();
+    assert!(!ours.is_empty(), "vendor/SOURCES names no copy of this repository's");
+    for (sha, file, theirs, from) in ours {
+        let bytes = std::fs::read(repo.join(&theirs)).unwrap_or_else(|e| panic!("this repository has no {theirs}: {e}"));
+        assert_eq!(
+            hex(&sha2::Sha256::digest(&bytes)),
+            sha,
+            "{theirs} has moved since {from}: re-vendor vendor/{file} and its pin (they are served to the same eyes)"
+        );
+    }
+    // The ten drawn doodles are copied from face.js; if it redraws one, say so here.
+    let face_js = std::fs::read_to_string(repo.join("app/web/webapp/assets/face/face.js")).unwrap();
+    for (id, svg) in assets::DOODLES {
+        assert!(face_js.contains(id), "face.js no longer offers the sticker {id}");
+        assert!(face_js.contains(svg), "face.js has redrawn {id} — copy it across");
+    }
+}
+
+/// The website's own copies (a `site/` path) against the same pins. It needs the website
+/// checked out beside this repository, so a plain `cargo test` lists it as ignored rather
+/// than passing it; `make check-arc` runs it where the website is, and says NOT RUN where it
+/// is not. The path is derived from this file's own location.
+#[test]
+#[ignore = "needs business/website beside this repository; make check-arc runs it"]
 fn vendored_copies_match_the_website() {
     use sha2::Digest as _;
     let website = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../business/website");
     assert!(website.join("site").is_dir(), "the website is not checked out at {}: the vendored copies cannot be compared here", website.display());
-    for (sha, file, theirs, from) in sources() {
+    for (sha, file, theirs, from) in sources().into_iter().filter(|(_, _, theirs, _)| theirs.starts_with("site/")) {
         let bytes = std::fs::read(website.join(&theirs)).unwrap_or_else(|e| panic!("the website has no {theirs}: {e}"));
         assert_eq!(
             hex(&sha2::Sha256::digest(&bytes)),
@@ -329,22 +353,16 @@ fn vendored_copies_match_the_website() {
             "the website's {theirs} has moved since {from}: re-vendor vendor/{file} and its pin (they are served to the same eyes)"
         );
     }
-    // The ten drawn doodles are copied from face.js; if it redraws one, say so here.
-    let face_js = std::fs::read_to_string(website.join("site/assets/face/face.js")).unwrap();
-    for (id, svg) in assets::DOODLES {
-        assert!(face_js.contains(id), "face.js no longer offers the sticker {id}");
-        assert!(face_js.contains(svg), "face.js has redrawn {id} — copy it across");
-    }
 }
 
-/// `vendor/SOURCES`: (sha256, vendored file, website path, website commit) per line.
+/// `vendor/SOURCES`: (sha256, vendored file, source path, commit) per line.
 fn sources() -> Vec<(String, String, String, String)> {
     let text = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("vendor/SOURCES")).expect("vendor/SOURCES");
     text.lines()
         .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
         .map(|l| {
             let f: Vec<&str> = l.split_whitespace().collect();
-            assert_eq!(f.len(), 4, "vendor/SOURCES: {l:?} is not sha256, file, website path, commit");
+            assert_eq!(f.len(), 4, "vendor/SOURCES: {l:?} is not sha256, file, source path, commit");
             (f[0].into(), f[1].into(), f[2].into(), f[3].into())
         })
         .collect()

@@ -1,0 +1,5 @@
+# The two boxes' host keys, as this repository trusts them: door-01 (the Door) and
+# wallflowers-01 (the Arc, the account store, the docs). deploy.yml checks every connection
+# against these and no other.
+188.166.244.69 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIuNrPp7204xZlzW1zmvhAce0WyAbWjyZFMNuXfgr8Cw
+167.99.83.136 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKC9QfetYFqO8PqpAJRuS2gLdAdAWwhRoc/I6lXMxV6F

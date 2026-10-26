@@ -1,7 +1,7 @@
 //! A site's PUBLIC FACE, drawn as HTML from what its Host published — the page an Arc
 //! serves at `wallflowers.io/<slug>`.
 //!
-//! The editor that makes a face is `business/website/site/assets/face/face.js` (/signup,
+//! The editor that makes a face is `app/web/webapp/assets/face/face.js` (/signup,
 //! step 2), and face.css there draws both its phone preview and THIS page: the markup
 //! below uses face.js's own `.wf-*` classes and sets the look as the same custom
 //! properties its `applyLook` sets, so linking face.css makes the page look like the

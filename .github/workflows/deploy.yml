@@ -1,0 +1,115 @@
+# The four deploys, each a Makefile target, chosen when the run is started. Only from main,
+# only in the production environment (its reviewers approve each run; its secret is the
+# deploy key), one run at a time. Order when several are chosen: arc, door, app; docs apart.
+
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      arc:
+        description: "arc: the planes -> wallflowers-01, and the account store when arc/auth changed"
+        type: boolean
+        default: false
+      door:
+        description: "door: the Door -> door-01 (the restart ends every session)"
+        type: boolean
+        default: false
+      app:
+        description: "app: the webapp -> app.wallflowers.io (no restart)"
+        type: boolean
+        default: false
+      docs:
+        description: "docs: docs.wallflowers.io"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: never
+  DEPLOY_KEY: /home/runner/.ssh/deploy_key
+
+jobs:
+  arc:
+    if: inputs.arc && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0  # icd-pin.sh deploy reads the newest icd/* tag
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # stable, 2026-10-01
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: arc
+      - run: pip install --no-deps --require-hashes -r .github/deploy-tools.lock
+      - &ssh
+        name: the deploy key, and the boxes' host keys only
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$KEY" > "$DEPLOY_KEY" && chmod 0600 "$DEPLOY_KEY"
+          printf 'Host *\n  UserKnownHostsFile %s\n  StrictHostKeyChecking yes\n' "$GITHUB_WORKSPACE/.github/known_hosts" > ~/.ssh/config
+      - run: make deploy-arc
+
+  door:
+    needs: arc
+    if: ${{ !cancelled() && !failure() && inputs.door && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # stable, 2026-10-01
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: app/door
+      - run: pip install --no-deps --require-hashes -r .github/deploy-tools.lock
+      - *ssh
+      - run: make deploy-door
+
+  app:
+    needs: door
+    if: ${{ !cancelled() && !failure() && inputs.app && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - *ssh
+      - run: make deploy-app
+
+  docs:
+    if: inputs.docs && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0  # build.mjs --check reads the release's commit and the icd/* tags
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - *ssh
+      - run: make deploy-docs

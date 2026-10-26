@@ -1,0 +1,444 @@
+/* face-editor.css — the public face editor in /signup step 2: two columns, the
+ * panel on the left (a rail of sections, and the detail of the one lit) and the
+ * phone on the right.
+ *
+ * It sits inside signup.html and uses that page's tokens (--ink, --hair, --box,
+ * --ease, --mono …). Inside the phone, and on every swatch that previews a look,
+ * face.js sets the FACE's tokens instead (--bg, --fg, --wallpaper …; see
+ * face.css), so a rule there reads the face's colours, not the page's.
+ *
+ * signup.html styles every <button>, <label> and text <input> for its own steps,
+ * so the editor takes its controls back to neutral first. The reset is held to
+ * one class of specificity (:where), so any rule below it wins by order alone;
+ * a face's own buttons (.wf-btn) are left to face.css. */
+
+.face-editor { display: grid; grid-template-columns: minmax(540px, 600px) auto; gap: 56px;
+        justify-content: center; align-items: start;
+        /* THE PHONE IS AN IPHONE: its screen is laid out at 390x844 CSS px, always,
+           and shown through one scale per width band. Nothing that changes the
+           window's height (a toolbar, the keyboard, a drag of the window) reaches
+           it, so the face never reflows and the frame never resizes. The panel
+           takes the shown phone's height. */
+        --face-s: .72; --face-h: calc(862px * var(--face-s)); }
+.face-editor :where(button:not(.wf-btn)) { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; font: inherit;
+               letter-spacing: normal; text-transform: none; color: inherit; cursor: pointer; }
+.face-editor label { display: block; margin: 0; padding: 0; font: inherit; letter-spacing: normal; text-transform: none; color: inherit; }
+.face-editor button:focus-visible, .face-editor [tabindex]:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.face-editor button:disabled { cursor: default; }
+
+.ftitle { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--ink); }
+
+/* ---- the panel: the rail, and the detail beside it ------------------------------------ */
+.face-panel { display: flex; height: var(--face-h); overflow: hidden;
+              background: var(--box); border: 1px solid var(--hair); border-radius: 16px; }
+.fnav { flex: none; display: flex; flex-direction: column; width: 186px; border-right: 1px solid var(--hair);
+        background: color-mix(in srgb, var(--bg) 55%, var(--box)); }
+.fnav-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-auto-rows: max-content; gap: 1px; padding: 10px 10px 6px; }
+.fnav-group { margin: 16px 8px 6px; font-size: 10px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--ink); white-space: nowrap; }
+.fnav-group:first-child { margin-top: 2px; }
+.fnav-item { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 3px 8px 3px 6px;
+             border-radius: 9px; text-align: left; font: 13px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink-2);
+             transition: background .15s var(--ease), color .15s var(--ease); }
+.fnav-item:hover { color: var(--ink); background: var(--surface); }
+.fnav-item.on { color: var(--bg); background: var(--ink); }
+.fnav-icon { display: grid; place-items: center; width: 22px; height: 22px; color: inherit; }
+.fnav-icon svg { width: 16px; height: 16px; }
+.fnav-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.fnav-step { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%;
+             font: 600 10px/1 -apple-system, BlinkMacSystemFont, sans-serif; color: var(--ink-3); box-shadow: inset 0 0 0 1.25px var(--hair); }
+.fnav-item.on .fnav-step { color: var(--ink); background: var(--bg); box-shadow: none; }
+.fnav-step.done, .fnav-item.on .fnav-step.done { box-shadow: none;
+  background: var(--ok) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.3 5 8.6l4.5-5.2'/%3E%3C/svg%3E") center / 10px no-repeat; }
+/* Shuffle, at the foot of the rail whatever is open */
+.fnav .fshuffle { flex: none; justify-content: center; margin: 6px 10px 10px; padding: 8px 12px; }
+
+.fdetail { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+/* the title centred, whatever sits either side of it */
+.fpanel-top { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px;
+              min-height: 52px; padding: 8px 14px; border-bottom: 1px solid var(--hair); }
+.fpanel-top .ftitle { text-align: center; }
+.fpanel-side { display: flex; align-items: center; }
+.fpanel-side:last-child { justify-content: flex-end; }
+.fpanel-foot:empty { display: none; }
+.fpanel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+               display: grid; grid-auto-rows: max-content; align-content: start; gap: 16px; padding: 16px 18px 20px; }
+.fpanel-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px;
+               border-top: 1px solid var(--hair); }
+.fprev, .fnext { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; letter-spacing: .06em; white-space: nowrap; }
+.fprev { padding: 8px 10px 8px 6px; border-radius: 999px; color: var(--ink-2); transition: background .15s var(--ease), color .15s var(--ease); }
+.fprev:hover { color: var(--ink); background: var(--surface); }
+.fnext { padding: 9px 12px 9px 16px; border-radius: 999px; color: var(--bg); background: var(--ink); transition: background .15s var(--ease); }
+.fnext:hover { background: #000000; }
+.fprev svg, .fnext svg { width: 15px; height: 15px; }
+.fback { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--ink); }
+.fback:hover { background: var(--surface); }
+.fback svg { width: 18px; height: 18px; }
+
+/* ---- the widgets list ----------------------------------------------------------------- */
+.tray-list { display: grid; gap: 6px; }
+.tray-tile { display: flex; align-items: center; gap: 11px; padding: 8px 10px 8px 8px; cursor: grab;
+             background: var(--bg); border: 1px solid var(--hair); border-radius: 12px;
+             transition: border-color .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease); }
+.tray-tile:hover { border-color: var(--ink-3); transform: translateY(-1px); box-shadow: 0 8px 18px -12px rgb(20 24 30 / .35); }
+.tray-tile:active { cursor: grabbing; }
+.tray-icon { flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--ink) center / 19px no-repeat; }
+.tray-words { display: grid; gap: 1px; min-width: 0; }
+.tray-words b { font: 600 13px/1.25 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); }
+.tray-words span { font: 11px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink-3); }
+.tray-link .tray-icon { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FAF8F3' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1'/%3E%3C/svg%3E"); }
+.tray-social .tray-icon { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23FAF8F3'%3E%3Ccircle cx='5' cy='12' r='2.6'/%3E%3Ccircle cx='12' cy='12' r='2.6'/%3E%3Ccircle cx='19' cy='12' r='2.6'/%3E%3C/svg%3E"); }
+.tray-next .tray-icon { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FAF8F3' stroke-width='2' stroke-linecap='round'%3E%3Crect x='4' y='5' width='16' height='15' rx='3'/%3E%3Cpath d='M4 10h16M9 3v4M15 3v4'/%3E%3C/svg%3E"); }
+.tray-events .tray-icon { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FAF8F3' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M5 6h2M10 6h9M5 12h2M10 12h9M5 18h2M10 18h9'/%3E%3C/svg%3E"); }
+.tray-posts .tray-icon { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FAF8F3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 3h7l4 4v14H7z'/%3E%3Cpath d='M10 12h5M10 16h5'/%3E%3C/svg%3E"); }
+.tray-location .tray-icon { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FAF8F3' stroke-width='2'%3E%3Cpath d='M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21Z'/%3E%3Ccircle cx='12' cy='9.8' r='2.2' fill='%23FAF8F3'/%3E%3C/svg%3E"); }
+.tray-text .tray-icon { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FAF8F3' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M5 7V5h14v2M12 5v14M9 19h6'/%3E%3C/svg%3E"); }
+
+/* the header's Show switches */
+.fshows { padding: 2px 12px; background: var(--bg); border: 1px solid var(--hair); border-radius: 12px; }
+.fshows .fswitch + .fswitch { border-top: 1px solid var(--hair); }
+
+/* stickers: a sheet of them, four across, dragged off */
+.tray-stickers { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 6px; }
+.tray-sticker { display: grid; place-items: center; aspect-ratio: 1 / 1; padding: 7px; cursor: grab; color: var(--ink);
+                background: var(--bg); border: 1px solid var(--hair); border-radius: 12px;
+                transition: transform .18s var(--ease), border-color .18s var(--ease); }
+.tray-sticker:hover { transform: scale(1.07) rotate(-4deg); border-color: var(--ink-3); }
+.tray-sticker:active { cursor: grabbing; }
+.tray-sticker img, .tray-sticker svg { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.tray-clear { justify-self: end; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.tray-clear:hover { color: var(--danger); }
+/* the sticker picked on the phone, above the sheet */
+.fsticker { display: grid; gap: 12px; padding: 12px 14px 8px; background: var(--bg); border: 1px solid var(--ink); border-radius: 12px; }
+.fsticker-top { display: flex; align-items: center; gap: 14px; }
+.fsticker-name { flex: 1; font: 600 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); }
+.fsticker-rm { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--danger); }
+.fsticker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* ---- the phone, and the undo beside it ----------------------------------------- */
+.face-stage { position: relative; width: calc(408px * var(--face-s)); height: var(--face-h); }
+.face-phone { position: relative; isolation: isolate; width: 408px; height: 862px; overflow: hidden;
+              transform: scale(var(--face-s)); transform-origin: 0 0;
+              background: var(--ink); border: 9px solid var(--ink); border-radius: 46px;
+              box-shadow: 0 30px 60px -34px rgb(20 24 30 / .55); }
+.face-phone .wf-backdrop { position: absolute; z-index: 0; border-radius: 37px; }
+.face-screen { position: relative; z-index: 1; height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; border-radius: 37px; }
+.face-screen::-webkit-scrollbar { width: 0; }
+.face-tools { position: absolute; top: 50%; right: calc(100% + 13px); transform: translateY(-50%); display: grid; gap: 2px; padding: 4px;
+              background: var(--bg); border: 1px solid var(--hair); border-radius: 999px; box-shadow: 0 6px 16px -10px rgb(20 24 30 / .3); }
+.face-tool { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--ink-2);
+             transition: background .15s var(--ease), color .15s var(--ease), opacity .15s var(--ease); }
+.face-tool svg { width: 17px; height: 17px; }
+.face-tool:hover:not(:disabled) { background: var(--surface); color: var(--ink); }
+.face-tool:disabled { opacity: .3; }
+
+.face-item { position: relative; border-radius: var(--card-radius, 22px); cursor: grab; outline: none; }
+.face-item:active { cursor: grabbing; }
+.face-item.on { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #14181E; }
+.face-item:focus-visible { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #14181E; }
+.face-item .wf-unset { opacity: .5; }
+/* Remove, as a phone's editing mode has it: a minus at the corner. */
+.face-x { position: absolute; z-index: 3; top: -7px; left: -7px; width: 24px; height: 24px; border-radius: 50% !important;
+          display: grid !important; place-items: center; font: 600 16px/1 -apple-system, BlinkMacSystemFont, sans-serif !important;
+          color: #FFFFFF !important; background: #8E8E93 !important; box-shadow: 0 1px 3px rgb(0 0 0 / .3);
+          opacity: 0; transform: scale(.7); transition: opacity .15s var(--ease), transform .15s var(--ease); }
+.face-item:hover .face-x, .face-item.on .face-x, .face-item:focus-within .face-x,
+.face-sticker:hover .face-x, .face-sticker.on .face-x { opacity: 1; transform: none; }
+.face-x:hover { background: #C2455C !important; }
+/* While a widget is in the air, the others shiver, as a phone's do. */
+.face-phone.dragging .face-item { animation: face-jiggle .26s ease-in-out infinite alternate; }
+.face-phone.dragging .face-item:nth-child(2n) { animation-delay: -.13s; }
+@keyframes face-jiggle { from { transform: rotate(-.7deg); } to { transform: rotate(.7deg); } }
+.face-item.lifted { display: none; }
+.face-gap { border-radius: var(--card-radius, 22px); min-height: 56px;
+            border: 2px dashed color-mix(in srgb, var(--fg) 28%, transparent);
+            background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.face-gap.wf-size-s { aspect-ratio: 1 / 1; }
+.face-gap.wf-size-m { min-height: var(--cell, 112px); }
+.face-gap.wf-size-l { min-height: calc(var(--cell, 124px) * 2 + 12px); }
+.face-empty { grid-column: 1 / -1; padding: 44px 10px; border-radius: 22px; font-size: 13px; color: var(--muted);
+              border: 2px dashed color-mix(in srgb, var(--fg) 20%, transparent); }
+
+/* A sticker on the phone: picked up anywhere, turned and sized by the knob at its corner. */
+.face-editor .face-sticker { pointer-events: auto; cursor: grab; touch-action: none; outline: none; }
+.face-editor .face-sticker:active { cursor: grabbing; }
+.face-sticker.on::before, .face-sticker:focus-visible::before {
+  content: ""; position: absolute; inset: -7px; border-radius: 10px; pointer-events: none;
+  border: 1.5px dashed rgb(20 24 30 / .6); box-shadow: 0 0 0 1.5px rgb(255 255 255 / .7), inset 0 0 0 1.5px rgb(255 255 255 / .7); }
+.face-sticker .face-x { top: -17px; left: -17px; }
+.face-turn { position: absolute; right: -15px; bottom: -15px; width: 22px; height: 22px; border-radius: 50%; cursor: grab;
+             background: #FFFFFF url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2314181E' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12a8 8 0 1 1-2.3-5.7'/%3E%3Cpath d='M20 4v4.5h-4.5'/%3E%3C/svg%3E") center / 13px no-repeat;
+             box-shadow: 0 1px 4px rgb(0 0 0 / .35), 0 0 0 1px rgb(20 24 30 / .15); }
+
+/* The door and a notice float over the phone's screen, not the page. */
+.face-editor .wf-door { position: absolute; bottom: 20px; }
+.face-editor .wf-door.on { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #14181E; }
+.face-editor .wf-notice { position: absolute; border-radius: 37px; }
+.face-editor .wf-sheet { position: absolute; border-radius: 37px; overflow: hidden; }
+
+/* ---- inside a section ---------------------------------------------------------------- */
+.fdone { font-size: 12px !important; letter-spacing: .12em !important; text-transform: uppercase !important; color: var(--ink-2) !important; }
+.fdone:hover { color: var(--ink) !important; }
+.ffield { display: grid; gap: 7px; }
+.flabel { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); }
+.face-editor .finput { width: 100%; padding: 9px 11px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                color: var(--ink); background: var(--bg); border: 1px solid var(--hair); border-radius: 6px; min-height: 0; }
+.face-editor textarea.finput { min-height: 0; resize: none; overflow-y: hidden; line-height: 1.45; }
+.face-editor .finput:focus { outline: none; border-color: var(--ink); }
+.fcounted { display: grid; gap: 4px; }
+.fcount { justify-self: end; font-size: 10px; letter-spacing: .06em; color: var(--ink-3); }
+.fseg { display: flex; border: 1px solid var(--hair); border-radius: 7px; overflow: hidden; }
+.fseg button { flex: 1; padding: 8px 4px !important; font-size: 10px !important; letter-spacing: .16em !important; text-transform: uppercase !important;
+               color: var(--ink-2) !important; text-align: center; transition: background .2s var(--ease), color .2s var(--ease); }
+.fseg button + button { border-left: 1px solid var(--hair) !important; }
+.fseg button:hover { background: var(--surface) !important; }
+.fseg button[aria-checked="true"] { color: var(--bg) !important; background: var(--ink) !important; }
+.fchecks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.flevels { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.flevels button { display: grid; gap: 1px; padding: 7px 10px !important; text-align: left; border: 1px solid var(--hair) !important; border-radius: 8px !important;
+                  font: 12px/1.25 -apple-system, BlinkMacSystemFont, sans-serif !important; color: var(--ink) !important; }
+.flevels button span { font-size: 11px; color: var(--ink-3); }
+.flevels button[aria-checked="true"] { color: var(--bg) !important; background: var(--ink) !important; border-color: var(--ink) !important; }
+.flevels button[aria-checked="true"] span { color: rgb(255 255 255 / .7); }
+.fmarkrow { display: flex; align-items: center; gap: 12px; }
+.face-editor .fmark { position: relative; width: 64px; height: 64px; border-radius: 50%; overflow: hidden; cursor: pointer;
+               display: grid; place-items: center; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3);
+               background: var(--box-2); border: 1px dashed var(--hair); }
+.face-editor .fmark-wide, .face-editor .fmark-logo { width: 128px; height: 58px; border-radius: 10px; }
+.face-editor .fmark.has { border-style: solid; }
+.fmark input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.fmark img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.fmark-logo img { object-fit: contain; padding: 6px; }
+.fx { font-size: 15px !important; color: var(--ink-3) !important; }
+.fx:hover { color: var(--danger) !important; }
+.fremove { justify-self: start; font-size: 11px !important; letter-spacing: .14em !important; text-transform: uppercase !important; color: var(--danger) !important; }
+/* the questions asked before someone may knock */
+.fquestions { display: grid; gap: 8px; }
+.fquestion { display: grid; gap: 8px; padding: 10px 12px 12px; background: var(--bg); border: 1px solid var(--hair); border-radius: 12px; }
+.fquestion-top { display: flex; align-items: center; gap: 6px; }
+.fquestion-kind { flex: 1; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+.fquestion-req { padding: 3px 9px; border-radius: 999px; font-size: 11px; color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hair); }
+.fquestion-req.on { color: var(--bg); background: var(--ink); box-shadow: none; }
+.fquestion-move { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--ink-2); }
+.fquestion-move svg { width: 15px; height: 15px; }
+.fquestion-move:hover:not(:disabled) { background: var(--surface); }
+.fquestion-move:disabled { opacity: .3; }
+.foptions { display: grid; gap: 6px; }
+.foption { display: grid; grid-template-columns: 14px minmax(0, 1fr) 16px; align-items: center; gap: 8px; }
+.foption-dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.fquestion-adds { display: flex; flex-wrap: wrap; gap: 6px; }
+.fnote, .ftrouble { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-3); }
+.ftrouble { color: var(--danger); }
+
+.fpill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 9px; font-size: 12px; color: var(--ink);
+         background: var(--bg); border: 1px solid var(--hair); border-radius: 999px; transition: border-color .2s var(--ease); }
+.fpill:hover { border-color: var(--ink); }
+.fpill svg { width: 16px; height: 16px; transition: transform .35s var(--ease); }
+.fpill:active svg { transform: rotate(90deg); }
+
+/* themes: all of them, as cards of themselves */
+.fthemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 14px 10px; }
+.ftheme { display: grid; gap: 6px; justify-items: center; min-width: 0; }
+.ftheme-card { position: relative; display: block; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 12px;
+               background: var(--wallpaper); box-shadow: inset 0 0 0 1px rgb(20 24 30 / .1); transition: transform .2s var(--ease); }
+.ftheme:hover .ftheme-card { transform: translateY(-2px); }
+.ftheme[aria-checked="true"] .ftheme-card { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px var(--ink); }
+.ftheme-aa { position: absolute; left: 9px; top: 8px; font: 600 25px/1 var(--name-font); color: var(--title); }
+.ftheme-btn { position: absolute; left: 8px; right: 8px; height: 15px; border-radius: min(var(--btn-radius), 8px);
+              background: var(--btn-bg); border: var(--btn-border); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.ftheme-card .ftheme-btn:nth-of-type(2) { bottom: 30px; }
+.ftheme-card .ftheme-btn:nth-of-type(3) { bottom: 11px; }
+.ftheme-name { max-width: 100%; overflow: hidden; font-size: 11px; letter-spacing: .02em; color: var(--ink-2); white-space: nowrap; text-overflow: ellipsis; }
+.ftheme[aria-checked="true"] .ftheme-name { color: var(--ink); font-weight: 600; }
+
+/* choices as pictures of themselves */
+.fpics { display: grid; grid-template-columns: repeat(3, minmax(0, 104px)); gap: 10px; }
+.fpics-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.fpic { display: grid; gap: 6px; justify-items: center; font-size: 11px; color: var(--ink-2); }
+.fpic-pic { position: relative; display: block; width: 100%; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 10px;
+            background: var(--bg); box-shadow: inset 0 0 0 1px var(--hair); transition: box-shadow .2s var(--ease); }
+.fpic:hover .fpic-pic { box-shadow: inset 0 0 0 1px var(--ink-3); }
+.fpic[aria-checked="true"] .fpic-pic { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 3.5px var(--ink); }
+.fpic[aria-checked="true"] .fpic-name { color: var(--ink); font-weight: 600; }
+.fpics-5 .fpic-name { font-size: 10px; }
+.fpic-image { background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239AA4B0' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='16' height='16' rx='3'/%3E%3Cpath d='m4.5 16 4.5-4.5 4 4 2.5-2.5 4 4'/%3E%3Ccircle cx='15' cy='9' r='1.4'/%3E%3C/svg%3E") center / 22px no-repeat; }
+.fpic-block { background: var(--wallpaper); }
+.fpic-block .ftheme-btn { top: 50%; left: 16%; right: 16%; height: 30%; transform: translateY(-50%); box-shadow: var(--shadow); }
+/* the header layouts, drawn with three strokes each */
+.fpic-layout i { position: absolute; display: block; background: var(--ink-3); border-radius: 3px; transition: background .2s var(--ease); }
+.fpic[aria-checked="true"] .fpic-layout i { background: var(--ink); }
+.fpic-layout .fpl-a { top: 16%; left: 50%; width: 30%; aspect-ratio: 1 / 1; border-radius: 50%; transform: translateX(-50%); }
+.fpic-layout .fpl-b { top: 58%; left: 24%; right: 24%; height: 8%; }
+.fpic-layout .fpl-c { top: 72%; left: 34%; right: 34%; height: 6%; opacity: .55; }
+.fpic-layout-hero .fpl-a { top: 0; left: 0; width: 100%; height: 50%; aspect-ratio: auto; border-radius: 0; transform: none; opacity: .5; }
+.fpic-layout-banner .fpl-a { top: 0; left: 0; width: 100%; height: 30%; aspect-ratio: auto; border-radius: 0; transform: none; opacity: .4; }
+.fpic-layout-banner .fpl-b { top: 17%; left: 50%; right: auto; width: 28%; height: auto; aspect-ratio: 1 / 1; border-radius: 50%;
+                             transform: translateX(-50%); box-shadow: 0 0 0 2px var(--bg); }
+.fpic-layout-banner .fpl-c { top: 64%; left: 24%; right: 24%; height: 8%; opacity: 1; }
+
+.fcorners { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.fcorner { display: grid; place-items: center; height: 40px; color: var(--ink-3); background: var(--bg); border: 1px solid var(--hair); border-radius: 9px;
+           transition: border-color .2s var(--ease), color .2s var(--ease); }
+.fcorner svg { width: 22px; height: 22px; }
+.fcorner:hover { border-color: var(--ink-3); }
+.fcorner[aria-checked="true"] { color: var(--ink); border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+
+/* a colour: a dot and its hex, the dot opening the picker */
+.face-editor .fcolour { display: inline-flex; align-items: center; gap: 8px; width: max-content; padding: 5px 12px 5px 5px; cursor: pointer;
+                        background: var(--bg); border: 1px solid var(--hair); border-radius: 999px; transition: border-color .2s var(--ease); }
+.face-editor .fcolour:hover, .face-editor .fcolour:focus-within { border-color: var(--ink); }
+.fcolour-dot { flex: none; width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(20 24 30 / .15); }
+.face-editor .fcolour-input { width: 66px; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; outline: none; cursor: pointer;
+                              font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; text-transform: uppercase; color: var(--ink); }
+.face-editor .fcolour-input:focus { background: none; }
+.fcolours { display: grid; }
+.fcolour-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; }
+.fcolour-row + .fcolour-row { border-top: 1px solid var(--hair); }
+.fcolour-name { display: grid; justify-items: start; gap: 4px; font: 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); }
+.fcontrast { padding: 3px 8px; border-radius: 999px; font-size: 10px; letter-spacing: .02em; color: var(--warn);
+             background: color-mix(in srgb, var(--warn) 13%, transparent); }
+.fcontrast:hover { background: color-mix(in srgb, var(--warn) 24%, transparent); }
+.fcontrast[hidden] { display: none; }
+.fcolour-set { display: flex; align-items: center; gap: 10px; }
+.face-editor .fcolour.inherited { border-style: dashed; }
+.face-editor .fcolour.inherited .fcolour-input { color: var(--ink-3); }
+.fcolour-from { width: 38px; font-size: 11px; color: var(--ink-3); }
+.fcolour-reset { width: 38px; font-size: 11px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
+.fcolour-reset:hover { color: var(--ink); }
+
+/* type: every face shown in itself */
+.ffonts { display: grid; gap: 8px; }
+.ffonts-group { margin: 6px 0 0; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); }
+.ffonts-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ffont { padding: 11px 6px; overflow: hidden; font-size: 15px; line-height: 1.15; color: var(--ink); text-align: center; white-space: nowrap; text-overflow: ellipsis;
+         background: var(--bg); border: 1px solid var(--hair); border-radius: 9px; transition: border-color .15s var(--ease); }
+.ffont:hover { border-color: var(--ink-3); }
+.ffont[aria-checked="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.ffont-same { font: 13px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+/* a slider */
+.face-editor .frange { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; margin: 0; padding: 0; border: 0; background: none; }
+.frange::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--hair); }
+.frange::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border-radius: 50%; background: #FFFFFF;
+                                box-shadow: 0 1px 4px rgb(20 24 30 / .35), 0 0 0 .5px rgb(20 24 30 / .12); }
+.frange::-moz-range-track { height: 4px; border-radius: 2px; background: var(--hair); }
+.frange::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 4px rgb(20 24 30 / .35); }
+.frange:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* platforms: picked from their marks, then a handle for each */
+.fplatforms { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 6px; }
+.fplatform { display: grid; place-items: center; aspect-ratio: 1 / 1; font: 700 13px/1 -apple-system, BlinkMacSystemFont, sans-serif; color: var(--ink-2);
+             background: var(--bg); border: 1px solid var(--hair); border-radius: 10px; transition: background .15s var(--ease), color .15s var(--ease); }
+.fplatform:hover { border-color: var(--ink-3); color: var(--ink); }
+.fplatform[aria-pressed="true"] { color: #FFFFFF; background: var(--ink); border-color: var(--ink); }
+.fplatform-glyph, .fhandle-glyph { display: grid; place-items: center; }
+.fplatform-glyph svg { width: 17px; height: 17px; }
+.fhandles { display: grid; gap: 6px; }
+.face-editor .fhandle { display: flex; align-items: center; gap: 7px; height: 38px; padding: 0 10px 0 9px; cursor: text;
+                        background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; }
+.face-editor .fhandle:focus-within { border-color: var(--ink); }
+.fhandle-glyph { flex: none; width: 18px; font: 700 12px/1 -apple-system, BlinkMacSystemFont, sans-serif; color: var(--ink); }
+.fhandle-glyph svg { width: 16px; height: 16px; }
+.fhandle-prefix { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.face-editor .fhandle-input { flex: 1; min-width: 0; height: 100%; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; outline: none;
+                              font: 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); }
+.face-editor .fhandle-input:focus { background: none; }
+
+/* the card a message app draws from the link */
+.fog { overflow: hidden; background: var(--bg); border: 1px solid var(--hair); border-radius: 14px; }
+.fog-pic { display: grid; place-items: center; align-content: center; gap: 8px; aspect-ratio: 1.91 / 1; background: var(--wallpaper); }
+.fog-mark { display: grid; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; font-size: 22px; }
+.fog-name { font: 600 16px/1.2 var(--name-font); color: var(--title); }
+.fog-words { display: grid; gap: 2px; padding: 10px 12px 12px; background: var(--surface); }
+.fog-words b { font: 600 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); }
+.fog-desc { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 12px; line-height: 1.35; color: var(--ink-2); }
+.fog-domain { font-size: 11px; color: var(--ink-3); }
+
+/* ---- controls, drawn: a switch, a radio, a checkbox, a size ------------------------ */
+.face-editor .fswitch { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%;
+                        padding: 10px 0; text-align: left; }
+.fswitch-words { display: grid; gap: 2px; min-width: 0; }
+.fswitch-label { font: 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); }
+.fswitch-hint { font: 11px/1.35 -apple-system, BlinkMacSystemFont, sans-serif; color: var(--ink-3); }
+.fswitch-track { position: relative; flex: none; width: 40px; height: 24px; border-radius: 999px; background: var(--hair);
+                 transition: background .22s var(--ease); }
+.fswitch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+                        background: #FFFFFF; box-shadow: 0 1px 3px rgb(20 24 30 / .3); transition: transform .22s var(--ease); }
+.fswitch[aria-checked="true"] .fswitch-track { background: var(--ok); }
+.fswitch[aria-checked="true"] .fswitch-track::after { transform: translateX(16px); }
+
+.fradios { display: grid; gap: 2px; }
+.face-editor .fradio { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; text-align: left;
+                       font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); }
+.fradio-dot { position: relative; flex: none; width: 18px; height: 18px; margin-top: -1px; border-radius: 50%;
+              border: 1.5px solid var(--ink-3); background: var(--bg); transition: border-color .2s var(--ease); }
+.fradio-dot::after { content: ""; position: absolute; inset: 3.5px; border-radius: 50%; background: var(--ink);
+                     transform: scale(0); transition: transform .2s var(--ease); }
+.fradio[aria-checked="true"] .fradio-dot { border-color: var(--ink); }
+.fradio[aria-checked="true"] .fradio-dot::after { transform: scale(1); }
+.fradio-words { display: grid; gap: 1px; }
+.fradio-hint { font-size: 11px; color: var(--ink-3); }
+
+.face-editor .fcheckbox { display: flex; align-items: center; gap: 9px; padding: 5px 0; text-align: left;
+                          font: 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); }
+.fcheckbox-box { flex: none; width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--ink-3); background: var(--bg) center / 12px no-repeat;
+                 transition: background-color .15s var(--ease), border-color .15s var(--ease); }
+.fcheckbox[aria-checked="true"] .fcheckbox-box { border-color: var(--ink); background-color: var(--ink);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.3 5 8.6l4.5-5.2'/%3E%3C/svg%3E"); }
+.face-editor .fcheckbox.locked { cursor: default; }
+.fcheckbox.locked .fcheckbox-box { opacity: .4; }
+
+.fsizes { display: flex; gap: 8px; }
+.face-editor .fsize { flex: 1; display: grid; justify-items: center; align-content: end; gap: 7px; height: 70px; padding: 8px 6px;
+                      border: 1px solid var(--hair); border-radius: 10px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2);
+                      transition: border-color .2s var(--ease), background .2s var(--ease); }
+.fsize-shape { display: block; border-radius: 4px; background: var(--ink-3); transition: background .2s var(--ease); }
+.fsize-s .fsize-shape { width: 18px; height: 18px; }
+.fsize-m .fsize-shape { width: 38px; height: 18px; }
+.fsize-l .fsize-shape { width: 38px; height: 34px; }
+.face-editor .fsize[aria-checked="true"] { border-color: var(--ink); color: var(--ink); background: var(--bg); }
+.fsize[aria-checked="true"] .fsize-shape { background: var(--ink); }
+
+/* ---- the configure window's copy: what is dragged onto the phone ----------------- */
+.fpreview { display: grid; gap: 9px; justify-items: center; padding: 12px; cursor: grab;
+            border: 1px dashed var(--ink-3); border-radius: 16px; background: var(--bg); }
+.fpreview:active { cursor: grabbing; }
+.fpreview .wf-face { width: 100%; min-height: 0; padding: 12px; border-radius: 12px; background: var(--wallpaper); container-type: inline-size; }
+.fpreview .wf-grid > .wf-size-s { grid-column: 1 / -1; justify-self: center; width: calc(50% - 6px); }
+.fpreview .wf-unset { opacity: .55; }
+.fpreview-hint { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); }
+
+/* ---- the colour picker (vendor/coloris), put back after the page's own rules ------ */
+.clr-picker { border-radius: 14px; box-shadow: 0 24px 48px -18px rgb(20 24 30 / .45), 0 0 0 1px rgb(20 24 30 / .08); }
+.clr-picker .clr-close, .clr-picker .clr-swatches button, .clr-picker .clr-preview button { letter-spacing: normal; text-transform: none; transition: none; }
+.clr-picker .clr-close { padding: 0 16px; border-radius: 12px; font-size: 12px; background: #14181E; }
+.clr-picker input.clr-color { min-height: 0; padding: 0 10px; border: 1px solid #DDD; border-radius: 16px; background: #FFFFFF; transition: none;
+                              font: 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; text-transform: uppercase; }
+
+/* Narrower: the rail keeps its icons and drops its words. */
+@media (max-width: 1100px) {
+  .face-editor { grid-template-columns: minmax(420px, 480px) auto; gap: 44px; }
+  .fnav { width: 60px; }
+  .fnav-list { padding: 10px 8px; }
+  .fnav-group, .fnav-name, .fnav .fshuffle span { display: none; }
+  .fnav-item { grid-template-columns: 1fr; justify-items: center; position: relative; padding: 8px 4px; }
+  .fnav-step { position: absolute; top: 1px; right: 1px; width: 14px; height: 14px; font-size: 9px; }
+  .fnav .fshuffle { margin: 8px; padding: 9px; }
+}
+@media (max-width: 900px) {
+  .face-editor { grid-template-columns: 1fr; justify-items: center; gap: 28px; }
+  .face-stage { order: -1; }
+  .face-panel { width: 100%; max-width: 560px; }
+  .face-tools { top: auto; right: auto; bottom: -46px; left: 50%; transform: translateX(-50%); grid-auto-flow: column; }
+}
+/* A phone: a smaller phone, 44px targets, and fields at 16px, under which iOS zooms on focus. */
+@media (max-width: 560px) {
+  .face-editor { --face-s: .6; gap: 72px; }
+  .fnav { width: 64px; }
+  .fnav-item { min-height: 44px; }
+  .face-tool { width: 44px; height: 44px; }
+  .face-tools { bottom: -62px; }
+  .face-editor .finput { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .face-phone.dragging .face-item { animation: none; }
+}

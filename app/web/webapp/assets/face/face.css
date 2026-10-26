@@ -1,0 +1,187 @@
+/* face.css — A SITE'S PUBLIC FACE: the link-in-bio page an external user lands on.
+ *
+ * Scoped under .wf-*, so the same rules draw the face on the phone in /signup's
+ * step 2 and, later, the published face itself. The look is set as custom
+ * properties by face.js (applyLook) on whatever holds the face:
+ *
+ *   --bg --fg --title --surface --accent --on-accent --muted --line   colours
+ *   --wallpaper                                                         the whole background
+ *   --font --name-font                                                  text and title faces
+ *   --btn-bg --btn-fg --btn-border --btn-radius                         buttons (a Link, the door)
+ *   --card-bg --card-border --card-radius --shadow --blur               cards (every other widget)
+ *
+ * Widgets size as a phone's do: small sits two to a row, medium and large take
+ * the row. Stickers sit over it all, placed in the face's own width (cqw), and
+ * never catch a tap. */
+
+/* Every button a face draws starts from nothing, so no page it sits in can
+   lend it a stray letter-spacing or padding. */
+.wf-btn { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; font: inherit; letter-spacing: normal;
+          text-transform: none; color: inherit; cursor: pointer; }
+
+/* The wallpaper holds still while the face scrolls over it. */
+.wf-backdrop { position: fixed; inset: 0; z-index: -1; background: var(--wallpaper, var(--bg)); }
+
+.wf-face {
+  box-sizing: border-box;
+  min-height: 100%;
+  /* the foot is kept clear for the door, which floats over it */
+  padding: 26px 16px 100px;
+  color: var(--fg);
+  font: 15px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+  text-align: center;
+}
+.wf-face *, .wf-face *::before, .wf-face *::after { box-sizing: border-box; }
+/* The face's own width is the unit a sticker is placed in. */
+.wf-canvas { position: relative; container-type: inline-size; }
+
+/* ---- the header: the site's mark, name, address and what it is for ------------ */
+.wf-profile { position: relative; margin: 0 0 20px; }
+.wf-avatar { display: block; width: 76px; height: 76px; margin: 0 auto 10px; border-radius: 50%; object-fit: cover; }
+.wf-initials { display: grid; place-items: center; font: 400 30px/1 var(--name-font); color: var(--on-accent); background: var(--accent); }
+.wf-name { margin: 0 0 3px; font: 600 22px/1.2 var(--name-font); letter-spacing: .01em; color: var(--title); overflow-wrap: anywhere; }
+.wf-logo { display: block; max-width: 72%; max-height: 64px; margin: 2px auto 8px; object-fit: contain; }
+.wf-handle { margin: 0 0 8px; font-size: 13px; color: var(--muted); letter-spacing: .02em; }
+.wf-bio { margin: 0 auto; max-width: 30em; font-size: 14px; line-height: 1.42; color: var(--muted); }
+.wf-members { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+.wf-members b { font-weight: 600; color: var(--fg); }
+
+/* Hero: the mark, big, bleeding off the top and fading into the face. */
+.wf-layout-hero .wf-hero { position: relative; margin: -26px -16px -30px; aspect-ratio: 10 / 9; overflow: hidden; }
+.wf-hero-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.wf-hero::after { content: ""; position: absolute; inset: 45% 0 0; background: linear-gradient(transparent, var(--bg)); }
+/* without a photo, a monogram in the title's colour on the wallpaper itself */
+.wf-hero-empty { aspect-ratio: 10 / 7; }
+.wf-hero-empty::after { display: none; }
+.wf-hero-empty .wf-initials { font-size: 112px; color: var(--title); background: none; }
+.wf-layout-hero .wf-name, .wf-layout-hero .wf-logo { position: relative; }
+/* Banner: a strip across the top, the mark over its lower edge. */
+.wf-banner { height: 118px; margin: -26px -16px 0; background: linear-gradient(135deg, var(--accent), var(--title)) center / cover; }
+.wf-layout-banner .wf-avatar { position: relative; margin-top: -40px; box-shadow: 0 0 0 4px var(--bg); }
+
+/* Share: a round button at the top corner, over whatever is behind it. */
+.wf-sharebtn { position: absolute; z-index: 3; top: -14px; right: -6px; display: grid; place-items: center; width: 36px; height: 36px;
+               border-radius: 50%; color: var(--fg); background: color-mix(in srgb, var(--bg) 72%, transparent);
+               -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 1px 4px rgba(0, 0, 0, .14); }
+.wf-sharebtn svg { width: 18px; height: 18px; }
+
+/* ---- the grid --------------------------------------------------------------------- */
+.wf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
+           /* a small widget's side, in the face's own width (the canvas is the container) */
+           --cell: calc((100cqw - 12px) / 2); }
+.wf-grid > * { grid-column: 1 / -1; min-width: 0; }
+.wf-grid > .wf-size-s { grid-column: auto; aspect-ratio: 1 / 1; }
+.wf-grid > * > .wf-w { height: 100%; }
+
+/* a widget: a card */
+.wf-w {
+  display: flex; flex-direction: column;
+  padding: 14px 16px; text-align: left; overflow: hidden;
+  border-radius: var(--card-radius, 22px); border: var(--card-border, 0 solid transparent);
+  background: var(--card-bg, var(--surface)); color: var(--fg);
+  box-shadow: var(--shadow, none);
+  -webkit-backdrop-filter: var(--blur, none); backdrop-filter: var(--blur, none);
+}
+.wf-head { margin: 0 0 8px; font: 600 11px/1.3 var(--font); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+/* Sizes as a phone's widgets have them: a small one is a square, a medium one is
+   as tall as a small one and twice as wide, a large one is two smalls tall. A
+   Link is a button and Social a row, so they keep their own heights. */
+.wf-size-m > .wf-w:not(.wf-link):not(.wf-social) { min-height: var(--cell); }
+.wf-size-l > .wf-w:not(.wf-link):not(.wf-social) { min-height: calc(var(--cell) * 2 + 12px); }
+
+/* shapes, until the Arc's feed fills them */
+.wf-skel { display: block; height: 10px; border-radius: 6px; background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.wf-items { display: grid; gap: 14px; }
+.wf-skel-row { display: grid; gap: 7px; }
+.wf-skel-lead { width: 32%; }
+.wf-skel-main { width: 72%; height: 13px; }
+.wf-skel-meta { width: 46%; }
+.wf-size-s .wf-items { flex: 1; align-content: end; }
+.wf-compact .wf-skel-lead { width: 58%; height: 16px; }
+.wf-compact .wf-skel-main { width: 88%; }
+.wf-skel-num { color: color-mix(in srgb, var(--fg) 24%, transparent); }
+
+/* a link: a button to anywhere */
+.wf-link {
+  align-items: center; justify-content: center; min-height: 56px; padding: 14px 20px;
+  border-radius: var(--btn-radius, 999px); border: var(--btn-border, 0 solid transparent);
+  background: var(--btn-bg, var(--accent)); color: var(--btn-fg, var(--on-accent));
+  font: 600 15px/1.3 var(--font); text-align: center; text-decoration: none;
+}
+.wf-size-s .wf-link { border-radius: var(--card-radius, 22px); }
+
+/* text of the site's own: a card like the rest, its type growing with its size */
+.wf-textcard { justify-content: center; }
+.wf-textcard p { margin: 0; font: 400 15px/1.5 var(--font); white-space: pre-wrap; overflow-wrap: anywhere; }
+.wf-size-m .wf-textcard p { font-size: 17px; }
+.wf-size-l .wf-textcard p { font: 400 23px/1.35 var(--name-font); color: var(--title); }
+.wf-textcard.wf-unset p { color: var(--muted); }
+
+/* elsewhere: a row of the platforms' own marks */
+.wf-social { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px 14px; padding: 2px 0;
+             background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.wf-glyph { display: grid; place-items: center; width: 32px; height: 32px; font: 700 14px/1 var(--font); color: var(--fg); }
+.wf-glyph svg { width: 24px; height: 24px; }
+.wf-glyph.wf-skel { width: 28px; height: 28px; margin: 2px; border-radius: 50%; }
+
+/* where */
+.wf-place { flex: 1; display: flex; align-items: center; gap: 12px; }
+.wf-size-s .wf-place { flex-direction: column; align-items: flex-start; justify-content: space-between; }
+.wf-pin { flex: none; width: 14px; height: 14px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent); }
+.wf-place-words { display: grid; gap: 4px; min-width: 0; width: 100%; }
+.wf-place-label { font: 600 16px/1.3 var(--font); }
+.wf-place-scale { font-size: 13px; color: var(--muted); }
+
+/* ---- stickers: over everything, and never in the way of a tap ------------------- */
+.wf-stickers { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.wf-sticker { position: absolute; pointer-events: none; }
+.wf-sticker img, .wf-sticker svg { display: block; width: 100%; height: auto; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; }
+.wf-sticker img { filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .18)); }
+
+/* ---- the door: the way in. Every face has one, bottom centre, outside the scroll —
+   the face's own ink turned over, so it reads on any wallpaper. */
+.wf-door {
+  position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 5;
+  display: inline-flex; align-items: center; gap: 9px; padding: 13px 22px 13px 18px; border-radius: var(--door-radius, 999px);
+  background: var(--fg); color: var(--bg); font: 600 15px/1 var(--font); letter-spacing: .01em; white-space: nowrap;
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, .5);
+}
+.wf-door-icon, .wf-door-icon svg { display: inline-flex; width: 20px; height: 20px; }
+
+/* ---- knocking: the sheet of questions a site asks before it lets someone in -------- */
+.wf-sheet { position: fixed; inset: 0; z-index: 15; display: flex; align-items: flex-end; background: rgba(10, 12, 16, .32); }
+.wf-sheet-card { width: 100%; max-height: 84%; overflow-y: auto; padding: 10px 18px 20px; border-radius: 24px 24px 0 0;
+                 background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font); text-align: left;
+                 box-shadow: 0 -14px 32px -14px rgba(0, 0, 0, .4); }
+.wf-sheet-grab { display: block; width: 38px; height: 4px; margin: 0 auto 14px; border-radius: 2px; background: var(--line); }
+.wf-sheet-head { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
+.wf-sheet-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; color: var(--bg); background: var(--fg); }
+.wf-sheet-icon svg { width: 22px; height: 22px; }
+.wf-sheet-title { margin: 0; font: 600 18px/1.2 var(--name-font); color: var(--title); }
+.wf-sheet-sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.wf-q { margin: 0 0 14px; }
+.wf-q-label { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.wf-q i { font-style: normal; color: var(--accent); }
+.wf-q-field { display: block; height: 38px; border-radius: 10px; border: 1.5px solid var(--line); background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.wf-q-long { height: 72px; }
+.wf-q-option { display: flex; align-items: center; gap: 9px; margin-top: 6px; padding: 8px 10px; font-size: 13px;
+               border: 1.5px solid var(--line); border-radius: 10px; }
+.wf-q-option::before { content: ""; flex: none; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--muted); }
+.wf-q-agree { display: flex; align-items: flex-start; gap: 10px; margin: 0; font-size: 13px; }
+.wf-q-agree::before { content: ""; flex: none; width: 16px; height: 16px; margin-top: 1px; border-radius: 4px; border: 1.5px solid var(--muted); }
+.wf-sheet-go { display: block; width: 100%; margin-top: 4px; padding: 14px; border-radius: var(--btn-radius, 999px);
+               background: var(--fg); color: var(--bg); font: 600 15px/1 var(--font); }
+
+/* ---- a content notice: over the whole face until the visitor chooses -------------- */
+.wf-notice { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 28px;
+             background: color-mix(in srgb, var(--bg) 62%, transparent);
+             -webkit-backdrop-filter: blur(26px) saturate(1.2); backdrop-filter: blur(26px) saturate(1.2); }
+.wf-notice-card { width: 100%; max-width: 300px; text-align: center; color: var(--fg); font: 15px/1.45 var(--font); }
+.wf-notice-icon { display: inline-grid; place-items: center; width: 46px; height: 46px; border-radius: 50%;
+                  font: 700 22px/1 var(--font); color: var(--bg); background: var(--fg); }
+.wf-notice-title { margin: 14px 0 6px; font: 600 21px/1.25 var(--name-font); color: var(--title); }
+.wf-notice-text { margin: 0 0 20px; font-size: 14px; color: var(--muted); }
+.wf-notice-go { display: block; width: 100%; padding: 14px; border-radius: var(--btn-radius, 999px);
+                background: var(--fg); color: var(--bg); font: 600 15px/1 var(--font); }
+.wf-notice-back { margin-top: 12px; padding: 6px 10px; font: 14px/1 var(--font); color: var(--muted); }

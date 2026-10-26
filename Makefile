@@ -1,74 +1,20 @@
-# Pacific / WallFlowers — one entry point over the product and the two business repositories.
+# WallFlowers — one entry point: the checks and the four deploys.
 #
-# WHAT THIS IS, AND WHAT IT DELIBERATELY IS NOT. Every target here DELEGATES.
-# `deploy-arc` runs arc/hosting/deploy-arc.sh; `deploy-auth` runs site's
-# justfile; `wasm` runs app/web/build-wasm.sh. None of them reimplements a build,
-# because a second way to build is a second thing to be wrong — the same argument
-# the doctrine makes about the ICD, applied to the pipeline. This file is an INDEX:
-# it knows what exists, what order it goes in, and what "green" means. When CI
-# arrives it should call these targets, not reproduce them.
-#
-# ── WHY THERE IS NO CI YET, AND IT IS NOT THE PIPELINE'S FAULT ───────────────
-#
-# Checked 18 Sep 2026 with `git ls-remote` over SSH, which is what `git push`
-# uses. HTTPS gives a misleading answer here: it reports an auth failure for a
-# repository that does not exist, so it cannot distinguish "no access" from "no
-# repo". SSH can.
-#
-#   app        no remote                          (web + ios joined 18 Sep; ios's old
-#                                                  origin was a local filesystem path)
-#   arc        git@codeberg.org:phezman/arc.git   exists, remote behind local
-#   core       git@codeberg.org:phezman/pacific-core.git   DOES NOT EXIST
-#   site       git@codeberg.org:phezman/kenjin.git         exists, to be renamed site
-#   branding   no remote                          (extracted from the workspace 18 Sep)
-#
-# `make status` reports the live state; this table is the state on the day the
-# workspace was split, kept because it explains why there was no pipeline.
-#
-# So: most of the five had nowhere to push. **There is no pipeline because there is nothing pushed
-# to build.** That is the blocker `arc@ac85d89` named — planes/relay pins
-# pacific-wire to a codeberg rev predating the vocabulary work, and there is
-# nothing to bump to because the vocabulary work has never left this laptop.
-#
-# Order, therefore: `make status` → push paths → CI. Not the other way round.
-#
-# ── WHAT CODEBERG ACTUALLY OFFERS, when the push path exists ─────────────────
-#
-# Two options, and the heavy build fits NEITHER without a self-hosted runner:
-#
-#   Woodpecker (hosted)     ci.codeberg.org. Manual onboarding by volunteers,
-#                           linux/amd64 only, "resource usage must be reasonable
-#                           for the intended use-case", explicitly as-is.
-#   Forgejo Actions         .forgejo/workflows/ (falls back to .github/workflows/).
-#                           Disabled per repo by default: Settings > Units >
-#                           Overview. Codeberg-hosted runners are open alpha and
-#                           limited; self-hosted is the supported path. Runners
-#                           connect OUTBOUND, so no public IP is needed. Labels
-#                           are <name>:<type>://<image>, type one of docker | lxc
-#                           | host.
-#
-# THE HEAVY BUILD IS NOT A REASONABLE USE OF A NON-PROFIT'S SHARED RUNNERS.
-# arc/hosting/deploy-arc.sh already records why: mls-rs plus bundled SQLite "would
-# take hours and OOM" on kenjin-01 (1 vCPU, 961Mi, no swap). That rules out both
-# the shared Woodpecker instance AND kenjin-01 as a runner. The build happens on
-# a laptop today; if it should stop happening there, the answer is a build host
-# registered as a self-hosted Forgejo runner, not a workflow file.
-#
-# What IS worth putting on hosted CI the day the code is pushed: the checks.
-# `make check` is cheap, catches the cross-repo drift this tree keeps producing,
-# and needs no cross-compiler.
+# Every target DELEGATES to the script that does the work; none reimplements a build,
+# because a second way to build is a second thing to be wrong. CI calls these targets
+# (.github/workflows/): ci.yml the checks on every pull request, deploy.yml the deploys.
 #
 # Usage: `make` for the list.
 
 SHELL      := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
-# This file lives at the root of product/, the repository that holds app, arc and
-# core. The workspace is product's parent: the site and the marks are under
-# business/ (website, branding). Neither `wallflowers/` nor `business/` is a repository.
+# This file lives at the root of the repository that holds app, arc and core. Its parent
+# is the workspace, where a website checkout may sit under business/ for the checks that
+# compare against it; nothing here needs one.
 PRODUCT    := $(shell cd $(dir $(lastword $(MAKEFILE_LIST))) && pwd)
 CORE       := $(PRODUCT)/core
 WS         := $(abspath $(PRODUCT)/..)
-REPOS      := product business/website business/branding
+REPOS      := $(notdir $(PRODUCT))
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 # The workspace's .venv where there is one; otherwise python3 (CI).
 PY         ?= $(if $(wildcard $(WS)/.venv/bin/python),$(WS)/.venv/bin/python,python3)
@@ -77,7 +23,7 @@ ARC_HOST   := https://arc.wallflowers.io
 
 .DEFAULT_GOAL := help
 .PHONY: help status check check-icd check-core check-arc check-auth check-harness check-door e2e e2e-browser \
-        wasm serve stop deploy-arc deploy-auth deploy-site live site-setup
+        wasm serve stop deploy-app deploy-door deploy-arc deploy-docs live site-setup
 
 help:  ## this list
 	@awk 'BEGIN{FS=":.*## "} /^[a-z][a-z0-9-]*:.*## /{printf "  \033[1m%-14s\033[0m %s\n",$$1,$$2}' $(MAKEFILE_LIST)
@@ -145,8 +91,7 @@ check-arc:  ## the Arc planes
 	else echo '  arc     face-render vendored_copies_match_the_website NOT RUN: no business/website beside product'; fi
 
 check-door:  ## the Door (app/door, its own workspace), and its window's and the webapp's node tests
-	@if [ -d $(WS)/business/website/site ]; then cd $(PRODUCT) && node --test app/door/hosting/bake.test.mjs; \
-	else echo '  door    bake.test.mjs (the deploy stage takes /assets from the website) NOT RUN: no business/website beside product'; fi
+	@cd $(PRODUCT) && node --test app/door/hosting/bake.test.mjs
 	@if [ "$$(uname)" = Darwin ]; then cd $(PRODUCT) && node --test app/door/hosting/one-signin/site-setup.test.mjs; \
 	else echo '  door    site-setup.test.mjs (the operator tool draws with macOS sips) NOT RUN: not macOS'; fi
 	@printf '  door    '
@@ -172,21 +117,33 @@ stop:  ## stop what `serve` started
 	@$(CORE)/serve-docs.sh stop
 
 # ── deploys ─────────────────────────────────────────────────────────────────
-# Each one delegates. They are listed together so the three are visible as one
-# system, which they are: the client, the account store and the planes all have
-# to agree about the audience and the label set.
+# Four routes, each a commit shipped by its own script. door-01 holds the Door; the Arc's
+# box (wallflowers-01) the planes, the account store and the docs. DEPLOY_KEY is the ssh
+# key both take.
 
-deploy-arc:  ## the five planes -> kenjin-01 (stamped, guarded)
-	@$(PRODUCT)/arc/hosting/deploy-arc.sh
+DEPLOY_KEY ?= $(HOME)/.ssh/machine0_key
+DOOR        = DOOR_BOX=ubuntu@188.166.244.69 DOOR_HOST=app.wallflowers.io DOOR_KEY=$(DEPLOY_KEY) $(PRODUCT)/app/door/hosting/deploy-door.sh
+ARC_ENV     = ARC_BOX=ubuntu@167.99.83.136 ARC_KEY=$(DEPLOY_KEY)
 
-deploy-auth:  ## the account store -> kenjin-01
-	@cd $(WS)/business/website && just deploy-auth
+deploy-app:  ## the webapp -> app.wallflowers.io; the Door keeps running, no session ends
+	@$(DOOR) app
 
-deploy-site:  ## the pages -> kenjin-01
-	@cd $(WS)/business/website && just deploy
+deploy-door:  ## the Door -> door-01; the restart ends every session
+	@$(DOOR) door
 
-live:  ## what the deployed Arc reports about itself
-	@$(PRODUCT)/arc/hosting/deploy-arc.sh verify
+deploy-arc:  ## the five planes -> wallflowers-01, and the account store when arc/auth changed
+	@$(ARC_ENV) $(PRODUCT)/arc/hosting/deploy-arc.sh
+	@if $(ARC_ENV) $(PRODUCT)/arc/hosting/deploy-auth.sh changed; then $(ARC_ENV) $(PRODUCT)/arc/hosting/deploy-auth.sh; \
+	else echo '  auth    unchanged: not restarted'; fi
+
+deploy-docs:  ## the Community API docs -> docs.wallflowers.io
+	@$(ARC_ENV) $(PRODUCT)/app/door/docs/hosting/deploy-docs.sh
+
+live:  ## what each deploy reports about itself
+	@$(DOOR) verify
+	@$(ARC_ENV) $(PRODUCT)/arc/hosting/deploy-arc.sh verify
+	@$(ARC_ENV) $(PRODUCT)/arc/hosting/deploy-auth.sh verify
+	@$(ARC_ENV) $(PRODUCT)/app/door/docs/hosting/deploy-docs.sh verify
 
 site-setup:  ## a Site's one sign-in, by the owner's passkey: SITE=egregore MARK=<picture>
 	@node $(PRODUCT)/app/door/hosting/one-signin/site-setup.mjs "$(SITE)" "$(MARK)"
