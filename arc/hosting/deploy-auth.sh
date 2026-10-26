@@ -8,8 +8,8 @@
 #                               not a commit here), 1 when it does not
 #
 # AN AUTH RESTART CUTS DOOR SIGN-INS for its seconds (K-49), so `make deploy-arc` ships it
-# only when `changed` says so. The secrets stay on the box (~/kenjin-auth-secrets); a
-# deploy never carries one.
+# only when `changed` says so. The secrets stay on the box (~/kenjin-auth-secrets, placed
+# once by push-auth-secrets.sh); a deploy never carries one.
 #
 # ARC_BOX and ARC_KEY as deploy-arc.sh's.
 set -euo pipefail

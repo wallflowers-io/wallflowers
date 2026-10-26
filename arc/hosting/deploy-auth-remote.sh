@@ -29,8 +29,8 @@ KEEP=5
 
 cd "$SRC"
 
-[ -f "$SECRETS/.env" ] || { echo "FATAL: $SECRETS/.env missing: the secrets are put there by hand, never by a deploy" >&2; exit 1; }
-[ -f "$SECRETS/AuthKey.p8" ] || { echo "FATAL: $SECRETS/AuthKey.p8 missing: the secrets are put there by hand, never by a deploy" >&2; exit 1; }
+[ -f "$SECRETS/.env" ] || { echo "FATAL: $SECRETS/.env missing: run arc/hosting/push-auth-secrets.sh first" >&2; exit 1; }
+[ -f "$SECRETS/AuthKey.p8" ] || { echo "FATAL: $SECRETS/AuthKey.p8 missing: run arc/hosting/push-auth-secrets.sh first" >&2; exit 1; }
 
 # A commit carries no .env, .env.dev or scratch db (NC-78), and the replaced tree
 # drops any an older deploy left. None is read by anything, but a stale .env beside
