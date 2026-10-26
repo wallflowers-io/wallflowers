@@ -176,7 +176,14 @@ mod tests {
     impl Relay {
         fn start(root: &std::path::Path) -> Relay {
             use std::os::unix::process::CommandExt;
-            let bin = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../arc/target/debug/semaphore");
+            // The relay `make check-door` builds: under $CARGO_TARGET_DIR when it is set (a
+            // relative one is arc's), else arc's own target; absent, this fails, naming it.
+            let arc = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../arc");
+            let bin = match std::env::var_os("CARGO_TARGET_DIR").filter(|d| !d.is_empty()).map(std::path::PathBuf::from) {
+                Some(d) if d.is_absolute() => d.join("debug/semaphore"),
+                Some(d) => arc.join(d).join("debug/semaphore"),
+                None => arc.join("target/debug/semaphore"),
+            };
             assert!(bin.exists(), "this test needs the relay: `cargo build -p relay` in arc ({} is absent)", bin.display());
             let free = || std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
             let (port, tunnel) = (free(), free());

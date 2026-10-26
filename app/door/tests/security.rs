@@ -734,9 +734,21 @@ struct Relay {
     log: PathBuf,
 }
 
+/// The relay `make check-door` builds (`cd arc && cargo build -p relay`): under $CARGO_TARGET_DIR
+/// when it is set (the shared target; a relative one is arc's, as cargo resolves it there), else
+/// arc's own target. Absent, `Relay::start` fails, naming it: a missing relay is never a skip.
+fn relay_bin() -> PathBuf {
+    let arc = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../arc");
+    match std::env::var_os("CARGO_TARGET_DIR").filter(|d| !d.is_empty()).map(PathBuf::from) {
+        Some(d) if d.is_absolute() => d.join("debug/semaphore"),
+        Some(d) => arc.join(d).join("debug/semaphore"),
+        None => arc.join("target/debug/semaphore"),
+    }
+}
+
 impl Relay {
     fn start() -> Relay {
-        let bin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../arc/target/debug/semaphore");
+        let bin = relay_bin();
         assert!(bin.exists(), "this test needs the relay: run `cargo build -p relay` in arc ({} is absent)", bin.display());
         let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
         let tunnel = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
