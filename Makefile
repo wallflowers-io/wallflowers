@@ -25,7 +25,7 @@ PKGS = $(shell cd $(PRODUCT) && PATH='$(PATH)' cargo metadata --no-deps --format
 ARC_HOST   := https://arc.wallflowers.io
 
 .DEFAULT_GOAL := help
-.PHONY: help status check check-icd check-core check-arc check-auth check-harness check-door e2e e2e-browser \
+.PHONY: help status check check-icd check-core check-arc check-auth check-harness check-door e2e e2e-browser ci ci-hooks \
         wasm serve stop deploy-app deploy-door deploy-arc deploy-docs live site-setup
 
 help:  ## this list
@@ -107,6 +107,16 @@ e2e:  ## the WallFlowers path end to end on loopback; outside check for now
 e2e-browser:  ## the path in a visible browser: the real window, a virtual passkey with PRF
 	@printf '  e2e-browser '
 	@$(PINNED) e2e-browser sh -c 'cd $(PRODUCT) && E2E_KEEP=1 $(PY) app/e2e/browser_path.py'
+
+# ── the CI runner ───────────────────────────────────────────────────────────
+# GitHub's CI jobs (label wf-ci) run here, in a container per job on Colima's wf-ci VM, for as
+# long as any are queued; then the VM stops. tools/ci/serve.sh says how.
+
+ci:  ## serve GitHub's queued CI jobs on this Mac, then tear down; one run per machine
+	@$(PRODUCT)/tools/ci/serve.sh
+
+ci-hooks:  ## a push starts `make ci` in the background (tools/hooks/pre-push)
+	@git -C $(PRODUCT) config core.hooksPath tools/hooks && echo '  pushes now start make ci'
 
 # ── build and serve ─────────────────────────────────────────────────────────
 
