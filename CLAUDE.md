@@ -67,23 +67,47 @@ wire type ids, every op and its id, authority and commutativity: the ICD says, a
 **What this enables, concretely:**
 
 - **Parametric Modelling.** To the greatest extent possible, numbers, counts, operations, should be read at build/runtime directly from the ICD, because copies break.
-   /Users/ralph/wallflowers/product/core/docs/ref/ECSS_DATA_EXCHANGE.md is a useful reference for this, published by the European Space Agency. Read it.
+   ~/wallflowers/wallflowers_backup/product/core/docs/ref/ECSS_DATA_EXCHANGE.md is a useful reference for this, published by the European Space Agency. Read it.
 
 *Parallel implementations of the delta model, including for testing, are expressly forbidden.*
 
 ** NEVER NERF A TEST **
 Failing tests inform fixes or PRs. Weakening a test for a 'special case' or unimplmented stub breaks the test, and provides the false illusion of coverage.
 
+## Repositories
+
+- `wallflowers_public`, this one: all code. Public on GitHub, AGPL.
+- `~/wallflowers/wallflowers_backup/product`: the pre-release backup, private on Codeberg. Its history never goes public; code from it is ported here as a PR.
+- `~/wallflowers/business/website`: www.wallflowers.io, private on Codeberg, deployed on its own path.
+
+## Changes
+
+- One worktree per branch: `git worktree add ~/wallflowers/wt/<name> -b <type>/<name> origin/main`.
+- CI (`.github/workflows/ci.yml`) runs on Ralph's pushes only, on `wf-runner`, a Lima VM on his Mac: one job at a time, queued while the Mac sleeps.
+- `icd`, `auth`, `core`, `arc` and `door` must pass before a merge to `main`. A known red is named in the PR with its NC.
+- Squash merge: `gh pr merge <n> --squash --delete-branch --author-email 49734093+phezman@users.noreply.github.com`. No personal address enters public history.
+
 ## Deploy
 
-`core/docs/launch/deploy.md` is the authority on deploying. It sets the six units, one path for each, the common method, and where deployed state is read. A unit deploys only by its path there. A difference between paths stands only on a named requirement. No other document states a deployed commit.
+`.github/workflows/deploy.yml`, from `main`, on the same runner. Each run waits for approval in the `production` environment, which holds the deploy key.
+
+| Route | Ships | Restart |
+|---|---|---|
+| `arc` | the five planes → wallflowers-01; the account store when `arc/auth` changed | the planes; auth only when shipped |
+| `door` | the Door → door-01 | every session ends |
+| `app` | the webapp and its `/assets` → door-01 | none |
+| `docs` | `app/door/docs/dist` → docs.wallflowers.io | none |
+
+- `gh workflow run deploy.yml -f <route>=true`, then approve. `make live` reads what each box serves.
+- Several at once ship arc, then door, then app.
+- A change to `/v2/signin.js` moves its SRI: egregores-echoes.com's pin is updated in the same window.
+- Never from a working tree. `make deploy-<route>` from a laptop only when the pipeline is broken, from a clean checkout of `main`, and said.
 
 ## If you are about to write something
 
 - **Find the op first.** The catalogue is `core/coordination/delta-graph.icd.json`, and the
-  reducers are held to IT by `core/WallFlowers-core/src/icd.rs` (which currently states the anchor the
-  other way round — see the violations above). If the op you need is not there, the work is *adding
-  an op to the ICD* — not storing the value somewhere convenient.
+  reducers are held to IT by `core/pacific-core/src/icd.rs`. If the op you need is not there, the
+  work is *adding an op to the ICD* — not storing the value somewhere convenient.
   
 - **If you cannot persist it, say so and stop.** Report the gap. Do not fill it.
 
