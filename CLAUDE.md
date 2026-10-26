@@ -83,7 +83,7 @@ Failing tests inform fixes or PRs. Weakening a test for a 'special case' or unim
 ## Changes
 
 - One worktree per branch: `git worktree add ~/wallflowers/wt/<name> -b <type>/<name> origin/main`.
-- CI (`.github/workflows/ci.yml`) runs on Ralph's pushes only, on `wf-runner`, a Lima VM on his Mac: one job at a time, queued while the Mac sleeps.
+- CI (`.github/workflows/ci.yml`) runs on Ralph's pushes only, on `wf-runner`, a Lima VM on his Mac: one job at a time, queued while the Mac sleeps. It is built by `~/wallflowers/dev/wf-runner/up.sh`.
 - `icd`, `auth`, `core`, `arc` and `door` must pass before a merge to `main`. A known red is named in the PR with its NC.
 - Squash merge: `gh pr merge <n> --squash --delete-branch --author-email 49734093+phezman@users.noreply.github.com`. No personal address enters public history.
 
