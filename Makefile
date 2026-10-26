@@ -145,8 +145,7 @@ check-arc:  ## the Arc planes
 	else echo '  arc     face-render vendored_copies_match_the_website NOT RUN: no business/website beside product'; fi
 
 check-door:  ## the Door (app/door, its own workspace), and its window's and the webapp's node tests
-	@if [ -d $(WS)/business/website/site ]; then cd $(PRODUCT) && node --test app/door/hosting/bake.test.mjs; \
-	else echo '  door    bake.test.mjs (the deploy stage takes /assets from the website) NOT RUN: no business/website beside product'; fi
+	@cd $(PRODUCT) && node --test app/door/hosting/bake.test.mjs
 	@if [ "$$(uname)" = Darwin ]; then cd $(PRODUCT) && node --test app/door/hosting/one-signin/site-setup.test.mjs; \
 	else echo '  door    site-setup.test.mjs (the operator tool draws with macOS sips) NOT RUN: not macOS'; fi
 	@printf '  door    '

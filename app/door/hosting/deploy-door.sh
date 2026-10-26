@@ -25,8 +25,7 @@
 # DOOR_GLIBC the glibc the host has. DOOR_TLS=internal gives a rehearsal host with no
 # public name Caddy's own certificate authority instead of a real certificate.
 #
-# DOOR_ASSETS_COMMIT is the website commit /assets are baked from (D-54; default the
-# website's HEAD). DOOR_EGRESS the prefixes the Door may reach besides localhost
+# DOOR_EGRESS the prefixes the Door may reach besides localhost
 # (default Cloudflare's published ranges, "none" for a rehearsal on loopback).
 # DOOR_MEMORY_MAX sizes door.service's MemoryMax (default 75% of the host, until D-30);
 # the Door fits its session caps under it (NC-48).
@@ -80,19 +79,11 @@ assert all(hashlib.sha256(base64.urlsafe_b64decode(v + "=" * (-len(v) % 4))).hex
 PY
 }
 
-# ── /assets (D-54, HV-8) ─────────────────────────────────────────────────────
-# The webapp's /assets are the website's, baked into the deploy from one committed website
-# commit and served by the Door with the rest of the webapp: nothing is fetched at run
-# time. What ships is what index.html loads, and what its stylesheets load (url(),
-# @import); its scripts load nothing. They run as the Door's origin, beside the PRF.
-# The website sits beside this repository's main checkout, wherever the worktree is.
-WEBSITE="$(cd "$(git -C "$PRODUCT" rev-parse --path-format=absolute --git-common-dir)/../../business/website" 2>/dev/null && pwd)"
-# DOOR_ASSETS_COMMIT, else the website's HEAD.
-assets_commit() {
-  [ -d "$WEBSITE/.git" ] || die "no website checkout beside $PRODUCT: /assets cannot be baked"
-  git -C "$WEBSITE" rev-parse -q --verify "${DOOR_ASSETS_COMMIT:-HEAD}^{commit}" \
-    || die "website commit ${DOOR_ASSETS_COMMIT:-HEAD} is not in $WEBSITE: fetch it"
-}
+# ── /assets (HV-8) ───────────────────────────────────────────────────────────
+# The webapp's own, under app/web/webapp/assets, served by the Door with the rest of the
+# webapp: nothing is fetched at run time. What ships is what index.html loads, and what its
+# stylesheets load (url(), @import); its scripts load nothing. They run as the Door's
+# origin, beside the PRF.
 # The Caddyfile for this host.
 render_caddyfile() {
   local tls="" global=""
@@ -101,8 +92,7 @@ render_caddyfile() {
     "$DOOR_DIR/hosting/Caddyfile.template" > /tmp/door-Caddyfile || die "render Caddyfile"
 }
 # The webapp as shipped, in $WORK/webapp and $WORK/webapp.tgz: its own files, and under
-# assets/ what they load from website commit $1, each script and stylesheet index.html
-# names with its sha384. A directory per run, so a dry run never touches a deploy's.
+# assets/ what they load, each script and stylesheet index.html names with its sha384. A directory per run, so a dry run never touches a deploy's.
 #
 # WHAT webapp.js LOADS ITSELF (2.2.2's Face editor, when first wanted) is baked as what
 # index.html names: its quoted "assets/…" literals, comments aside. Only webapp.js is read so;
@@ -153,9 +143,9 @@ PY
     [ -e "$stage/$f" ] && continue
     mkdir -p "$stage/$(dirname "$f")" && cp "$WEBAPP_SRC/$f" "$stage/$f" || die "stage webapp: $f"
   done
-  python3 - "$stage" "$WEBSITE" "$1" "$LIVERY" "$WITH_FACE" "$WORK/pins.list" > "$WORK/assets.list" <<'PY' || die "bake /assets"
-import base64, hashlib, os, posixpath, re, subprocess, sys
-stage, web, commit, livery, with_face, pins_out = sys.argv[1:]
+  python3 - "$stage" "$WEBAPP_SRC" "$LIVERY" "$WITH_FACE" "$WORK/pins.list" > "$WORK/assets.list" <<'PY' || die "bake /assets"
+import base64, hashlib, os, posixpath, re, sys
+stage, src, livery, with_face, pins_out = sys.argv[1:]
 livery = livery.split()
 page = os.path.join(stage, "index.html")
 s = open(page).read()
@@ -167,22 +157,21 @@ def bake(todo):
         p = posixpath.normpath(todo.pop())
         if p in done: continue
         if not p.startswith("assets/"): sys.exit(f"{p}: outside /assets")
-        r = subprocess.run(["git", "-C", web, "cat-file", "blob", f"{commit}:site/{p}"], capture_output=True)
-        if r.returncode: sys.exit(f"{p}: not in website {commit[:12]}")
+        if not os.path.isfile(os.path.join(src, p)): sys.exit(f"{p}: not in the webapp")
+        body = open(os.path.join(src, p), "rb").read()
         os.makedirs(os.path.join(stage, posixpath.dirname(p)), exist_ok=True)
-        open(os.path.join(stage, p), "wb").write(r.stdout)
+        open(os.path.join(stage, p), "wb").write(body)
         done.add(p)
         if p.endswith(".css"):
-            for m in re.finditer(r'url\(\s*["\']?([^"\')\s]+)|@import\s+["\']([^"\']+)', r.stdout.decode()):
+            for m in re.finditer(r'url\(\s*["\']?([^"\')\s]+)|@import\s+["\']([^"\']+)', body.decode()):
                 u = re.split(r"[?#]", m.group(1) or m.group(2))[0]
                 if re.match(r"[A-Za-z][A-Za-z0-9+.-]*:", u): continue
                 todo.append(u[1:] if u.startswith("/") else posixpath.join(posixpath.dirname(p), u))
 bake(re.findall(r'(?:src|href)="(assets/[^"?#]+)', s) + livery + re.findall(r"""['"](assets/[^'"?#]+)['"]""", js))
 if "assets/face/face.js" in done:
     for d in with_face.split():
-        ls = subprocess.run(["git", "-C", web, "ls-tree", "-r", "--name-only", commit, f"site/{d}/"], capture_output=True, text=True)
-        files = [f[len("site/"):] for f in ls.stdout.split()]
-        if ls.returncode or not files: sys.exit(f"{d}/: not in website {commit[:12]}")
+        files = sorted(posixpath.relpath(posixpath.join(r, f), src) for r, _, fs in os.walk(os.path.join(src, d)) for f in fs)
+        if not files: sys.exit(f"{d}/: not in the webapp")
         bake(files)
 sri = lambda p: "sha384-" + base64.b64encode(hashlib.sha384(open(os.path.join(stage, p), "rb").read()).digest()).decode()
 s = re.sub(r'((?:src|href)="(assets/[^"?#]+\.(?:js|css))[^"]*")', lambda m: f'{m.group(1)} integrity="{sri(m.group(2))}"', s)
@@ -205,10 +194,8 @@ PY
     [ -f "$stage/$p" ] || miss="$miss $p"
   done
   [ -z "$miss" ] || die "index.html loads what is not staged:$miss"
-  [ -z "$(git -C "$WEBSITE" status --porcelain -- $(sed 's|^|site/|' "$WORK/assets.list"))" ] \
-    || die "the website is dirty in what ships: commit it"
   COPYFILE_DISABLE=1 tar --no-xattrs -C "$stage" -czf "$WORK/webapp.tgz" $(cd "$stage" && ls -A) || die "tar webapp"
-  note "/assets: $(wc -l < "$WORK/assets.list" | tr -d ' ') files, $(du -sh "$stage/assets" | cut -f1), from website $1"
+  note "/assets: $(wc -l < "$WORK/assets.list" | tr -d ' ') files, $(du -sh "$stage/assets" | cut -f1)"
   while read -r f q i; do note "pinned: /$q $i (${f})"; done < "$WORK/pins.list"
 }
 # ONLY WHAT THE PAGES LOAD (NC-56), followed from them (stage_webapp); kept here only what
@@ -230,13 +217,16 @@ WEBAPP_SRC="$PRODUCT/app/web/webapp"
 # What becomes the binary, and what it serves.
 INPUTS="app/door/src app/door/Cargo.toml app/door/Cargo.lock app/door/clients.stand-in.json arc/lib/arc-build arc/lib/face-render app/web/door app/web/webapp core/pacific-core core/pacific-wire core/pacific-media core/coordination/delta-graph.icd.json"
 
+# What becomes the webapp alone (`app`): its files, and the ICD its op bindings are checked against.
+WEBAPP_INPUTS="app/web/webapp core/coordination/delta-graph.icd.json"
+
 DIRTY=0
 guard_clean() {
   local dirty
-  dirty=$(cd "$PRODUCT" && git status --porcelain -- $INPUTS)
+  dirty=$(cd "$PRODUCT" && git status --porcelain -- $1)
   [ -z "$dirty" ] && return 0
   DIRTY=1
-  printf '✗ REFUSING: uncommitted changes in what becomes the Door\n%s\n' "$dirty" >&2
+  printf '✗ REFUSING: uncommitted changes in what ships\n%s\n' "$dirty" >&2
   echo "  Deploy from a clean worktree: git worktree add --detach <dir> HEAD" >&2
   [ "${ALLOW_DIRTY:-}" = "1" ] || exit 1
   echo "⚠ ALLOW_DIRTY=1: shipping a dirty tree anyway." >&2
@@ -297,7 +287,7 @@ verify() {
     H=$HOST CA="" sh -c "$ASSET_CHECK"
     [ -z "${PINS:-}" ] || H=$HOST P="$PINS" CA="" sh -c "$PIN_CHECK"
   fi
-  $SSHC "$BOX" 'printf "  %-16s %s\n" version "$(/opt/door/bin/door --version 2>/dev/null)"; for u in door door-edge; do printf "  %-16s %s\n" "$u" "$(systemctl is-active $u)"; done; printf "  %-16s %s\n" commit "$(cat /opt/door/COMMIT 2>/dev/null || echo none)"; printf "  %-16s %s\n" "website assets" "$(cat /opt/door/ASSETS 2>/dev/null || echo none)"' 2>/dev/null
+  $SSHC "$BOX" 'printf "  %-16s %s\n" version "$(/opt/door/bin/door --version 2>/dev/null)"; for u in door door-edge; do printf "  %-16s %s\n" "$u" "$(systemctl is-active $u)"; done; printf "  %-16s %s\n" commit "$(cat /opt/door/COMMIT 2>/dev/null || echo none)"; printf "  %-16s %s\n" webapp "$(cat /opt/door/WEBAPP 2>/dev/null || echo none)"' 2>/dev/null
   # TRAINING_WHEELS (P0): what the running Door said at start; configured and off fails.
   local tw=0 said
   said=$($SSHC "$BOX" 'sudo journalctl -u door --since "$(systemctl show door -p ActiveEnterTimestamp --value)" --no-pager -o cat | grep -m1 "door: training_wheels "' 2>/dev/null)
@@ -385,19 +375,28 @@ RESTART_DOOR='sudo systemctl stop door
     sudo systemctl start door'
 
 rollback() {
-  # A SWAP, binary and webapp together, so a rollback can itself be undone. COMMIT is
-  # rewritten from the binary's own stamp, not remembered (NC-51). The clients file is
-  # configuration, not a build, and stays.
-  $SSHC "$BOX" 'set -e
-    cd /opt/door
-    test -f bin/door.prev || { echo "no previous binary" >&2; exit 1; }
-    sudo mv bin/door bin/door.swap && sudo mv bin/door.prev bin/door && sudo mv bin/door.swap bin/door.prev
-    if [ -d webapp.prev ]; then sudo mv webapp webapp.swap && sudo mv webapp.prev webapp && sudo mv webapp.swap webapp.prev; fi
-    if [ -f ASSETS.prev ]; then sudo mv ASSETS ASSETS.swap && sudo mv ASSETS.prev ASSETS && sudo mv ASSETS.swap ASSETS.prev; fi
-    bin/door --version | python3 -c "import json,sys; s=json.load(sys.stdin); print(s[\"commit\"] + (\"-dirty\" if s.get(\"dirty\") else \"\"))" | sudo tee COMMIT >/dev/null
-    '"$RESTART_DOOR" || die "rollback failed"
-  # The pins a site may hold stay served: every retained one into the webapp now live.
-  $SSHC "$BOX" "sudo python3 - carry /opt/door/webapp /opt/door/webapp.prev /opt/door/PINS" < "$DOOR_DIR/hosting/pins.py" || die "carry pins"
+  # A SWAP, so a rollback can itself be undone: `app` the webapp, `door` the binary, neither
+  # named both. COMMIT is rewritten from the binary's own stamp, not remembered (NC-51). The
+  # clients file is configuration, not a build, and stays. Only the binary's swap restarts.
+  local what=${1:-both} web="" bin=""
+  case "$what" in app) web=1 ;; door) bin=1 ;; both) web=1; bin=1 ;; *) die "rollback [app|door]" ;; esac
+  if [ -n "$bin" ]; then
+    $SSHC "$BOX" 'set -e
+      cd /opt/door
+      test -f bin/door.prev || { echo "no previous binary" >&2; exit 1; }
+      sudo mv bin/door bin/door.swap && sudo mv bin/door.prev bin/door && sudo mv bin/door.swap bin/door.prev
+      bin/door --version | python3 -c "import json,sys; s=json.load(sys.stdin); print(s[\"commit\"] + (\"-dirty\" if s.get(\"dirty\") else \"\"))" | sudo tee COMMIT >/dev/null' || die "rollback failed"
+  fi
+  if [ -n "$web" ]; then
+    $SSHC "$BOX" 'set -e
+      cd /opt/door
+      test -d webapp.prev || { echo "no previous webapp" >&2; exit 1; }
+      sudo mv webapp webapp.swap && sudo mv webapp.prev webapp && sudo mv webapp.swap webapp.prev
+      if [ -f WEBAPP.prev ]; then sudo mv WEBAPP WEBAPP.swap && sudo mv WEBAPP.prev WEBAPP && sudo mv WEBAPP.swap WEBAPP.prev; fi' || die "rollback failed"
+    # The pins a site may hold stay served: every retained one into the webapp now live.
+    $SSHC "$BOX" "sudo python3 - carry /opt/door/webapp /opt/door/webapp.prev /opt/door/PINS" < "$DOOR_DIR/hosting/pins.py" || die "carry pins"
+  fi
+  [ -z "$bin" ] || $SSHC "$BOX" "$RESTART_DOOR" || die "restart failed"
   sleep 3; verify
 }
 
@@ -409,97 +408,113 @@ prune() {
   verify
 }
 
-SHIP=0
+# What a run ships: WEB the webapp, BIN the binary and its configuration. SHIP: the binary
+# uploaded beside the live one, nothing swapped.
+WEB=1; BIN=1; SHIP=0
 case "${1:-deploy}" in
   verify) verify; exit $? ;;
   setup) setup; exit 0 ;;
-  rollback) rollback; exit $? ;;
+  rollback) rollback "${2:-}"; exit $? ;;
   clients) clients; exit $? ;;
   prune) shift; prune "$@"; exit $? ;;
-  stage) WEBAPP_SRC=${DOOR_WEBAPP:-$WEBAPP_SRC}; WCOMMIT=$(assets_commit) || exit 1; stage_webapp "$WCOMMIT"; note "$WORK/webapp"; exit 0 ;;
+  stage) WEBAPP_SRC=${DOOR_WEBAPP:-$WEBAPP_SRC}; stage_webapp; note "$WORK/webapp"; exit 0 ;;
+  # The webapp alone, swapped in while the Door runs: it serves /opt/door/webapp from disk,
+  # so no session ends.
+  app) BIN="" ;;
+  # The binary and its configuration alone, and the restart: every session ends head-first.
+  door) WEB="" ;;
   # Build and upload to /opt/door/bin/door.next, nothing swapped or restarted: training_wheels'
   # spool key is made with it first (`door.next tw-keygen`, runbook § 2t), then `deploy`.
-  ship) SHIP=1 ;;
+  ship) WEB=""; SHIP=1 ;;
   deploy) ;;
-  *) die "deploy | ship | setup | verify | rollback | clients | stage | prune" ;;
+  *) die "deploy | app | door | ship | setup | verify | rollback [app|door] | clients | stage | prune" ;;
 esac
 
 # THE PIN FIRST (O-68): before the dirt guard, so ALLOW_DIRTY=1 cannot pass it.
 "$ICD_PIN" deploy || die "REFUSING: the ICD is not the pinned model; nothing built, nothing uploaded"
-# THE FOLD CACHE'S TEST SWITCHES NEVER SHIP (O-69): a stamped build names its own model, and
-# a verified hit that differed would end a person's session.
-# A file that is missing or unreadable, or a sudo that fails, refuses: only grep's "none
-# found" (exit 1) counts as zero, and the count must be a number.
-SWITCHES=$($SSHC "$BOX" "sudo test -r /opt/door/door.env && { sudo grep -cE '^[[:space:]]*(export[[:space:]]+)?PACIFIC_FOLD_CACHE_' /opt/door/door.env; [ \$? -le 1 ]; }") \
-  || die "REFUSING: /opt/door/door.env could not be read; nothing built, nothing uploaded"
-case "$SWITCHES" in ''|*[!0-9]*) die "REFUSING: /opt/door/door.env's switches could not be counted; nothing built, nothing uploaded" ;; esac
-[ "$SWITCHES" = 0 ] || die "REFUSING: /opt/door/door.env sets PACIFIC_FOLD_CACHE_*; nothing built, nothing uploaded"
-# TRAINING_WHEELS (P0): door.env names all four of its settings or none; half is a mistake the
-# Door would only report as "off". Not for `ship`, which comes before the key is made.
-if [ "$SHIP" = 0 ]; then
-  TW=$($SSHC "$BOX" "sudo grep -cE '^(DOOR_TW_DSN|DOOR_TW_SPOOL|DOOR_TW_SPOOL_PUB|DOOR_TW_SPOOL_KEY)=' /opt/door/door.env; true") \
+if [ -n "$BIN" ]; then
+  # THE FOLD CACHE'S TEST SWITCHES NEVER SHIP (O-69): a stamped build names its own model, and
+  # a verified hit that differed would end a person's session.
+  # A file that is missing or unreadable, or a sudo that fails, refuses: only grep's "none
+  # found" (exit 1) counts as zero, and the count must be a number.
+  SWITCHES=$($SSHC "$BOX" "sudo test -r /opt/door/door.env && { sudo grep -cE '^[[:space:]]*(export[[:space:]]+)?PACIFIC_FOLD_CACHE_' /opt/door/door.env; [ \$? -le 1 ]; }") \
     || die "REFUSING: /opt/door/door.env could not be read; nothing built, nothing uploaded"
-  case "${TW:-0}" in
-    0|4) ;;
-    *) die "REFUSING: /opt/door/door.env names $TW of training_wheels' four settings (runbook § 2t); nothing built, nothing uploaded" ;;
-  esac
+  case "$SWITCHES" in ''|*[!0-9]*) die "REFUSING: /opt/door/door.env's switches could not be counted; nothing built, nothing uploaded" ;; esac
+  [ "$SWITCHES" = 0 ] || die "REFUSING: /opt/door/door.env sets PACIFIC_FOLD_CACHE_*; nothing built, nothing uploaded"
+  # TRAINING_WHEELS (P0): door.env names all four of its settings or none; half is a mistake the
+  # Door would only report as "off". Not for `ship`, which comes before the key is made.
+  if [ "$SHIP" = 0 ]; then
+    TW=$($SSHC "$BOX" "sudo grep -cE '^(DOOR_TW_DSN|DOOR_TW_SPOOL|DOOR_TW_SPOOL_PUB|DOOR_TW_SPOOL_KEY)=' /opt/door/door.env; true") \
+      || die "REFUSING: /opt/door/door.env could not be read; nothing built, nothing uploaded"
+    case "${TW:-0}" in
+      0|4) ;;
+      *) die "REFUSING: /opt/door/door.env names $TW of training_wheels' four settings (runbook § 2t); nothing built, nothing uploaded" ;;
+    esac
+  fi
+  guard_clean "$INPUTS"
+else
+  guard_clean "$WEBAPP_INPUTS"
 fi
-guard_clean
-command -v cargo-zigbuild >/dev/null || die "cargo-zigbuild missing — brew install zig && cargo install cargo-zigbuild"
 COMMIT=$(cd "$PRODUCT" && git rev-parse HEAD)
-
 LABEL=$COMMIT; [ "$DIRTY" = 1 ] && LABEL=$COMMIT-dirty
-# THE STAMP (arc/lib/arc-build), compiled in: `door --version` answers for the binary.
-# Core is in this repository, so its commit is this one.
-export ARC_BUILD_SHA=$COMMIT
-export ARC_BUILD_REF=$(cd "$PRODUCT" && git rev-parse --abbrev-ref HEAD)
-export ARC_BUILD_DIRTY=$DIRTY
-export ARC_BUILD_CORE=$LABEL
-export ARC_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-note "cross-building the Door at ${LABEL:0:18} for $TARGET (glibc $GLIBC)"
-python3 -m json.tool < "$CLIENTS" > /dev/null || die "$CLIENTS is not JSON: the Door would not start"
-keys_ok
-WCOMMIT=$(assets_commit) || exit 1
 trap 'rm -rf "${WORK:-}"' EXIT
-stage_webapp "$WCOMMIT"
-render_caddyfile
-(cd "$DOOR_DIR" && cargo zigbuild --release --target "$TARGET.$GLIBC") || die "build failed"
-BIN="${CARGO_TARGET_DIR:-$DOOR_DIR/target}/$TARGET/release/door"
-[ -f "$BIN" ] || die "missing binary: $BIN"
-LC_ALL=C grep -aq "@(#)arc-build commit=$COMMIT" "$BIN" || die "the binary carries no stamp for $COMMIT: refusing to ship it"
+[ -z "$WEB" ] || stage_webapp
 
-note "shipping to $BOX"
-# Beside the live one, then swap: a half-finished copy must never be what systemd starts.
-$SCP "$BIN" "$BOX:/tmp/door.new" || die "scp door"
-if [ "$SHIP" = 1 ]; then
-  $SSHC "$BOX" "sudo install -m 0755 /tmp/door.new /opt/door/bin/door.next" || die "ship failed"
-  note "shipped to /opt/door/bin/door.next at ${LABEL:0:12}; nothing swapped or restarted"
-  exit 0
+if [ -n "$BIN" ]; then
+  command -v cargo-zigbuild >/dev/null || die "cargo-zigbuild missing — brew install zig && cargo install cargo-zigbuild"
+  # THE STAMP (arc/lib/arc-build), compiled in: `door --version` answers for the binary.
+  # Core is in this repository, so its commit is this one.
+  export ARC_BUILD_SHA=$COMMIT
+  export ARC_BUILD_REF=$(cd "$PRODUCT" && git rev-parse --abbrev-ref HEAD)
+  export ARC_BUILD_DIRTY=$DIRTY
+  export ARC_BUILD_CORE=$LABEL
+  export ARC_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  note "cross-building the Door at ${LABEL:0:18} for $TARGET (glibc $GLIBC)"
+  python3 -m json.tool < "$CLIENTS" > /dev/null || die "$CLIENTS is not JSON: the Door would not start"
+  keys_ok
+  render_caddyfile
+  (cd "$DOOR_DIR" && cargo zigbuild --release --target "$TARGET.$GLIBC") || die "build failed"
+  BINF="${CARGO_TARGET_DIR:-$DOOR_DIR/target}/$TARGET/release/door"
+  [ -f "$BINF" ] || die "missing binary: $BINF"
+  LC_ALL=C grep -aq "@(#)arc-build commit=$COMMIT" "$BINF" || die "the binary carries no stamp for $COMMIT: refusing to ship it"
+  note "shipping the Door to $BOX"
+  # Beside the live one, then swap: a half-finished copy must never be what systemd starts.
+  $SCP "$BINF" "$BOX:/tmp/door.new" || die "scp door"
+  if [ "$SHIP" = 1 ]; then
+    $SSHC "$BOX" "sudo install -m 0755 /tmp/door.new /opt/door/bin/door.next" || die "ship failed"
+    note "shipped to /opt/door/bin/door.next at ${LABEL:0:12}; nothing swapped or restarted"
+    exit 0
+  fi
+  $SCP "$CLIENTS" "$BOX:/tmp/clients.json" || die "scp clients"
+  $SCP "$CLAIM_KEYS" "$BOX:/tmp/claim-keys.json" || die "scp claim keys"
+  $SCP /tmp/door-Caddyfile "$BOX:/tmp/door-Caddyfile" || die "scp Caddyfile"
 fi
-$SCP "$CLIENTS" "$BOX:/tmp/clients.json" || die "scp clients"
-$SCP "$CLAIM_KEYS" "$BOX:/tmp/claim-keys.json" || die "scp claim keys"
-$SCP "$WORK/webapp.tgz" "$BOX:/tmp/door-webapp.tgz" || die "scp webapp"
-$SCP "$WORK/pins.list" "$BOX:/tmp/door-pins.list" || die "scp pins"
-$SCP "$DOOR_DIR/hosting/pins.py" "$BOX:/tmp/door-pins.py" || die "scp pins.py"
-$SCP /tmp/door-Caddyfile "$BOX:/tmp/door-Caddyfile" || die "scp Caddyfile"
-$SSHC "$BOX" "set -e
-  cd /opt/door/bin
+if [ -n "$WEB" ]; then
+  note "shipping the webapp to $BOX"
+  $SCP "$WORK/webapp.tgz" "$BOX:/tmp/door-webapp.tgz" || die "scp webapp"
+  $SCP "$WORK/pins.list" "$BOX:/tmp/door-pins.list" || die "scp pins"
+  $SCP "$DOOR_DIR/hosting/pins.py" "$BOX:/tmp/door-pins.py" || die "scp pins.py"
+fi
+SWAP_BIN='cd /opt/door/bin
   if [ -f door ]; then sudo cp -p door door.prev; fi
   sudo install -m 0755 /tmp/door.new door
   sudo install -m 0644 /tmp/clients.json /opt/door/clients.json
   sudo install -m 0644 /tmp/claim-keys.json /opt/door/claim-keys.json
-  sudo rm -rf /opt/door/webapp.new && sudo mkdir -p /opt/door/webapp.new
+  echo '"$LABEL"' | sudo tee /opt/door/COMMIT >/dev/null
+  # The edge restarts only when its config changed.
+  sudo cmp -s /tmp/door-Caddyfile /opt/door/Caddyfile || { sudo install -m 0644 /tmp/door-Caddyfile /opt/door/Caddyfile && sudo systemctl restart door-edge; }'
+SWAP_WEB='sudo rm -rf /opt/door/webapp.new && sudo mkdir -p /opt/door/webapp.new
   sudo tar -C /opt/door/webapp.new -xzf /tmp/door-webapp.tgz
-  # Earlier deploys' pins kept beside this one's, the rest pruned (SECURITY's rule, pins.py).
-  sudo python3 /tmp/door-pins.py ship /opt/door/webapp /opt/door/webapp.new /opt/door/PINS $LABEL /tmp/door-pins.list
+  # Earlier deploys'"'"' pins kept beside this one'"'"'s, the rest pruned (SECURITY'"'"'s rule, pins.py).
+  sudo python3 /tmp/door-pins.py ship /opt/door/webapp /opt/door/webapp.new /opt/door/PINS '"$LABEL"' /tmp/door-pins.list
   sudo rm -rf /opt/door/webapp.prev; [ -d /opt/door/webapp ] && sudo mv /opt/door/webapp /opt/door/webapp.prev
   sudo mv /opt/door/webapp.new /opt/door/webapp
-  echo $LABEL | sudo tee /opt/door/COMMIT >/dev/null
-  if [ -f /opt/door/ASSETS ]; then sudo cp -p /opt/door/ASSETS /opt/door/ASSETS.prev; fi
-  echo $WCOMMIT | sudo tee /opt/door/ASSETS >/dev/null
-  # The edge restarts only when its config changed.
-  sudo cmp -s /tmp/door-Caddyfile /opt/door/Caddyfile || { sudo install -m 0644 /tmp/door-Caddyfile /opt/door/Caddyfile && sudo systemctl restart door-edge; }
-  $RESTART_DOOR" || die "swap failed"
+  if [ -f /opt/door/WEBAPP ]; then sudo cp -p /opt/door/WEBAPP /opt/door/WEBAPP.prev; fi
+  echo '"$LABEL"' | sudo tee /opt/door/WEBAPP >/dev/null'
+$SSHC "$BOX" "set -e
+  ${BIN:+$SWAP_BIN}
+  ${WEB:+$SWAP_WEB}
+  ${BIN:+$RESTART_DOOR}" || die "swap failed"
 
 sleep 4
 verify

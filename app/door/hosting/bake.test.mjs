@@ -1,13 +1,12 @@
 /* bake.test.mjs — the Door's /assets bake (deploy-door.sh stage) against the webapp it ships:
    every "assets/…" string literal webapp.js names (the Face editor's scripts and stylesheets,
-   which it loads when first wanted) is staged, from the website commit the deploy names, as
-   index.html's own are; the editor's stickers, which face.js builds from face-assets.js's
+   which it loads when first wanted) is staged, from the webapp's own assets/, as index.html's
+   own are; the editor's stickers, which face.js builds from face-assets.js's
    names at run time, are staged exactly when face.js is; and every file of the webapp's own
    that index.html (src, href) or webapp.js (a quoted relative path) names is staged too
    (NC-56: only what the pages load, and all of it). Nothing is sent.
 
-   DOOR_WEBAPP: the webapp to stage (default app/web/webapp). DOOR_ASSETS_COMMIT: the website
-   commit (default the website checkout's HEAD, as the deploy's).
+   DOOR_WEBAPP: the webapp to stage (default app/web/webapp).
 
    Run: node --test app/door/hosting/bake.test.mjs */
 
