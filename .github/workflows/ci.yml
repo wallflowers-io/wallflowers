@@ -1,8 +1,8 @@
 # Every job calls a Makefile target: the Makefile is the one way to build and test.
-# Jobs run on wf-runner, a Lima VM on Ralph's Mac with the toolchain installed (label wf-mac),
-# and only for Ralph's pushes. There is no pull_request trigger, so a fork runs nothing on that
-# machine; a push run's checks land on the commit, which is what a PR's required checks read.
-# The runner takes one job at a time and is offline while the Mac sleeps.
+# Jobs (label wf-ci) run on Ralph's Mac, each in its own container, while `make ci` serves them
+# (tools/ci/serve.sh; a push starts it once `make ci-hooks` is set), and only for Ralph's pushes.
+# There is no pull_request trigger, so a fork runs nothing on that machine; a push run's checks
+# land on the commit, which is what a PR's required checks read. One job at a time.
 # Not here yet: check-harness (red on main: the ICD has no components.messages).
 # Checks against business/website (another repository) say NOT RUN and do not fail.
 
@@ -30,7 +30,7 @@ jobs:
   icd:
     name: icd
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-mac]
+    runs-on: [self-hosted, wf-ci]
     timeout-minutes: 30
     steps:
       - &checkout
@@ -47,7 +47,7 @@ jobs:
   auth:
     name: auth
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-mac]
+    runs-on: [self-hosted, wf-ci]
     timeout-minutes: 10
     steps:
       - *checkout
@@ -57,7 +57,7 @@ jobs:
   core:
     name: core
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-mac]
+    runs-on: [self-hosted, wf-ci]
     timeout-minutes: 60
     steps:
       - *checkout
@@ -66,12 +66,12 @@ jobs:
       - &output
         name: suite output
         if: failure() || cancelled()
-        run: tail -n 400 "${TMPDIR:-/tmp}"/pinned-* 2>/dev/null || true  # each runner has its own TMPDIR
+        run: tail -n 400 "${TMPDIR:-/tmp}"/pinned-* 2>/dev/null || true
 
   arc:
     name: arc
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-mac]
+    runs-on: [self-hosted, wf-ci]
     timeout-minutes: 60
     steps:
       - *checkout
@@ -82,7 +82,7 @@ jobs:
   door:
     name: door
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-mac]
+    runs-on: [self-hosted, wf-ci]
     timeout-minutes: 45
     steps:
       - *checkout
