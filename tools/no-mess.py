@@ -226,7 +226,7 @@ def main():
             print(json.dumps({"systemMessage": "no-mess: this session leaves\n" + "\n".join(lines)}))
             return 0
         print("This session made branches or worktrees that are not open PRs. Finish them before "
-              "ending the turn (AGENTS.md, Leave no mess):\n" + "\n".join(lines), file=sys.stderr)
+              "ending the turn (~/.claude/CLAUDE.md, PR HYGINE):\n" + "\n".join(lines), file=sys.stderr)
         return 2
     return 0
 
