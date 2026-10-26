@@ -1,0 +1,7 @@
+#!/bin/sh
+# A push queues CI for the runner on this Mac: serve it, in the background, never blocking the push.
+# A second start while one serves exits at once (tools/ci/serve.sh).
+state="${XDG_STATE_HOME:-$HOME/.local/state}/wf-ci"
+mkdir -p "$state"
+nohup make -C "$(git rev-parse --show-toplevel)" ci >> "$state/serve.log" 2>&1 < /dev/null &
+exit 0
