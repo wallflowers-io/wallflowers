@@ -164,7 +164,8 @@ def session_text(transcript):
                     if isinstance(c, dict) and c.get("type") == "tool_use":
                         inp = c.get("input", {})
                         parts.append(str(inp.get("command", "")))
-                        writes += [str(inp[k]) for k in ("file_path", "notebook_path") if k in inp]
+                        if c.get("name") in ("Edit", "Write", "NotebookEdit"):  # a Read writes nothing
+                            writes += [str(inp[k]) for k in ("file_path", "notebook_path") if k in inp]
     except OSError:
         pass
     return "\n".join(parts + writes), writes
