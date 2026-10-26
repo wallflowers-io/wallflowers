@@ -1,14 +1,15 @@
 # Every job calls a Makefile target: the Makefile is the one way to build and test.
+# Jobs run on wf-runner, a Lima VM on Ralph's Mac with the toolchain installed (label wf-mac),
+# and only for Ralph's pushes. There is no pull_request trigger, so a fork runs nothing on that
+# machine; a push run's checks land on the commit, which is what a PR's required checks read.
+# The runner takes one job at a time and is offline while the Mac sleeps.
 # Not here yet: check-harness (red on main: the ICD has no components.messages).
 # Checks against business/website (another repository) say NOT RUN and do not fail.
 
 name: CI
 
 on:
-  pull_request:
   push:
-    branches: [main]
-  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -16,11 +17,11 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: never
-  # Tests built at opt-level 1: in debug, core's MLS suites outran an hour on 4 CPUs.
+  # Tests built at opt-level 1: in debug, core's MLS suites run several times slower.
   # Debug assertions and overflow checks are separate settings and stay on.
   CARGO_PROFILE_DEV_OPT_LEVEL: "1"
   CARGO_PROFILE_DEV_DEBUG: line-tables-only
@@ -28,105 +29,65 @@ env:
 jobs:
   icd:
     name: icd
-    runs-on: ubuntu-latest
+    if: github.actor == 'phezman'
+    runs-on: [self-hosted, wf-mac]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0  # icd-released.py reads the newest icd/* tag's ICD
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # stable, 2026-10-01
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: core
-      - run: sudo apt-get update -q && sudo apt-get install -yq libopenblas-dev
+          fetch-depth: 0  # icd-released.py reads the newest icd/* tag; the docs read door-release's commit
+          clean: false
+      - &clean
+        name: clean, keeping the build caches
+        run: git clean -ffdx -e target/
       - run: make check-icd
 
   auth:
     name: auth
-    runs-on: ubuntu-latest
+    if: github.actor == 'phezman'
+    runs-on: [self-hosted, wf-mac]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - run: pip install --require-hashes -r arc/auth/requirements-dev.lock
+      - *checkout
+      - *clean
       - run: make check-auth
 
   core:
     name: core
-    runs-on: ubuntu-latest
+    if: github.actor == 'phezman'
+    runs-on: [self-hosted, wf-mac]
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # stable, 2026-10-01
-        with:
-          toolchain: stable
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: core
-      - run: sudo apt-get update -q && sudo apt-get install -yq libopenblas-dev
+      - *checkout
+      - *clean
       - run: make check-core
-      - name: suite output
+      - &output
+        name: suite output
         if: failure() || cancelled()
         run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
 
   arc:
     name: arc
-    runs-on: ubuntu-latest
+    if: github.actor == 'phezman'
+    runs-on: [self-hosted, wf-mac]
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # stable, 2026-10-01
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: arc
+      - *checkout
+      - *clean
       - run: make check-arc
-      - name: suite output
-        if: failure() || cancelled()
-        run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
+      - *output
 
   door:
     name: door
-    runs-on: ubuntu-latest
+    if: github.actor == 'phezman'
+    runs-on: [self-hosted, wf-mac]
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0  # the docs read door-release's commit and the icd/* tags
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # stable, 2026-10-01
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: |
-            arc
-            app/door
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - run: pip install --require-hashes -r arc/auth/requirements-dev.lock
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-      - name: PostgreSQL 16 for training_wheels' tests
-        run: test -x /usr/lib/postgresql/16/bin/initdb || { sudo apt-get update -q && sudo apt-get install -yq postgresql-16; }
+      - *checkout
+      - *clean
       - run: make check-door
         env:
           PG_BIN: /usr/lib/postgresql/16/bin
-      - name: suite output
-        if: failure() || cancelled()
-        run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
+      - *output

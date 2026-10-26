@@ -1,6 +1,8 @@
 # The four deploys, each a Makefile target, chosen when the run is started. Only from main,
-# only in the production environment (its reviewers approve each run; its secret is the
-# deploy key), one run at a time. Order when several are chosen: arc, door, app; docs apart.
+# only by Ralph, only in the production environment (its reviewers approve each run; its secret
+# is the deploy key), one run at a time. Order when several are chosen: arc, door, app; docs apart.
+# Built on wf-runner (label wf-mac), the Lima VM on Ralph's Mac. The runner persists between
+# jobs, so the key and the ssh config are removed when each job ends.
 
 name: deploy
 
@@ -37,22 +39,20 @@ env:
 
 jobs:
   arc:
-    if: inputs.arc && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    if: inputs.arc && github.ref == 'refs/heads/main' && github.actor == 'phezman'
+    runs-on: [self-hosted, wf-mac]
     environment: production
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0  # icd-pin.sh deploy reads the newest icd/* tag
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # stable, 2026-10-01
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: arc
-      - run: pip install --no-deps --require-hashes -r .github/deploy-tools.lock
+          fetch-depth: 0  # icd-pin.sh deploy and build.mjs --check read the icd/* tags
+          clean: false
+      - &clean
+        name: clean, keeping the build caches
+        run: git clean -ffdx -e target/
       - &ssh
         name: the deploy key, and the boxes' host keys only
         env:
@@ -62,54 +62,45 @@ jobs:
           printf '%s\n' "$KEY" > "$DEPLOY_KEY" && chmod 0600 "$DEPLOY_KEY"
           printf 'Host *\n  UserKnownHostsFile %s\n  StrictHostKeyChecking yes\n' "$GITHUB_WORKSPACE/.github/known_hosts" > ~/.ssh/config
       - run: make deploy-arc
+      - &unkey
+        name: remove the deploy key
+        if: always()
+        run: rm -f "$DEPLOY_KEY" ~/.ssh/config
 
   door:
     needs: arc
-    if: ${{ !cancelled() && !failure() && inputs.door && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-24.04
+    if: ${{ !cancelled() && !failure() && inputs.door && github.ref == 'refs/heads/main' && github.actor == 'phezman' }}
+    runs-on: [self-hosted, wf-mac]
     environment: production
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # stable, 2026-10-01
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: app/door
-      - run: pip install --no-deps --require-hashes -r .github/deploy-tools.lock
+      - *checkout
+      - *clean
       - *ssh
       - run: make deploy-door
+      - *unkey
 
   app:
     needs: door
-    if: ${{ !cancelled() && !failure() && inputs.app && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-24.04
+    if: ${{ !cancelled() && !failure() && inputs.app && github.ref == 'refs/heads/main' && github.actor == 'phezman' }}
+    runs-on: [self-hosted, wf-mac]
     environment: production
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
+      - *checkout
+      - *clean
       - *ssh
       - run: make deploy-app
+      - *unkey
 
   docs:
-    if: inputs.docs && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    if: inputs.docs && github.ref == 'refs/heads/main' && github.actor == 'phezman'
+    runs-on: [self-hosted, wf-mac]
     environment: production
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0  # build.mjs --check reads the release's commit and the icd/* tags
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
+      - *checkout
+      - *clean
       - *ssh
       - run: make deploy-docs
+      - *unkey
