@@ -1,6 +1,6 @@
 """relay_harness — bring up a REAL semaphore relay to attack.
 
-The relay binary is `arc/target/debug/semaphore` (per the task and the-harness §07).
+The relay binary is `target/debug/semaphore` (per the task and the-harness §07).
 Bind address: RELAY_BIND, else $PORT, else 8787. Store: RELAY_STORE, else in-memory.
 
 Two modes:
@@ -29,7 +29,7 @@ import websockets
 
 # core/harness/adversary/ -> core -> product; the relay binary is in the SIBLING arc.
 WORKSPACE = Path(__file__).resolve().parents[3]
-SEMAPHORE_BIN = WORKSPACE / "arc" / "target" / "debug" / "semaphore"
+SEMAPHORE_BIN = WORKSPACE / "target" / "debug" / "semaphore"
 
 
 def _free_port() -> int:
@@ -90,7 +90,7 @@ async def relay(store: bool = False):
     if not SEMAPHORE_BIN.exists():
         raise FileNotFoundError(
             f"relay binary not found at {SEMAPHORE_BIN}. Build it "
-            f"(cargo build -p relay --bin semaphore in arc/) or set RELAY_URL."
+            f"(cargo build -p relay --bin semaphore) or set RELAY_URL."
         )
     port = _free_port()
     bind = f"127.0.0.1:{port}"

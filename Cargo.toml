@@ -1,0 +1,101 @@
+# WallFlowers — the one Rust workspace: core, the Arc and the Door. One Cargo.lock and one
+# target/, so a crate the three share (pacific-core, mls-rs, tokio, SQLite…) resolves to one
+# version and compiles once per feature set, where three workspaces compiled it three times.
+[workspace]
+resolver = "2"
+members = [
+  # core: the protocol
+  "core/pacific-wire",
+  "core/pacific-core",
+  "core/pacific-ffi",
+  "core/uniffi-bindgen",
+  "core/pacific-geometry",
+  "core/pacific-media",
+  "core/media-wasm",
+  "core/viz-wasm",
+  "core/core-wasm",
+  # arc: the server, one plane per directory (arc/docs/arc-api-icd-v1.html)
+  "arc/gateway",
+  "arc/lib/face-render",
+  "arc/lib/arc-build",
+  "arc/planes/relay",
+  "arc/planes/membership",
+  "arc/planes/land",
+  "arc/planes/boxoffice",
+  "arc/planes/waker",
+  "arc/planes/systems/__nango",
+  "arc/planes/systems/gmail",
+  "arc/planes/systems/nango-rag",
+  "arc/planes/systems/systems-server",
+  # the Door
+  "app/door",
+]
+exclude = [
+  # On disk, not a member since 14 Sep 2026: readmitting it is its own change.
+  "arc/console/traffic",
+  # The mls-rs fork [patch.crates-io] points at; a path patch, not a member.
+  "core/vendor",
+  # Its own workspace: harness/adversary/emitter.py builds it.
+  "core/harness/adversary/intro_emit",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+
+[workspace.dependencies]
+pacific-wire = { path = "core/pacific-wire" }
+pacific-core = { path = "core/pacific-core" }
+# The deploy stamp every shipped plane compiles in; arc/hosting/deploy-arc.sh fills its env.
+arc-build = { path = "arc/lib/arc-build" }
+# MLS (sync — do NOT set --cfg mls_build_async). rustcrypto = no system OpenSSL dep.
+mls-rs = "0.55.2"
+mls-rs-core = "0.27.0"
+mls-rs-crypto-rustcrypto = "0.22.0"
+# identity / hashing
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+sha2 = "0.10"
+# BIP-39 English wordlist: the read-aloud SAS and the recovery mnemonic.
+bip39 = "2.2"
+zeroize = { version = "1.8", features = ["derive"] }
+# storage
+rusqlite = { version = "0.31", features = ["bundled"] }
+# serialization (substrate = canonical CBOR; ciborium for decode/round-trip)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_bytes = "0.11"
+ciborium = "0.2"
+base64 = "0.22"
+hex = "0.4"
+# seal
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+# transport
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+async-trait = "0.1"
+# Outbound HTTP(S) for the gateway's proxy and the box office's Stripe adapter; rustls, no OpenSSL.
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+# errors
+thiserror = "2"
+# ffi bridge (the one language boundary; Swift bindings via proc-macros)
+uniffi = "0.28"
+
+# Arc's manifests and the relay name pacific-core and pacific-wire as git dependencies on
+# the old monorepo; resolve them to the crates here, so exactly one of each is compiled.
+[patch."https://codeberg.org/phezman/pacific.git"]
+pacific-core = { path = "core/pacific-core" }
+pacific-wire = { path = "core/pacific-wire" }
+
+# WHY WE CARRY A FORK OF mls-rs. It hard-codes getrandom `features = ["js","custom"]` for
+# wasm32, and `js` wins getrandom's backend cascade, so the host-entropy hook core-wasm
+# registers is dead code and the module reaches into `globalThis.crypto` through 25
+# wasm-bindgen shims instead. The fork drops `js`. mls-rs never calls getrandom itself
+# (randomness reaches it through `CryptoProvider`), so native builds are unchanged.
+# THIS PATCH IS VERSION-PINNED AND FAILS SILENTLY: on any mls-rs bump, re-vendor.
+# `app/web/build-wasm.sh` asserts it still applies on every build.
+[patch.crates-io]
+mls-rs = { path = "core/vendor/mls-rs" }

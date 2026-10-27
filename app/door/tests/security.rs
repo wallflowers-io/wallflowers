@@ -736,8 +736,11 @@ struct Relay {
 
 impl Relay {
     fn start() -> Relay {
-        let bin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../arc/target/debug/semaphore");
-        assert!(bin.exists(), "this test needs the relay: run `cargo build -p relay` in arc ({} is absent)", bin.display());
+        // The workspace's target/, or wherever CARGO_TARGET_DIR puts it.
+        let target = std::env::var_os("CARGO_TARGET_DIR").map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
+        let bin = target.join("debug/semaphore");
+        assert!(bin.exists(), "this test needs the relay: run `cargo build -p relay` ({} is absent)", bin.display());
         let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
         let tunnel = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
         let root = std::env::temp_dir().join(format!("door-security-relay-{}", unique()));

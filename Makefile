@@ -19,6 +19,9 @@ export PATH := $(HOME)/.cargo/bin:$(PATH)
 # The workspace's .venv where there is one; otherwise python3 (CI).
 PY         ?= $(if $(wildcard $(WS)/.venv/bin/python),$(WS)/.venv/bin/python,python3)
 PINNED     := $(PRODUCT)/tools/pinned.sh
+# The Rust workspace's members under one directory, as -p flags: read from Cargo.toml's
+# members, so a crate added there is tested here. $(call PKGS,core)
+PKGS = $(shell cd $(PRODUCT) && PATH='$(PATH)' cargo metadata --no-deps --format-version 1 | $(PY) -c 'import json,sys; r=sys.argv[1]; print(" ".join("-p "+p["name"] for p in json.load(sys.stdin)["packages"] if p["manifest_path"].startswith(r)))' $(PRODUCT)/$(1)/)
 ARC_HOST   := https://arc.wallflowers.io
 
 .DEFAULT_GOAL := help
@@ -82,15 +85,15 @@ check-harness:  ## the Python harness, and pinned.sh's own summary (NC-122)
 
 check-core:  ## pacific-core + core-wasm + pacific-ffi, and core-wasm as the browser builds it; the fold cache on, every hit verified (O-69, FC-2)
 	@printf '  core    '
-	@$(PINNED) core sh -c 'cd $(CORE) && { cargo check -q -p core-wasm --target wasm32-unknown-unknown; w=$$?; PACIFIC_FOLD_CACHE_MODEL=core-suite PACIFIC_FOLD_CACHE_VERIFY=1 cargo test --workspace --no-fail-fast; t=$$?; exit $$(( w | t )); }'
+	@$(PINNED) core sh -c 'cd $(CORE) && { cargo check -q -p core-wasm --target wasm32-unknown-unknown; w=$$?; PACIFIC_FOLD_CACHE_MODEL=core-suite PACIFIC_FOLD_CACHE_VERIFY=1 cargo test $(call PKGS,core) --no-fail-fast; t=$$?; exit $$(( w | t )); }'
 
 check-arc:  ## the Arc planes
 	@printf '  arc     '
-	@$(PINNED) arc sh -c 'cd $(PRODUCT)/arc && cargo test --workspace --no-fail-fast'
+	@$(PINNED) arc sh -c 'cd $(PRODUCT)/arc && cargo test $(call PKGS,arc) --no-fail-fast'
 	@if [ -d $(WS)/business/website/site ]; then cd $(PRODUCT)/arc && cargo test -q -p face-render -- --ignored; \
 	else echo '  arc     face-render vendored_copies_match_the_website NOT RUN: no business/website beside product'; fi
 
-check-door:  ## the Door (app/door, its own workspace), and its window's and the webapp's node tests
+check-door:  ## the Door (app/door), and its window's and the webapp's node tests
 	@cd $(PRODUCT) && node --test app/door/hosting/bake.test.mjs
 	@if [ "$$(uname)" = Darwin ]; then cd $(PRODUCT) && node --test app/door/hosting/one-signin/site-setup.test.mjs; \
 	else echo '  door    site-setup.test.mjs (the operator tool draws with macOS sips) NOT RUN: not macOS'; fi

@@ -35,7 +35,7 @@ cd <repo>
 
 Nothing to install. The browser agent is `bun web/agent.mjs`, which resolves
 `playwright-core` 1.58.2 from bun's cache and launches the Chromium headless
-shell in `~/Library/Caches/ms-playwright`. The relay is `arc/target/debug/semaphore`,
+shell in `~/Library/Caches/ms-playwright`. The relay is `target/debug/semaphore`,
 started through `harness.live.relay.Relay` rather than a third copy of that code. The
 phone needs Xcode and a **Debug** simulator build of Pacific.app, because Release
 compiles DevLinks out. Transcripts, logs and screenshots go to `--out`, a temp

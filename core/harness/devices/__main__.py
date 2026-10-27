@@ -33,7 +33,7 @@ from .cases import GROUPS, i1
 def preflight(cases) -> list[str]:
     problems = []
     if not SEMAPHORE.exists():
-        problems.append(f"no relay binary at {SEMAPHORE} (cargo build -p relay in arc/)")
+        problems.append(f"no relay binary at {SEMAPHORE} (cargo build -p relay)")
     if any(c is not i1 for c in cases) and not shutil.which("bun"):
         problems.append("no bun on PATH — the browser agent is a bun sidecar (agent.mjs)")
     if i1 in cases:
