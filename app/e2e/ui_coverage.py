@@ -499,8 +499,21 @@ async def lane_trade(A: J.Browser, D: str, site: str) -> str:
     await p.ev("(() => { const s = document.querySelector('#feed select[aria-label=\"For sale\"]'); s.value = 'sold'; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()")
     await tap(p, "#feed .trow .tact", "Set")
     await p.until("!!document.querySelector('#feed .pill.disp.sold')", "sold", 60)
-    listed = await p.ev("!!document.querySelector('#feed .tlist button')")
-    return "a Thing made, its profile saved, a photo added and removed, marked sold" + ("" if listed else "; no List on the Site drawn")
+    # On the market, listed on the Site and withdrawn, then off the market.
+    market = "document.querySelector('#feed select[aria-label=Market]')"
+    mset = market + ".closest('.trow').querySelector('.tact button')"
+    lbtn = "[...document.querySelectorAll('#feed .tlist button')].find(b => b.textContent.startsWith(%s))"
+    await p.ev(f"(() => {{ const s = {market}; s.value = 'selling'; s.dispatchEvent(new Event('change', {{bubbles: true}})); return true; }})()")
+    await p.ev(f"{mset}.click(), true")
+    await p.until(f"!!{lbtn % js('List on')}", "List on the Site", 60)
+    await p.ev(f"{lbtn % js('List on')}.click(), true")
+    await p.until(f"!!{lbtn % js('Withdraw from')}", "listed", 60)
+    await p.ev(f"{lbtn % js('Withdraw from')}.click(), true")
+    await p.until(f"!!{lbtn % js('List on')}", "withdrawn", 60)
+    await p.ev(f"(() => {{ const s = {market}; s.value = ''; s.dispatchEvent(new Event('change', {{bubbles: true}})); return true; }})()")
+    await p.ev(f"{mset}.click(), true")
+    await p.until(f"!{lbtn % js('List on')} && ({market}||{{}}).value === ''", "off the market", 60)
+    return "a Thing made, its profile saved, a photo added and removed, marked sold; put on the market, listed on the Site, withdrawn, taken off the market"
 
 
 async def lane_resources(A: J.Browser, D: str, site: str) -> str:

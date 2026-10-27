@@ -51,6 +51,10 @@ pub const OP_SET_DISPOSITION: u32 = 6; // owner / sequenced
 pub const CONDITIONS: [&str; 6] = ["new", "like_new", "very_good", "good", "fair", "for_parts"];
 /// thing.setDisposition's `state` (N5).
 pub const DISPOSITIONS: [&str; 3] = ["available", "reserved", "sold"];
+/// thing.setPosture's `posture` and `reach` words, the ICD's vocabularies (held there by
+/// `w98_caps_and_vocabularies_are_the_icds`, and to `Posture::parse` and `Reach::parse`).
+pub const POSTURES: [&str; 5] = ["has", "wants", "offers", "buying", "selling"];
+pub const REACHES: [&str; 2] = ["private", "network"];
 /// thing.setProfile's `description`, in characters (the ICD's maxLength).
 pub const MAX_DESCRIPTION: usize = 5000;
 /// thing.addPhoto's inline photo, base64 characters (the ICD's maxLength): its own Delta
@@ -659,6 +663,10 @@ mod tests {
         let set = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<std::collections::BTreeSet<_>>();
         assert_eq!(keys(&ops["thing.setProfile"]["args"]["condition"]["vocabulary"]), set(&CONDITIONS));
         assert_eq!(keys(&ops["thing.setDisposition"]["args"]["state"]["vocabulary"]), set(&DISPOSITIONS));
+        assert_eq!(keys(&ops["thing.setPosture"]["args"]["posture"]["vocabulary"]), set(&POSTURES));
+        assert_eq!(keys(&ops["thing.setPosture"]["args"]["reach"]["vocabulary"]), set(&REACHES));
+        assert!(POSTURES.iter().all(|w| Posture::parse(w).is_ok_and(|p| p.as_str() == *w)));
+        assert!(REACHES.iter().all(|w| Reach::parse(w).is_ok_and(|r| r.as_str() == *w)));
         assert_eq!(ops["thing.setProfile"]["args"]["description"]["maxLength"].as_u64(), Some(MAX_DESCRIPTION as u64));
         assert_eq!(ops["thing.addPhoto"]["args"]["photo"]["maxLength"].as_u64(), Some(MAX_ADDED_PHOTO_B64 as u64));
         assert_eq!(ops["thing.addPhoto"]["maxLive"].as_u64(), Some(MAX_PHOTOS as u64));

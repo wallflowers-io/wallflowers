@@ -93,6 +93,17 @@
     return a;
   }
 
+  /* On the market (thing.setPosture) and how far it may travel, or off it: none chosen is
+     thing.clearPosture, whose args are none. A listing on a Site is a snapshot of it. */
+  function postures(icd) { return words(icd, 'thing', 'thing.setPosture', 'posture'); }
+  function reaches(icd) { return words(icd, 'thing', 'thing.setPosture', 'reach'); }
+  function postureArgs(posture, reach, icd) {
+    if (!posture) return null;
+    if (postures(icd).indexOf(posture) < 0) throw new Error('posture: ' + posture);
+    if (reaches(icd).indexOf(reach) < 0) throw new Error('reach: ' + reach);
+    return { posture: posture, reach: reach };
+  }
+
   /* ── what is drawn ───────────────────────────────────────────────────────────── */
 
   /* A listing's snapshot photo (`photo`, `photoMime`, as core serves a SiteListing), or none. */
@@ -231,6 +242,23 @@
       var end = until.value ? new Date(until.value + 'T23:59:59').getTime() : null;
       return dispositionArgs(disp.value, Date.now(), disp.value === 'reserved' ? forWho.value : null, disp.value === 'reserved' ? end : null, icd);
     })]));
+
+    var market = ctx.el('select', { 'aria-label': 'Market' }), reach = ctx.el('select', { 'aria-label': 'Reach' });
+    function cap(w) { return w.charAt(0).toUpperCase() + w.slice(1); }
+    [''].concat(postures(icd)).forEach(function (w) { market.appendChild(ctx.el('option', { value: w, text: w ? cap(w) : 'Not on the market' })); });
+    reaches(icd).forEach(function (w) { reach.appendChild(ctx.el('option', { value: w, text: cap(w) })); });
+    market.value = v.posture || '';
+    reach.value = v.reach || reaches(icd)[0];
+    var mwhy = ctx.el('span', { class: 'why' }), mset = ctx.el('button', { type: 'button', class: 'tbtn', text: 'Set' });
+    function moved() { reach.hidden = !market.value; mset.disabled = market.value === (v.posture || '') && (!market.value || reach.value === (v.reach || reaches(icd)[0])); }
+    market.onchange = reach.onchange = moved;
+    moved();
+    mset.onclick = function (e) {
+      e.stopPropagation();
+      var a = postureArgs(market.value, reach.value, icd);
+      write(ctx, mset, mwhy, o.id, a ? 'thing.setPosture' : 'thing.clearPosture', a || {});
+    };
+    box.appendChild(ctx.el('div', { class: 'trow' }, [market, reach, ctx.el('span', { class: 'tact' }, [mset, mwhy])]));
     return box;
   }
 
@@ -252,7 +280,7 @@
     listArgs: listArgs, withdrawArgs: withdrawArgs, removeArgs: removeArgs, mayRemove: mayRemove,
     board: board, listedOn: listedOn, picture: picture, profileArgs: profileArgs, conditions: conditions,
     photoArgs: photoArgs, removePhotoArgs: removePhotoArgs, roomForPhotos: roomForPhotos,
-    dispositions: dispositions, dispositionArgs: dispositionArgs,
+    dispositions: dispositions, dispositionArgs: dispositionArgs, postures: postures, reaches: reaches, postureArgs: postureArgs,
     draw: { board: drawBoard, thing: drawThing }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -3031,13 +3031,25 @@
           "args": {
             "posture": {
               "type": "string",
-              "required": true
+              "required": true,
+              "vocabulary": {
+                "has": "you have one",
+                "wants": "you want one",
+                "offers": "you offer it: a skill, a loan, a hand",
+                "buying": "buying now; the one posture besides selling that may carry a price",
+                "selling": "selling now; the one posture besides buying that may carry a price"
+              }
             },
             "price": {
-              "type": "string"
+              "type": "string",
+              "summary": "only with an active posture, buying or selling; refused with any other"
             },
             "reach": {
-              "type": "string"
+              "type": "string",
+              "vocabulary": {
+                "private": "your connections only, never forwarded; absent is this",
+                "network": "may be forwarded by your connections' agents, your identity with it"
+              }
             },
             "area": {
               "type": "string"
