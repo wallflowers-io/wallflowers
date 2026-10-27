@@ -71,6 +71,21 @@ fn kp_arg(op: &Op<'_>) -> Result<[u8; 32], DeltaRejection> {
     v.try_into().map_err(|_| DeltaRejection::MalformedArgs)
 }
 
+/// `base.offerBundle`'s args; the write path stamps `gen`.
+pub fn offer_args(kp_id: &[u8; 32], bundle: &str, not_after: u64) -> crate::coordinator::Args {
+    use crate::coordinator::ArgVal;
+    crate::coordinator::Args::from([
+        ("kp_id".into(), ArgVal::Text(hex::encode(kp_id))),
+        ("bundle".into(), ArgVal::Text(bundle.into())),
+        ("not_after".into(), ArgVal::Int(not_after as i64)),
+    ])
+}
+
+/// `base.withdrawBundle`'s args; the write path stamps `gen`.
+pub fn withdraw_args(kp_id: &[u8; 32]) -> crate::coordinator::Args {
+    crate::coordinator::Args::from([("kp_id".into(), crate::coordinator::ArgVal::Text(hex::encode(kp_id)))])
+}
+
 /// The one reducer, over whatever State holds the facet. The author is the subject.
 pub fn reduce_bundles(b: &mut Bundles, op: &Op<'_>) -> Result<(), DeltaRejection> {
     // Validate every arg before the first mutation — reduce is atomic.

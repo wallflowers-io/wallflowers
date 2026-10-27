@@ -241,6 +241,14 @@ CREATE TABLE IF NOT EXISTS profile_publish (
   at        INTEGER NOT NULL
 );
 
+-- The Site offers (base.offerBundle, #12) THIS DEVICE made: their key packages are its own, so
+-- an offer here whose package it no longer holds has been used by a Welcome and is withdrawn.
+-- Another device's offers are never in it, and it never withdraws them for not holding them.
+CREATE TABLE IF NOT EXISTS bundle_offer (
+  kp_id     BLOB PRIMARY KEY,
+  group_id  BLOB NOT NULL
+);
+
 -- The same self-healing ledger, per LISTING rather than per profile: what we last
 -- published (or relayed) into each connection, keyed by the listing's network-wide
 -- identity `(origin, thing_id)`.
@@ -847,6 +855,24 @@ impl Directory {
             params![group_id, digest, at],
         )?;
         Ok(())
+    }
+
+    /// Record that this device offered the key package `kp_id` on `group_id`.
+    pub fn note_bundle_offer(&self, kp_id: &[u8; 32], group_id: &[u8]) -> Result<(), CoreError> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO bundle_offer (kp_id, group_id) VALUES (?1, ?2)",
+            params![&kp_id[..], group_id],
+        )?;
+        Ok(())
+    }
+
+    /// Whether this device made the offer `kp_id`.
+    pub fn offered_here(&self, kp_id: &[u8; 32]) -> Result<bool, CoreError> {
+        Ok(self
+            .conn
+            .query_row("SELECT 1 FROM bundle_offer WHERE kp_id=?1", params![&kp_id[..]], |_| Ok(()))
+            .optional()?
+            .is_some())
     }
 
     /// What we last told `group_id` about the listing `(origin, thing_id)`:

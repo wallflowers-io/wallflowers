@@ -95,7 +95,7 @@
       "host": "never: the Arc serves its items from its own fold, and its members are Arcs",
       "conversation": "never: a DM admits no one",
       "contact": "never: a tether admits no one",
-      "cards": "shared with a Site's or a room's history: each current member's latest card, sent with it by the same admitter to the same member, within the same total",
+      "cards": "shared with a Site's or a room's history: each current member's latest card, sent with it by the same admitter to the same member, within the same total; and each current member's live offers (facets.bundles: base.offerBundle, not withdrawn), after the cards, within the same total, so a joiner, who reads no epoch before its own, can reach a member from their card",
       "posts": "shared with a Site's or a room's history (Ralph, 29 Sep: \"Use the MLS welcome history package, delivered by the arc\"): its posts and the rows beside them (reacts, receipts, votes, retracts, membership records), newest first to the cap, after the spine in the spine's bundle (mls.intro.kinds.history.order); the cards go in their own bundles. A retraction is newer than the row it withdraws, so it travels whenever that row does, and a withdrawn row stays withdrawn",
       "otherwise": "never: only an object whose admitter admitted the member"
     }
