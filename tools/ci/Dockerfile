@@ -36,4 +36,6 @@ RUN python3.12 -m venv /home/runner/venv \
     && /home/runner/venv/bin/pip install -q --no-deps --require-hashes -r /tmp/deploy-tools.lock
 
 ENV PATH=/home/runner/venv/bin:/home/runner/.cargo/bin:/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# run.sh is PID 1: it passes a stop on to the runner, which fails its job on GitHub before exiting.
+ENV RUNNER_MANUALLY_TRAP_SIG=1
 ENTRYPOINT ["./run.sh"]

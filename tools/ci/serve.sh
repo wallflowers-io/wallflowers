@@ -4,9 +4,9 @@
 # One run per machine, its PID in $STATE/serve.pid. It starts Colima's wf-ci VM, builds the image
 # (tools/ci/Dockerfile), and gives each queued job labelled wf-ci its own container holding a
 # one-job (JIT) runner. After IDLE seconds with nothing queued it exits, and on every exit, red,
-# Ctrl-C or kill, it deletes the container and the runner and stops the VM (its disk, holding the
-# image and the build caches, is kept). A kill -9 cannot be trapped: the next run sweeps what
-# that one left.
+# Ctrl-C or kill, it stops the container (the job fails on GitHub), deletes it and the runner, and
+# stops the VM (its disk, holding the image and the build caches, is kept). A kill -9 cannot be
+# trapped: the next run stops and deletes what that one left.
 #
 #   tools/ci/serve.sh        CI_IDLE=<seconds> (120)
 
@@ -22,15 +22,28 @@ pidf="$STATE/serve.pid" cidf="$STATE/job.cid" ridf="$STATE/job.runner"
 
 say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$*"; }
 dk() { docker --context "colima-$LABEL" "$@"; }
-unrun() { gh api -X DELETE "repos/$REPO/actions/runners/$1" >/dev/null 2>&1 || true; }
+# GitHub refuses to delete a runner while its job is open; a runner stopped by stop_jobs closes it.
+unrun() {
+  local i
+  gh api "repos/$REPO/actions/runners/$1" >/dev/null 2>&1 || return 0
+  for i in $(seq 1 12); do
+    gh api -X DELETE "repos/$REPO/actions/runners/$1" >/dev/null 2>&1 && return 0
+    sleep 5
+  done
+  say "runner $1 not deleted: github.com/$REPO/settings/actions/runners"
+}
+# SIGTERM first: the runner (RUNNER_MANUALLY_TRAP_SIG) tells GitHub, which fails the job and releases it.
+stop_jobs() {
+  local ids
+  ids="$(dk ps -aq --filter "label=$LABEL" 2>/dev/null)"
+  [ -z "$ids" ] || { dk stop -t 30 $ids; dk rm -f $ids; } >/dev/null 2>&1
+}
 
 mkdir -p "$STATE"
 if [ -f "$pidf" ]; then
   old="$(cat "$pidf")"
   if ps -p "$old" -o command= 2>/dev/null | grep -q 'serve\.sh'; then say "serving already (pid $old)"; exit 0; fi
   say "sweeping a run that did not end (pid $old)"
-  gh api --paginate "repos/$REPO/actions/runners" --jq ".runners[] | select(.name | startswith(\"$LABEL-\")) | .id" \
-    | while read -r id; do unrun "$id"; done
   rm -f "$pidf" "$cidf" "$ridf"
 fi
 ( set -o noclobber; echo $$ > "$pidf" ) 2>/dev/null || { say "another run started first"; exit 0; }
@@ -40,7 +53,7 @@ caffeinate -i -w $$ &
 teardown() {
   trap - EXIT INT TERM HUP
   set +e
-  [ -s "$cidf" ] && dk rm -f "$(cat "$cidf")" >/dev/null 2>&1
+  stop_jobs
   [ -s "$ridf" ] && unrun "$(cat "$ridf")"
   colima stop "$LABEL" >/dev/null 2>&1 || true
   rm -f "$cidf" "$ridf" "$pidf"
@@ -65,7 +78,10 @@ queued() {
 say "starting the VM"
 colima start "$LABEL" --vm-type vz --cpu 12 --memory 24 --disk 100 --mount none --activate=false >"$STATE/colima.log" 2>&1 \
   || { say "the VM did not start: $STATE/colima.log"; exit 1; }
-ids="$(dk ps -aq --filter "label=$LABEL")"; [ -z "$ids" ] || dk rm -f $ids >/dev/null
+# What a run that was killed left: its containers, then its runners.
+stop_jobs
+gh api --paginate "repos/$REPO/actions/runners" --jq ".runners[] | select(.name | startswith(\"$LABEL-\")) | .id" \
+  | while read -r id; do unrun "$id"; done
 say "building the image"
 dk buildx build -q -t "$LABEL" --build-context auth="$product/arc/auth" --build-context github="$product/.github" \
   "$product/tools/ci" >/dev/null
