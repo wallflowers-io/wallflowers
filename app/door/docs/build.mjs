@@ -411,6 +411,12 @@ const NOT_OPEN = {
     'facet:visibility': 'On an event or a post, only <code>network</code> is available in this release: <code>private</code> and <code>connections</code> would reach only its creator.',
   },
 };
+/* 2.4.0 opens connecting members (#12), from WallFlowers' app alone; the rest stands as 2.3.1 said. */
+NOT_OPEN['2.4.0'] = {
+  ...NOT_OPEN['2.3.1'],
+  'kind:contact': 'Two members connect in WallFlowers\' app, from a member\'s card in a community they share: the app pairs privately with one of that member\'s own offers (the <code>bundles</code> facet), so the community\'s log never says who asked whom. A site cannot start, accept or decline a connection: <code>/v2/connect</code>, <code>/v2/link</code> and <code>/v2/conversation</code> refuse a site\'s token.',
+  'facet:bundles': 'Each member\'s WallFlowers writes and withdraws its own offers as it syncs. A site has no reason to write one.',
+};
 const notOpen = (version, key) => (NOT_OPEN[version] || {})[key];
 const notOpenNote = (html) => (html ? `<p style="border-left:3px solid #b8860b;padding:2px 0 2px 12px"><strong>In this release:</strong> ${html}</p>` : '');
 

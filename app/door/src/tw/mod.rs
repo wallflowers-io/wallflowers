@@ -66,7 +66,8 @@ pub const NOT_KEPT: &[(&str, &str)] = &[
 
 fn keep_table(route: &str) -> Option<Keep> {
     match route {
-        "/v2/mint" | "/v2/apply" | "/v2/add" | "/v2/history" | "/v2/batch" | "/v2/site/address" => Some(Keep::Whole),
+        "/v2/mint" | "/v2/apply" | "/v2/add" | "/v2/history" | "/v2/batch" | "/v2/site/address" | "/v2/connect" | "/v2/link"
+        | "/v2/conversation" => Some(Keep::Whole),
         "/v2/join" => Some(Keep::WithoutClaim),
         "/v2/signup/finish" | "/v2/signup/continue" | "/v2/signin/finish" | "/v2/signout" | "/v2/token" | "/signin/site" | "/v2/bundle" => Some(Keep::Nothing),
         _ => None,

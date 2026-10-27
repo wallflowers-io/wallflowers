@@ -87,6 +87,12 @@ enum Ask {
     /// The owner seals a Site's or a room's history to a member by their contact bundle: the
     /// Arc's node, added to a room late. `dry` sends nothing and answers what would go.
     History { object: String, bundle: String, dry: bool, scope: Option<String>, back: Reply<serde_json::Value> },
+    /// #12: connect with a member of a Site from their card, by one of their offers.
+    Connect { site: String, member: String, scope: Option<String>, back: Reply<serde_json::Value> },
+    /// #12: this side's wish for the link with a peer: accept, decline, withdraw, end.
+    Link { peer: String, active: bool, scope: Option<String>, back: Reply<serde_json::Value> },
+    /// The conversation with a connected peer, derived if there is none.
+    Conversation { peer: String, scope: Option<String>, back: Reply<serde_json::Value> },
     Batch { steps: Vec<Step>, scope: Option<String>, who: String, back: Reply<serde_json::Value> },
     /// The held connection delivered something (O-69): ingest it.
     Rang,
@@ -1126,6 +1132,9 @@ pub fn run() {
         .route("/v2/apply", post(apply))
         .route("/v2/add", post(add))
         .route("/v2/history", post(history))
+        .route("/v2/connect", post(connect))
+        .route("/v2/link", post(link))
+        .route("/v2/conversation", post(conversation))
         .route("/v2/batch", post(batch))
         .route("/v2/site/address", post(address))
         .route("/i/site/:site", get(site_of))
@@ -1848,10 +1857,24 @@ fn actor(
                             continue;
                         }
                         let out = match by {
-                            AddBy::Bundle(bundle) => rt.block_on(n.group_add_member(&object, &bundle)).map(hex::encode).map_err(|e| match e {
-                                pacific_core::CoreError::KeyPackageExpired(_) => EXPIRED.to_string(),
-                                e => e.to_string(),
-                            }),
+                            AddBy::Bundle(bundle) => rt
+                                .block_on(n.group_add_member(&object, &bundle))
+                                .inspect(|m| {
+                                    // THE ADMITTER SHARES A SITE'S HISTORY (ICD mls.historyPolicy, `group`):
+                                    // its spine, posts, cards and live offers, to this member alone, as an
+                                    // admission by claim does. The add stands without it.
+                                    let intro = pacific_core::handshake::parse_and_verify(&bundle).map(|b| b.intro_tag);
+                                    if let (Ok("group"), Ok(intro)) = (n.object_kind(&object).as_deref(), intro) {
+                                        if let Err(e) = rt.block_on(n.send_history(&object, m, &intro)) {
+                                            eprintln!("door: no history to the member added to {object}: {e}");
+                                        }
+                                    }
+                                })
+                                .map(hex::encode)
+                                .map_err(|e| match e {
+                                    pacific_core::CoreError::KeyPackageExpired(_) => EXPIRED.to_string(),
+                                    e => e.to_string(),
+                                }),
                             // MAKE ADMIN'S SECOND STEP (ICD 2.1.0 row 10): a member of the part's
                             // Site, by identity; refused in core's own words, unprefixed.
                             AddBy::Member(member) => match rt.block_on(n.add_part_member(&object, &member)) {
@@ -1889,6 +1912,66 @@ fn actor(
                             Err(e) => Err(e.to_string()),
                         };
                         let _ = back.send(out);
+                    }
+                    Ask::Connect { site, member, scope, back } => {
+                        // A person's own act, as an Add is: a site's token connects no one.
+                        if scope.is_some() {
+                            let _ = back.send(Err("a site's token connects no one".to_string()));
+                            continue;
+                        }
+                        let out = match peer_key(&member) {
+                            Err(why) => Err(why),
+                            Ok(peer) => match rt.block_on(n.connect_member(&site, &peer)) {
+                                Ok(p) => Ok(serde_json::json!({ "peer": hex::encode(p) })),
+                                Err(pacific_core::CoreError::Membership(why)) => Err(why),
+                                Err(e) => Err(e.to_string()),
+                            },
+                        };
+                        if let Err(e) = seal_write(n, &rt, &cfg, &mut keeper, spine_unreached) {
+                            let _ = back.send(Err(format!("the request went, but this Door could not keep it ({e}); sign in again")));
+                            break;
+                        }
+                        let _ = back.send(out);
+                        tail.get_or_insert_with(Tail::default).add(false);
+                    }
+                    Ask::Link { peer, active, scope, back } => {
+                        if scope.is_some() {
+                            let _ = back.send(Err("a site's token states no one's link".to_string()));
+                            continue;
+                        }
+                        let out = match peer_key(&peer) {
+                            Err(why) => Err(why),
+                            Ok(p) => match rt.block_on(n.set_link(&p, active)) {
+                                Ok(()) => Ok(serde_json::json!({ "peer": peer, "active": active })),
+                                Err(pacific_core::CoreError::Membership(why)) => Err(why),
+                                Err(e) => Err(e.to_string()),
+                            },
+                        };
+                        if let Err(e) = seal_write(n, &rt, &cfg, &mut keeper, spine_unreached) {
+                            let _ = back.send(Err(format!("the link was stated, but this Door could not keep it ({e}); sign in again")));
+                            break;
+                        }
+                        let _ = back.send(out);
+                        tail.get_or_insert_with(Tail::default).add(false);
+                    }
+                    Ask::Conversation { peer, scope, back } => {
+                        if scope.is_some() {
+                            let _ = back.send(Err("a site's token opens no conversation".to_string()));
+                            continue;
+                        }
+                        let out = match peer_key(&peer) {
+                            Err(why) => Err(why),
+                            Ok(p) => match rt.block_on(n.conversation_open(&p)) {
+                                Ok(id) => Ok(serde_json::json!({ "object": id })),
+                                Err(e) => Err(e.to_string()),
+                            },
+                        };
+                        if let Err(e) = seal_write(n, &rt, &cfg, &mut keeper, spine_unreached) {
+                            let _ = back.send(Err(format!("the conversation was opened, but this Door could not keep it ({e}); sign in again")));
+                            break;
+                        }
+                        let _ = back.send(out);
+                        tail.get_or_insert_with(Tail::default).add(false);
                     }
                     Ask::Batch { steps, scope, who, back } => {
                         // ONE ACTOR TURN, each step through the one write path with its own
@@ -2046,6 +2129,7 @@ fn refuse(ask: Ask, why: &str) {
         Ask::Draft { back, .. } => drop(back.send(Err(why))),
         Ask::Mint { back, .. } | Ask::Apply { back, .. } | Ask::Add { back, .. } => drop(back.send(Err(why))),
         Ask::History { back, .. } => drop(back.send(Err(why))),
+        Ask::Connect { back, .. } | Ask::Link { back, .. } | Ask::Conversation { back, .. } => drop(back.send(Err(why))),
         Ask::Batch { back, .. } => drop(back.send(Err(why))),
         _ => {}
     }
@@ -2508,6 +2592,62 @@ async fn history(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let scope = scope_of(&h);
     ask_async(d, move |back| Ask::History { object: input.object, bundle: input.bundle, dry: input.dry, scope, back }).await.map(Json)
+}
+
+/// A member's key as the page names it, bare hex or `ed25519:<hex>`.
+fn peer_key(s: &str) -> Result<[u8; 32], String> {
+    hex::decode(s.trim_start_matches("ed25519:")).ok().and_then(|b| b.try_into().ok()).ok_or_else(|| format!("{s} is not a member's key"))
+}
+
+#[derive(Deserialize)]
+struct ConnectIn {
+    site: String,
+    member: String,
+}
+
+/// #12: connect with a member of a Site from their card. The Site holds the member's own offers
+/// of a way to reach them; this takes one and pairs privately, so nothing of the request is on
+/// the Site (`Node::connect_member`). The webapp's own session only.
+async fn connect(
+    State(d): State<Door>,
+    h: axum::http::HeaderMap,
+    Json(input): Json<ConnectIn>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let scope = scope_of(&h);
+    ask_async(d, move |back| Ask::Connect { site: input.site, member: input.member, scope, back }).await.map(Json)
+}
+
+#[derive(Deserialize)]
+struct LinkIn {
+    peer: String,
+    active: bool,
+}
+
+/// #12: this side's wish for the link with `peer` (`contact.setLink`): true accepts or invites
+/// again, false declines, withdraws or ends it (`Node::set_link`). The webapp's own session only.
+async fn link(
+    State(d): State<Door>,
+    h: axum::http::HeaderMap,
+    Json(input): Json<LinkIn>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let scope = scope_of(&h);
+    ask_async(d, move |back| Ask::Link { peer: input.peer, active: input.active, scope, back }).await.map(Json)
+}
+
+#[derive(Deserialize)]
+struct ConversationIn {
+    peer: String,
+}
+
+/// The conversation with a connected peer, derived if this side holds none
+/// (`Node::conversation_open`). The webapp's own session only.
+async fn conversation(
+    State(d): State<Door>,
+    h: axum::http::HeaderMap,
+    Json(input): Json<ConversationIn>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let scope = scope_of(&h);
+    ask_async(d, move |back| Ask::Conversation { peer: input.peer, scope, back }).await.map(Json)
 }
 
 #[derive(Deserialize)]
