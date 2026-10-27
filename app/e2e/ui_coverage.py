@@ -607,6 +607,8 @@ async def lane_connect(A: J.Browser, B: J.Browser, C: J.Browser, D: str, site: s
     await b.until(f"!!{dm}", "A in B's Direct messages", 90)
     await b.ev(f"{dm}.click(), true")
     await b.until(f"!!{ROW % js(text)}", "A's message on B's page", 90)
+    # B has it on screen, so B's page says it is read; A's sees "Read" under it.
+    await a.until("!!document.querySelector('#feed .readmark')", "Read, on A's page", 90)
     # A asks C, then withdraws: C's bell turns, then returns.
     await card_until(a, names["C"], "Connect")
     await a.ev(f"{CARD_GO % js('Connect')}.click(), true")
@@ -638,7 +640,7 @@ async def lane_connect(A: J.Browser, B: J.Browser, C: J.Browser, D: str, site: s
     if await c.ev(f"!!{CARD_GO % js('Connect')}"):
         raise w.Fail("B declined C, and C's card of B offers Connect again: it is B's to open")
     await c.click("personX")
-    return "A asked B from the card; B accepted in the tray; A messaged and B read it; A withdrew from C; B declined C"
+    return "A asked B from the card; B accepted in the tray; A messaged, B read it and A saw Read; A withdrew from C; B declined C"
 
 
 async def run(s: w.Stack, results: list, hits: list) -> None:

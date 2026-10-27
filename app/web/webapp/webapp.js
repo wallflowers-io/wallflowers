@@ -2419,8 +2419,27 @@
       el('h1', { text: peer ? name : name }),
       el('p', { text: peer ? 'The start of your conversation.' : 'The start of #' + name + '.' })]));
     if (!peer && window.WallFlowers && window.WallFlowers.Rooms) window.WallFlowers.Rooms.header(col, o, { door: door, load: load, el: el, op: opDecl, me: M.me.pk, note: note });
-    messageList(col, msgs(id), id);
+    var ms = msgs(id), last = ms[ms.length - 1];
+    messageList(col, ms, id);
+    if (peer && last && last.author === M.me.pk && last.read > 0) col.appendChild(el('p', { class: 'readmark', text: 'Read' }));
     composeFor(id, peer ? name : '#' + name);
+    receipt(id, ms);
+  }
+
+  /* READ (forum.receipt): what is on screen is read, said once for each message of another's,
+     in one receipt. A DM says "Read" under your last message once the other side's receipt
+     reaches it (the view's `read`, a count on your own messages). */
+  var RECEIPTED = {};
+  function receipt(id, ms) {
+    var said = RECEIPTED[id] = RECEIPTED[id] || {};
+    var fresh = ms.filter(function (m) { return m.author !== M.me.pk && !said[mref(m)]; });
+    var words = ICD && ICD.kinds.forum.ops['forum.receipt'].args.status.vocabulary;
+    var read = words && Object.keys(words).filter(function (k) { return words[k] === 'read'; })[0];
+    if (!fresh.length || !read) return;
+    fresh.forEach(function (m) { said[mref(m)] = true; });
+    door('/v2/apply', { method: 'POST', body: { object: id, op: 'forum.receipt',
+      args: { upto: fresh[fresh.length - 1].ts || 0, status: Number(read), refs: fresh.map(mref).join(',') } } })
+      .then(null, function () { fresh.forEach(function (m) { delete said[mref(m)]; }); });
   }
 
   /* An object's own view: what its lens folded, labelled by the view's own keys.
