@@ -26,7 +26,7 @@ PKGS = $(shell cd $(PRODUCT) && PATH='$(PATH)' cargo metadata --no-deps --format
 ARC_HOST   := https://arc.wallflowers.io
 
 .DEFAULT_GOAL := help
-.PHONY: help status check check-icd check-play check-core check-arc check-auth check-harness check-door e2e e2e-browser ci ci-hooks \
+.PHONY: help status check check-icd check-play check-core check-arc check-auth check-harness check-door e2e e2e-browser ci ci-hooks coverage ui-coverage \
         wasm serve stop deploy-app deploy-door deploy-arc deploy-docs live site-setup
 
 help:  ## this list
@@ -79,8 +79,12 @@ check-play:  ## /play: its engine, land, town and sea, and the map code it vendo
 	@printf '  play    '
 	@cd $(PRODUCT)/play && for t in tests/test_*.js; do node $$t > /dev/null || { echo "$$t failed"; exit 1; }; done; echo ok
 
-coverage:  ## which ICD ops the WebApp sends, and which it names that the ICD does not
+coverage:  ## which ICD ops the WebApp's source names, and which it names that the ICD does not
 	@$(PY) $(CORE)/coordination/icd-coverage.py
+
+ui-coverage:  ## which ICD ops and Door routes the WebApp sends, driven headless in its UI on loopback
+	@printf '  ui-coverage '
+	@$(PINNED) ui-coverage sh -c 'cd $(PRODUCT) && $(PY) app/e2e/ui_coverage.py'
 
 check-auth:  ## the Arc account store (pytest; a check needing the website says when it skips)
 	@printf '  auth    '

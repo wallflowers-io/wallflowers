@@ -8,7 +8,10 @@ THE LEVELS.
     mls      recorded by the MLS doors, never authored as a delta
     none     no WebApp source names it
     ui       a WebApp source names it
-    ui+e2e   and an e2e journey names it too
+
+WHAT THE UI SENDS is measured, not read: `make ui-coverage` (app/e2e/ui_coverage.py) drives
+the WebApp in a browser and records every op the Door is sent.  The e2e lanes that name ops
+drive the Door's HTTP API, not the UI, so they are no measure of it and are not read here.
 
 WHY A NAME IS NEARLY A SENDER.  The WebApp authors through the Door's generic
 routes (/v2/apply, /v2/batch, /v2/mint), each taking the op by its ICD name.  A
@@ -33,7 +36,6 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 WEB = ROOT / "app" / "web"
-E2E = ROOT / "app" / "e2e"
 
 # The op list and the MLS doors' ops are gen-web-ops.py's; read there, not copied.
 _spec = importlib.util.spec_from_file_location("gen_web_ops", HERE / "gen-web-ops.py")
@@ -87,7 +89,6 @@ def rows() -> tuple:
     where = homes(icd)
     prefixes = {op.split(".")[0] for op in ops}
     ui = named(webapp_sources(), prefixes)
-    e2e = named(sorted(E2E.glob("*.py")), prefixes)
     out = []
     for op in ops:
         if op in gen.MEMBERSHIP_REFUSED:
@@ -95,10 +96,10 @@ def rows() -> tuple:
         elif op not in ui:
             level = "none"
         else:
-            level = "ui+e2e" if op in e2e else "ui"
+            level = "ui"
         home, kinds = where[op]
         out.append({"op": op, "home": home, "kinds": kinds, "level": level,
-                    "ui": ui.get(op, []), "e2e": e2e.get(op, [])})
+                    "ui": ui.get(op, [])})
     gone = retired(icd)
     stray = [{"name": n, "retired": n in gone, "ui": at} for n, at in sorted(ui.items()) if n not in ops]
     return out, stray
@@ -117,8 +118,8 @@ def table(rs: list, stray: list) -> str:
         L.append("")
         L.append(f"{home} ({len(group)})")
         for r in sorted(group, key=lambda r: r["op"]):
-            ev = " · ".join(x[0] + (f" (+{len(x) - 1})" if len(x) > 1 else "") for x in (r["ui"], r["e2e"]) if x)
-            L.append(f"  {r['op']:<{width}}  {r['level']:<6}  {ev}".rstrip())
+            ev = r["ui"][0] + (f" (+{len(r['ui']) - 1})" if len(r["ui"]) > 1 else "") if r["ui"] else ""
+            L.append(f"  {r['op']:<{width}}  {r['level']:<4}  {ev}".rstrip())
     if stray:
         L.append("")
         L.append(f"undeclared: named in the WebApp, not an ICD op ({len(stray)})")
