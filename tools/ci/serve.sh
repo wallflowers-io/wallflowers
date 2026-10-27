@@ -36,7 +36,8 @@ unrun() {
 stop_jobs() {
   local ids
   ids="$(dk ps -aq --filter "label=$LABEL" 2>/dev/null)"
-  [ -z "$ids" ] || { dk stop -t 30 $ids; dk rm -f $ids; } >/dev/null 2>&1
+  # --rm removes a stopped container; rm -f is for one that would not stop.
+  [ -z "$ids" ] || { dk stop -t 30 $ids; dk rm -f $ids; } >/dev/null 2>&1 || true
 }
 
 mkdir -p "$STATE"
@@ -81,7 +82,7 @@ colima start "$LABEL" --vm-type vz --cpu 12 --memory 24 --disk 100 --mount none 
 # What a run that was killed left: its containers, then its runners.
 stop_jobs
 gh api --paginate "repos/$REPO/actions/runners" --jq ".runners[] | select(.name | startswith(\"$LABEL-\")) | .id" \
-  | while read -r id; do unrun "$id"; done
+  | while read -r id; do unrun "$id"; done || true
 say "building the image"
 dk buildx build -q -t "$LABEL" --build-context auth="$product/arc/auth" --build-context github="$product/.github" \
   "$product/tools/ci" >/dev/null
