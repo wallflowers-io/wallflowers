@@ -837,7 +837,7 @@
         };
       }
       box.appendChild(el('div', { class: 'tr' }, [avatar(c.pk), el('div', { class: 'grow' }, [
-        el('b', { text: (c.name || 'Someone') + ' wants to connect' }),
+        el('b', { text: who(c.pk) + ' wants to connect' }),
         el('div', { class: 'tact' }, [
           el('button', { class: 'pc-go', type: 'button', text: 'Accept', onclick: answer(true) }),
           el('button', { class: 'pc-alt', type: 'button', text: 'Decline', onclick: answer(false) })]), why])]));

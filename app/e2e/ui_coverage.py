@@ -7,6 +7,7 @@ op a /v2/apply or /v2/batch carries and each kind a mint names, and the status t
 
   make ui-coverage            or: .venv/bin/python app/e2e/ui_coverage.py
   E2E_KEEP=1 keeps the run's directory: screenshots, logs, and ui-coverage.json
+  UI_LANES=U3,U10 runs those lanes after the setup, and names the rest SKIP
 
 Prints every ICD op and every route in app/door/routes.json, each with what the UI sent and what
 the Door said; a refusal is a finding, printed as one. A lane that could not finish is NG, named.
@@ -541,6 +542,92 @@ async def lane_resources(A: J.Browser, D: str, site: str) -> str:
     return "a resource drafted with a cover, a picture and a PDF; the picture removed; published; unpublished"
 
 
+CARD_STATE = "((document.querySelector('#personBody .pc-head p')||{}).textContent||'')"
+CARD_GO = "[...document.querySelectorAll('#personBody button')].find(b => b.textContent === %s)"
+
+
+async def card_until(p, name: str, button: str, secs: float = 120) -> None:
+    """`name`'s card, reopened as the page reloads, until it offers `button`."""
+    end = time.monotonic() + secs
+    while True:
+        await person_card(p, name)
+        if await p.ev(f"!!{CARD_GO % js(button)}"):
+            return
+        await p.click("personX")
+        if time.monotonic() > end:
+            raise w.Fail(f"{name}'s card never offered {button}")
+        await asyncio.sleep(3)
+
+
+async def lane_connect(A: J.Browser, B: J.Browser, C: J.Browser, D: str, site: str, names: dict) -> str:
+    """#12: Connect from a member's card, the invitation in the tray, Accept, Message; a Withdraw,
+    and a Decline."""
+    a, b, c = A.p, B.p, C.p
+    await home(a, D, site)
+    for p in (b, c):
+        await open_site(p, cc.NAME)
+    # A asks B, from B's card on the Site.
+    await card_until(a, names["B"], "Connect")
+    await a.ev(f"{CARD_GO % js('Connect')}.click(), true")
+    await a.until(f"{CARD_STATE} === 'Requested' || !!(document.getElementById('pcLink')||{{}}).textContent", "A's request", 60)
+    if await a.ev("!!(document.getElementById('pcLink')||{}).textContent"):
+        raise w.Fail("Connect: " + await a.ev("document.getElementById('pcLink').textContent"))
+    await a.click("personX")
+    # B's bell turns red, and B accepts in the tray.
+    await b.until("document.getElementById('bell').classList.contains('waiting')", "B's bell", 120)
+    await b.click("bell")
+    row = f"[...document.querySelectorAll('#tray .tr')].find(r => r.textContent.includes({js(names['A'] + ' wants to connect')}))"
+    await b.until(f"!!{row}", "the invitation in B's tray", 30)
+    await b.ev(f"{row}.querySelector('.pc-go').click(), true")
+    await b.until("!document.getElementById('bell').classList.contains('waiting')", "B's tray emptied", 60)
+    # A messages B; B reads it in Direct messages.
+    await card_until(a, names["B"], "Message")
+    await a.ev(f"{CARD_GO % js('Message')}.click(), true")
+    await a.until("!document.getElementById('compose').hidden", "the conversation open", 60)
+    text = f"Hello B {cc.TAG}"
+    await fill(a, "#say", text)
+    await a.click("send")
+    await a.until(f"!!{ROW % js(text)}", "A's message", 60)
+    # Direct messages are listed in the Rooms tab's index.
+    await b.ev("[...document.querySelectorAll('#tabs .tab')].find(t => t.textContent.trim() === 'Rooms').click(), true")
+    dm = f"[...document.querySelectorAll('#lbody .it')].find(i => i.textContent.includes({js(names['A'])}))"
+    await b.until(f"!!{dm}", "A in B's Direct messages", 90)
+    await b.ev(f"{dm}.click(), true")
+    await b.until(f"!!{ROW % js(text)}", "A's message on B's page", 90)
+    # A asks C, then withdraws: C's bell turns, then returns.
+    await card_until(a, names["C"], "Connect")
+    await a.ev(f"{CARD_GO % js('Connect')}.click(), true")
+    await a.until(f"!!{CARD_GO % js('Withdraw')}", "Withdraw", 60)
+    await a.ev(f"{CARD_GO % js('Withdraw')}.click(), true")
+    await a.until(f"{CARD_STATE} === 'Not connected'", "A's request withdrawn", 60)
+    await a.click("personX")
+    # C asks B, and B declines.
+    await card_until(c, names["B"], "Connect")
+    await c.ev(f"{CARD_GO % js('Connect')}.click(), true")
+    await c.until(f"{CARD_STATE} === 'Requested'", "C's request", 60)
+    await c.click("personX")
+    await b.until("document.getElementById('bell').classList.contains('waiting')", "B's bell, again", 120)
+    await b.click("bell")
+    row = f"[...document.querySelectorAll('#tray .tr')].find(r => r.textContent.includes({js(names['C'] + ' wants to connect')}))"
+    await b.until(f"!!{row}", "C's invitation in B's tray", 30)
+    await b.ev(f"[...{row}.querySelectorAll('button')].find(x => x.textContent === 'Decline').click(), true")
+    await b.until("!document.getElementById('bell').classList.contains('waiting')", "B's tray emptied again", 60)
+    end = time.monotonic() + 90
+    while True:
+        await person_card(c, names["B"])
+        st = await c.ev(CARD_STATE)
+        if st == "Not connected":
+            break
+        await c.click("personX")
+        if time.monotonic() > end:
+            raise w.Fail(f"C's card of B reads {st!r} after B declined")
+        await asyncio.sleep(3)
+    if await c.ev(f"!!{CARD_GO % js('Connect')}"):
+        raise w.Fail("B declined C, and C's card of B offers Connect again: it is B's to open")
+    await c.click("personX")
+    return "A asked B from the card; B accepted in the tray; A messaged and B read it; A withdrew from C; B declined C"
+
+
 async def run(s: w.Stack, results: list, hits: list) -> None:
     result = cc.resulter(results)
     opened: list[J.Browser] = []
@@ -573,12 +660,17 @@ async def run(s: w.Stack, results: list, hits: list) -> None:
         await cc.held(B, [site])
         result("U2", site in {o.get("id") for o in (await B.graph()).get("objects", [])}, "A adds B by the code")
 
+        only = [x for x in os.environ.get("UI_LANES", "").split(",") if x]
+
         async def lane(sid: str, what: str, body) -> None:
+            if only and sid not in only:
+                results.append((sid, "SKIP", what + ": not in UI_LANES"))
+                return
             try:
                 result(sid, True, what, did=await body())
             except (w.Fail, TimeoutError) as e:
-                for who, b in (("A", A), ("B", B)):
-                    await b.p.shot(s.work, f"{sid}-{who}-failed")
+                for i, b in enumerate(opened):
+                    await b.p.shot(s.work, f"{sid}-{i}-failed")
                 result(sid, False, what, failed=str(e) or type(e).__name__, page=A.p.said[-3:])
 
         await lane("U3", "rooms", lambda: lane_rooms(A))
@@ -588,6 +680,13 @@ async def run(s: w.Stack, results: list, hits: list) -> None:
         await lane("U7", "events", lambda: lane_events(A, B, s.door_url, site, "Ada " + cc.TAG, mp4(s.work)))
         await lane("U8", "trade", lambda: lane_trade(A, s.door_url, site))
         await lane("U9", "resources", lambda: lane_resources(A, s.door_url, site))
+        C = await browser("C")
+        code_c, _ = await cc.copy_code(C, s, "Cy " + cc.TAG)
+        await home(A.p, s.door_url, site)
+        await cc.add_by_code(A, code_c)
+        await A.p.until("document.getElementById('sheet').hidden || !!document.getElementById('sheetWhy').textContent", "C's add", 120)
+        await lane("U10", "connect from a member's card (#12)", lambda: lane_connect(A, B, C, s.door_url, site,
+                   {"A": "Ada " + cc.TAG, "B": "Bo " + cc.TAG, "C": "Cy " + cc.TAG}))
     finally:
         await asyncio.sleep(2)                        # the last responses' bodies
         for r in rec:
