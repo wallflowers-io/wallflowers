@@ -66,7 +66,7 @@ jobs:
       - &output
         name: suite output
         if: failure() || cancelled()
-        run: tail -n 400 /tmp/pinned-* 2>/dev/null || true
+        run: tail -n 400 "${TMPDIR:-/tmp}"/pinned-* 2>/dev/null || true  # each runner has its own TMPDIR
 
   arc:
     name: arc
