@@ -34,6 +34,8 @@ if [ -f "$pidf" ]; then
   rm -f "$pidf" "$cidf" "$ridf"
 fi
 ( set -o noclobber; echo $$ > "$pidf" ) 2>/dev/null || { say "another run started first"; exit 0; }
+# The Mac's idle sleep freezes the VM and GitHub abandons the job; a closed lid still does.
+caffeinate -i -w $$ &
 
 teardown() {
   trap - EXIT INT TERM HUP
