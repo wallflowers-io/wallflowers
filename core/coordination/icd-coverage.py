@@ -57,7 +57,9 @@ def homes(icd: dict) -> dict:
 
 
 def webapp_sources():
-    for p in sorted([*(WEB / "webapp").rglob("*.js"), *(WEB / "shared").glob("*.js")]):
+    # resources/ is the editor the Door serves as /v2/resources.js, which index.html loads.
+    for p in sorted([*(WEB / "webapp").rglob("*.js"), *(WEB / "shared").glob("*.js"),
+                     *(WEB / "resources").glob("*.js")]):
         if "vendor" in p.parts or p.name.endswith(".test.mjs") or p == gen.OUT:
             continue
         yield p
