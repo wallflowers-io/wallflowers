@@ -196,6 +196,12 @@ html[data-state="inside"] [data-screen="inside"]{display:grid}
   background:var(--s0);border:1px solid var(--hair);border-radius:16px;padding:6px;box-shadow:0 18px 50px rgba(20,24,30,.18)}
 .menu[hidden]{display:none}
 .brand .menu{left:10px}.util .menu{right:12px}
+.bell{width:17px;height:17px;border-radius:50%;background:var(--accent);flex:none}
+.bell.waiting{background:var(--red)}
+.tray .tr{display:flex;gap:10px;align-items:flex-start;padding:8px 10px}
+.tray .tr .tact{display:flex;gap:8px;margin-top:6px}
+.tray .tr .tact button{flex:1;margin-top:0;height:34px}
+.tray .none{padding:10px;color:var(--i3)}
 .menu .mi{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:6px 10px;border-radius:10px;text-align:left;color:var(--ink)}
 .menu .mi:hover,.menu .mi:focus-visible{background:var(--s2);outline:0}
 .menu .mi.on{background:var(--a1);font-weight:600}
@@ -624,6 +630,8 @@ dl.kv.sheetkv{background:none;padding:0}
     <nav class="tabs" id="tabs" aria-label="Sections"></nav>
     <div class="util" id="util">
       <span class="meetSlot" id="meetSlot" aria-hidden="true"></span>
+      <button class="bell" id="bell" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Notifications"></button>
+      <div class="menu tray" id="tray" role="dialog" aria-label="Notifications" hidden></div>
       <button class="meBtn" id="meBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="You"></button>
       <div class="menu" id="meMenu" role="menu" aria-label="You" hidden></div>
     </div>

@@ -108,6 +108,7 @@
   function model(g) {
     var m = { me: { pk: strip(g.me && g.me.pk), name: (g.me && g.me.display_name) || '' },
               byId: {}, host: {}, origin: {}, names: {}, sites: [], feed: [], conns: [], chats: {}, problems: [],
+              link: {}, invites: [],
               self: null };
     var spine = (g.spine || []).slice().sort(function (a, b) { return a.index - b.index; });
     m.self = spine.length ? spine[0].object : null;
@@ -121,9 +122,14 @@
     m.names[m.me.pk] = m.me.name;
     (g.objects || []).forEach(function (o) {
       if (!o.folds) { m.problems.push(o); return; }
+      /* A connection by its link (contact.setLink, #12): linked, or stated by neither side (a
+         pairing older than the link), is a connection; asked of me, an invitation in the tray. */
       if (o.role === 'channel') {
+        var link = (o.view && o.view.link) || {}, c = { pk: o.peer, name: o.name, id: o.id };
         m.names[o.peer] = o.name;
-        m.conns.push({ pk: o.peer, name: o.name, id: o.id });
+        m.link[o.peer] = { state: link.state || 'none', mine: link.mine };
+        if (link.state === 'invited_me') m.invites.push(c);
+        else if (!link.state || link.state === 'linked' || link.state === 'none') m.conns.push(c);
         return;
       }
       if (o.role === 'chat') { m.chats[o.peer] = o.id; return; }
@@ -733,7 +739,7 @@
     var big = avatar(pk); big.classList.add('big');
     box.appendChild(el('div', { class: 'pc-head' }, [big, el('div', { class: 'grow' }, [
       el('h3', { text: who(pk) }),
-      el('p', { text: pk === M.me.pk ? 'You' : M.chats[pk] ? 'Connected' : 'Not connected' })])]));
+      el('p', { text: linkWords(pk) })])]));
     var kv = el('dl', { class: 'kv' });
     function row(k, v) { kv.appendChild(el('dt', { text: k })); kv.appendChild(v); }
     if (site) {
@@ -751,7 +757,7 @@
       } })]));
     box.appendChild(kv);
     if (!named(pk) && !p) box.appendChild(el('p', { class: 'mnote', text: 'No card yet. Every member publishes one on entry: their name, their picture and this key.' }));
-    if (M.chats[pk] && pk !== M.me.pk) box.appendChild(el('button', { class: 'pc-go', type: 'button', text: 'Message', onclick: function () { closeCard(); open('dm', pk); } }));
+    linkActions(box, pk);
     /* The owner gives and takes the admin role here (REQUIREMENTS.md § 4). */
     if (site && site.owner === M.me.pk && pk !== M.me.pk && (site.members || []).indexOf(pk) >= 0) {
       var admin = roleOfMember(site, pk) === 'admin';
@@ -759,11 +765,84 @@
         onclick: function (e) { (admin ? unmakeAdmin : makeAdmin)(site, pk, e.currentTarget); } }));
       /* The Door adds someone to the page (the Host) only if they are your contact (BW-B). */
       box.appendChild(el('p', { class: 'why', id: 'pcWhy',
-        text: !admin && !M.chats[pk] ? 'To change the pictures too, they need to be connected with you first.' : '' }));
+        text: !admin && !connected(pk) ? 'To change the pictures too, they need to be connected with you first.' : '' }));
     }
     $('person').hidden = false;
   }
   function closeCard() { $('person').hidden = true; }
+
+  /* THE LINK, from a member's card (#12). Each side states its own (contact.setLink): Connect
+     pairs with one of the member's own offers on a community you share (the bundles facet), so
+     the community's log never says who asked whom; the other side accepts in the tray. */
+  function linkOf(pk) { return (M.link[pk] || {}).state || null; }
+  function connected(pk) { var s = linkOf(pk); return s === 'linked' || s === 'none'; }
+  function linkWords(pk) {
+    if (pk === M.me.pk) return 'You';
+    if (connected(pk)) return 'Connected';
+    return { invited: 'Requested', invited_me: 'Wants to connect' }[linkOf(pk)] || 'Not connected';
+  }
+  /* A community you share where they offer a way to be reached: the open one first. */
+  function offeredIn(pk) {
+    var sites = S.site && M.byId[S.site] ? [M.byId[S.site]].concat(M.sites) : M.sites;
+    return sites.filter(function (s) { var b = s.view && s.view.bundles && s.view.bundles[pk]; return b && b.length; })[0] || null;
+  }
+  function linkWrite(btn, path, body, then) {
+    var why = $('pcLink');
+    busy(btn, true);
+    why.textContent = '';
+    return door(path, { method: 'POST', body: body })
+      .then(function (r) { return load().then(function () { return then ? then(r) : personCard(btn.dataset.pk); }); },
+        function (e) { why.textContent = String(e && e.message || e); })
+      .then(function () { busy(btn, false); });
+  }
+  function linkActions(box, pk) {
+    if (pk === M.me.pk) return;
+    var s = linkOf(pk), at = offeredIn(pk);
+    function btn(text, cls, go) { box.appendChild(el('button', { class: cls, type: 'button', text: text, 'data-pk': pk, onclick: function (e) { go(e.currentTarget); } })); }
+    if (connected(pk)) {
+      btn('Message', 'pc-go', function (b) {
+        if (M.chats[pk]) { closeCard(); open('dm', pk); return; }
+        linkWrite(b, '/v2/conversation', { peer: pk }, function () { closeCard(); open('dm', pk); });
+      });
+    } else if (s === 'invited_me') {
+      btn('Accept', 'pc-go', function (b) { linkWrite(b, '/v2/link', { peer: pk, active: true }); });
+      btn('Decline', 'pc-alt', function (b) { linkWrite(b, '/v2/link', { peer: pk, active: false }); });
+    } else if (s === 'invited') {
+      btn('Withdraw', 'pc-alt', function (b) { linkWrite(b, '/v2/link', { peer: pk, active: false }); });
+    } else if (at && (s !== 'ended' || (M.link[pk] || {}).mine === 0)) {
+      /* Ended by their 0, it is theirs to open again; ended by mine, Connect states 1 again. */
+      btn('Connect', 'pc-go', function (b) { linkWrite(b, '/v2/connect', { site: at.id, member: pk }); });
+    }
+    box.appendChild(el('p', { class: 'why', id: 'pcLink' }));
+  }
+
+  /* THE TRAY (iOS's NotificationTray and BellButton, ported): what waits on you. The bell is an
+     accent disc that turns red, whole, while anything waits; the tray lists each, and empty it
+     says so and nothing else. */
+  function bell() {
+    var n = M.invites.length, b = $('bell');
+    b.classList.toggle('waiting', n > 0);
+    b.setAttribute('aria-label', n ? 'Notifications, ' + n + ' to review' : 'Notifications');
+  }
+  function fillTray(box) {
+    if (!M.invites.length) { box.appendChild(el('div', { class: 'none', text: 'No notifications' })); return; }
+    M.invites.forEach(function (c) {
+      var why = el('p', { class: 'why' });
+      function answer(active) {
+        return function (e) {
+          var b = e.currentTarget;
+          busy(b, true);
+          door('/v2/link', { method: 'POST', body: { peer: c.pk, active: active } })
+            .then(function () { return load().then(function () { closeMenus(); }); }, function (err) { why.textContent = String(err && err.message || err); busy(b, false); });
+        };
+      }
+      box.appendChild(el('div', { class: 'tr' }, [avatar(c.pk), el('div', { class: 'grow' }, [
+        el('b', { text: (c.name || 'Someone') + ' wants to connect' }),
+        el('div', { class: 'tact' }, [
+          el('button', { class: 'pc-go', type: 'button', text: 'Accept', onclick: answer(true) }),
+          el('button', { class: 'pc-alt', type: 'button', text: 'Decline', onclick: answer(false) })]), why])]));
+    });
+  }
   function roleOfMember(site, pk) {
     if (pk === site.owner) return 'owner';
     var r = ((site.view && site.view.roles) || []).filter(function (x) { return x[0] === pk; })[0];
@@ -1333,10 +1412,11 @@
     me.textContent = own ? '' : (M.me.name || '').slice(0, 1).toUpperCase();
     if (own) me.appendChild(el('img', { src: own, alt: '' }));
     me.title = M.me.name || 'You';
+    bell();
   }
 
   /* THE MENUS: one open at a time; a click outside or Escape closes it. */
-  var MENUS = [['siteBtn', 'siteMenu', fillSites], ['meBtn', 'meMenu', fillMe]];
+  var MENUS = [['siteBtn', 'siteMenu', fillSites], ['bell', 'tray', fillTray], ['meBtn', 'meMenu', fillMe]];
   function closeMenus() {
     MENUS.forEach(function (m) { $(m[1]).hidden = true; $(m[0]).setAttribute('aria-expanded', 'false'); });
   }
@@ -2637,7 +2717,7 @@
     if (!e.target.closest) return;
     if (!$('emo').hidden && !e.target.closest('#emo,.act.react')) closePicker();
     if (!e.target.closest('.msg.on,#emo')) closeActs();
-    if (!e.target.closest('.menu,#siteBtn,#meBtn')) closeMenus();
+    if (!e.target.closest('.menu,#siteBtn,#bell,#meBtn')) closeMenus();
     if (MEETING && e.target.closest && !e.target.closest('#meet')) meet(false);
   });
   window.addEventListener('resize', function () { rails(); closePicker(); });
