@@ -13,7 +13,8 @@ SHELL      := /usr/bin/env bash
 # compare against it; nothing here needs one.
 PRODUCT    := $(shell cd $(dir $(lastword $(MAKEFILE_LIST))) && pwd)
 CORE       := $(PRODUCT)/core
-WS         := $(abspath $(PRODUCT)/..)
+# A worktree is <ws>/wt/<name> (CLAUDE.md, Changes), a step further from the workspace.
+WS         := $(abspath $(PRODUCT)/..$(if $(filter wt,$(notdir $(abspath $(PRODUCT)/..))),/..))
 REPOS      := $(notdir $(PRODUCT))
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 # The workspace's .venv where there is one; otherwise python3 (CI).
