@@ -47,7 +47,7 @@ CORE="${CORE:-../../core}"
 OUT_DIR="${OUT_DIR:-docs}"
 export PATH="$HOME/.cargo/bin:$PATH"
 
-WBG_VERSION="$(grep -A1 '^name = "wasm-bindgen"$' "$CORE/Cargo.lock" | grep '^version' | head -1 | cut -d'"' -f2)"
+WBG_VERSION="$(grep -A1 '^name = "wasm-bindgen"$' "$CORE/../Cargo.lock" | grep '^version' | head -1 | cut -d'"' -f2)"
 if ! command -v wasm-bindgen >/dev/null 2>&1; then
   echo "wasm-bindgen CLI not found. Install the version matching the crate:" >&2
   echo "  cargo install wasm-bindgen-cli --version ${WBG_VERSION}" >&2
@@ -65,7 +65,7 @@ echo "building core-wasm WITH mls (release, wasm32-unknown-unknown)…"
 echo "post-processing with wasm-bindgen ${HAVE}…"
 rm -rf "$OUT_DIR/core"
 wasm-bindgen --target web --out-dir "$OUT_DIR/core" --out-name core_wasm \
-  "$CORE/target/wasm32-unknown-unknown/release/core_wasm.wasm"
+  "$CORE/../target/wasm32-unknown-unknown/release/core_wasm.wasm"
 
 printf "  %s  %s bytes\n" "$OUT_DIR/core/core_wasm_bg.wasm" \
   "$(stat -f%z "$OUT_DIR/core/core_wasm_bg.wasm")"
@@ -125,7 +125,7 @@ node -e '
   }
   // THE getrandom BACKEND GUARD. mls-rs hard-codes getrandom ["js","custom"] for
   // wasm32 and js WINS the cascade, which makes our registered host-entropy hook
-  // dead code and drags ~25 JS-crypto shims in with it. The [patch] in core/Cargo.toml
+  // dead code and drags ~25 JS-crypto shims in with it. The [patch] in the root Cargo.toml
   // drops js. That patch is VERSION-PINNED and fails SILENTLY when mls-rs moves —
   // it already did once, 0.55.2 -> 0.55.4. This is what catches it: with js gone the
   // module imports entropy exactly once, from us.
@@ -136,7 +136,7 @@ node -e '
   const jsCrypto = imports.filter(i => /getRandomValues|randomFillSync|__wbg_crypto|msCrypto/.test(i.name));
   if (jsCrypto.length) {
     console.error("  REGRESSION: the getrandom js backend is back —", jsCrypto.length,
-                  "JS-crypto shims. The mls-rs patch in core/Cargo.toml has stopped");
+                  "JS-crypto shims. The mls-rs patch in the root Cargo.toml has stopped");
     console.error("  applying, almost certainly because the version moved. Re-vendor it.");
     process.exit(1);
   }

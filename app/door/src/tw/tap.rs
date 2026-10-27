@@ -176,8 +176,10 @@ mod tests {
     impl Relay {
         fn start(root: &std::path::Path) -> Relay {
             use std::os::unix::process::CommandExt;
-            let bin = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../arc/target/debug/semaphore");
-            assert!(bin.exists(), "this test needs the relay: `cargo build -p relay` in arc ({} is absent)", bin.display());
+            let target = std::env::var_os("CARGO_TARGET_DIR").map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
+            let bin = target.join("debug/semaphore");
+            assert!(bin.exists(), "this test needs the relay: `cargo build -p relay` ({} is absent)", bin.display());
             let free = || std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
             let (port, tunnel) = (free(), free());
             let child = std::process::Command::new(bin)

@@ -53,7 +53,7 @@
 # tells (it answered a media frame, so it postdated 13 Aug; it had no service
 # gate, so it predated 16 Sep). That is not a thing anyone should have to do.
 #
-# WHAT IS STAMPED. The workspace [patch] in arc/Cargo.toml redirects pacific-core
+# WHAT IS STAMPED. The workspace [patch] in the root Cargo.toml redirects pacific-core
 # and pacific-wire at core/ — roughly half of `node`. Since 18 Sep 2026 core/ is a
 # directory of the SAME repository as arc/, so the one SHA names both, and the
 # stamp's `core=<sha>[-dirty]` is that SHA judged on core's own build inputs.
@@ -93,8 +93,8 @@ export PATH="$HOME/.cargo/bin:$PATH"
 # parent and core is the arc's sibling. A literal path here broke the day the
 # workspace was renamed, and would break again on the next one.
 ARC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# core/, which the workspace [patch] compiles in. Not a copy of a path from
-# arc/Cargo.toml for the build to use — only for judging its build inputs.
+# core/, which the workspace [patch] compiles in. Not a copy of a path from the root
+# Cargo.toml for the build to use — only for judging its build inputs.
 CORE="$(cd "$ARC/../core" && pwd)"
 # PRODUCTION UNLESS NAMED. ARC_BOX and ARC_KEY name another box; with ARC_SSH_CONFIG,
 # ARC_BOX is that config's Host alias (a Lima VM). ARC_TARGET and ARC_GLIBC build for it.
@@ -126,7 +126,7 @@ die()  { printf '✗ %s\n' "$*" >&2; exit 1; }
 # it will claim to be", so it covers the build inputs and nothing else. A dirty README
 # or .gitignore changes no instruction in the output and must not block a deploy —
 # a guard that cries wolf is a guard that gets ALLOW_DIRTY'd by reflex.
-BUILD_INPUTS="gateway planes lib Cargo.toml Cargo.lock"
+BUILD_INPUTS="gateway planes lib ../Cargo.toml ../Cargo.lock"   # the workspace's manifest and lock are the root's
 
 # Is the arc working tree dirty in the paths that become the binaries? Untracked files
 # count: a new .rs under planes/ is as much a difference from the commit as an edited one.
@@ -134,7 +134,7 @@ arc_dirty() { [ -n "$(cd "$ARC" && git status --porcelain -- $BUILD_INPUTS)" ]; 
 
 # The same question of core/, on the paths of it the arc compiles in (the [patch]
 # crates, and the workspace manifest they may inherit from).
-CORE_INPUTS="pacific-core pacific-wire Cargo.toml"
+CORE_INPUTS="pacific-core pacific-wire"
 core_dirty() { [ -n "$(cd "$CORE" && git status --porcelain -- $CORE_INPUTS)" ]; }
 
 # Refuse to ship a working tree that is not the commit it claims to be.
@@ -389,8 +389,7 @@ command -v cargo-zigbuild >/dev/null || die "cargo-zigbuild missing — brew ins
 
 cd "$ARC" || die "no $ARC"
 
-# The stamp. Computed from git BEFORE the Cargo.toml edit below, so the manifest sed
-# cannot be what makes the tree look dirty. lib/arc-build's build.rs declares each of
+# The stamp. lib/arc-build's build.rs declares each of
 # these rerun-if-env-changed, so a new SHA rebuilds the stamp rather than being served
 # from cargo's cache — a cached stamp is last week's SHA on this week's binary, which
 # is worse than no stamp because it looks right.
@@ -401,20 +400,13 @@ export ARC_BUILD_CORE=$(git_stamp "$CORE" $CORE_INPUTS)
 export ARC_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 note "stamping ${ARC_BUILD_SHA:0:12} ($ARC_BUILD_REF) dirty=$ARC_BUILD_DIRTY core=$ARC_BUILD_CORE"
 
-# console/traffic is not an image plane and its arc-resolver path dep points into
-# the pacific monorepo, which is outside this tree. The Dockerfile drops it the
-# same way. Restore on EVERY exit so an interrupted build cannot leave the
-# manifest edited.
-cp Cargo.toml /tmp/arc-Cargo.toml.deploy.bak
-trap 'cp /tmp/arc-Cargo.toml.deploy.bak "$ARC/Cargo.toml"' EXIT
-sed -i '' '/"console\/traffic"/d' Cargo.toml
 
 note "cross-building for $TARGET (glibc $GLIBC)"
 cargo zigbuild --release --offline \
   --target "$TARGET.$GLIBC" -p arc-gateway -p relay -p waker -p boxoffice -p node \
   || die "build failed"
 
-OUT="${CARGO_TARGET_DIR:-target}/$TARGET/release"
+OUT="${CARGO_TARGET_DIR:-$ARC/../target}/$TARGET/release"
 for b in $PLANES; do [ -f "$OUT/$b" ] || die "missing binary: $b"; done
 
 # The stamp has to have LANDED, not merely been exported. A cargo cache hit that

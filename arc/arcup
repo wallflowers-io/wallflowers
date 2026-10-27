@@ -81,8 +81,8 @@ case "$ARC_SECRETS" in
   *) die "unknown ARC_SECRETS=$ARC_SECRETS (want env|bws|systemd-creds)" ;;
 esac
 
-# ── plane binaries: image=/usr/local/bin, local=./target/{release,debug} ──────────────
-find_exec() { local n="$1" d; for d in "${ARC_BIN_DIR:-}" /usr/local/bin "$HERE/target/release" "$HERE/target/debug"; do
+# ── plane binaries: image=/usr/local/bin, local=../target/{release,debug} ──────────────
+find_exec() { local n="$1" d; for d in "${ARC_BIN_DIR:-}" /usr/local/bin "$HERE/../target/release" "$HERE/../target/debug"; do
   [ -n "$d" ] && [ -x "$d/$n" ] && { printf '%s' "$d/$n"; return 0; }; done; command -v "$n" 2>/dev/null; }
 
 # ── persisted logs ────────────────────────────────────────────────────────────────────

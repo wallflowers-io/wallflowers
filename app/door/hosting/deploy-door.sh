@@ -215,7 +215,7 @@ WITH_FACE="assets/face/vendor/stickers"
 WEBAPP_SRC="$PRODUCT/app/web/webapp"
 
 # What becomes the binary, and what it serves.
-INPUTS="app/door/src app/door/Cargo.toml app/door/Cargo.lock app/door/clients.stand-in.json arc/lib/arc-build arc/lib/face-render app/web/door app/web/webapp core/pacific-core core/pacific-wire core/pacific-media core/coordination/delta-graph.icd.json"
+INPUTS="app/door/src app/door/Cargo.toml Cargo.toml Cargo.lock app/door/clients.stand-in.json arc/lib/arc-build arc/lib/face-render app/web/door app/web/webapp core/pacific-core core/pacific-wire core/pacific-media core/coordination/delta-graph.icd.json"
 
 # What becomes the webapp alone (`app`): its files, and the ICD its op bindings are checked against.
 WEBAPP_INPUTS="app/web/webapp core/coordination/delta-graph.icd.json"
@@ -474,7 +474,7 @@ if [ -n "$BIN" ]; then
   keys_ok
   render_caddyfile
   (cd "$DOOR_DIR" && cargo zigbuild --release --target "$TARGET.$GLIBC") || die "build failed"
-  BINF="${CARGO_TARGET_DIR:-$DOOR_DIR/target}/$TARGET/release/door"
+  BINF="${CARGO_TARGET_DIR:-$DOOR_DIR/../../target}/$TARGET/release/door"
   [ -f "$BINF" ] || die "missing binary: $BINF"
   LC_ALL=C grep -aq "@(#)arc-build commit=$COMMIT" "$BINF" || die "the binary carries no stamp for $COMMIT: refusing to ship it"
   note "shipping the Door to $BOX"

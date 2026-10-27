@@ -188,7 +188,7 @@ The relay's own telemetry after a run: `total_publishes=2 total_deliveries=4
 store_tags=1 store_blobs=2 bad_frames=0` — counts and a tag count, never a tag
 value and never content.
 
-Needs the relay up: `RELAY_BIND=127.0.0.1:8787 ~/pacific/arc/target/debug/semaphore`.
+Needs the relay up: `RELAY_BIND=127.0.0.1:8787 target/debug/semaphore`.
 
 **What this is not.** It is not MLS and it is not a group — it is a pairwise
 channel between two devices that trust each other because one person holds both.

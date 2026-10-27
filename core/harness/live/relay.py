@@ -21,7 +21,7 @@ from ..state.relay import Tables
 SEMAPHORE = Path(os.environ.get(
     "SEMAPHORE_BIN",
     # core/harness/live -> the workspace; the relay binary is in the SIBLING arc repo.
-    str(Path(__file__).resolve().parents[3] / "arc/target/debug/semaphore")))
+    str(Path(__file__).resolve().parents[3] / "target/debug/semaphore")))
 
 
 def free_port() -> int:

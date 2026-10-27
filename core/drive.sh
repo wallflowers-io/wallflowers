@@ -116,8 +116,8 @@ esac
 # 1 · the relay two devices converge through.
 if ! nc -z 127.0.0.1 8787 2>/dev/null; then
   echo "  no relay on 8787 — start one:"
-  echo "    cd arc && cargo build -p relay && \\"
-  echo "      RELAY_STORE=/tmp/relay.db ./target/debug/semaphore &"
+  echo "    cargo build -p relay && \\"
+  echo "      RELAY_STORE=/tmp/relay.db target/debug/semaphore &"
 fi
 
 # 2 · the web fixture origins (8100 docs, 8103/8104 two keyholder origins).

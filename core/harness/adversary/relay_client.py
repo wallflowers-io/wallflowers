@@ -1,6 +1,6 @@
 """relay_client — a minimal, REAL WebSocket client to the semaphore relay.
 
-The relay (`arc/target/debug/semaphore`) speaks `pacific_wire::Frame` as JSON text
+The relay (`target/debug/semaphore`) speaks `pacific_wire::Frame` as JSON text
 frames over a plain WebSocket (see core/pacific-wire/src/lib.rs and
 arc/planes/relay/src/wire.rs). No hello/auth frame. Tags are hex(32 bytes), blobs
 are base64 — both opaque to the relay.

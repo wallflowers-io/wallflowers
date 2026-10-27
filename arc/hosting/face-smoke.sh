@@ -65,7 +65,7 @@ say "building (relay, arc-node, gateway, and the owner's device)"
 ( cd "$core" && cargo build -p pacific-core --example publish_a_face )
 
 say "starting the relay on :$relay_port"
-RELAY_BIND="127.0.0.1:$relay_port" "$arc/target/debug/semaphore" >"$work/relay.log" 2>&1 &
+RELAY_BIND="127.0.0.1:$relay_port" "$arc/../target/debug/semaphore" >"$work/relay.log" 2>&1 &
 pids+=($!)
 
 if [ -n "${FACE_SMOKE_AUTHORITY:-}" ]; then
@@ -95,7 +95,7 @@ ARC_RELAY_URL="ws://127.0.0.1:$relay_port" \
 ARC_SIGNUP_BIND="127.0.0.1:$node_port" \
 ARC_SLUG_AUTHORITY="$authority" \
 ARC_SYNC_MS=1000 \
-  "$arc/target/debug/node" >"$work/node.log" 2>&1 &
+  "$arc/../target/debug/node" >"$work/node.log" 2>&1 &
 pids+=($!)
 wait_for "http://127.0.0.1:$node_port/health" "arc-node"
 
@@ -103,7 +103,7 @@ say "starting the gateway on :$gw_port"
 PORT="$gw_port" \
 ARC_MEMBERSHIP_UPSTREAM="http://127.0.0.1:$node_port" \
 ARC_RELAY_UPSTREAM="ws://127.0.0.1:$relay_port" \
-  "$arc/target/debug/arc-gateway" >"$work/gateway.log" 2>&1 &
+  "$arc/../target/debug/arc-gateway" >"$work/gateway.log" 2>&1 &
 pids+=($!)
 wait_for "http://127.0.0.1:$gw_port/v1/health" "gateway"
 
@@ -112,7 +112,7 @@ curl -fsS "http://127.0.0.1:$node_port/bundle" >"$work/arc-bundle.json"
 echo "the Arc is $arc_identity"
 
 say "the owner's device publishes a face at /$slug"
-owner_dev="$core/target/debug/examples/publish_a_face"
+owner_dev="$core/../target/debug/examples/publish_a_face"
 PACIFIC_STATE_DIR="$work/owner" \
   "$owner_dev" \
     --relay "ws://127.0.0.1:$relay_port" \

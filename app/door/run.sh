@@ -8,7 +8,7 @@
 # passkey, and WebAuthn will not run on an IP address: open it as localhost.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-relay="$(cd "$here/../../arc" && pwd)/target/release/semaphore"
+relay="$(cd "$here/../.." && pwd)/target/release/semaphore"
 
 [ -x "$relay" ] || {
   echo "no relay binary at $relay — build it with:" >&2
@@ -33,4 +33,4 @@ if [ -z "${DOOR_RELAY:-}" ]; then
   export RELAY_STORE="${RELAY_STORE:-$DOOR_ROOT/relay.db}"
 fi
 
-exec "$here/target/release/door"
+exec "$here/../../target/release/door"

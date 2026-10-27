@@ -198,13 +198,13 @@ class Stack:
         if not UVICORN.exists():
             raise Fail(f"no auth service: expected {UVICORN}")
         self.start_auth()
-        self.spawn("node", [str(ARC / "target" / PROFILE / "node")],
+        self.spawn("node", [str(PRODUCT / "target" / PROFILE / "node")],
                    {"PACIFIC_STATE_DIR": str(self.work / "arc"), "ARC_STATE_DIR": str(self.work / "arc-state"),
                     "ARC_NAME": "e2e Arc", "ARC_RELAY_URL": f"ws://127.0.0.1:{self.relay}",
                     "ARC_SIGNUP_BIND": f"127.0.0.1:{self.node}", "ARC_SLUG_AUTHORITY": self.auth_url, "ARC_SYNC_MS": "1000",
                     "ARC_CLAIM_KEYS": str(CLAIM_KEYS)})
         wait_for(f"http://127.0.0.1:{self.node}/health", "arc-node", UP, proc=self.procs[-1], log=self.work / "node.log", prints=True)
-        self.spawn("gateway", [str(ARC / "target" / PROFILE / "arc-gateway")],
+        self.spawn("gateway", [str(PRODUCT / "target" / PROFILE / "arc-gateway")],
                    {"PORT": str(self.gw), "ARC_MEMBERSHIP_UPSTREAM": f"http://127.0.0.1:{self.node}",
                     "ARC_RELAY_UPSTREAM": f"ws://127.0.0.1:{self.relay}"})
         wait_for(f"http://127.0.0.1:{self.gw}/v1/health", "the gateway", UP, proc=self.procs[-1], log=self.work / "gateway.log", prints=True)
@@ -213,7 +213,7 @@ class Stack:
 
     def start_door(self, log: str, env: dict) -> None:
         self.door_env = env
-        self.spawn(log, [str(DOOR / "target" / PROFILE / "door")],
+        self.spawn(log, [str(PRODUCT / "target" / PROFILE / "door")],
                    {"DOOR_PORT": str(self.door), "DOOR_ROOT": str(self.work / "door"),
                     "DOOR_RELAY": f"ws://127.0.0.1:{self.relay}/v1/relay", "DOOR_ORIGIN": self.door_url,
                     "DOOR_AUTH": self.auth_url, "DOOR_PUBLIC": self.door_url, "DOOR_IDLE_SECS": str(IDLE),
@@ -243,7 +243,7 @@ class Stack:
 
     def start_relay(self, log: str) -> None:
         # Durable, as a deployed relay is: a restart keeps what it holds (E12).
-        self.spawn(log, [str(ARC / "target" / PROFILE / "semaphore")],
+        self.spawn(log, [str(PRODUCT / "target" / PROFILE / "semaphore")],
                    {"RELAY_BIND": f"127.0.0.1:{self.relay}", "RELAY_TUNNEL_BIND": f"127.0.0.1:{free_port()}",
                     "RELAY_STORE": str(self.work / "relay.db")})
         self.relay_proc = self.procs[-1]

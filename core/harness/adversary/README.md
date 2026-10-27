@@ -25,7 +25,7 @@ $PY -m pytest -v                    # E10 + E11 + E12 as tests
 ```
 
 Point at an already-running relay with `RELAY_URL=ws://host:port`; otherwise the
-harness spawns `arc/target/debug/semaphore` on a free localhost port (in-memory
+harness spawns `target/debug/semaphore` on a free localhost port (in-memory
 store) and tears it down after.
 
 ## The E10 tripwire — green because the bug is present
