@@ -78,6 +78,9 @@ check-play:  ## /play: its engine, land, town and sea, and the map code it vendo
 	@printf '  play    '
 	@cd $(PRODUCT)/play && for t in tests/test_*.js; do node $$t > /dev/null || { echo "$$t failed"; exit 1; }; done; echo ok
 
+coverage:  ## which ICD ops the WebApp sends, and which it names that the ICD does not
+	@$(PY) $(CORE)/coordination/icd-coverage.py
+
 check-auth:  ## the Arc account store (pytest; a check needing the website says when it skips)
 	@printf '  auth    '
 	@$(PINNED) auth sh -c 'cd $(PRODUCT)/arc/auth && $(PY) -m pytest -q -rs'
