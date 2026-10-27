@@ -911,6 +911,7 @@ async fn handle(
     let mut ws_cfg = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default();
     ws_cfg.max_message_size = Some(limits.max_message_bytes());
     ws_cfg.max_frame_size = Some(limits.max_message_bytes());
+    stream.set_nodelay(true)?; // Nagle holds a frame for the peer's delayed ACK (~40 ms on Linux)
     let ws = tokio_tungstenite::accept_async_with_config(stream, Some(ws_cfg)).await?;
     let (mut sink, mut source) = ws.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<Frame>();
