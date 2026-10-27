@@ -83,9 +83,13 @@ check-harness:  ## the Python harness, and pinned.sh's own summary (NC-122)
 	@printf '  harness '
 	@$(PINNED) harness sh -c 'cd $(CORE) && $(PY) -m harness all'
 
+# Each test in its own process (cargo-nextest), all at once. A Harness holds a process-wide lock
+# for its life (PACIFIC_STATE_DIR is process-global) and cargo test runs binaries one by one, so
+# under cargo test the suite ran on one CPU. nextest runs no doctests: cargo test --doc does.
 check-core:  ## pacific-core + core-wasm + pacific-ffi, and core-wasm as the browser builds it; the fold cache on, every hit verified (O-69, FC-2)
+	@command -v cargo-nextest >/dev/null || { echo '  core    needs cargo-nextest: brew install cargo-nextest'; exit 1; }
 	@printf '  core    '
-	@$(PINNED) core sh -c 'cd $(CORE) && { cargo check -q -p core-wasm --target wasm32-unknown-unknown; w=$$?; PACIFIC_FOLD_CACHE_MODEL=core-suite PACIFIC_FOLD_CACHE_VERIFY=1 cargo test $(call PKGS,core) --no-fail-fast; t=$$?; exit $$(( w | t )); }'
+	@$(PINNED) core sh -c 'cd $(CORE) && { cargo check -q -p core-wasm --target wasm32-unknown-unknown; w=$$?; export PACIFIC_FOLD_CACHE_MODEL=core-suite PACIFIC_FOLD_CACHE_VERIFY=1; cargo nextest run $(call PKGS,core) --no-fail-fast --retries 0; t=$$?; cargo test $(call PKGS,core) --doc; d=$$?; exit $$(( w | t | d )); }'
 
 check-arc:  ## the Arc planes
 	@printf '  arc     '
