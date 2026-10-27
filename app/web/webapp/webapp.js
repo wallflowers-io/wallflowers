@@ -1203,6 +1203,14 @@
     });
     body.appendChild(opt('members', 'Members', (site.members || []).length + ' in it' + (owner ? '. Roles are yours to give.' : ''),
       function () { closeSettings(); if (narrowNow()) $('app').classList.add('roster'); else if (R.rf) fold('r'); }));
+    /* THE PAGE, taken down (base.unpublish on the Host): its address and publisher cleared, so
+       the Arc stops serving it. Only while it is published; what the web read stays read. */
+    var host = partsIn(site, 'host')[0], pub = host && M.byId[host.part] && (M.byId[host.part].view || {}).publication;
+    if (owner && pub) body.appendChild(opt('out', 'Take the page down', ADDRESS + pub.slug + ' stops being served', function () {
+      closeSettings();
+      door('/v2/apply', { method: 'POST', body: { object: host.part, op: 'base.unpublish', args: {} } })
+        .then(function () { toast('Taken down'); return load(); }, function (e) { toast(String(e && e.message || e)); });
+    }));
     if (owner) body.appendChild(opt('person', 'Add by contact code', null,
       function () { closeSettings(); addByCode(site); }));
     if (!owner) body.appendChild(el('p', { class: 'mnote', text: 'The owner changes this community: its face, its rooms, and who holds which role.' }));
@@ -2419,11 +2427,29 @@
       el('h1', { text: peer ? name : name }),
       el('p', { text: peer ? 'The start of your conversation.' : 'The start of #' + name + '.' })]));
     if (!peer && window.WallFlowers && window.WallFlowers.Rooms) window.WallFlowers.Rooms.header(col, o, { door: door, load: load, el: el, op: opDecl, me: M.me.pk, note: note });
+    if (!peer && site && site.owner === M.me.pk && o.owner === M.me.pk) col.appendChild(removeRoom(site, o));
     var ms = msgs(id), last = ms[ms.length - 1];
     messageList(col, ms, id);
     if (peer && last && last.author === M.me.pk && last.read > 0) col.appendChild(el('p', { class: 'readmark', text: 'Read' }));
     composeFor(id, peer ? name : '#' + name);
     receipt(id, ms);
+  }
+
+  /* REMOVE A ROOM from its Site (the owner of both): the Site's half of the edge (base.clearPart)
+     and the room's (base.clearParent), in one request. The room, its log and its roster stay;
+     it is no longer the Site's. A first tap asks, a second does it. */
+  function removeRoom(site, room) {
+    var why = el('span', { class: 'why' });
+    var b = el('button', { class: 'tb rmroom', type: 'button', text: 'Remove room' });
+    b.onclick = function () {
+      if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Remove from ' + titleOf(site) + '?'; return; }
+      busy(b, true);
+      batch([{ do: 'apply', object: site.id, op: 'base.clearPart', args: { part: room.id } },
+             { do: 'apply', object: room.id, op: 'base.clearParent', args: { parent: site.id } }])
+        .then(function (r) { if (r.refused) throw new Error(r.refused.why); return load().then(function () { open('feed', null, site.id); }); })
+        .then(null, function (e) { why.textContent = String(e && e.message || e); busy(b, false); });
+    };
+    return el('div', { class: 'rmrow' }, [b, why]);
   }
 
   /* READ (forum.receipt): what is on screen is read, said once for each message of another's,

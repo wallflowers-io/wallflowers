@@ -238,7 +238,11 @@ async def lane_rooms(A: J.Browser) -> str:
     await p.until("[...document.querySelectorAll('#mmenu .mm-acts button.del')].some(b => b.textContent === 'Delete for everyone')", "Delete for everyone", 10)
     await p.ev("[...document.querySelectorAll('#mmenu .mm-acts button.del')].find(b => b.textContent === 'Delete for everyone').click(), true")
     await p.until(f"!{row}", "the message gone", 60)
-    return "a room made, a message posted, reacted to and deleted, the description edited"
+    await press(p, ".rmroom")
+    await p.until("(document.querySelector('.rmroom')||{}).textContent?.startsWith('Remove from')", "Remove room, asked", 10)
+    await press(p, ".rmroom")
+    await p.until(f"!document.querySelector('.rmroom') && (document.querySelector('#pttl h2')||{{}}).textContent !== {js('# ' + room)}", "the room removed", 60)
+    return "a room made, a message posted, reacted to and deleted, the description edited, the room removed from the Site"
 
 
 async def person_card(p, name: str) -> None:
