@@ -50,7 +50,9 @@ tmp="${TMPDIR:-/tmp}"
 run="$(mktemp "${tmp%/}/pinned-$label.XXXXXXXX")"
 before="$(mktemp "${tmp%/}/pin-before.XXXXXXXX")"
 after="$(mktemp "${tmp%/}/pin-after.XXXXXXXX")"
-trap 'rm -f "$run" "$before" "$after"' EXIT
+# A green run's output goes with the run, unless PINNED_KEEP is set (the CI runners keep every
+# job's output, ~/wallflowers/dev/wf-runner/job-done.sh).
+if [ -n "${PINNED_KEEP:-}" ]; then trap 'rm -f "$before" "$after"' EXIT; else trap 'rm -f "$run" "$before" "$after"' EXIT; fi
 
 # Every source file git can see, tracked or not. Sorted, so the manifest is a
 # function of content and not of listing order. A subshell: the command runs where
