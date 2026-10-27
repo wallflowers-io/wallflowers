@@ -3822,12 +3822,11 @@ async fn o69_a_write_survives_a_sigkill_straight_after_its_answer() {
     assert!(seen_on(&http, &other, &who, &text, Duration::from_secs(30)).await, "the write reached the relay: another Door's device reads it");
 }
 
-/// NC-93 (O-69's write path: an answered write is held by this Door's seal alone until its
-/// tail publishes it). THE GUARANTEE THE WRITE PATH GAVE UP, kept red (D-11): before it, a
-/// write was at the relay when it was answered, so a Door that died at once lost nothing
-/// another device could not read. Now the publish follows the answer: with the relay 2 s
-/// away, a Door killed the moment its write answers leaves it where only its own seal holds
-/// it, and a sign-in on another Door does not see it. (The control: that Door sees the room.)
+/// NC-93, RD.7: AN ANSWERED WRITE IS AT THE RELAY. O-69 answered once the write was kept and
+/// published it after, so with the relay 2 s away a Door killed the moment its write answered
+/// left it where only its own seal held it. The publish is before the answer again (Ralph,
+/// 26 Oct: "the 200 should never be delivered until the operation is complete"); the webapp
+/// shows the write at once rather than waiting. (The control: the other Door sees the room.)
 #[tokio::test(flavor = "multi_thread")]
 async fn nc93_an_answered_write_is_at_the_relay_even_if_its_door_dies_at_once() {
     let (auth, relay) = (Auth::start(), Relay::start());
