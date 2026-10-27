@@ -43,6 +43,7 @@ pub mod host;
 pub mod parts;
 pub mod profiles;
 pub mod about;
+pub mod bundles;
 pub mod questions;
 pub mod rsvp;
 /// The standing facet: what one member of an object is to it. Any kind may

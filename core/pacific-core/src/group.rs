@@ -640,6 +640,8 @@ pub struct GroupState {
     pub about: BTreeMap<MemberId, crate::about::About>,
     /// The owner's and admins' questions and the members' answers (`crate::questions`).
     pub questions: crate::questions::Questions,
+    /// Each member's own offers of contact bundles (`crate::bundles`), by author and kp_id.
+    pub bundles: crate::bundles::Bundles,
     /// The group's public address and the member that serves it — the SITE face.
     /// Default is unpublished, so a group that predates the facet stays private.
     pub publication: publication::Publication,
@@ -975,6 +977,20 @@ static GROUP_OPS: &[OpDecl] = &[
         authority: Authority::OwnerOrRole(GroupRole::Admin),
         commutativity: Commutativity::Commutative,
     },
+    // The base BUNDLES facet (#12), spliced: `base_bundle_ops_are_spliced_verbatim` pins it to
+    // `BUNDLE_OPS`.
+    OpDecl {
+        op_id: crate::bundles::OP_OFFER_BUNDLE,
+        name: "base.offerBundle",
+        authority: Authority::AnyMember,
+        commutativity: Commutativity::Commutative,
+    },
+    OpDecl {
+        op_id: crate::bundles::OP_WITHDRAW_BUNDLE,
+        name: "base.withdrawBundle",
+        authority: Authority::AnyMember,
+        commutativity: Commutativity::Commutative,
+    },
     // ---- base membership op-group, spliced verbatim -------------------------
     // Duplicated rather than referenced because `membership::MEMBERSHIP_OPS` is a
     // `static` and Rust cannot read a static in a const initialiser (the same
@@ -1209,6 +1225,9 @@ impl ObjectType for GroupType {
         }
         if crate::questions::is_question_op(op.op_id) {
             return crate::questions::reduce_questions(&mut state.questions, &state.member_roles, op);
+        }
+        if crate::bundles::is_bundle_op(op.op_id) {
+            return crate::bundles::reduce_bundles(&mut state.bundles, op);
         }
         if matches!(op.op_id, OP_RSVP | OP_SET_REGISTRATION | OP_RSVP_DECIDE) {
             return crate::rsvp::reduce(state, op);

@@ -585,6 +585,7 @@ pub fn view_of(
             v["registration"] = registration;
             v["about"] = crate::about::view(&st.about, &roster);
             v["questions"] = crate::questions::view(&st.questions, &roster);
+            v["bundles"] = crate::bundles::view(&st.bundles, &roster);
             // The group's own card (group.setProfile): on the self record, the person's own
             // name and picture, as they see them (webapp REQUIREMENTS § 3). A card never written
             // is null, not an object of empty fields claiming one.

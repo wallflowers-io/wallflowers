@@ -10,7 +10,7 @@
  * it. That is the whole reason this file is generated — the audit found four
  * hand-maintained layers between the model and a screen and no two agreed.
  *
- * 141 ops · 138 reachable · 3 not, each with its reason.
+ * 143 ops · 140 reachable · 3 not, each with its reason.
  *
  * AN UNREACHABLE OP IS STILL LISTED. It has no author function, and asking for
  * one throws with the reason. A client that cannot see what it cannot do will
@@ -34,6 +34,7 @@
     "base.defineQuestion": {name:"base.defineQuestion", prefix:"base", opId:4027318272, authority:"owner|role:admin", fold:"commutative", reachable:true, why:null, fields:[{name:"free",type:"integer",required:false}, {name:"hint",type:"string",required:false}, {name:"max",type:"integer",required:false}, {name:"multi",type:"integer",required:false}, {name:"options",type:"string",required:false}, {name:"text",type:"string",required:true}, {name:"textMax",type:"integer",required:false}]},
     "base.memberJoined": {name:"base.memberJoined", prefix:"base", opId:4026597376, authority:"anyMember", fold:"commutative", reachable:false, why:"recorded by the MLS doors, never authored as a delta", fields:[{name:"at",type:"integer",required:true}, {name:"member",type:"string",required:true}]},
     "base.memberLeft": {name:"base.memberLeft", prefix:"base", opId:4026597377, authority:"anyMember", fold:"commutative", reachable:false, why:"recorded by the MLS doors, never authored as a delta", fields:[{name:"at",type:"integer",required:true}, {name:"member",type:"string",required:true}, {name:"reason",type:"string",required:false}]},
+    "base.offerBundle": {name:"base.offerBundle", prefix:"base", opId:4027383808, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"bundle",type:"string",required:true}, {name:"kp_id",type:"string",required:true}, {name:"not_after",type:"integer",required:true}]},
     "base.ownerHandover": {name:"base.ownerHandover", prefix:"base", opId:4026597378, authority:"owner", fold:"sequenced", reachable:false, why:"recorded by the MLS doors, never authored as a delta", fields:[{name:"at",type:"integer",required:true}, {name:"member",type:"string",required:true}]},
     "base.publish": {name:"base.publish", prefix:"base", opId:4026728448, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"publisher",type:"string",required:true}, {name:"slug",type:"string",required:true}]},
     "base.publishAbout": {name:"base.publishAbout", prefix:"base", opId:4027252736, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"bio",type:"string",required:true}, {name:"links",type:"string",required:false}]},
@@ -46,6 +47,7 @@
     "base.setRole": {name:"base.setRole", prefix:"base", opId:4026990592, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"member",type:"string",required:true}, {name:"role",type:"string",required:true}]},
     "base.setVisibility": {name:"base.setVisibility", prefix:"base", opId:4026662912, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"visibility",type:"string",required:true}]},
     "base.unpublish": {name:"base.unpublish", prefix:"base", opId:4026728449, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[]},
+    "base.withdrawBundle": {name:"base.withdrawBundle", prefix:"base", opId:4027383809, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"kp_id",type:"string",required:true}]},
     "contact.admitTicket": {name:"contact.admitTicket", prefix:"contact", opId:11, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"admittedMs",type:"integer",required:true}, {name:"ticket",type:"string",required:true}]},
     "contact.deliverTicket": {name:"contact.deliverTicket", prefix:"contact", opId:6, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"listing",type:"string",required:true}, {name:"ticket",type:"string",required:true}, {name:"tickets",type:"string",required:true}]},
     "contact.discoverRequest": {name:"contact.discoverRequest", prefix:"contact", opId:7, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"budget",type:"integer",required:true}, {name:"hops",type:"integer",required:true}, {name:"kind",type:"string",required:true}, {name:"origin",type:"string",required:true}, {name:"rid",type:"string",required:true}, {name:"tags",type:"string",required:false}]},
@@ -224,6 +226,7 @@
   api.baseDefineQuestion = function (a) { return draft("base.defineQuestion", a); };
   api.baseMemberJoined = function (a) { return draft("base.memberJoined", a); };
   api.baseMemberLeft = function (a) { return draft("base.memberLeft", a); };
+  api.baseOfferBundle = function (a) { return draft("base.offerBundle", a); };
   api.baseOwnerHandover = function (a) { return draft("base.ownerHandover", a); };
   api.basePublish = function (a) { return draft("base.publish", a); };
   api.basePublishAbout = function (a) { return draft("base.publishAbout", a); };
@@ -236,6 +239,7 @@
   api.baseSetRole = function (a) { return draft("base.setRole", a); };
   api.baseSetVisibility = function (a) { return draft("base.setVisibility", a); };
   api.baseUnpublish = function (a) { return draft("base.unpublish", a); };
+  api.baseWithdrawBundle = function (a) { return draft("base.withdrawBundle", a); };
   api.contactAdmitTicket = function (a) { return draft("contact.admitTicket", a); };
   api.contactDeliverTicket = function (a) { return draft("contact.deliverTicket", a); };
   api.contactDiscoverRequest = function (a) { return draft("contact.discoverRequest", a); };

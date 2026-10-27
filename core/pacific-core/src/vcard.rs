@@ -569,6 +569,7 @@ mod tests {
             rsvps: Default::default(),
             about: Default::default(),
             questions: Default::default(),
+            bundles: Default::default(),
             claim_issuers: Default::default(),
             claims_spent: Default::default(),
             claims_picked: Default::default(),

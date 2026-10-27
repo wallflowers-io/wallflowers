@@ -1,6 +1,6 @@
 {
   "model": "wallflowers/delta-graph",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "summary": "The interface between a GroupObject's delta log and its projection into the",
   "glossary": {
     "kind": "what an object is: group, forum, post, …",
@@ -1017,6 +1017,64 @@
       },
       "view": {
         "questions": "[{author, gen, text, options, multi, free, retired, answers: {<member key>: {text, choices, gen}}, tally: [count per option]}]: questions whose author counts, oldest first; answers from members on the roster only"
+      }
+    },
+    "bundles": {
+      "summary": "each member's own offer of contact bundles in a Site, so that another member can pair with them privately",
+      "note": "W-98 Members, #12: connect from a member's card. Band 0xF00D. Ruled 30 Sep (Software Assurance): pending connection invitations stay pairwise and off the Site, because every member and every later member reads its log. So the Site carries only each member's own offer, never who asked whom. A member who wants to connect takes one of the other's live bundles and pairs with it as from a contact code (pair_scan); the invitation is that pairing's own contact.setLink. The offering member withdraws a bundle once a Welcome has used its key package, which mls-rs deletes on use. Ruled out: a request on the Site (the ruling); a bundle in base.publishProfile's card (one key package, used once, shared by every member).",
+      "on": [
+        "group"
+      ],
+      "ops": {
+        "base.offerBundle": {
+          "op": 4027383808,
+          "ego": "member",
+          "fold": "commutative",
+          "summary": "The author's own contact bundle, offered to the Site's members. The bundle's identity must be the author's and its key package must hash to kp_id, or it is refused. Live until the author withdraws it: a withdrawal is final for that kp_id, so offer and withdrawal commute.",
+          "args": {
+            "kp_id": {
+              "type": "string",
+              "required": true,
+              "summary": "the key package's id, 64 hex (contact::kp_id), of the bundle's key package"
+            },
+            "bundle": {
+              "type": "string",
+              "required": true,
+              "summary": "a contact bundle, as a contact code carries one (handshake::build_bundle, base64)"
+            },
+            "not_after": {
+              "type": "integer",
+              "required": true,
+              "summary": "unix seconds: the key package's own expiry, past which a pairing with it is refused"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this group's log, the Lamport generation"
+            }
+          }
+        },
+        "base.withdrawBundle": {
+          "op": 4027383809,
+          "ego": "member",
+          "fold": "commutative",
+          "summary": "The author withdraws one of their own offers, final for that kp_id: once a Welcome has used its key package, or to retire it. A withdrawal of another member's kp_id withdraws nothing.",
+          "args": {
+            "kp_id": {
+              "type": "string",
+              "required": true,
+              "summary": "the key package's id, 64 hex (contact::kp_id), of the bundle's key package"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this group's log, the Lamport generation"
+            }
+          }
+        }
+      },
+      "view": {
+        "bundles": "{<member key>: [{kp_id, bundle, not_after}]}: live offers of members on the roster only"
       }
     }
   },

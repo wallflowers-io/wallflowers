@@ -1095,8 +1095,10 @@ mod tests {
         if !unprobed.is_empty() {
             eprintln!("{} op(s) never folded, so their declared args are not held to reads:\n{}", unprobed.len(), unprobed.join("\n"));
         }
-        const NEVER_FOLD: [&str; 5] = [
+        const NEVER_FOLD: [&str; 6] = [
             "group: group.clearClaimIssuer",
+            // Its bundle must be signed by its author, and a probe's author has no secret key.
+            "group: base.offerBundle",
             "project: project.addDependency",
             "project: project.removeDependency",
             "project: project.touchSubscription",
