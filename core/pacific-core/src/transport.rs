@@ -234,4 +234,38 @@ mod tests {
         assert_eq!(msgs[0].0, tag);
         assert_eq!(msgs[0].2, payload);
     }
+
+    /// A drain is answered with several small frames back to back (each message, then Eose).
+    /// With Nagle's algorithm on, Linux holds the second until the first is ACKed, and the
+    /// ACK is delayed ~40 ms: core's MLS suites ran ~6x slower on Linux than on macOS.
+    #[tokio::test]
+    async fn thirty_drains_are_answered_within_a_second() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { relay::serve(listener).await });
+
+        let at = Address::from_seed(&[0x43u8; 32]);
+        let url = format!("ws://{addr}");
+        let mut s = RelaySession::connect(&url).await.unwrap();
+        for i in 0..3u8 {
+            s.publish(&at, blob_b64(&[i])).await.unwrap();
+        }
+        let started = std::time::Instant::now();
+        for _ in 0..30 {
+            assert_eq!(s.drain(vec![at.tag_hex()], 0).await.unwrap().len(), 3);
+        }
+        let took = started.elapsed();
+        assert!(took < std::time::Duration::from_secs(1), "30 drains took {took:?}");
+    }
+
+    #[tokio::test]
+    async fn the_relay_socket_does_not_wait_to_coalesce() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { relay::serve(listener).await });
+
+        let ws = RelaySession::connect(&format!("ws://{addr}")).await.unwrap().into_socket();
+        let MaybeTlsStream::Plain(tcp) = ws.get_ref() else { panic!("a ws:// relay is plain TCP") };
+        assert!(tcp.nodelay().unwrap(), "TCP_NODELAY is off");
+    }
 }
