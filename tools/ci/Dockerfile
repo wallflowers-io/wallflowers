@@ -6,6 +6,8 @@ ARG NODE=v24.22.1
 ARG NODE_SHA=dbabf7a1cbf947e6059ffad2c27b80041db97dea1e553b62afdee7f13fca336e
 ARG RUNNER=2.338.2
 ARG RUNNER_SHA=670adb2f268fe21dcbb58b3db0e0aa9d5b3bddfe2c651481336e561ff86de945
+ARG NEXTEST=0.9.149
+ARG NEXTEST_SHA=6f82e375187cf3a1f3e336879a51940c315a5d0ce7253f7e517ad28295b74189
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -q && apt-get install -yq --no-install-recommends \
@@ -16,6 +18,10 @@ RUN apt-get update -q && apt-get install -yq --no-install-recommends \
 RUN curl -fsSL -o /tmp/node.tar.xz https://nodejs.org/dist/$NODE/node-$NODE-linux-arm64.tar.xz \
     && echo "$NODE_SHA  /tmp/node.tar.xz" | sha256sum -c - \
     && tar -xJ -C /opt -f /tmp/node.tar.xz && ln -s /opt/node-$NODE-linux-arm64 /opt/node && rm /tmp/node.tar.xz
+
+RUN curl -fsSL -o /tmp/nx.tgz https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$NEXTEST/cargo-nextest-$NEXTEST-aarch64-unknown-linux-gnu.tar.gz \
+    && echo "$NEXTEST_SHA  /tmp/nx.tgz" | sha256sum -c - \
+    && tar xzf /tmp/nx.tgz -C /usr/local/bin cargo-nextest && rm /tmp/nx.tgz
 
 # initdb refuses root: the door tests start their own clusters from PG_BIN.
 RUN useradd -m -s /bin/bash runner
