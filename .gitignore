@@ -8,3 +8,6 @@ __pycache__/
 
 # The Flower route (D-45): a local Python virtualenv and checkpoints, never published.
 arc/library/flower/
+
+# The one Rust workspace's build output.
+/target/
