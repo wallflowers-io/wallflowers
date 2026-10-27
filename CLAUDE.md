@@ -83,13 +83,20 @@ Failing tests inform fixes or PRs. Weakening a test for a 'special case' or unim
 ## Changes
 
 - One worktree per branch: `git worktree add ~/wallflowers/wt/<name> -b <type>/<name> origin/main`.
-- CI (`.github/workflows/ci.yml`) runs on Ralph's pushes only, on `wf-runner`, a Lima VM on his Mac: one job at a time, queued while the Mac sleeps. It is built by `~/wallflowers/dev/wf-runner/up.sh`.
+- CI (`.github/workflows/ci.yml`) runs on Ralph's pushes only, on the build VM (§ Build).
 - `icd`, `auth`, `core`, `arc` and `door` must pass before a merge to `main`. A known red is named in the PR with its NC.
 - Squash merge: `gh pr merge <n> --squash --delete-branch --author-email 49734093+phezman@users.noreply.github.com`. No personal address enters public history.
 
+## Build
+
+- **Build happens on the VM.** CI's suites and the deploys' builds run in one VM on Ralph's Mac, GitHub Actions' only runner for this repository. Not on the Mac itself.
+- **Exactly one harness.** One VM, one runner setup, one build target. No session starts a second runner, VM, scaler or agent, nor runs a suite beside the VM's.
+- **Scale to zero.** The VM starts when GitHub has a job for it and stops when there is none. Nothing persists between jobs: no agent, no idle VM.
+- A change to the harness is one PR, on Ralph's word.
+
 ## Deploy
 
-`.github/workflows/deploy.yml`, from `main`, on the same runner. Each run waits for approval in the `production` environment, which holds the deploy key.
+`.github/workflows/deploy.yml`, from `main`, on the build VM. Each run waits for approval in the `production` environment, which holds the deploy key.
 
 | Route | Ships | Restart |
 |---|---|---|
