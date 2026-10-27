@@ -5,7 +5,7 @@
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message as Ws;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{connect_async_with_config, MaybeTlsStream, WebSocketStream};
 
 use pacific_wire::address::Address;
 use pacific_wire::Frame;
@@ -50,7 +50,7 @@ impl RelaySession {
     pub async fn connect(url: &str) -> Result<Self, CoreError> {
         ensure_crypto_provider();
         DIALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let (ws, _) = connect_async(url)
+        let (ws, _) = connect_async_with_config(url, None, true)  // true: TCP_NODELAY
             .await
             .map_err(|e| CoreError::Transport(format!("connect {url}: {e}")))?;
         Ok(Self { ws })
