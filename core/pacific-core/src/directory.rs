@@ -244,6 +244,14 @@ CREATE TABLE IF NOT EXISTS profile_publish (
 -- The Site offers (base.offerBundle, #12) THIS DEVICE made: their key packages are its own, so
 -- an offer here whose package it no longer holds has been used by a Welcome and is withdrawn.
 -- Another device's offers are never in it, and it never withdraws them for not holding them.
+-- The leaves (devices) of each connection that this device last restated its own standing
+-- for — its link and its card (Node::restate_standing). A device joining a connection late reads
+-- no earlier epoch, so a new leaf set is restated to.
+CREATE TABLE IF NOT EXISTS standing_restated (
+  group_id  BLOB PRIMARY KEY,
+  digest    BLOB NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS bundle_offer (
   kp_id     BLOB PRIMARY KEY,
   group_id  BLOB NOT NULL
@@ -853,6 +861,24 @@ impl Directory {
             "INSERT INTO profile_publish (group_id, digest, at) VALUES (?1, ?2, ?3)
              ON CONFLICT(group_id) DO UPDATE SET digest=excluded.digest, at=excluded.at",
             params![group_id, digest, at],
+        )?;
+        Ok(())
+    }
+
+    /// The leaf set this device last restated its standing for on connection `group_id`.
+    pub fn standing_digest(&self, group_id: &[u8]) -> Result<Option<Vec<u8>>, CoreError> {
+        Ok(self
+            .conn
+            .query_row("SELECT digest FROM standing_restated WHERE group_id=?1", params![group_id], |r| r.get::<_, Vec<u8>>(0))
+            .optional()?)
+    }
+
+    /// Record that this device restated its standing on `group_id` for the leaf set `digest`.
+    pub fn set_standing_digest(&self, group_id: &[u8], digest: &[u8]) -> Result<(), CoreError> {
+        self.conn.execute(
+            "INSERT INTO standing_restated (group_id, digest) VALUES (?1, ?2)
+             ON CONFLICT(group_id) DO UPDATE SET digest=excluded.digest",
+            params![group_id, digest],
         )?;
         Ok(())
     }

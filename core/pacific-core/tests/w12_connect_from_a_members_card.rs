@@ -130,4 +130,9 @@ async fn a_connection_made_from_a_card_survives_a_device_that_never_saw_it() {
     h.settle_among(&[0, fresh]).await;
     let seen = h.node(fresh).dm_transcript(&h.id(0)).expect("the transcript");
     assert!(seen.iter().any(|l| l.contains("after it")), "{seen:?}");
+    // And it speaks: ben's answer from the new device reaches ada.
+    h.node(fresh).author_post(&h.id(0), "from the new device").await.expect("ben answers from the new device");
+    h.settle_among(&[0, fresh]).await;
+    let seen = h.node(0).dm_transcript(&h.id(1)).expect("ada's transcript");
+    assert!(seen.iter().any(|l| l.contains("from the new device")), "{seen:?}");
 }

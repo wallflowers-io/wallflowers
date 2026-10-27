@@ -408,6 +408,10 @@ pub struct HistorySent {
     pub cards: usize,
     pub card_bundles: usize,
     pub cards_unsent: usize,
+    /// The members' live offers of contact bundles (#12, `facets.bundles`), in their own
+    /// bundles after the cards, within what the cards left of the same total.
+    pub offers: usize,
+    pub offers_unsent: usize,
     /// The spine's bundle sealed, in base64 characters, as the relay measures a blob against
     /// `HISTORY_MAX_B64`; 0 when none goes.
     pub sealed: usize,
@@ -939,9 +943,8 @@ impl Node {
         if self.folded_contact(group_id)?.wants_link(&self.id.identity_pk()) {
             return Ok(());
         }
-        self.apply(&hex::encode(group_id), crate::contact::OP_SET_LINK, crate::contact::set_link_args(true))
-            .await
-            .map(|_| ())
+        self.apply(&hex::encode(group_id), crate::contact::OP_SET_LINK, crate::contact::set_link_args(true)).await?;
+        self.note_standing(group_id)
     }
 
     /// Connect with `peer`, a member of the Site `site`, from their card (#12). The Site holds
@@ -988,9 +991,61 @@ impl Node {
         if active {
             return self.want_link(&gid).await;
         }
-        self.apply(&hex::encode(&gid), crate::contact::OP_SET_LINK, crate::contact::set_link_args(false))
-            .await
-            .map(|_| ())
+        self.apply(&hex::encode(&gid), crate::contact::OP_SET_LINK, crate::contact::set_link_args(false)).await?;
+        self.note_standing(&gid)
+    }
+
+    /// This side's own standing rows on each connection — its `contact.setLink` and its card —
+    /// written again when the connection's leaves (its devices) are not the ones this device
+    /// last wrote them for: a device that joined late reads no earlier epoch (ICD
+    /// mls.historyPolicy, `contact`). Both are per-author last-writer-wins, so on a device that
+    /// had them the restatement changes nothing. Returns the connections restated.
+    pub async fn restate_standing(&self) -> Result<usize, CoreError> {
+        let me = self.id.identity_pk();
+        let mut restated = 0;
+        for (gid, kind) in self.dir.all_groups()? {
+            if kind != "connection" {
+                continue;
+            }
+            let Ok(digest) = self.leaf_digest(&gid) else { continue };
+            match self.dir.standing_digest(&gid)? {
+                Some(was) if was == digest => continue,
+                // First seen here: nothing was missed by a device that had no record of it.
+                None => {
+                    self.dir.set_standing_digest(&gid, &digest)?;
+                    continue;
+                }
+                Some(_) => {}
+            }
+            let wish = self.folded_contact(&gid)?.links.get(&me).map(|w| w.active);
+            if let Some(active) = wish {
+                self.apply(&hex::encode(&gid), crate::contact::OP_SET_LINK, crate::contact::set_link_args(active)).await?;
+            }
+            let (name, shape, card) = self.my_profile()?;
+            self.publish_profile_into(&gid, &name, shape, &card).await?;
+            self.dir.set_standing_digest(&gid, &digest)?;
+            restated += 1;
+        }
+        Ok(restated)
+    }
+
+    /// The leaves (devices) of connection `gid`, as one digest: who holds which leaf.
+    fn leaf_digest(&self, gid: &[u8]) -> Result<Vec<u8>, CoreError> {
+        use sha2::Digest;
+        let (sid, sk, _n) = self.signer()?;
+        let client = mls::build_client_sqlite(&paths::db_path(), sid, sk)?;
+        let group = mls::load_group(&client, gid)?;
+        let mut leaves: Vec<([u8; 32], u32)> = mls::roster_identities(&group)?
+            .iter()
+            .flat_map(|p| mls::leaves_of(&group, p).into_iter().map(move |l| (*p, l)))
+            .collect();
+        leaves.sort();
+        Ok(leaves.iter().fold(sha2::Sha256::new(), |h, (p, l)| h.chain_update(p).chain_update(l.to_be_bytes())).finalize().to_vec())
+    }
+
+    /// This side's standing was just written on connection `gid`: the devices it reached.
+    fn note_standing(&self, gid: &[u8]) -> Result<(), CoreError> {
+        self.dir.set_standing_digest(gid, &self.leaf_digest(gid)?)
     }
 
     /// The link with `peer` from this side, or None with no connection.
@@ -4355,17 +4410,32 @@ impl Node {
         }
         let mut cards: Vec<((u64, [u8; 32]), Row)> = latest.into_values().collect();
         cards.sort_by(|a, b| b.0.cmp(&a.0));
-        // AND EACH CURRENT MEMBER'S LIVE OFFERS (#12, `facets.bundles`), after the cards: a joiner
-        // reads no epoch before its own, and an offer is how it reaches someone from their card.
-        cards.extend(self.offers_of(&group_id, joiner, &roster)?);
+        let (bundles, sent, unsent, _) = self.pack(&group_id, joiner, intro_tag, cards.into_iter().map(|(_, r)| r), blob, total)?;
+        Ok((bundles, sent, unsent))
+    }
+
+    /// `rows`, in order, packed into `history` bundles each within `blob` bytes encoded (never
+    /// more than `history::CAP`, nor the relay's sealed measure), each signed by this Node, to at
+    /// most `total` bytes of encoded bundles: the bundles, the rows in them, the rows that did
+    /// not go, and the bytes used.
+    fn pack(
+        &self,
+        group_id: &[u8],
+        joiner: &[u8; 32],
+        intro_tag: &[u8; 32],
+        rows: impl IntoIterator<Item = crate::history::Row>,
+        blob: usize,
+        total: usize,
+    ) -> Result<(Vec<crate::history::Bundle>, usize, usize, usize), CoreError> {
+        use crate::history::{encode, sign, Row, CAP};
         let fits = |rows: &[Row]| -> Result<Option<usize>, CoreError> {
-            let plain = encode(&sign(&self.id, &group_id, joiner, rows.to_vec()));
+            let plain = encode(&sign(&self.id, group_id, joiner, rows.to_vec()));
             let sealed = pacific_wire::blob_b64(&seal::seal(&plain, intro_tag, intro_tag)?).len();
             Ok((plain.len() <= blob.min(CAP) && sealed <= HISTORY_MAX_B64).then_some(plain.len()))
         };
         let (mut bundles, mut current, mut used, mut sent, mut unsent) = (Vec::new(), Vec::<Row>::new(), 0usize, 0usize, 0usize);
         let mut full = false;
-        for (_, card) in cards {
+        for card in rows {
             if full {
                 unsent += 1;
                 continue;
@@ -4377,7 +4447,7 @@ impl Node {
                 continue;
             }
             if current.is_empty() {
-                unsent += 1; // one card alone over a blob
+                unsent += 1; // one row alone over a blob
                 continue;
             }
             // Close the bundle that is full, if the admission's total still holds it.
@@ -4390,7 +4460,7 @@ impl Node {
             }
             used += bytes;
             sent += current.len();
-            bundles.push(sign(&self.id, &group_id, joiner, std::mem::take(&mut current)));
+            bundles.push(sign(&self.id, group_id, joiner, std::mem::take(&mut current)));
             if fits(std::slice::from_ref(&card))?.is_some() {
                 current.push(card);
             } else {
@@ -4402,11 +4472,12 @@ impl Node {
             if used + bytes > total {
                 unsent += current.len();
             } else {
+                used += bytes;
                 sent += current.len();
-                bundles.push(sign(&self.id, &group_id, joiner, current));
+                bundles.push(sign(&self.id, group_id, joiner, current));
             }
         }
-        Ok((bundles, sent, unsent))
+        Ok((bundles, sent, unsent, used))
     }
 
     /// O-75: send `object_hex`'s history (`history_of`) to a joiner's intro mailbox, after its
@@ -4483,8 +4554,18 @@ impl Node {
         intro_tag: &[u8; 32],
     ) -> Result<HistoryPlan, CoreError> {
         let (bundle, mut report) = self.history_of(object_hex, joiner, intro_tag)?;
-        let (cards, sent, unsent) = self.cards_of(object_hex, joiner, intro_tag, crate::history::CAP, cards_max()?)?;
+        let (mut cards, sent, unsent) = self.cards_of(object_hex, joiner, intro_tag, crate::history::CAP, cards_max()?)?;
         (report.cards, report.card_bundles, report.cards_unsent) = (sent, cards.len(), unsent);
+        // AND EACH CURRENT MEMBER'S LIVE OFFERS (#12, `facets.bundles`), after the cards and in
+        // what they left of the total: a joiner reads no epoch before its own, and an offer is how
+        // it reaches a member from their card.
+        let used: usize = cards.iter().map(|b| crate::history::encode(b).len()).sum();
+        let group_id = self.object_group_id(object_hex)?;
+        let roster: std::collections::HashSet<[u8; 32]> = self.object_members(object_hex)?.into_iter().collect();
+        let offers = self.offers_of(&group_id, joiner, &roster)?.into_iter().map(|(_, r)| r);
+        let (more, sent, unsent, _) = self.pack(&group_id, joiner, intro_tag, offers, crate::history::CAP, cards_max()?.saturating_sub(used))?;
+        (report.offers, report.offers_unsent) = (sent, unsent);
+        cards.extend(more);
         let bundle = bundle.filter(|b| !b.rows.is_empty());
         if bundle.is_none() {
             report.sealed = 0;
@@ -5697,6 +5778,7 @@ impl Node {
             Some(gen),
         );
         self.append_and_flush(&mut group, group_id, delta).await?;
+        self.note_standing(group_id)?;
         Ok(true)
     }
 
@@ -10636,6 +10718,16 @@ impl Node {
             Ok(0) => {}
             Ok(n) => tracing::info!(offers = n, "replenished prekey offers"),
             Err(e) => tracing::warn!(error = %e, "prekey replenishment failed this sync"),
+        }
+
+        // 5b. MY STANDING ON EACH CONNECTION, RESTATED TO A DEVICE IT HAS NOT SEEN. A contact
+        //     shares no history (mls.historyPolicy), so a device that joins a connection late
+        //     reads none of its earlier rows: without this, the other side's link and card
+        //     never reach it, and a linked connection reads "invited" there.
+        match boxed(|| self.restate_standing()).await {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(connections = n, "my link and card restated to new devices"),
+            Err(e) => tracing::warn!(error = %e, "my standing could not be restated this sync"),
         }
 
         // 6. THE POOL (resumption.md §6.5): renew, evict, provision, and publish what
