@@ -801,12 +801,13 @@
       .then(function () { busy(btn, false); });
   }
   function unmakeAdmin(site, pk, btn) {
-    var host = partsIn(site, 'host')[0];
+    var host = partsIn(site, 'host')[0], hostObj = host && M.byId[host.part];
+    function holds(o) { return ((o && o.view && o.view.roles) || []).some(function (x) { return x[0] === pk; }); }
     function clear(obj) { return door('/v2/apply', { method: 'POST', body: { object: obj, op: 'base.clearRole', args: { member: pk } } }); }
     busy(btn, true);
-    clear(site.id).then(function () { return host ? clear(host.part).catch(function () {}) : null; })
+    clear(site.id).then(function () { return holds(hostObj) ? clear(host.part).catch(function () {}) : null; })
       .then(function () {
-        return Promise.all(roomsOf(site).filter(function (r) { return ((r.view && r.view.roles) || []).some(function (x) { return x[0] === pk; }); })
+        return Promise.all(roomsOf(site).filter(holds)
           .map(function (r) { return clear(r.id).catch(function () {}); }));
       })
       .then(function () { return load().then(function () { personCard(pk); }); },
