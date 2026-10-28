@@ -14,7 +14,7 @@ pub mod vec;
 pub mod space_calibration;
 pub mod chromodynamics;
 pub mod spectral;
-pub mod ontology_anchors;
+pub mod kind_anchor;
 pub mod attitude;
 pub mod coarsening;
 pub mod transmission;

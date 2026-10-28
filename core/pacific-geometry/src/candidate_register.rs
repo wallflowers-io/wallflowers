@@ -44,7 +44,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::chromodynamics::{self, Charge};
 use crate::coarsening::{self, PyramidParams};
-use crate::ontology_anchors::KindAnchor;
+use crate::kind_anchor::KindAnchor;
 use crate::space_calibration::SpaceCalibration;
 use crate::transmission::TransmissionEpisode;
 use crate::vec::{dot, normalize};
@@ -396,7 +396,7 @@ pub fn identify(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology_anchors::OntologyKind;
+    use crate::kind_anchor::OntologyKind;
 
     const DAY: u64 = 24 * 3_600_000;
 
