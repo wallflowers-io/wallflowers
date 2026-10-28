@@ -1,8 +1,8 @@
 # The four deploys, each a Makefile target, chosen when the run is started. Only from main,
 # only by Ralph, only in the production environment (its reviewers approve each run; its secret
 # is the deploy key), one run at a time. Order when several are chosen: arc, door, app; docs apart.
-# Built on wf-runner (label wf-mac), the Lima VM on Ralph's Mac. The runner persists between
-# jobs, so the key and the ssh config are removed when each job ends.
+# Built on Ralph's Mac (label wf-ci) while `make ci` serves: start it after dispatching. Each job's
+# container, holding the key, is deleted when the job ends.
 
 name: deploy
 
@@ -40,7 +40,7 @@ env:
 jobs:
   arc:
     if: inputs.arc && github.ref == 'refs/heads/main' && github.actor == 'phezman'
-    runs-on: [self-hosted, wf-mac]
+    runs-on: [self-hosted, wf-ci]
     environment: production
     timeout-minutes: 60
     steps:
@@ -62,15 +62,11 @@ jobs:
           printf '%s\n' "$KEY" > "$DEPLOY_KEY" && chmod 0600 "$DEPLOY_KEY"
           printf 'Host *\n  UserKnownHostsFile %s\n  StrictHostKeyChecking yes\n' "$GITHUB_WORKSPACE/.github/known_hosts" > ~/.ssh/config
       - run: make deploy-arc
-      - &unkey
-        name: remove the deploy key
-        if: always()
-        run: rm -f "$DEPLOY_KEY" ~/.ssh/config
 
   door:
     needs: arc
     if: ${{ !cancelled() && !failure() && inputs.door && github.ref == 'refs/heads/main' && github.actor == 'phezman' }}
-    runs-on: [self-hosted, wf-mac]
+    runs-on: [self-hosted, wf-ci]
     environment: production
     timeout-minutes: 60
     steps:
@@ -78,12 +74,11 @@ jobs:
       - *clean
       - *ssh
       - run: make deploy-door
-      - *unkey
 
   app:
     needs: door
     if: ${{ !cancelled() && !failure() && inputs.app && github.ref == 'refs/heads/main' && github.actor == 'phezman' }}
-    runs-on: [self-hosted, wf-mac]
+    runs-on: [self-hosted, wf-ci]
     environment: production
     timeout-minutes: 15
     steps:
@@ -91,11 +86,10 @@ jobs:
       - *clean
       - *ssh
       - run: make deploy-app
-      - *unkey
 
   docs:
     if: inputs.docs && github.ref == 'refs/heads/main' && github.actor == 'phezman'
-    runs-on: [self-hosted, wf-mac]
+    runs-on: [self-hosted, wf-ci]
     environment: production
     timeout-minutes: 15
     steps:
@@ -103,4 +97,3 @@ jobs:
       - *clean
       - *ssh
       - run: make deploy-docs
-      - *unkey

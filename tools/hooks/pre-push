@@ -1,0 +1,5 @@
+#!/bin/sh
+# A push queues CI for the runner on this Mac: serve it, in the background, never blocking the push.
+# A second start while one serves exits at once. ci.sh logs to its CI_LOGS (CLAUDE.md § Build).
+nohup "$HOME/wallflowers/dev/ci.sh" >/dev/null 2>&1 < /dev/null &
+exit 0
