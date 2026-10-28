@@ -8,6 +8,9 @@ ARG RUNNER=2.338.2
 ARG RUNNER_SHA=670adb2f268fe21dcbb58b3db0e0aa9d5b3bddfe2c651481336e561ff86de945
 ARG NEXTEST=0.9.149
 ARG NEXTEST_SHA=6f82e375187cf3a1f3e336879a51940c315a5d0ce7253f7e517ad28295b74189
+ARG RUST=1.99.1
+ARG RUSTUP=1.29.2
+ARG RUSTUP_SHA=a9c168dbea81a84671c6b7a5c1795cb0eb699020110d107ddfca427bd797e697
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -q && apt-get install -yq --no-install-recommends \
@@ -31,9 +34,15 @@ RUN curl -fsSL -o /tmp/r.tgz https://github.com/actions/runner/releases/download
     && tar xzf /tmp/r.tgz && rm /tmp/r.tgz && ./bin/installdependencies.sh >/dev/null \
     && mkdir _work && chown -R runner:runner /home/runner
 
+# The job-started hook (job-started.sh): root's, so a job cannot change it.
+COPY --chmod=0555 job-started.sh /opt/ci/job-started.sh
+ENV ACTIONS_RUNNER_HOOK_JOB_STARTED=/opt/ci/job-started.sh
+
 USER runner
-RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable \
-      -t wasm32-unknown-unknown -t x86_64-unknown-linux-gnu \
+RUN curl -fsSL -o /tmp/rustup-init https://static.rust-lang.org/rustup/archive/$RUSTUP/aarch64-unknown-linux-gnu/rustup-init \
+    && echo "$RUSTUP_SHA  /tmp/rustup-init" | sha256sum -c - && chmod +x /tmp/rustup-init \
+    && /tmp/rustup-init -y --profile minimal --default-toolchain $RUST \
+      -t wasm32-unknown-unknown -t x86_64-unknown-linux-gnu && rm /tmp/rustup-init \
     && mkdir -p /home/runner/.cargo/registry
 COPY --from=auth requirements-dev.lock /tmp/requirements-dev.lock
 COPY --from=github deploy-tools.lock /tmp/deploy-tools.lock
