@@ -5,6 +5,7 @@
 ## Start
 
 - [Overview](https://docs.wallflowers.io/)
+- [What WallFlowers is](https://docs.wallflowers.io/about.html)
 - [Start here](https://docs.wallflowers.io/start.html)
 - [Quickstart](https://docs.wallflowers.io/quickstart.html)
 - [Register your app](https://docs.wallflowers.io/register.html)

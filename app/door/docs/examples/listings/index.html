@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Listings board</title>
+  <link rel="icon" href="data:,">
+  <!-- Keep third-party scripts off this page: anything running here can use the session. -->
+  <style>
+    :root { --bg: #fbfaf7; --fg: #1d1c19; --muted: #6b675f; --line: #e3dfd6; --accent: #2f5d50; --on-accent: #fff; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #151513; --fg: #ecebe6; --muted: #a29e94; --line: #2f2e2a; --accent: #8fc7b4; --on-accent: #10201b; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 42rem; margin: 0 auto; padding: 24px 16px 48px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 1.4rem; margin: 0; }
+    h2 { font-size: 1.1rem; margin: 24px 0 8px; }
+    button { font: inherit; border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+    button.lead, button[type="submit"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    #status { color: var(--muted); }
+    ul { list-style: none; padding: 0; margin: 0; }
+    #board li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    #board img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+    #board div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    #board small { display: block; color: var(--muted); }
+    #board p { margin: 4px 0 0; }
+    form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    form .wide { grid-column: 1 / -1; }
+    input, select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; min-width: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1 id="community">Listings</h1>
+      <div>
+        <button id="signin" class="lead" type="button" hidden>Sign in with WallFlowers</button>
+        <button id="signout" type="button" hidden>Sign out</button>
+      </div>
+    </header>
+    <p id="status" role="status" hidden></p>
+
+    <div id="app" hidden>
+      <h2>On the board</h2>
+      <ul id="board"></ul>
+      <p id="empty" hidden>Nothing listed yet.</p>
+
+      <h2>List something</h2>
+      <form id="list">
+        <input id="title" class="wide" required maxlength="200" placeholder="What is it?" aria-label="Title">
+        <select id="posture" aria-label="Posture">
+          <option value="selling">Selling</option>
+          <option value="offers">Offering</option>
+          <option value="wants">Wanted</option>
+          <option value="buying">Buying</option>
+        </select>
+        <input id="price" maxlength="40" placeholder="Price (selling or buying)" aria-label="Price">
+        <input id="descriptor" class="wide" maxlength="200" placeholder="One line about it" aria-label="Description">
+        <button id="add" class="wide" type="submit">List it</button>
+      </form>
+    </div>
+  </main>
+  <script>
+    // Opened as a file (file://), the module below can't load: say so, rather than a blank page.
+    if (location.protocol === 'file:') {
+      var s = document.getElementById('status');
+      s.hidden = false;
+      s.textContent = 'This page has to be served, not opened as a file: serve the folder, then open http://localhost:5174/.';
+    }
+  </script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
