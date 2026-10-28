@@ -93,8 +93,8 @@ RELAY = os.environ.get("RELAY", "ws://localhost:8787")
 # carries it, port included (wrap.rs `aad`). In the harness the keyholder proxies
 # /auth, so the host a device signs and seals for is the keyholder's, not :8021's.
 HOST = AUTH.split("//", 1)[-1].rstrip("/")
-# The passkey's RP ID. localhost in the harness; kenjin.cc in production, which
-# is the registrable domain rather than an origin.
+# The passkey's RP ID. localhost in the harness; in production the Door's own
+# host, app.wallflowers.io (D-33).
 RP_ID = HOST.split(":")[0]
 
 # ── the core's constants, retyped ────────────────────────────────────────────

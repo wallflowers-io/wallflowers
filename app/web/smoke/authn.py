@@ -98,8 +98,8 @@ class Authenticator:
         are built by the device -- which is what `pacific-account.js`
         createPasskey does, and this is that call's other half.
 
-        `rp_id` is the REGISTRABLE DOMAIN and not an origin: a credential is
-        bound to it for life, so `kenjin.cc` covers every subdomain and one made
+        `rp_id` names a host: a credential is bound to it for life. Production's
+        is the Door's own host, `app.wallflowers.io` (D-33), and one made
         under `localhost` is worthless anywhere else -- which is right for a
         throwaway smoke database and would be a serious mistake near a real one.
         """

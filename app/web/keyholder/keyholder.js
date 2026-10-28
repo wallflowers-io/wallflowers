@@ -346,8 +346,8 @@
      and the sites held. Never the seed, and there is no method that returns
      it. */
 
-  /* Same origin as this document by default — in production the keyholder is
-     served from kenjin.cc, so /auth is already here. Overridable because a
+  /* Same origin as this document by default, so /auth is already here where the
+     keyholder is served beside the auth service. Overridable because a
      local harness serves the keyholder from a port of its own. */
   var AUTH = '';
 
@@ -465,7 +465,7 @@
     });
   }
 
-  /* The account module, shared with kenjin.cc and staged beside this file.
+  /* The account module, shared with the Door's sign-in and staged beside this file.
      Nothing cryptographic about accounts is written in this file — the
      derivation, the wrap and the challenge signature have one definition. */
   var _pac = null;

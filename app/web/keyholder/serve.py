@@ -17,16 +17,16 @@ SO WHERE IS SIGN-IN. Not reachable from here, and not because of missing effort:
 
   · Apple and Passport refuse http and refuse localhost return URLs, so
     /auth/{provider}/start cannot come back to localhost:8103 at all.
-  · The passkey RP ID is `kenjin.cc`, the registrable domain -- deliberately, so
-    a credential made in dev is the same credential in production. An origin of
+  · The passkey RP ID is the Door's own host, `app.wallflowers.io` (D-33), so a
+    credential is bound to the Door that asks for the seed. An origin of
     localhost:8103 cannot use one, and minting one under RP ID `localhost` would
     strand it the moment it mattered.
 
 Which is exactly why site/auth/dev/ runs local development behind a real
 HTTPS hostname through cloudflared instead of on a port. To drive the doors,
-serve the keyholder from that hostname -- production puts it on kenjin.cc, the
-same origin as the auth service, which is what makes the cookie and the RP ID
-line up in the first place. Set AUTH_UPSTREAM to proxy /auth to a service that
+serve the keyholder from that hostname -- production signs in at the Door,
+app.wallflowers.io, the host the RP ID names, which is what makes the session
+and the RP ID line up in the first place. Set AUTH_UPSTREAM to proxy /auth to a service that
 is already running; leave it unset and every endpoint that needs one says so.
 
 WHAT REMAINS HONEST HERE. A session fixture, which is a session you already had
@@ -89,7 +89,7 @@ MISSING = (
     "<p><b>%s</b> needs the auth service, and this is <code>serve.py</code>.</p>"
     "<p>The three doors cannot complete from <code>localhost</code> whatever is "
     "running: Apple and Passport refuse http and localhost return URLs, and the "
-    "passkey RP ID is <code>kenjin.cc</code>. Local development puts the whole "
+    "passkey RP ID is <code>app.wallflowers.io</code>. Local development puts the whole "
     "origin behind a real HTTPS hostname for that reason &mdash; see "
     "<code>site/auth/dev/</code>.</p>"
     "<p>To proxy <code>/auth</code> to a service that is already running, start "

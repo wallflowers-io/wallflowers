@@ -11,9 +11,9 @@
 #
 # WHAT IS DELIBERATELY DIFFERENT FROM PRODUCTION, and the price of each:
 #
-#   WEBAUTHN_RP_ID=localhost   Production uses kenjin.cc, the registrable domain,
-#                              so a passkey made in dev is the same passkey in
-#                              production. A credential minted here is bound to
+#   WEBAUTHN_RP_ID=localhost   Production's RP ID is the Door's own host,
+#                              app.wallflowers.io (D-33), never a dev host's.
+#                              A credential minted here is bound to
 #                              RP ID `localhost` and is worthless anywhere else
 #                              — which is right for a throwaway smoke database
 #                              and would be a serious mistake anywhere near a
