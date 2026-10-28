@@ -24,7 +24,8 @@ product="$(cd "$here/.." && pwd)"
 # THE SUMMARY SAYS WHAT IT COUNTS, AND WHAT IT CANNOT (NC-122). A test binary killed by a
 # signal (a stack overflow's SIGABRT) prints no "test result" line, so a count of those lines
 # read "N passed, M failed" with the dead binary missing (28 Sep: o69_fc1_on_off, found by
-# build-worker-a). Cargo names it on "process didn't exit successfully"; so does this.
+# build-worker-a). Cargo names it on "process didn't exit successfully"; so does this. nextest
+# counts such a test as failed; its name is given too.
 if [ "${1:-}" = "--self-test" ]; then
   fails=0
   check() { # <what> <expected substring> <script>
@@ -40,6 +41,16 @@ if [ "${1:-}" = "--self-test" ]; then
   check "a binary killed by a signal: named" "3 passed, 0 failed; 1 test binary died without a result: o69_fc1_on_off (signal 6)" "$green; $died; exit 101"
   check "a binary that exits 101 printed its result: not a death" "3 passed, 0 failed" "$green; $exit101; exit 101"
   check "no result lines, a death: still named" "died without a result: o69_fc1_on_off (signal 6)" "$died; exit 101"
+  # nextest, as 0.9.150 prints it: a failed test's captured libtest line comes indented, and a
+  # test a signal ended is listed in the run and again under the summary.
+  nx_green='printf "%s\n" "        PASS [   0.005s] (1/1) nx::green ok_c" "     Summary [   0.005s] 1 test run: 1 passed, 0 skipped"'
+  nx_red='printf "%s\n" "        PASS [   0.006s] (1/4) nx::green ok_c" "        FAIL [   0.006s] (3/4) nx::red fails_d" "    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s" "     SIGABRT [   0.023s] (4/4) nx::dies aborts_e" "     Summary [   0.024s] 4 tests run: 2 passed, 2 failed, 1 skipped" "     SIGABRT [   0.023s] (4/4) nx::dies aborts_e"'
+  nx_slow='echo "     Summary [  60.000s] 3 tests run: 1 passed, 1 failed, 1 timed out, 0 skipped"'
+  check "nextest green: counted" "1 passed, 0 failed" "$nx_green"
+  check "nextest and doctests: summed" "4 passed, 0 failed" "$nx_green; $green"
+  check "nextest red: its indented libtest line not counted twice" "2 passed, 2 failed;" "$nx_red; exit 100"
+  check "nextest, a test a signal ended: named once" "1 test died by a signal: nx::dies aborts_e (SIGABRT)" "$nx_red; exit 100"
+  check "nextest, a timeout: counted as failed" "1 passed, 2 failed" "$nx_slow; exit 100"
   exit $(( fails > 0 ))
 fi
 label="${1:?usage: pinned.sh <label> <command...>}"; shift
@@ -77,9 +88,17 @@ fi
 status=$?
 manifest > "$after" || { echo "pinned.sh: cannot read the tree at $product" >&2; exit 1; }
 
-# The summary line, whatever suite produced it.
-summary="$(grep -hE '^test result:' "$run" 2>/dev/null \
-  | awk '{ok+=$4; bad+=$6} END { if (NR) printf "%d passed, %d failed", ok, bad }')"
+# The summary line, whatever suite produced it: libtest's result lines, and nextest's run
+# summary (a timeout is a failure). nextest indents the result lines it captured, so they are
+# not counted twice.
+summary="$( { grep -hE '^test result:' "$run" 2>/dev/null | awk '{print $4, $6}'
+              grep -hE '^ +Summary \[' "$run" 2>/dev/null | awk '{
+                p = 0; f = 0
+                for (i = 3; i <= NF; i++) { w = $i; sub(/,$/, "", w)
+                  if (w == "passed") p = $(i-1); if (w == "failed") f += $(i-1)
+                  if (w == "out" && $(i-1) == "timed") f += $(i-2) }
+                print p, f }'; } \
+  | awk '{ok+=$1; bad+=$2} END { if (NR) printf "%d passed, %d failed", ok, bad }')"
 # Test binaries a signal ended, by name (the hash suffix off), which no result line counts.
 died="$(grep -hoE "process didn't exit successfully: \`[^\`]*\` \(signal: [0-9]+" "$run" 2>/dev/null \
   | sed -E "s/^[^\`]*\`([^\` ]*)[^\`]*\` \(signal: ([0-9]+)$/\1 (signal \2)/; s#^.*/##; s/-[0-9a-f]{16} / /" | sort -u)"
@@ -87,6 +106,14 @@ if [ -n "$died" ]; then
   n="$(printf '%s\n' "$died" | wc -l | tr -d ' ')"
   what="$n test binary died without a result"; [ "$n" = 1 ] || what="$n test binaries died without a result"
   summary="${summary:+$summary; }$what: $(printf '%s\n' "$died" | paste -sd, - | sed 's/,/, /g')"
+fi
+# Tests nextest saw a signal end. Counted as failed already; named, as the binaries above are.
+signalled="$(grep -hE '^ +SIG[A-Z]+ \[' "$run" 2>/dev/null \
+  | sed -E 's/^ +(SIG[A-Z]+) \[[^]]*\] (\([0-9]+\/[0-9]+\) )?(.*)$/\3 (\1)/' | sort -u)"
+if [ -n "$signalled" ]; then
+  n="$(printf '%s\n' "$signalled" | wc -l | tr -d ' ')"
+  what="$n test died by a signal"; [ "$n" = 1 ] || what="$n tests died by a signal"
+  summary="${summary:+$summary; }$what: $(printf '%s\n' "$signalled" | paste -sd, - | sed 's/,/, /g')"
 fi
 [ -n "$summary" ] || summary="$(tail -1 "$run" 2>/dev/null | cut -c1-72)"
 echo "$summary"
