@@ -410,20 +410,15 @@ async function newMember(o) {
   return { w, first };
 }
 for (const [what, o] of [
+  /* iCloud Keychain has no real witness either (ASSURANCE), so WebKit is no longer witnessed. */
   ['iCloud Keychain on an iPhone', { ua: IPHONE, touch: 5, aaguid: ICLOUD }],
   ['iCloud Keychain in Chrome on an iPhone (WebKit, as every iOS browser)', { ua: CHROME_ON_IPHONE, touch: 5, aaguid: ICLOUD }],
   ['iCloud Keychain in Mac Safari', { ua: MAC_SAFARI, aaguid: ICLOUD }],
+  ['iCloud Keychain in Chrome on a Mac', { ua: MAC_CHROME, aaguid: ICLOUD }],
+  /* Google Password Manager has no real witness (SECURITY, str.md run 110 V4: a virtual
+     authenticator wearing its AAGUID), so desktop Chrome is no longer witnessed (ASSURANCE). */
   ['Google Password Manager in Chrome on a Mac', { ua: MAC_CHROME, aaguid: GPM }],
   ['Google Password Manager in Chrome on Windows', { ua: WINDOWS_CHROME, aaguid: GPM }],
-]) {
-  test(`witnessed, ${what}: create()'s PRF is used, one prompt`, async () => {
-    const { w } = await newMember(o);
-    assert.equal(w.created.length, 1);
-    assert.equal(w.gets(), 0, 'no get()');
-  });
-}
-for (const [what, o] of [
-  ['iCloud Keychain in Chrome on a Mac', { ua: MAC_CHROME, aaguid: ICLOUD }],
   ['Google Password Manager in Chrome on Android', { ua: ANDROID_CHROME, touch: 5, aaguid: GPM }],
   ['Google Password Manager named in Edge', { ua: EDGE, aaguid: GPM }],
   ['Google Password Manager named in Firefox', { ua: MAC_FIREFOX, aaguid: GPM }],
