@@ -59,9 +59,8 @@
  * a second source of truth with a delay on it.
  *
  * WHAT IS BUILT AND WHAT IS DRAWN. The first half is working code:
- * pacific-account.js's signIn() takes the passkey's PRF, fetches the wrap by
- * public key, opens it to the seed, and reads the head — which the web client
- * writes at position 0 when the account is made. The chain is the DESIGN: it is
+ * a sign-in (the Door's session, or the iOS app) takes the passkey's PRF, fetches
+ * the wrap by public key, opens it to the seed, and reads the head. The chain is the DESIGN: it is
  * not in core (locator.rs has its address and nothing seals an entry), so the
  * head never moves past 0, and no door writes `group.joinedObject` when a
  * person joins something. The page carried a standing note saying so until

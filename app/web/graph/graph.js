@@ -42,19 +42,50 @@
   var dec = new TextDecoder(), enc = new TextEncoder();
 
   /* ── the core ─────────────────────────────────────────────────────────────
-     PacificAccount is the loader: it supplies the three declared imports, of
-     which `pacific_fill_random` is the one that matters, and hands back the
-     instance's exports. The core is the one staged for the other surfaces —
-     this page is served from `app/web`, so it reads that copy rather than
-     adding a fourth staging target. */
+     core-wasm, as build-wasm.sh stages it into app/web/docs/core. The module
+     declares three imports and this supplies them; `pacific_fill_random` is the
+     only way randomness enters it. Nothing here holds a key: the page reads the
+     model (which kinds take which op) and nothing else. */
   /* THE MODULE IS FETCHED PAST THE CACHE. A browser that cached the wasm under
      heuristic freshness keeps serving it whatever the server says NEXT, so a
      rebuilt export reads as "fn is not a function" until someone thinks to hard
      reload. A dev tool reloads against a core that changed minutes ago; paying
      for the fetch is cheaper than the confusion. */
-  var account = new PacificAccount({
-    corePath: '../docs/core/core_wasm_bg.wasm?b=' + Date.now()
-  });
+  var CORE_PATH = '../docs/core/core_wasm_bg.wasm?b=' + Date.now();
+  var HOSTFNS = {
+    pacific_fill_random: function (at) {
+      return function (ptr, len) { crypto.getRandomValues(new Uint8Array(at().exports.memory.buffer, ptr, len)); };
+    },
+    __wbindgen_init_externref_table: function (at) {
+      return function () {
+        var t = at().exports.__wbindgen_externrefs, off = t.grow(4);
+        t.set(0, undefined);
+        t.set(off + 0, undefined); t.set(off + 1, null); t.set(off + 2, true); t.set(off + 3, false);
+      };
+    },
+    date_now: function () { return function () { return Date.now(); }; }
+  };
+  function loadCore() {
+    return fetch(CORE_PATH)
+      .then(function (r) {
+        if (!r.ok) throw new Error(CORE_PATH + ' ' + r.status + ': the core is not staged; run app/web/build-wasm.sh');
+        return r.arrayBuffer();
+      })
+      .then(function (b) { return WebAssembly.compile(b); })
+      .then(function (mod) {
+        var inst = null, at = function () { return inst; }, imports = {};
+        WebAssembly.Module.imports(mod).forEach(function (i) {
+          var make = HOSTFNS[i.name];
+          if (!make) throw new Error('unsupplied wasm import ' + i.module + '.' + i.name);
+          (imports[i.module] = imports[i.module] || {})[i.name] = make(at);
+        });
+        return WebAssembly.instantiate(mod, imports).then(function (w) {
+          inst = w;
+          if (w.exports.__wbindgen_start) w.exports.__wbindgen_start();
+          return w.exports;
+        });
+      });
+  }
   var CORE = null;
 
   /* THE LOG IS NOT A NARRATION. One line per crossing into the core through the
@@ -1408,7 +1439,7 @@
     }
   }
 
-  account.core().then(function (exports) {
+  loadCore().then(function (exports) {
     CORE = exports;
     M.opsOn = ask('ops_on', CORE.ops_on) || {};
     /* The map between the ICD's channels and the directory's kind strings, from

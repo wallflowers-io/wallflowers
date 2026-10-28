@@ -10,9 +10,8 @@ thing it models.
     ← {"id": 41, "ok": true, "v": {…}}
     ← {"id": 42, "ok": false, "e": "store.commit: not paired"}
 
-The value rides under `v` rather than flattened beside `id` and `ok`. The
-keyholder's own replies already have that shape, and a flattened answer would
-collide the first time a result carried a field named `ok`.
+The value rides under `v` rather than flattened beside `id` and `ok`: a flattened
+answer would collide the first time a result carried a field named `ok`.
 
 ASSERTIONS DO NOT LIVE HERE. An agent reports what its device did and what it
 holds. Whether that counts as convergence is the runner's call, made once and

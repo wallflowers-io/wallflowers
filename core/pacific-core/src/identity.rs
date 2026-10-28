@@ -287,9 +287,9 @@ pub fn auth_payload(audience: &str, identity_key: &str, nonce: &str) -> Vec<u8> 
 /// The first line of [`auth_payload`], and its domain separation.
 ///
 /// A NAMED CONSTANT because it could not otherwise be PINNED. This string is
-/// written out again in `business/website/auth/app/auth.py`, in
-/// `app/web/account/pacific-account.js` and in `app/web/smoke/e2e.py` — two
-/// repositories, no atomic commit — and a signer and a verifier that disagree by one
+/// written out again in the Arc's `arc/auth/app/auth.py` and in
+/// `app/web/smoke/e2e.py`, and `arc/auth/tests/test_cross_repo_domains.py` holds
+/// them to this one — and a signer and a verifier that disagree by one
 /// byte fail in a way neither side can see, because the verifier refuses without
 /// saying which part was wrong. While it lived inline in the format string above
 /// there was nothing for a cross-repo test to read.

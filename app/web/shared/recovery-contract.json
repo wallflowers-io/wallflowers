@@ -53,7 +53,7 @@
     "tail: forked is drawn as an alert in words, never as a count. Ralph ruled that an arc rollback or spoof leaves the account unable to recover its state."
   ],
   "exports": {
-    "_note": "The two core-wasm exports behind it (7a3fdf5). core-wasm cannot do the network: the keyholder fetches and hands every blob in.",
+    "_note": "The two core-wasm exports behind it (7a3fdf5). core-wasm cannot do the network: its caller fetches and hands every blob in.",
     "spine_addresses": {
       "in": "{seed | storage_root (64 hex), gen, from, count}. count is at most one batch; over it is REFUSED, in words.",
       "out": {

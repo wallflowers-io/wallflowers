@@ -4,12 +4,10 @@
 #
 #   ./serve.sh            http://127.0.0.1:8232/graph/
 #
-# THE DOCUMENT ROOT IS app/web, NOT graph/. The page reads three files it does
-# not own — the account module (the core loader), the ICD-generated op bindings,
-# and the staged wasm — and reaching them by relative path is what keeps this
-# surface from becoming a fourth staging target in account/stage.sh. The cost is
-# that the root is one level up; the benefit is that nothing here can hold a
-# stale copy of somebody else's file.
+# THE DOCUMENT ROOT IS app/web, NOT graph/. The page reads two files it does not
+# own — the ICD-generated op bindings and the staged wasm — by relative path, so
+# nothing here can hold a stale copy of somebody else's file. The cost is that the
+# root is one level up.
 #
 # BIND EXPLICITLY, AND CHECK. Two servers can hold one port on macOS — an IPv4
 # listener and an IPv6 wildcard one bind happily side by side, and which answers

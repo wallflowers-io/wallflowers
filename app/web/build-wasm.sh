@@ -143,15 +143,3 @@ node -e '
   console.log("  mls surface:", mls.length, "exports · imports:", imports.length,
               "· entropy: host · instantiable: yes");
 '
-# Every other surface is its own origin and cannot fetch docs/ across one, so
-# each carries its own staged copy of the core AND of the account module that
-# calls it. One script knows the list.
-#
-# Only for THIS tree's own build. A caller that redirected OUT_DIR elsewhere is
-# building for a surface outside app/web, and fanning that out to app/web's
-# staging targets would overwrite them with a module they did not ask for.
-if [ "$OUT_DIR" = "docs" ]; then
-  ./account/stage.sh
-else
-  echo "  OUT_DIR is ${OUT_DIR} — skipping account/stage.sh (that stages app/web's own surfaces)"
-fi
