@@ -1,0 +1,73 @@
+{
+  "_": "What /map runs that this repository did not write, exactly as downloaded: where from, which version, and the bytes. tests/test_vendor.js holds the files to it. Each licence's text is beside the code it covers.",
+  "code": [
+    {
+      "path": "maplibre-gl.mjs",
+      "package": "maplibre-gl",
+      "version": "6.13.0",
+      "licence": "BSD-3-Clause",
+      "licence_text": "LICENSE.maplibre-gl.txt",
+      "from": "https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.mjs",
+      "bytes": 1079357,
+      "sha256": "389731e8581cc59d484e867b051db73ae034a76f0691d2890a2a1a7d2495bdf3"
+    },
+    {
+      "path": "maplibre-gl-worker.mjs",
+      "package": "maplibre-gl",
+      "version": "6.13.0",
+      "licence": "BSD-3-Clause",
+      "licence_text": "LICENSE.maplibre-gl.txt",
+      "from": "https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl-worker.mjs",
+      "bytes": 508314,
+      "sha256": "53a2dd60f76c7b9201a3cc007b755d98ce4b52403843fef5c90c41780fe62e91"
+    },
+    {
+      "path": "maplibre-gl.css",
+      "package": "maplibre-gl",
+      "version": "6.13.0",
+      "licence": "BSD-3-Clause",
+      "licence_text": "LICENSE.maplibre-gl.txt",
+      "from": "https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css",
+      "bytes": 83290,
+      "sha256": "20fc3054e6c769ae9502ec5c7ea46dae05b544fdc4fca2108553fb8c07265bf3"
+    },
+    {
+      "path": "pmtiles.js",
+      "package": "pmtiles",
+      "version": "4.5.0",
+      "licence": "BSD-3-Clause",
+      "licence_text": "LICENSE.pmtiles.txt",
+      "from": "https://unpkg.com/pmtiles@4.5.0/dist/pmtiles.js",
+      "bytes": 20229,
+      "sha256": "caf981bc46f6327ee7e65d5dc964d89d38a69f60edca2bd4c5c890c21b554c6c"
+    },
+    {
+      "path": "basemaps.mjs",
+      "package": "@protomaps/basemaps",
+      "version": "5.7.2",
+      "licence": "BSD-3-Clause",
+      "licence_text": "LICENSE.basemaps.txt",
+      "from": "https://unpkg.com/@protomaps/basemaps@5.7.2/dist/esm/index.js",
+      "bytes": 38226,
+      "sha256": "9d6ee63bee82fd4af79bedaaab538f904341b35fbc1f6254b86166aa4ee24cf1"
+    }
+  ],
+  "tiles": {
+    "_": "Not committed: cut by scripts/cut-tiles.sh, and checked against this when present.",
+    "path": "tiles/seoul-gangnam.pmtiles",
+    "from": "https://build.protomaps.com/20261008.pmtiles",
+    "build": "20261008",
+    "schema": "Protomaps Basemap 4.15.2",
+    "bbox": [
+      127.0,
+      37.48,
+      127.09,
+      37.54
+    ],
+    "maxzoom": 15,
+    "data": "OpenStreetMap, to 2026-10-08T04:00:00Z",
+    "licence": "ODbL-1.0, as a Produced Work: the credit to OpenStreetMap stays on the map",
+    "bytes": 5662493,
+    "sha256": "a291a37b319def58a78b1d545fc20738904cc704b494c7b2d7103d25aa3987d3"
+  }
+}

@@ -1,0 +1,3766 @@
+{
+  "_note": "FIXTURE ART, NOT PACIFIC STATE. One Tamagotchi spec per member of the demo's cast, keyed by the same ids as world.js's profiles (names, bios, seating). Parameters only — tama.js derives every emotion, facing and frame from them; `overrides` are hand-painted pixel corrections keyed facing/emotion/frame. Written by tama-studio.html through serve.py. No Delta carries any of this: a real member's sprite would need a `sprite` field on core's ContactCard, which does not exist yet.",
+  "version": 1,
+  "cast": {
+    "angelica": {
+      "notes": "Bio: 'holds Sunday by tenure, claimed Saturday by right' puts a crown on the blonde (mid) pigtails and a heavy dark dress under them, and she idles smug with hands on hips; a pet only confirms what she already believes, so it is smug too. 'Offered a process and choosing a threat' drives the poke: a steaming, arms-out shout ('I will tell my mother'), with a stamping tantrum for cry and a crossed-arm pout for sad. Her nervous is shifty sly eyes, the look of someone who has just heard that things are being written down. She refused the meeting and makes people come to her, so sociable 3.",
+      "body": {
+        "build": "kid",
+        "width": 0,
+        "outfit": "dress",
+        "tone": "ink",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": -1
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "pigtails",
+        "tone": "mid",
+        "volume": 1,
+        "fringe": "straight",
+        "ties": "bows"
+      },
+      "hat": {
+        "style": "crown",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "big"
+      },
+      "brows": {
+        "style": "thin"
+      },
+      "mouth": {
+        "rest": "smirk"
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "bossy",
+        "rest": "smug",
+        "poke": "angry",
+        "pet": "smug",
+        "energy": 7,
+        "blink": 4,
+        "sociable": 3
+      },
+      "expr": {
+        "smug": {
+          "eye": "lidded",
+          "mouth": "smirk",
+          "arms": "hips",
+          "pose": "still"
+        },
+        "happy": {
+          "eye": "happy",
+          "mouth": "grin",
+          "arms": "hips",
+          "pose": "bob"
+        },
+        "laugh": {
+          "arms": "hips",
+          "pose": "shake"
+        },
+        "sad": {
+          "mouth": "pout",
+          "arms": "cross",
+          "pose": "slump"
+        },
+        "cry": {
+          "arms": "out",
+          "pose": "hop"
+        },
+        "angry": {
+          "eye": "angry",
+          "mouth": "shout",
+          "arms": "out",
+          "fx": "steam"
+        },
+        "nervous": {
+          "eye": "sly",
+          "arms": "cross"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#f6d2b4",
+        "hair": "#f2cf3a",
+        "outfit": "#9b6fc9",
+        "outfit2": "#f29b4b",
+        "pattern": "#f29b4b",
+        "hat": "#e9b52f",
+        "ties": "#8e5cc4",
+        "shoes": "#7a4fb0"
+      }
+    },
+    "francine": {
+      "notes": "Bio: drummer and singer who turned a slot fight into a criteria fight and intends to hold every one of them to whatever gets written down; her posts open with 'Let me say it before anyone pretends there's a mystery.' Bold and loud: drumsticks in hand, happiness is a hop with a note, anger is a shout with arms out and a bang, and a poke gets that anger. Her smug crosses its arms (she'll hold you to it), and even her sad and cry are tough: a pout with crossed arms, and frustrated tears under angry brows. The side-swept bob comes from her face; the eyes sit low enough that both still show under it. Art director: the snout nose is removed. Front-on it drew a boxed pig snout with nostrils, and in profile a flat duck bill, so she read as neither a monkey nor Francine; the small side ears now carry 'monkey' alone until the engine has a muzzle (a lower-face oval with the mouth inside).",
+      "body": {
+        "build": "kid",
+        "outfit": "tee",
+        "tone": "ink",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": 1
+      },
+      "ears": {
+        "style": "small"
+      },
+      "hair": {
+        "style": "bob",
+        "tone": "mid",
+        "fringe": "side"
+      },
+      "eyes": {
+        "style": "dot",
+        "y": 0
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "smirk"
+      },
+      "held": "drumsticks",
+      "personality": {
+        "temperament": "bold",
+        "rest": "neutral",
+        "poke": "angry",
+        "pet": "happy",
+        "energy": 8,
+        "blink": 4,
+        "sociable": 7
+      },
+      "expr": {
+        "happy": {
+          "mouth": "grin",
+          "pose": "hop",
+          "fx": "note"
+        },
+        "laugh": {
+          "pose": "hop"
+        },
+        "angry": {
+          "mouth": "shout",
+          "arms": "out",
+          "fx": "bang"
+        },
+        "smug": {
+          "arms": "cross"
+        },
+        "sad": {
+          "mouth": "pout",
+          "arms": "cross"
+        },
+        "scared": {
+          "mouth": "grit",
+          "arms": "out"
+        },
+        "nervous": {
+          "mouth": "grit",
+          "arms": "cross"
+        },
+        "cry": {
+          "brow": "angry",
+          "arms": "down"
+        }
+      },
+      "skin": {
+        "tone": 3
+      },
+      "colour": {
+        "skin": "#9a6a45",
+        "hair": "#5e3822",
+        "outfit": "#a3313d",
+        "outfit2": "#3f6fb0",
+        "pattern": "#f2d23c"
+      }
+    },
+    "binky": {
+      "notes": "Bio: 'prised the repair apart from the slot and is getting the crackling pot looked at this week, funded or not', so he rests planted, hands on hips, with the toothy grin from his face still. His anger is a bulldog bark with fists out, and he does not shake, he plants ('Look. I don't care who gets Saturday'); that is also what a poke gets, and his nervous keeps the hands on the hips and sweats rather than fidgets. A pat melts him to love, the tough guy's soft middle; and he is the one Ratburn names with the peanut allergy, so his scared is wide-eyed and sweating. Big teen build, jowly head and floppy ears make him the widest silhouette in the batch.",
+      "body": {
+        "build": "teen",
+        "width": 2,
+        "outfit": "vest",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "wide",
+        "size": 1
+      },
+      "ears": {
+        "style": "floppy"
+      },
+      "hair": {
+        "style": "bald"
+      },
+      "hat": {
+        "style": "none"
+      },
+      "eyes": {
+        "style": "dot",
+        "spacing": -1,
+        "y": -1
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "grin",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "bold",
+        "rest": "neutral",
+        "poke": "angry",
+        "pet": "love",
+        "energy": 6,
+        "blink": 4,
+        "sociable": 7
+      },
+      "expr": {
+        "neutral": {
+          "arms": "hips"
+        },
+        "happy": {
+          "eye": "happy",
+          "mouth": "grin",
+          "arms": "hips",
+          "pose": "bob"
+        },
+        "laugh": {
+          "mouth": "laugh",
+          "arms": "hips",
+          "pose": "shake"
+        },
+        "angry": {
+          "eye": "angry",
+          "brow": "angry",
+          "mouth": "shout",
+          "arms": "out",
+          "pose": "still",
+          "fx": "vein"
+        },
+        "scared": {
+          "eye": "wide",
+          "mouth": "wavy",
+          "arms": "up",
+          "pose": "jitter",
+          "fx": "sweat"
+        },
+        "nervous": {
+          "arms": "hips",
+          "pose": "still",
+          "fx": "sweat"
+        },
+        "smug": {
+          "eye": "lidded",
+          "mouth": "grin",
+          "arms": "cross"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#eedf8a",
+        "hair": "#d8c070",
+        "outfit": "#ef7f32",
+        "outfit2": "#f4f0e6",
+        "pattern": "#4a86c5"
+      }
+    },
+    "sueellen": {
+      "notes": "Bio: 'Keeper of the schedule and the archive; called the meeting, recorded who came', so she holds the archive book and rests composed, mouth flat. Her emotions are held in check: happy does not bounce, surprised stays still, angry is narrowed eyes and hands on hips with no vein ('I'm saying this plainly'), and smug is the sly look of 'offered a process and preferred a threat'. The most-connected person at Flash FM, so she turns to face her neighbours most readily; the big dark curly puffs with cat ears poking through keep her apart from Angelica's small light pigtails.",
+      "body": {
+        "build": "kid",
+        "width": 0,
+        "outfit": "jacket",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": -1
+      },
+      "ears": {
+        "style": "cat"
+      },
+      "hair": {
+        "style": "pigtails",
+        "tone": "ink",
+        "volume": 2,
+        "fringe": "ragged",
+        "ties": "none"
+      },
+      "hat": {
+        "style": "none"
+      },
+      "eyes": {
+        "style": "dot",
+        "spacing": 0,
+        "y": 0
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "dot"
+      },
+      "mouth": {
+        "rest": "flat",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "book",
+      "personality": {
+        "temperament": "calm",
+        "rest": "neutral",
+        "poke": "surprised",
+        "pet": "happy",
+        "energy": 3,
+        "blink": 4,
+        "sociable": 8
+      },
+      "expr": {
+        "happy": {
+          "eye": "happy",
+          "mouth": "smile",
+          "arms": "down",
+          "pose": "still"
+        },
+        "laugh": {
+          "eye": "happy",
+          "mouth": "grin",
+          "arms": "down",
+          "pose": "bob"
+        },
+        "angry": {
+          "eye": "narrow",
+          "brow": "angry",
+          "mouth": "flat",
+          "arms": "hips",
+          "pose": "still",
+          "fx": "none"
+        },
+        "surprised": {
+          "arms": "down",
+          "pose": "still"
+        },
+        "smug": {
+          "eye": "sly",
+          "mouth": "smirk",
+          "arms": "down",
+          "fx": "none"
+        },
+        "nervous": {
+          "mouth": "flat",
+          "pose": "still"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#f0c69c",
+        "hair": "#e6682f",
+        "outfit": "#2f9aa0",
+        "outfit2": "#f3e6b0",
+        "pattern": "#e8e0c0",
+        "ties": "#2fb07a"
+      }
+    },
+    "riley": {
+      "notes": "Bio: still wants Saturday and agreed to earn it on a bar everyone can read, and his listing is a party set for hire: 'I bring the crowd'. So he idles smug, hands on hips, bobbing with a music note always over him; a poke gets 'yo hold up' (fists up, shouting, hopping, steaming) and a pet gets a hop and more notes. His sad is a cross-armed sulk, not tears; his cry is a stomping tantrum; scared or nervous he fronts (fists up, a cool smirk) while he sweats. Cornrows, a smaller head and a white tank make him Huey's younger brother by build and his opposite in everything else.",
+      "body": {
+        "build": "kid",
+        "width": -1,
+        "outfit": "tee",
+        "tone": "off",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": -1
+      },
+      "ears": {
+        "style": "small"
+      },
+      "hair": {
+        "style": "cornrows",
+        "tone": "ink",
+        "volume": 1,
+        "fringe": "straight"
+      },
+      "hat": {
+        "style": "none"
+      },
+      "eyes": {
+        "style": "round",
+        "spacing": 0,
+        "y": 0
+      },
+      "brows": {
+        "style": "thin"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "grin",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "bold",
+        "rest": "smug",
+        "poke": "angry",
+        "pet": "happy",
+        "energy": 9,
+        "blink": 7,
+        "sociable": 9
+      },
+      "expr": {
+        "neutral": {
+          "arms": "hips"
+        },
+        "smug": {
+          "eye": "lidded",
+          "mouth": "grin",
+          "arms": "hips",
+          "pose": "bob",
+          "fx": "note"
+        },
+        "happy": {
+          "eye": "happy",
+          "mouth": "grin",
+          "arms": "up",
+          "pose": "hop",
+          "fx": "note"
+        },
+        "laugh": {
+          "eye": "laugh",
+          "mouth": "laugh",
+          "arms": "hips",
+          "pose": "hop"
+        },
+        "sad": {
+          "eye": "lidded",
+          "mouth": "pout",
+          "arms": "cross",
+          "pose": "slump",
+          "fx": "none"
+        },
+        "cry": {
+          "mouth": "wail",
+          "arms": "down",
+          "pose": "hop",
+          "fx": "tears"
+        },
+        "angry": {
+          "eye": "angry",
+          "brow": "angry",
+          "mouth": "shout",
+          "arms": "up",
+          "pose": "hop",
+          "fx": "steam"
+        },
+        "surprised": {
+          "arms": "out",
+          "pose": "hop"
+        },
+        "scared": {
+          "eye": "wide",
+          "mouth": "grit",
+          "arms": "up",
+          "pose": "jitter",
+          "fx": "sweat"
+        },
+        "sleepy": {
+          "mouth": "o",
+          "arms": "out"
+        },
+        "love": {
+          "mouth": "grin",
+          "arms": "wave",
+          "pose": "hop"
+        },
+        "nervous": {
+          "eye": "lidded",
+          "mouth": "smirk",
+          "arms": "hips",
+          "pose": "jitter"
+        }
+      },
+      "skin": {
+        "tone": 4
+      },
+      "colour": {
+        "skin": "#5e3c2a",
+        "hair": "#1c1512",
+        "outfit": "#9c9fa3",
+        "outfit2": "#f2f0ea",
+        "shoes": "#e8e8e8"
+      }
+    },
+    "nazz": {
+      "notes": "Bio: brought the four hundred and a sponsor, then withdrew the sponsor rather than let money set the schedule, so she is calm and generous rather than showy. She rests in an easy lash-eyed grin, stands still, and her hands are empty because she took the money back. 'There's no third thing' is her anger: cold, lidded, arms folded, no vein or steam; her nervous keeps smiling and only the sweat gives it away, and surprise doesn't lift her arms. The best-connected person at Flash FM ('if you get Saturday I'll still bring them to you'), so sociable 9: a poke gets a laugh and a wave, a pet gets the knowing wink.",
+      "body": {
+        "build": "teen",
+        "width": 0,
+        "outfit": "tee",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": 1
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "bob",
+        "tone": "off",
+        "volume": 2,
+        "count": 3,
+        "fringe": "side",
+        "ties": "none"
+      },
+      "hat": {
+        "style": "none",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "lashes",
+        "spacing": 0,
+        "y": 0
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "smile",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "calm",
+        "rest": "happy",
+        "poke": "laugh",
+        "pet": "smug",
+        "energy": 5,
+        "blink": 6,
+        "sociable": 9
+      },
+      "expr": {
+        "happy": {
+          "eye": "lashes",
+          "mouth": "grin",
+          "arms": "down",
+          "pose": "still"
+        },
+        "laugh": {
+          "arms": "wave",
+          "pose": "bob"
+        },
+        "smug": {
+          "eye": "wink",
+          "mouth": "smirk",
+          "arms": "hips"
+        },
+        "angry": {
+          "eye": "lidded",
+          "mouth": "flat",
+          "arms": "cross",
+          "pose": "still",
+          "fx": "none"
+        },
+        "nervous": {
+          "mouth": "smile",
+          "arms": "down",
+          "pose": "still"
+        },
+        "sad": {
+          "eye": "lidded"
+        },
+        "surprised": {
+          "arms": "down",
+          "pose": "still"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#fbe3cf",
+        "hair": "#f6d23a",
+        "outfit": "#f4f1ea",
+        "outfit2": "#6a87c9",
+        "pattern": "#f06fa0"
+      }
+    },
+    "susie": {
+      "notes": "Bio: a singer who 'asked for a process instead of a favour' and took Sunday morning, so at rest she is rehearsing for it (happy is singing: closed eyes, an 'o' mouth and a note) and her laugh and love carry notes too. She will not be pushed or pitied: poked, she stands hands on hips with a flat mouth and narrowed eyes, never Angelica's steam; petted, she folds her arms, composed ('I don't want Sunday morning to look like something you handed me'). Even her cry is held together, tears behind a closed frown rather than a wail. Dark parted hair with long braids and a light dotted dress.",
+      "body": {
+        "build": "kid",
+        "width": 0,
+        "outfit": "dress",
+        "tone": "off",
+        "emblem": "dots",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": 0
+      },
+      "ears": {
+        "style": "small"
+      },
+      "hair": {
+        "style": "braids",
+        "tone": "ink",
+        "volume": 3,
+        "fringe": "parted"
+      },
+      "eyes": {
+        "style": "big"
+      },
+      "brows": {
+        "style": "thin"
+      },
+      "mouth": {
+        "rest": "smile"
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "bold",
+        "rest": "happy",
+        "poke": "angry",
+        "pet": "smug",
+        "energy": 5,
+        "blink": 5,
+        "sociable": 7
+      },
+      "expr": {
+        "happy": {
+          "eye": "happy",
+          "mouth": "o",
+          "arms": "down",
+          "fx": "note",
+          "pose": "bob"
+        },
+        "laugh": {
+          "fx": "note"
+        },
+        "love": {
+          "fx": "note"
+        },
+        "angry": {
+          "eye": "narrow",
+          "mouth": "flat",
+          "arms": "hips",
+          "pose": "still"
+        },
+        "smug": {
+          "eye": "lidded",
+          "mouth": "smile",
+          "arms": "cross"
+        },
+        "sad": {
+          "arms": "cross",
+          "pose": "still"
+        },
+        "cry": {
+          "mouth": "frown",
+          "arms": "down",
+          "pose": "still"
+        }
+      },
+      "skin": {
+        "tone": 3
+      },
+      "colour": {
+        "skin": "#8a5a3c",
+        "hair": "#3a2418",
+        "outfit": "#7b4fa6",
+        "outfit2": "#f2d23c",
+        "pattern": "#f2d23c",
+        "ties": "#f07aa8",
+        "shoes": "#d64f4f"
+      }
+    },
+    "edd": {
+      "notes": "Bio: \"held the line that procedure comes before people; brings the pen\" gives him the pen and keeps his joy prim: happy, laugh and love keep his arms at his sides, and his laugh is a shaking, restrained titter. Angry is indignant hands-on-hips with narrowed eyes, and smug is the lidded gap-toothed grin of a rule safely in the archive. He idles wide-eyed and attentive, and turns readily to neighbours: he is Flash FM's most connected member, drafting the criterion with Francine before the meeting. Being petted flusters the fastidious boy into a sweating, polite grin.",
+      "body": {
+        "build": "teen",
+        "width": -1,
+        "outfit": "collar",
+        "tone": "mid",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "oval",
+        "size": -1
+      },
+      "ears": {
+        "style": "big"
+      },
+      "hair": {
+        "style": "bald"
+      },
+      "hat": {
+        "style": "sock",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "round"
+      },
+      "brows": {
+        "style": "thin"
+      },
+      "mouth": {
+        "rest": "grin",
+        "teeth": "gap"
+      },
+      "held": "pen",
+      "personality": {
+        "temperament": "fussy",
+        "rest": "neutral",
+        "poke": "surprised",
+        "pet": "nervous",
+        "energy": 5,
+        "blink": 6,
+        "sociable": 8
+      },
+      "expr": {
+        "happy": {
+          "arms": "down",
+          "pose": "still",
+          "fx": "sparkle"
+        },
+        "laugh": {
+          "mouth": "grin",
+          "arms": "down",
+          "pose": "shake"
+        },
+        "angry": {
+          "mouth": "frown",
+          "arms": "hips",
+          "pose": "still",
+          "eye": "angry"
+        },
+        "surprised": {
+          "pose": "hop"
+        },
+        "love": {
+          "arms": "down",
+          "pose": "still"
+        },
+        "smug": {
+          "mouth": "grin",
+          "arms": "down",
+          "fx": "sparkle"
+        },
+        "nervous": {
+          "mouth": "grin",
+          "arms": "up",
+          "eye": "wide"
+        },
+        "neutral": {
+          "eye": "wide"
+        },
+        "sad": {
+          "eye": "wide"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#fbe2ca",
+        "hair": "#1f1f1f",
+        "outfit": "#e0582e",
+        "outfit2": "#f2f0ea",
+        "hat": "#1d1d1f"
+      }
+    },
+    "stu": {
+      "notes": "Bio: 'kept the nights for building, still insisting this is a place where things get made' gives him the screwdriver (the one Tommy copies), work overalls and boots, a wild ink mop and a bulging-eyed grin at rest. His happy is a eureka hop with a sparkle, his smug is hands-on-hips pride with the same sparkle, and his anger is the 'things that MATTER' rant: slanted eyes, shout, arms out. Working nights makes his sleepy a daytime doze with a dreaming smile; poked mid-thought he jumps, petted he laughs. Few connections (Chuckie, Ed, Didi, Lou) and a basement at night, so sociable 4.",
+      "body": {
+        "build": "adult",
+        "width": -1,
+        "outfit": "overalls",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "boots"
+      },
+      "head": {
+        "shape": "oval",
+        "size": 1
+      },
+      "ears": {
+        "style": "small"
+      },
+      "hair": {
+        "style": "spiky",
+        "tone": "ink",
+        "volume": 0,
+        "fringe": "none"
+      },
+      "eyes": {
+        "style": "big"
+      },
+      "brows": {
+        "style": "thin"
+      },
+      "nose": {
+        "style": "long"
+      },
+      "mouth": {
+        "rest": "grin",
+        "y": 2
+      },
+      "face": {
+        "extra": "none"
+      },
+      "held": "screwdriver",
+      "personality": {
+        "temperament": "curious",
+        "rest": "neutral",
+        "poke": "surprised",
+        "pet": "laugh",
+        "energy": 7,
+        "blink": 2,
+        "sociable": 4
+      },
+      "expr": {
+        "happy": {
+          "eye": "happy",
+          "mouth": "grin",
+          "fx": "sparkle",
+          "pose": "hop"
+        },
+        "laugh": {
+          "pose": "hop"
+        },
+        "angry": {
+          "eye": "angry",
+          "mouth": "shout",
+          "arms": "out",
+          "fx": "vein"
+        },
+        "surprised": {
+          "pose": "hop"
+        },
+        "sleepy": {
+          "mouth": "smile",
+          "pose": "slump"
+        },
+        "smug": {
+          "mouth": "grin",
+          "arms": "hips",
+          "fx": "sparkle"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#f4cfb1",
+        "hair": "#3b55a5",
+        "outfit": "#4f7a4a",
+        "outfit2": "#e8e0cc"
+      }
+    },
+    "tommy": {
+      "notes": "'Opens the first green item instead of waiting for the checklist' and 'Going first's how you know it works': bold, he idles in the big-eyed open grin of his face with the screwdriver held up, and his surprise is a grinning hop, not a flinch. 'Backed Chuckie when it counted': even scared he stands with his arms out in front of the others, doesn't slump when sad, and turns to his neighbours readily (sociable 8). His nervous is the sheepish lopsided grin of 'that was me being wrong, not you being scared', and his smug is a wink.",
+      "body": {
+        "build": "baby",
+        "width": 0,
+        "outfit": "diaper",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "nubs"
+      },
+      "head": {
+        "shape": "round",
+        "size": 1
+      },
+      "ears": {
+        "style": "big"
+      },
+      "hair": {
+        "style": "strands",
+        "tone": "ink",
+        "volume": 0,
+        "count": 3,
+        "fringe": "none",
+        "ties": "none"
+      },
+      "hat": {
+        "style": "none",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "big",
+        "spacing": 0,
+        "y": 0
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "smile",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "screwdriver",
+      "personality": {
+        "temperament": "bold",
+        "rest": "happy",
+        "poke": "laugh",
+        "pet": "love",
+        "energy": 8,
+        "blink": 4,
+        "sociable": 8
+      },
+      "expr": {
+        "happy": {
+          "eye": "big",
+          "mouth": "laugh",
+          "arms": "up",
+          "pose": "bob"
+        },
+        "laugh": {
+          "pose": "hop"
+        },
+        "sad": {
+          "arms": "down",
+          "pose": "still"
+        },
+        "angry": {
+          "mouth": "grit",
+          "arms": "out",
+          "pose": "still"
+        },
+        "surprised": {
+          "mouth": "grin",
+          "pose": "hop",
+          "fx": "bang"
+        },
+        "scared": {
+          "eye": "wide",
+          "arms": "out",
+          "fx": "sweat"
+        },
+        "smug": {
+          "eye": "wink",
+          "mouth": "grin",
+          "arms": "hips"
+        },
+        "nervous": {
+          "mouth": "smirk"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#f6d2b2",
+        "hair": "#7a5536",
+        "outfit": "#8ccaf0",
+        "outfit2": "#ffffff"
+      }
+    },
+    "jonny": {
+      "notes": "Bio: \"got Plank onto the triage list like everything else and stopped apologising for it mattering to him\", so Plank stands beside him in every front and side view and rises with his arms when he loves or frets. He idles in a dreamy, closed-eyed contentment (\"He sees things you don't\"), sleeps smiling, and his smug is that knowing sidelong look. Poked, he does not flinch: he folds his arms and frowns (\"You triage him. Done.\"). He turns to neighbours least, because his first companion is Plank. Art director: ears are 'none'. The big ears made him a second Tommy, and he sits beside Tommy with a head the same size: a round bald dome with the same ear loops. In profile, the big side ear read as a second eye. Without them he is the clean bald dome with a long nose and Plank, and his profile shows one eye. Wears a saucepan for a hat — given him by request, from the retired portraits.",
+      "body": {
+        "build": "teen",
+        "width": 0,
+        "outfit": "tee",
+        "tone": "off",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": 3
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "bald"
+      },
+      "eyes": {
+        "style": "round"
+      },
+      "nose": {
+        "style": "long"
+      },
+      "mouth": {
+        "rest": "smile",
+        "y": 1
+      },
+      "held": "plank",
+      "personality": {
+        "temperament": "dreamy",
+        "rest": "happy",
+        "poke": "angry",
+        "pet": "love",
+        "energy": 4,
+        "blink": 3,
+        "sociable": 3
+      },
+      "expr": {
+        "happy": {
+          "eye": "happy",
+          "mouth": "wide",
+          "arms": "down"
+        },
+        "laugh": {
+          "pose": "hop"
+        },
+        "angry": {
+          "mouth": "frown",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "smug": {
+          "eye": "sly",
+          "fx": "sparkle"
+        },
+        "sleepy": {
+          "mouth": "smile"
+        },
+        "love": {
+          "arms": "up",
+          "pose": "still"
+        },
+        "nervous": {
+          "arms": "up"
+        },
+        "surprised": {
+          "pose": "still"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "hat": {
+        "style": "saucepan",
+        "tone": "mid"
+      },
+      "colour": {
+        "skin": "#f7e6c6",
+        "outfit": "#f2efe6",
+        "outfit2": "#6a8fc0",
+        "hat": "#7a4526"
+      }
+    },
+    "ed": {
+      "notes": "Bio: \"clears the bench in one trip ... the hands in the room, not a side in the argument\" makes him the broadest build in the batch with nothing in his hands, because the hands are the point. He idles in a vacant dot-eyed grin, and his angry is not a temper but a stance: arms out, planted still, the wall between people and the dangerous item. The sewing-machine apology and \"don't put me near glass\" drive the frown-and-tear sad and the hands-up, sweating nervous; poked, he just goes \"?\". He has more cross-site ties than anyone in the batch (Stu, Tommy, Chuckie, Jonny, Brain, Sarah, May, both Eds), so he turns to neighbours most readily.",
+      "body": {
+        "build": "adult",
+        "width": 2,
+        "outfit": "jacket",
+        "tone": "mid",
+        "emblem": "stripes",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "long",
+        "size": -1
+      },
+      "ears": {
+        "style": "small"
+      },
+      "hair": {
+        "style": "spiky",
+        "tone": "ink",
+        "volume": 1,
+        "fringe": "none"
+      },
+      "hat": {
+        "style": "none"
+      },
+      "eyes": {
+        "style": "dot"
+      },
+      "brows": {
+        "style": "uni"
+      },
+      "mouth": {
+        "rest": "grin",
+        "teeth": "three"
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "gentle",
+        "rest": "happy",
+        "poke": "surprised",
+        "pet": "love",
+        "energy": 6,
+        "blink": 2,
+        "sociable": 9
+      },
+      "expr": {
+        "happy": {
+          "eye": "dot",
+          "arms": "down",
+          "pose": "bob"
+        },
+        "laugh": {
+          "mouth": "tongue"
+        },
+        "sad": {
+          "eye": "dot"
+        },
+        "angry": {
+          "mouth": "grit",
+          "arms": "out",
+          "pose": "still",
+          "fx": "none"
+        },
+        "surprised": {
+          "eye": "dot",
+          "fx": "question"
+        },
+        "sleepy": {
+          "mouth": "o"
+        },
+        "love": {
+          "mouth": "tongue",
+          "pose": "bob"
+        },
+        "smug": {
+          "mouth": "grin",
+          "arms": "hips"
+        },
+        "nervous": {
+          "eye": "dot",
+          "arms": "up"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#eee26e",
+        "hair": "#1e1e1e",
+        "outfit": "#6e8b3a",
+        "outfit2": "#d8453e",
+        "pattern": "#f4f1ea"
+      }
+    },
+    "brain": {
+      "notes": "Bio: 'Runs the log live beside the work: photo, owner, failure, mark', so he holds the clipboard in every emotion and his happy is a bright-idea sparkle, not a cheer. The big round head with its tuft between bear ears is the know-it-all 'Brain': smug is hands on hips with a sparkle, and angry is a lecture, hands on hips and a frown ('You've replaced a problem with a destruction'). Curious, so a poke gets a question mark rather than a bang; and because he conceded 'I was wrong about the waiting', he rests pleasant rather than smug.",
+      "body": {
+        "build": "kid",
+        "width": 0,
+        "outfit": "hoodie",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": 1
+      },
+      "ears": {
+        "style": "bear"
+      },
+      "hair": {
+        "style": "strands",
+        "count": 3,
+        "tone": "ink"
+      },
+      "hat": {
+        "style": "none"
+      },
+      "eyes": {
+        "style": "dot",
+        "spacing": 0,
+        "y": 0
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "button"
+      },
+      "mouth": {
+        "rest": "smile",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "clipboard",
+      "personality": {
+        "temperament": "curious",
+        "rest": "neutral",
+        "poke": "surprised",
+        "pet": "happy",
+        "energy": 4,
+        "blink": 5,
+        "sociable": 6
+      },
+      "expr": {
+        "happy": {
+          "eye": "happy",
+          "mouth": "smile",
+          "arms": "down",
+          "pose": "bob",
+          "fx": "sparkle"
+        },
+        "laugh": {
+          "eye": "laugh",
+          "mouth": "grin",
+          "arms": "down",
+          "pose": "shake"
+        },
+        "angry": {
+          "eye": "narrow",
+          "brow": "angry",
+          "mouth": "frown",
+          "arms": "hips",
+          "pose": "still",
+          "fx": "vein"
+        },
+        "surprised": {
+          "eye": "wide",
+          "mouth": "o",
+          "fx": "question"
+        },
+        "smug": {
+          "eye": "lidded",
+          "mouth": "smirk",
+          "arms": "hips",
+          "fx": "sparkle"
+        }
+      },
+      "skin": {
+        "tone": 3
+      },
+      "colour": {
+        "skin": "#a07252",
+        "hair": "#6b4630",
+        "outfit": "#a9aaa3",
+        "outfit2": "#f2e48c",
+        "pattern": "#f2e48c"
+      }
+    },
+    "chuckie": {
+      "notes": "'Did the safety assessment nobody read': anxious, so he idles nervous with the quivering mouth, sweats even when he is happy or laughing, jumps clean off the ground when surprised, and blinks constantly behind the glasses. 'The dangerous item moves on his word or he walks, and everyone now knows he means it': his anger does not shake (arms folded, teeth gritted, standing still), and his smug is the flat, buck-toothed 'I'm not dramatic, I'm precise' with arms folded. The most connected person at Hope Cafe (seven peers, and the one Jonny brings Plank to), so he checks on his neighbours often; love makes him shy, not showy.",
+      "body": {
+        "build": "baby",
+        "width": 0,
+        "outfit": "tee",
+        "tone": "mid",
+        "emblem": "planet",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": 1
+      },
+      "ears": {
+        "style": "small"
+      },
+      "hair": {
+        "style": "spiky",
+        "tone": "mid",
+        "volume": 1,
+        "count": 3,
+        "fringe": "ragged",
+        "ties": "none"
+      },
+      "hat": {
+        "style": "none",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "dot",
+        "spacing": 0,
+        "y": 0
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "big"
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "flat",
+        "teeth": "buck",
+        "y": 1
+      },
+      "face": {
+        "cheeks": "freckles",
+        "extra": "none"
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "anxious",
+        "rest": "nervous",
+        "poke": "scared",
+        "pet": "happy",
+        "energy": 6,
+        "blink": 9,
+        "sociable": 7
+      },
+      "expr": {
+        "nervous": {
+          "mouth": "wavy",
+          "pose": "jitter",
+          "fx": "sweat"
+        },
+        "happy": {
+          "arms": "down",
+          "pose": "still",
+          "fx": "sweat"
+        },
+        "laugh": {
+          "arms": "down",
+          "pose": "jitter",
+          "fx": "sweat"
+        },
+        "angry": {
+          "mouth": "grit",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "surprised": {
+          "pose": "hop"
+        },
+        "smug": {
+          "mouth": "flat",
+          "arms": "cross",
+          "fx": "none"
+        },
+        "love": {
+          "mouth": "wavy",
+          "arms": "down"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#f8d8bd",
+        "hair": "#f07a2a",
+        "outfit": "#5c8dd6",
+        "outfit2": "#6faf4a",
+        "pattern": "#f2b233",
+        "glasses": "#7a4fb0"
+      }
+    },
+    "phil": {
+      "notes": "'Still thinks a dead toaster's motor belongs in something that spins' and 'Fine. We ask. But...': he idles in a lidded, knowing smirk, a poke gets a crossed-arms pout, and his nervous is the shifty sidelong look of someone caught stripping parts. Overalls for the salvager, and his happy and laugh are the tongue-out grin from his face. He shares Lil's wide head, wide-set eyes, button nose and cap so the twins read as a pair; he is the smooth cap with empty hands, and like her he never trembles (a sulky slump when he cries, a hop back when scared).",
+      "body": {
+        "build": "baby",
+        "width": 0,
+        "outfit": "overalls",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "nubs"
+      },
+      "head": {
+        "shape": "wide",
+        "size": 0
+      },
+      "ears": {
+        "style": "small"
+      },
+      "hair": {
+        "style": "cap",
+        "tone": "mid",
+        "volume": 0,
+        "count": 3,
+        "fringe": "none",
+        "ties": "none"
+      },
+      "hat": {
+        "style": "none",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "dot",
+        "spacing": 1,
+        "y": -1
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "button"
+      },
+      "mouth": {
+        "rest": "smirk",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "sly",
+        "rest": "smug",
+        "poke": "angry",
+        "pet": "happy",
+        "energy": 6,
+        "blink": 5,
+        "sociable": 5
+      },
+      "expr": {
+        "smug": {
+          "eye": "lidded",
+          "mouth": "smirk",
+          "arms": "down"
+        },
+        "happy": {
+          "mouth": "tongue"
+        },
+        "laugh": {
+          "mouth": "tongue",
+          "pose": "hop"
+        },
+        "sad": {
+          "eye": "lidded",
+          "mouth": "pout"
+        },
+        "cry": {
+          "pose": "slump"
+        },
+        "angry": {
+          "mouth": "pout",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "scared": {
+          "pose": "hop"
+        },
+        "nervous": {
+          "eye": "sly",
+          "pose": "still",
+          "fx": "sweat"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#f8dbbf",
+        "hair": "#a8793f",
+        "outfit": "#6ab0a6",
+        "outfit2": "#f4f1ea",
+        "pattern": "#f2d23c"
+      }
+    },
+    "lil": {
+      "notes": "'Turned the queue into a written record with owners' names on every part taken': she carries the clipboard and rests level-browed and flat-mouthed, blinking little. 'No permission, no part' and 'we ask the owner, or I stop sorting for you': her anger is hands on hips, not a tantrum, her laugh stays a squinting smirk, and she holds still even crying ('Don't turn me into the one who changed'). Phil's twin, with the same wide head, face and cap, told apart by the tied tuft with its bow, the dress and the clipboard.",
+      "body": {
+        "build": "baby",
+        "width": 0,
+        "outfit": "dress",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "nubs"
+      },
+      "head": {
+        "shape": "wide",
+        "size": 0
+      },
+      "ears": {
+        "style": "small"
+      },
+      "hair": {
+        "style": "bun",
+        "tone": "mid",
+        "volume": 0,
+        "count": 3,
+        "fringe": "none",
+        "ties": "none"
+      },
+      "hat": {
+        "style": "bow",
+        "tone": "mid"
+      },
+      "eyes": {
+        "style": "dot",
+        "spacing": 1,
+        "y": -1
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "button"
+      },
+      "mouth": {
+        "rest": "flat",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "clipboard",
+      "personality": {
+        "temperament": "stern",
+        "rest": "neutral",
+        "poke": "angry",
+        "pet": "happy",
+        "energy": 4,
+        "blink": 3,
+        "sociable": 4
+      },
+      "expr": {
+        "neutral": {
+          "brow": "thin"
+        },
+        "happy": {
+          "arms": "down",
+          "pose": "still"
+        },
+        "laugh": {
+          "eye": "laugh",
+          "mouth": "smirk",
+          "arms": "down",
+          "pose": "still"
+        },
+        "sad": {
+          "mouth": "flat",
+          "pose": "still"
+        },
+        "cry": {
+          "pose": "still"
+        },
+        "angry": {
+          "mouth": "flat",
+          "arms": "hips",
+          "pose": "still"
+        },
+        "scared": {
+          "arms": "out",
+          "pose": "still"
+        },
+        "smug": {
+          "arms": "hips"
+        },
+        "nervous": {
+          "pose": "still"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#f8dbbf",
+        "hair": "#a8793f",
+        "outfit": "#f29bb8",
+        "outfit2": "#f4f1ea",
+        "hat": "#e8609a",
+        "ties": "#e8609a"
+      }
+    },
+    "granddad": {
+      "notes": "Bio: cooks tomorrow regardless and turned everyone else's conditions into things they had to deliver by morning, so he is the cook (apron over a dark cardigan, spoon in hand) standing hands on hips: bossy, in the service of feeding people. The warmth is in the open arms of his happy and love ('I'll cook for you any day of the week'); his anger is a hands-on-hips 'that's not a debate', never a hop; a poke gets a wink and a smirk from a man who has done this for sixty years. White side hair, glasses and forehead lines make him the elder, and his expression eyes are kept small (dot, happy, wink, squeeze) so they sit inside the lenses. The most connected in this batch (the whole pantry, both grandsons and Ruckus), hence sociable 8.",
+      "body": {
+        "build": "elder",
+        "width": 0,
+        "outfit": "apron",
+        "tone": "ink",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "long",
+        "size": 0
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "sides",
+        "tone": "off",
+        "volume": 0,
+        "fringe": "none"
+      },
+      "hat": {
+        "style": "none"
+      },
+      "eyes": {
+        "style": "dot",
+        "spacing": 0,
+        "y": 0
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "round"
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "flat",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "wrinkles"
+      },
+      "held": "spoon",
+      "personality": {
+        "temperament": "bossy",
+        "rest": "neutral",
+        "poke": "smug",
+        "pet": "happy",
+        "energy": 5,
+        "blink": 4,
+        "sociable": 8
+      },
+      "expr": {
+        "neutral": {
+          "arms": "hips"
+        },
+        "happy": {
+          "eye": "happy",
+          "mouth": "smile",
+          "arms": "out",
+          "pose": "still"
+        },
+        "laugh": {
+          "eye": "happy",
+          "mouth": "laugh",
+          "arms": "hips",
+          "pose": "shake"
+        },
+        "sad": {
+          "mouth": "frown",
+          "arms": "down",
+          "fx": "none"
+        },
+        "cry": {
+          "eye": "squeeze",
+          "mouth": "frown",
+          "arms": "down",
+          "pose": "slump",
+          "fx": "tear"
+        },
+        "angry": {
+          "mouth": "shout",
+          "arms": "hips",
+          "pose": "still",
+          "fx": "vein"
+        },
+        "surprised": {
+          "arms": "out",
+          "pose": "still"
+        },
+        "scared": {
+          "arms": "out",
+          "fx": "sweat"
+        },
+        "sleepy": {
+          "arms": "cross"
+        },
+        "love": {
+          "eye": "happy",
+          "arms": "out",
+          "pose": "still"
+        },
+        "smug": {
+          "eye": "wink",
+          "mouth": "smirk",
+          "arms": "hips"
+        },
+        "nervous": {
+          "arms": "cross",
+          "pose": "still"
+        }
+      },
+      "skin": {
+        "tone": 4
+      },
+      "colour": {
+        "skin": "#5c3f2e",
+        "hair": "#dedcd6",
+        "outfit": "#5e6b45",
+        "outfit2": "#efede6",
+        "glasses": "#1e1e1e"
+      }
+    },
+    "ratburn": {
+      "notes": "Bio: 'Writing the one-page allergy form overnight and teaching the tracking while the pots are already on', so his sleepy is lidded and upright, still working, and he rests arms crossed under heavy lids: the teacher's look. Stern, so happy and laugh are restrained (the arms stay crossed; a laugh is a smirk) and a poke gets a still glare ('We do not feed first. We do it right first.'); he never slumps, which also keeps the snout attached. The adult build, long face and mouse ears set him apart from the kids, and the long profile snout is a 15-pixel override per frame, painted for right and mirrored for left.",
+      "body": {
+        "build": "adult",
+        "width": 0,
+        "outfit": "suit",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "long",
+        "size": -2
+      },
+      "ears": {
+        "style": "mouse"
+      },
+      "hair": {
+        "style": "bald"
+      },
+      "hat": {
+        "style": "none"
+      },
+      "eyes": {
+        "style": "narrow",
+        "spacing": 0,
+        "y": -2
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "dot"
+      },
+      "mouth": {
+        "rest": "flat",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "stern",
+        "rest": "neutral",
+        "poke": "angry",
+        "pet": "happy",
+        "energy": 3,
+        "blink": 2,
+        "sociable": 6
+      },
+      "expr": {
+        "neutral": {
+          "eye": "lidded",
+          "arms": "cross"
+        },
+        "happy": {
+          "eye": "happy",
+          "mouth": "smile",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "laugh": {
+          "eye": "laugh",
+          "mouth": "smirk",
+          "arms": "cross",
+          "pose": "shake"
+        },
+        "sad": {
+          "pose": "still"
+        },
+        "angry": {
+          "eye": "angry",
+          "brow": "angry",
+          "mouth": "frown",
+          "arms": "cross",
+          "pose": "still",
+          "fx": "vein"
+        },
+        "surprised": {
+          "pose": "still"
+        },
+        "scared": {
+          "pose": "shake"
+        },
+        "sleepy": {
+          "eye": "lidded",
+          "mouth": "flat",
+          "arms": "cross",
+          "pose": "still",
+          "fx": "zzz"
+        },
+        "love": {
+          "arms": "down",
+          "pose": "still"
+        },
+        "smug": {
+          "eye": "lidded",
+          "mouth": "smirk",
+          "arms": "cross"
+        },
+        "nervous": {
+          "pose": "shake"
+        }
+      },
+      "overrides": {
+        "right/*/0": [
+          [
+            22,
+            17,
+            0
+          ],
+          [
+            21,
+            18,
+            0
+          ],
+          [
+            21,
+            19,
+            0
+          ],
+          [
+            24,
+            17,
+            1
+          ],
+          [
+            25,
+            18,
+            1
+          ],
+          [
+            26,
+            18,
+            1
+          ],
+          [
+            27,
+            19,
+            1
+          ],
+          [
+            28,
+            19,
+            1
+          ],
+          [
+            21,
+            20,
+            1
+          ],
+          [
+            22,
+            20,
+            1
+          ],
+          [
+            23,
+            20,
+            1
+          ],
+          [
+            24,
+            20,
+            1
+          ],
+          [
+            25,
+            20,
+            1
+          ],
+          [
+            26,
+            20,
+            1
+          ],
+          [
+            27,
+            20,
+            1
+          ]
+        ],
+        "right/*/1": [
+          [
+            22,
+            18,
+            0
+          ],
+          [
+            21,
+            19,
+            0
+          ],
+          [
+            21,
+            20,
+            0
+          ],
+          [
+            24,
+            18,
+            1
+          ],
+          [
+            25,
+            19,
+            1
+          ],
+          [
+            26,
+            19,
+            1
+          ],
+          [
+            27,
+            20,
+            1
+          ],
+          [
+            28,
+            20,
+            1
+          ],
+          [
+            21,
+            21,
+            1
+          ],
+          [
+            22,
+            21,
+            1
+          ],
+          [
+            23,
+            21,
+            1
+          ],
+          [
+            24,
+            21,
+            1
+          ],
+          [
+            25,
+            21,
+            1
+          ],
+          [
+            26,
+            21,
+            1
+          ],
+          [
+            27,
+            21,
+            1
+          ]
+        ]
+      },
+      "skin": {
+        "tone": 2
+      },
+      "colour": {
+        "skin": "#c99a6e",
+        "outfit": "#6b6a2e",
+        "outfit2": "#f0e0a0",
+        "pattern": "#c8322e",
+        "glasses": "#3a3a3a"
+      }
+    },
+    "eddy": {
+      "notes": "Bio: \"dropped the margin ... and took the books\", plus the pantry threads (\"Give me the books\", \"It's a business that feeds people\", a cash box that is \"my money\"), so he holds the books, wears a tie and idles smug: sly eyes, a salesman's toothy grin, arms folded. Angry is the showy one (a shout, steam and a stamping hop), and a poke sets it off. Happy is hands on hips, and sad is a crossed-arm sulk (\"Okay. No margin Thursday\"). Nervous is a forced grin with sweat, and even asleep he smirks. He has the highest energy in the batch.",
+      "body": {
+        "build": "kid",
+        "width": 0,
+        "outfit": "collar",
+        "tone": "off",
+        "emblem": "tie",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": -1
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "strands",
+        "count": 3,
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "round"
+      },
+      "brows": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "smirk"
+      },
+      "held": "book",
+      "personality": {
+        "temperament": "bossy",
+        "rest": "smug",
+        "poke": "angry",
+        "pet": "happy",
+        "energy": 9,
+        "blink": 5,
+        "sociable": 7
+      },
+      "expr": {
+        "smug": {
+          "eye": "sly",
+          "mouth": "grin",
+          "arms": "cross"
+        },
+        "happy": {
+          "mouth": "grin",
+          "arms": "hips",
+          "pose": "bob"
+        },
+        "laugh": {
+          "mouth": "laugh",
+          "arms": "up",
+          "pose": "hop"
+        },
+        "sad": {
+          "arms": "cross",
+          "fx": "none"
+        },
+        "angry": {
+          "mouth": "shout",
+          "arms": "out",
+          "pose": "hop",
+          "fx": "steam"
+        },
+        "surprised": {
+          "mouth": "shout",
+          "pose": "hop"
+        },
+        "love": {
+          "mouth": "grin",
+          "arms": "out"
+        },
+        "nervous": {
+          "mouth": "grin"
+        },
+        "sleepy": {
+          "mouth": "smirk"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#fbe0c8",
+        "hair": "#1e1e1e",
+        "outfit": "#f6d23c",
+        "outfit2": "#f4f1ea",
+        "pattern": "#d8453e"
+      }
+    },
+    "lou": {
+      "notes": "Bio: 'talked the pantry out of charging', and his 'ask me again in a month and it's the same answer it was in '71', so he idles with folded arms and heavy lids behind thick glasses under a drooping walrus moustache, and his anger is the same folded arms held still. The spoon is 'cook alongside Granddad': the Pantry's two old cooks carry the same one. A pat sends him to sleep (arms folded, a snoring 'o'), a poke jolts him awake with a hop, and his happy is a neighbourly wave ('It's neighbours'); his smug is a sly sideways look, not Granddad's wink. Energy 2, blink 3: nothing about him hurries.",
+      "body": {
+        "build": "elder",
+        "width": 0,
+        "outfit": "vest",
+        "tone": "off",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "oval",
+        "size": 1
+      },
+      "ears": {
+        "style": "small"
+      },
+      "hair": {
+        "style": "sides",
+        "tone": "mid",
+        "volume": 0
+      },
+      "eyes": {
+        "style": "dot",
+        "y": -2
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "big"
+      },
+      "nose": {
+        "style": "long"
+      },
+      "mouth": {
+        "rest": "frown"
+      },
+      "face": {
+        "extra": "moustache"
+      },
+      "held": "spoon",
+      "personality": {
+        "temperament": "calm",
+        "rest": "neutral",
+        "poke": "surprised",
+        "pet": "sleepy",
+        "energy": 2,
+        "blink": 3,
+        "sociable": 6
+      },
+      "expr": {
+        "neutral": {
+          "eye": "lidded",
+          "arms": "cross"
+        },
+        "happy": {
+          "mouth": "wide",
+          "arms": "wave"
+        },
+        "laugh": {
+          "arms": "cross",
+          "pose": "shake"
+        },
+        "angry": {
+          "eye": "narrow",
+          "mouth": "flat",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "smug": {
+          "eye": "sly",
+          "mouth": "smirk",
+          "arms": "cross"
+        },
+        "surprised": {
+          "pose": "hop"
+        },
+        "sleepy": {
+          "mouth": "o",
+          "arms": "cross"
+        },
+        "love": {
+          "eye": "happy",
+          "mouth": "wide"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#f5d2b6",
+        "hair": "#d7dade",
+        "outfit": "#d8337a",
+        "outfit2": "#f4f1ea",
+        "glasses": "#1e1e1e"
+      }
+    },
+    "didi": {
+      "notes": "Bio: 'put the book down but kept the one question', so she holds nothing and a question mark floats beside her at rest; tall pink (mid) curls, round glasses and a dark dress make the silhouette. 'I keep thinking if we don't name what we are now...' makes her anxious: poked she startles, and nervous she frets with folded arms under that same question mark. Her anger is procedural, hands on hips and a flat mouth ('Not to argue'), and a pet is Lou's 'put the book down, sweetheart': relief, a wide smile. Her expression eyes are kept to dots and lines because her lenses are only two pixels tall. Art director: the left view is the right view mirrored, so her question mark, which floats beside her at rest, read backwards whenever she turned left toward Lou. The four left/neutral and left/nervous overrides (4 px each) turn the glyph the right way round in place. They are harmless, and can be deleted, once tama.js stamps glyph fx unmirrored after the flip.",
+      "body": {
+        "build": "adult",
+        "width": -1,
+        "outfit": "dress",
+        "tone": "ink",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "long",
+        "size": -1
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "afro",
+        "tone": "mid",
+        "volume": 0,
+        "fringe": "ragged"
+      },
+      "eyes": {
+        "style": "dot",
+        "y": 1
+      },
+      "glasses": {
+        "style": "round"
+      },
+      "mouth": {
+        "rest": "smile",
+        "y": 1
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "anxious",
+        "rest": "neutral",
+        "poke": "surprised",
+        "pet": "happy",
+        "energy": 4,
+        "blink": 6,
+        "sociable": 7
+      },
+      "expr": {
+        "neutral": {
+          "mouth": "tiny",
+          "fx": "question"
+        },
+        "happy": {
+          "eye": "dot",
+          "mouth": "wide",
+          "fx": "none"
+        },
+        "laugh": {
+          "eye": "closed"
+        },
+        "love": {
+          "eye": "dot",
+          "arms": "cross"
+        },
+        "sad": {
+          "eye": "dot",
+          "arms": "cross"
+        },
+        "angry": {
+          "eye": "narrow",
+          "mouth": "flat",
+          "arms": "hips",
+          "pose": "still"
+        },
+        "smug": {
+          "eye": "narrow",
+          "mouth": "smile",
+          "arms": "hips"
+        },
+        "nervous": {
+          "eye": "dot",
+          "arms": "cross",
+          "fx": "question",
+          "pose": "jitter"
+        }
+      },
+      "overrides": {
+        "left/neutral/0": [
+          [
+            5,
+            3,
+            0
+          ],
+          [
+            7,
+            3,
+            1
+          ],
+          [
+            5,
+            4,
+            0
+          ],
+          [
+            7,
+            4,
+            1
+          ]
+        ],
+        "left/neutral/1": [
+          [
+            5,
+            5,
+            0
+          ],
+          [
+            7,
+            5,
+            1
+          ],
+          [
+            5,
+            6,
+            0
+          ],
+          [
+            7,
+            6,
+            1
+          ]
+        ],
+        "left/nervous/0": [
+          [
+            5,
+            3,
+            0
+          ],
+          [
+            7,
+            3,
+            1
+          ],
+          [
+            5,
+            4,
+            0
+          ],
+          [
+            7,
+            4,
+            1
+          ]
+        ],
+        "left/nervous/1": [
+          [
+            6,
+            5,
+            0
+          ],
+          [
+            8,
+            5,
+            1
+          ],
+          [
+            6,
+            6,
+            0
+          ],
+          [
+            8,
+            6,
+            1
+          ]
+        ]
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#fbe6d5",
+        "hair": "#d9409a",
+        "outfit": "#c83a3a",
+        "outfit2": "#f4f1ea",
+        "glasses": "#6bbf4e"
+      }
+    },
+    "muffy": {
+      "notes": "Bio: wired the money, gave up the gala's place in the running order, and took on the records and the standards setup; her posts add 'I am still tracking every dollar of it, because somebody has to' and 'I'm not promising I'll like the answer'. Bossy and pleased with herself: she rests smug with hands on hips and a sparkle, her happy is a smirk with hands on hips, her laugh a posh 'oh-ho' (an o mouth), and her anger a huff (pout, crossed arms, steam) rather than a shout. She holds the clipboard for the records and standards; the bow and braids come from her face, and the big side ears make her a monkey. A poke gets an indignant gasp, hands on hips; petting only confirms what she already thought (smug). Art director: the snout nose is removed. Front-on it was a boxed pig snout, and in profile a duck bill, and it was the one thing blocking her lash eyes (they merged into its top edge), so the eyes are 'lashes' again, as first intended. A real muzzle is an engine gap.",
+      "body": {
+        "build": "kid",
+        "outfit": "dress",
+        "tone": "mid",
+        "emblem": "bowtie",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": 1
+      },
+      "ears": {
+        "style": "big"
+      },
+      "hair": {
+        "style": "braids",
+        "tone": "mid",
+        "fringe": "straight"
+      },
+      "hat": {
+        "style": "bow",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "lashes",
+        "y": -1
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "smile"
+      },
+      "held": "clipboard",
+      "personality": {
+        "temperament": "bossy",
+        "rest": "smug",
+        "poke": "surprised",
+        "pet": "smug",
+        "energy": 4,
+        "blink": 6,
+        "sociable": 5
+      },
+      "expr": {
+        "smug": {
+          "mouth": "smirk",
+          "arms": "hips",
+          "fx": "sparkle",
+          "pose": "still"
+        },
+        "happy": {
+          "mouth": "smirk",
+          "arms": "hips",
+          "fx": "sparkle"
+        },
+        "laugh": {
+          "mouth": "o",
+          "arms": "hips"
+        },
+        "angry": {
+          "mouth": "pout",
+          "arms": "cross",
+          "fx": "steam",
+          "pose": "still"
+        },
+        "surprised": {
+          "arms": "hips"
+        },
+        "sad": {
+          "mouth": "pout"
+        },
+        "nervous": {
+          "mouth": "smirk",
+          "arms": "hips"
+        }
+      },
+      "skin": {
+        "tone": 2
+      },
+      "colour": {
+        "skin": "#e2a462",
+        "hair": "#b04a2a",
+        "outfit": "#8e6ab0",
+        "outfit2": "#f3e8c8",
+        "ties": "#f2d23c"
+      }
+    },
+    "dil": {
+      "notes": "'One year old, the only participant who never moved position' and 'FEED ME. BOWL. WHERE.': he idles angry, brows down and mouth open in a shout with the bottle waved overhead, standing stock still (pose still) and almost never turning to his neighbours (sociable 1). 'im DROOLING and im SMALL': the smallest head in the batch, earless and egg-round against Tommy's big ears, with drool (tongue) in his happy and even his love. Poke him and he wails; pet him and he giggles; when he wins, it is hands on hips.",
+      "body": {
+        "build": "baby",
+        "width": -1,
+        "outfit": "tee",
+        "tone": "off",
+        "emblem": "none",
+        "feet": "nubs"
+      },
+      "head": {
+        "shape": "round",
+        "size": -1
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "strands",
+        "tone": "ink",
+        "volume": 0,
+        "count": 5,
+        "fringe": "none",
+        "ties": "none"
+      },
+      "hat": {
+        "style": "none",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "big",
+        "spacing": 1,
+        "y": 1
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "o",
+        "teeth": "none",
+        "y": 1
+      },
+      "face": {
+        "cheeks": "blush",
+        "extra": "none"
+      },
+      "held": "bottle",
+      "personality": {
+        "temperament": "fussy",
+        "rest": "angry",
+        "poke": "cry",
+        "pet": "laugh",
+        "energy": 7,
+        "blink": 3,
+        "sociable": 1
+      },
+      "expr": {
+        "angry": {
+          "eye": "big",
+          "mouth": "shout",
+          "arms": "up",
+          "pose": "still",
+          "fx": "none"
+        },
+        "happy": {
+          "mouth": "tongue"
+        },
+        "laugh": {
+          "pose": "hop"
+        },
+        "sad": {
+          "mouth": "pout",
+          "arms": "up"
+        },
+        "cry": {
+          "pose": "shake"
+        },
+        "sleepy": {
+          "mouth": "o"
+        },
+        "love": {
+          "mouth": "tongue"
+        },
+        "smug": {
+          "eye": "lidded",
+          "mouth": "smirk",
+          "arms": "hips"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#f8dcc0",
+        "hair": "#7a5536",
+        "outfit": "#f2e05a",
+        "outfit2": "#ffffff"
+      }
+    },
+    "buster": {
+      "notes": "Bio: put his name down for Plot 7 in the open; his posts add 'because the dusk sky gets weird up there and I want to see it' and 'I've got more snack mix if that helps'. Dreamy and easy: he rests happy with big open eyes, a buck-tooth grin and his spoon held up for the snack mix, loves with heart eyes and his tongue out, and is surprised with wide-eyed wonder and a sparkle, as if at the sky. His one stubborn moment ('I'm not backing down now') is his anger, a pout with crossed arms and not a shout, and fright makes him jump. Sociable 8: he offers snacks to everyone and is the only one who scanned across sites to Francine.",
+      "body": {
+        "build": "kid",
+        "outfit": "collar",
+        "tone": "ink",
+        "feet": "nubs"
+      },
+      "head": {
+        "shape": "wide",
+        "size": -2
+      },
+      "ears": {
+        "style": "rabbit"
+      },
+      "hair": {
+        "style": "bald"
+      },
+      "eyes": {
+        "style": "big"
+      },
+      "nose": {
+        "style": "dot"
+      },
+      "mouth": {
+        "rest": "smile",
+        "teeth": "buck"
+      },
+      "held": "spoon",
+      "personality": {
+        "temperament": "dreamy",
+        "rest": "happy",
+        "poke": "surprised",
+        "pet": "love",
+        "energy": 7,
+        "blink": 6,
+        "sociable": 8
+      },
+      "expr": {
+        "happy": {
+          "eye": "big",
+          "arms": "up",
+          "pose": "bob"
+        },
+        "laugh": {
+          "pose": "hop"
+        },
+        "love": {
+          "mouth": "tongue"
+        },
+        "angry": {
+          "mouth": "pout",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "smug": {
+          "mouth": "smirk",
+          "arms": "hips"
+        },
+        "surprised": {
+          "fx": "sparkle"
+        },
+        "scared": {
+          "eye": "wide",
+          "mouth": "wail",
+          "pose": "hop"
+        }
+      },
+      "overrides": {
+        "*/*/*": [
+          [
+            10,
+            0,
+            0
+          ],
+          [
+            11,
+            0,
+            0
+          ],
+          [
+            12,
+            0,
+            0
+          ],
+          [
+            13,
+            0,
+            0
+          ],
+          [
+            14,
+            0,
+            0
+          ],
+          [
+            15,
+            0,
+            0
+          ],
+          [
+            16,
+            0,
+            0
+          ],
+          [
+            17,
+            0,
+            0
+          ],
+          [
+            18,
+            0,
+            0
+          ],
+          [
+            19,
+            0,
+            0
+          ],
+          [
+            20,
+            0,
+            0
+          ],
+          [
+            21,
+            0,
+            0
+          ]
+        ],
+        "down/*/*": [
+          [
+            11,
+            1,
+            1
+          ],
+          [
+            12,
+            1,
+            1
+          ],
+          [
+            13,
+            1,
+            1
+          ],
+          [
+            18,
+            1,
+            1
+          ],
+          [
+            19,
+            1,
+            1
+          ],
+          [
+            20,
+            1,
+            1
+          ]
+        ],
+        "up/*/*": [
+          [
+            11,
+            1,
+            1
+          ],
+          [
+            12,
+            1,
+            1
+          ],
+          [
+            13,
+            1,
+            1
+          ],
+          [
+            18,
+            1,
+            1
+          ],
+          [
+            19,
+            1,
+            1
+          ],
+          [
+            20,
+            1,
+            1
+          ]
+        ],
+        "right/*/*": [
+          [
+            12,
+            1,
+            1
+          ],
+          [
+            13,
+            1,
+            1
+          ],
+          [
+            14,
+            1,
+            1
+          ],
+          [
+            15,
+            1,
+            1
+          ]
+        ]
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#f2efe4",
+        "outfit": "#3fb59a",
+        "outfit2": "#e9a0b0"
+      }
+    },
+    "huey": {
+      "notes": "Bio: will carry the water log down to the fence himself rather than let a gate decide who belongs, so he holds the log (the book) and idles arms folded, deadpan, all but unblinking. He argues on principle, not temper: his anger is cold (narrow eyes, folded arms, a vein, no movement), his laugh is a suppressed smirk, his love is heart eyes over a straight face, and scared he braces with gritted teeth instead of running. Riley's opposite on every dial: a dark afro dome against striped cornrows, energy 3 against 9, sociable 4 against 9. The 20 override pixels only repaint the engine's own vein and sweat drop in off so they show on the ink afro, which otherwise swallows them.",
+      "body": {
+        "build": "kid",
+        "width": 0,
+        "outfit": "jacket",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": 0
+      },
+      "ears": {
+        "style": "small"
+      },
+      "hair": {
+        "style": "afro",
+        "tone": "ink",
+        "volume": 3,
+        "fringe": "none"
+      },
+      "hat": {
+        "style": "none"
+      },
+      "eyes": {
+        "style": "narrow",
+        "spacing": 0,
+        "y": 0
+      },
+      "brows": {
+        "style": "thick"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "flat",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "book",
+      "personality": {
+        "temperament": "stern",
+        "rest": "neutral",
+        "poke": "angry",
+        "pet": "smug",
+        "energy": 3,
+        "blink": 2,
+        "sociable": 4
+      },
+      "expr": {
+        "neutral": {
+          "arms": "cross"
+        },
+        "happy": {
+          "eye": "happy",
+          "mouth": "smirk",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "laugh": {
+          "eye": "laugh",
+          "mouth": "smirk",
+          "arms": "cross",
+          "pose": "shake"
+        },
+        "sad": {
+          "eye": "narrow",
+          "mouth": "frown",
+          "arms": "down",
+          "pose": "slump",
+          "fx": "none"
+        },
+        "cry": {
+          "eye": "closed",
+          "mouth": "grit",
+          "arms": "down",
+          "pose": "still",
+          "fx": "tear"
+        },
+        "angry": {
+          "eye": "narrow",
+          "brow": "angry",
+          "mouth": "flat",
+          "arms": "cross",
+          "pose": "still",
+          "fx": "vein"
+        },
+        "surprised": {
+          "eye": "wide",
+          "mouth": "flat",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "scared": {
+          "eye": "wide",
+          "mouth": "grit",
+          "arms": "out"
+        },
+        "sleepy": {
+          "arms": "cross"
+        },
+        "love": {
+          "mouth": "flat",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "smug": {
+          "eye": "lidded",
+          "mouth": "smirk",
+          "arms": "cross"
+        },
+        "nervous": {
+          "eye": "narrow",
+          "mouth": "wavy",
+          "arms": "cross",
+          "pose": "still"
+        }
+      },
+      "overrides": {
+        "down/angry/*": [
+          [
+            25,
+            8,
+            0
+          ],
+          [
+            27,
+            8,
+            0
+          ],
+          [
+            26,
+            9,
+            0
+          ],
+          [
+            25,
+            10,
+            0
+          ],
+          [
+            27,
+            10,
+            0
+          ]
+        ],
+        "right/angry/*": [
+          [
+            24,
+            8,
+            0
+          ],
+          [
+            26,
+            8,
+            0
+          ],
+          [
+            25,
+            9,
+            0
+          ],
+          [
+            24,
+            10,
+            0
+          ],
+          [
+            26,
+            10,
+            0
+          ]
+        ],
+        "down/nervous/0": [
+          [
+            27,
+            10,
+            0
+          ],
+          [
+            26,
+            11,
+            0
+          ],
+          [
+            27,
+            11,
+            0
+          ],
+          [
+            26,
+            12,
+            0
+          ],
+          [
+            27,
+            12,
+            0
+          ]
+        ],
+        "down/nervous/1": [
+          [
+            27,
+            12,
+            0
+          ],
+          [
+            26,
+            13,
+            0
+          ],
+          [
+            27,
+            13,
+            0
+          ],
+          [
+            26,
+            14,
+            0
+          ],
+          [
+            27,
+            14,
+            0
+          ]
+        ]
+      },
+      "skin": {
+        "tone": 4
+      },
+      "colour": {
+        "skin": "#6b4632",
+        "hair": "#1a1512",
+        "outfit": "#4a3a30",
+        "outfit2": "#f2f0ea",
+        "shoes": "#2a2420"
+      }
+    },
+    "arthur": {
+      "notes": "Bio: opened the log on the shed shelf for anyone to read and refuses to be the one who reads it out loud. So he holds the clipboard (the meter log, every day since July), rests in a quiet neutral, and being poked makes him tight-lipped and sweating, not talkative: he has the numbers and won't name names. His anger is held in (narrow eyes, flat mouth, no shake) because 'that's not fair to them and it's not fair to me', and his smug is the sly squint of 'I've got the numbers. You don't.' A big round head with short, capped aardvark ears and round glasses keeps him distinct from Buster; the caps are overrides because the engine draws the ears past the tile edge. Art director: he now holds the watering can, not the clipboard. His bio says he put the log on the shed shelf for anyone to read, so it is out of his hands. Huey, beside him in the Sprouts row, is the one carrying the water log, and Sarah, on his other side, already holds a clipboard for her form, one of five clipboards in the cast. The can is his daily round of the metered beds, the same can May gave up so there would be only one in the row. At 3x it reads about as well as the clipboard did.",
+      "body": {
+        "build": "kid",
+        "outfit": "collar",
+        "tone": "mid",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": 0
+      },
+      "ears": {
+        "style": "aardvark"
+      },
+      "hair": {
+        "style": "bald"
+      },
+      "eyes": {
+        "style": "dot"
+      },
+      "glasses": {
+        "style": "round"
+      },
+      "mouth": {
+        "rest": "smile"
+      },
+      "held": "watercan",
+      "personality": {
+        "temperament": "gentle",
+        "rest": "neutral",
+        "poke": "nervous",
+        "pet": "happy",
+        "energy": 4,
+        "blink": 5,
+        "sociable": 6
+      },
+      "expr": {
+        "happy": {
+          "arms": "wave"
+        },
+        "laugh": {
+          "mouth": "grin",
+          "arms": "down",
+          "pose": "bob"
+        },
+        "angry": {
+          "eye": "narrow",
+          "mouth": "flat",
+          "arms": "down",
+          "pose": "still"
+        },
+        "smug": {
+          "eye": "sly",
+          "mouth": "smirk",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "love": {
+          "eye": "happy",
+          "arms": "down"
+        },
+        "nervous": {
+          "mouth": "tiny"
+        }
+      },
+      "overrides": {
+        "*/*/*": [
+          [
+            9,
+            0,
+            0
+          ],
+          [
+            10,
+            0,
+            0
+          ],
+          [
+            11,
+            0,
+            0
+          ],
+          [
+            12,
+            0,
+            0
+          ],
+          [
+            13,
+            0,
+            0
+          ],
+          [
+            14,
+            0,
+            0
+          ],
+          [
+            15,
+            0,
+            0
+          ],
+          [
+            16,
+            0,
+            0
+          ],
+          [
+            17,
+            0,
+            0
+          ],
+          [
+            18,
+            0,
+            0
+          ],
+          [
+            19,
+            0,
+            0
+          ],
+          [
+            20,
+            0,
+            0
+          ],
+          [
+            21,
+            0,
+            0
+          ],
+          [
+            22,
+            0,
+            0
+          ]
+        ],
+        "down/*/*": [
+          [
+            10,
+            1,
+            1
+          ],
+          [
+            11,
+            1,
+            1
+          ],
+          [
+            12,
+            1,
+            1
+          ],
+          [
+            19,
+            1,
+            1
+          ],
+          [
+            20,
+            1,
+            1
+          ],
+          [
+            21,
+            1,
+            1
+          ]
+        ],
+        "up/*/*": [
+          [
+            10,
+            1,
+            1
+          ],
+          [
+            11,
+            1,
+            1
+          ],
+          [
+            12,
+            1,
+            1
+          ],
+          [
+            19,
+            1,
+            1
+          ],
+          [
+            20,
+            1,
+            1
+          ],
+          [
+            21,
+            1,
+            1
+          ]
+        ],
+        "right/*/*": [
+          [
+            12,
+            1,
+            1
+          ],
+          [
+            13,
+            1,
+            1
+          ],
+          [
+            14,
+            1,
+            1
+          ],
+          [
+            15,
+            1,
+            1
+          ]
+        ]
+      },
+      "skin": {
+        "tone": 2
+      },
+      "colour": {
+        "skin": "#f2b53c",
+        "outfit": "#e0453a",
+        "outfit2": "#f4f1ea",
+        "pattern": "#f4f1ea",
+        "glasses": "#6b4a2a"
+      }
+    },
+    "sarah": {
+      "notes": "Bio: owns the form and the deadline, and Friday's post goes up at the gate with or without anybody's permission, so she idles hands on hips with a scowl, holding the form on its clipboard. Her happy is a satisfied smirk with hands still on hips, her smug folds its arms with a sly look, her sad is a sulk. Her anger and her crying are the same stamping tantrum with steam ('I am calling my mother and she is calling your mother'). The smallest of the batch, a kid under shoulder-length parted hair, because she is Ed's little sister ('Form. Friday.'). A poke sets her off; a pet gets a sly 'hmph'.",
+      "body": {
+        "build": "kid",
+        "width": -1,
+        "outfit": "dress",
+        "tone": "off",
+        "emblem": "none",
+        "feet": "shoes"
+      },
+      "head": {
+        "shape": "round",
+        "size": 0
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "long",
+        "tone": "mid",
+        "volume": -2,
+        "count": 3,
+        "fringe": "parted",
+        "ties": "none"
+      },
+      "hat": {
+        "style": "none",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "round",
+        "spacing": 0,
+        "y": 1
+      },
+      "brows": {
+        "style": "thick"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "dot"
+      },
+      "mouth": {
+        "rest": "frown",
+        "teeth": "none",
+        "y": 1
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "clipboard",
+      "personality": {
+        "temperament": "bossy",
+        "rest": "neutral",
+        "poke": "angry",
+        "pet": "smug",
+        "energy": 7,
+        "blink": 4,
+        "sociable": 6
+      },
+      "expr": {
+        "neutral": {
+          "brow": "angry",
+          "arms": "hips"
+        },
+        "happy": {
+          "mouth": "smirk",
+          "arms": "hips",
+          "pose": "still"
+        },
+        "laugh": {
+          "arms": "hips"
+        },
+        "angry": {
+          "mouth": "shout",
+          "arms": "up",
+          "pose": "hop",
+          "fx": "steam"
+        },
+        "cry": {
+          "mouth": "shout",
+          "pose": "hop"
+        },
+        "sad": {
+          "mouth": "pout",
+          "arms": "cross"
+        },
+        "smug": {
+          "eye": "sly",
+          "arms": "cross"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#fbdfca",
+        "hair": "#f08a2a",
+        "outfit": "#f2a0c0",
+        "outfit2": "#6a87c9"
+      }
+    },
+    "lee": {
+      "notes": "Bio: claims Plot 7 by having watered it and is installing the lock Sunday, so she rests smug with arms folded and the key to the gate in her hand. Her curls cover her eyes, as in her face still, so blink is 0 and every emotion is carried by mouth, arms, pose and fx. Her posts are lowercase and immovable ('the gate stays where it is until i move it'), so energy 3 and sociable 3; her happy is the landlord's grin with hands on hips, her sad is a pout behind crossed arms, and even nervous she keeps her arms folded. A poke gets gritted teeth, a vein and a shake; a pet gets the grin.",
+      "body": {
+        "build": "teen",
+        "width": 1,
+        "outfit": "tee",
+        "tone": "off",
+        "emblem": "none",
+        "feet": "boots"
+      },
+      "head": {
+        "shape": "round",
+        "size": 0
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "afro",
+        "tone": "mid",
+        "volume": 3,
+        "count": 3,
+        "fringe": "eyes",
+        "ties": "none"
+      },
+      "hat": {
+        "style": "none",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "round",
+        "spacing": 0,
+        "y": -2
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "none"
+      },
+      "mouth": {
+        "rest": "smirk",
+        "teeth": "none",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "freckles",
+        "extra": "none"
+      },
+      "held": "key",
+      "personality": {
+        "temperament": "bossy",
+        "rest": "smug",
+        "poke": "angry",
+        "pet": "happy",
+        "energy": 3,
+        "blink": 0,
+        "sociable": 3
+      },
+      "expr": {
+        "smug": {
+          "mouth": "smirk",
+          "arms": "cross",
+          "pose": "still"
+        },
+        "happy": {
+          "mouth": "grin",
+          "arms": "hips",
+          "pose": "still"
+        },
+        "laugh": {
+          "arms": "hips",
+          "pose": "shake"
+        },
+        "angry": {
+          "mouth": "grit",
+          "arms": "cross",
+          "fx": "vein"
+        },
+        "sad": {
+          "mouth": "pout",
+          "arms": "cross"
+        },
+        "love": {
+          "mouth": "smirk",
+          "arms": "hips"
+        },
+        "nervous": {
+          "arms": "cross"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#fbe3d6",
+        "hair": "#f07a1e",
+        "outfit": "#6fa84a",
+        "outfit2": "#6a87c9"
+      }
+    },
+    "may": {
+      "notes": "Bio: broke with her sister over who gets to hold the gate, so at rest she is Lee's opposite: arms open, hands empty (she refused to stand at the gate with Ruckus), a buck-toothed smile, and the same boots as Lee. Her anger is 'Wait, hold on': arms out, lip bitten under the buck teeth, a vein but no tantrum; her sad is the trembling lip of the break. Happy, laugh and love all hop, because she is the soft-hearted youngest Kanker. Sociable 7: she still turns toward people, including the sister beside her; a poke gets 'wait, what?', a pet gets hearts. Art director: the open arms at rest were described here but not set (neutral fell back to arms down, inside the hair curtain); expr.neutral.arms is now 'out', which reads as open arms front-on and as reaching toward whoever she faces in profile. Angry keeps its arms out too; there the brows, flat mouth and vein carry the difference.",
+      "body": {
+        "build": "teen",
+        "width": 0,
+        "outfit": "tee",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "boots"
+      },
+      "head": {
+        "shape": "oval",
+        "size": 0
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "long",
+        "tone": "off",
+        "volume": 1,
+        "count": 3,
+        "fringe": "parted",
+        "ties": "none"
+      },
+      "hat": {
+        "style": "none",
+        "tone": "ink"
+      },
+      "eyes": {
+        "style": "dot",
+        "spacing": 0,
+        "y": 0
+      },
+      "brows": {
+        "style": "none"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "button"
+      },
+      "mouth": {
+        "rest": "smile",
+        "teeth": "buck",
+        "y": 0
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "none"
+      },
+      "held": "none",
+      "personality": {
+        "temperament": "gentle",
+        "rest": "neutral",
+        "poke": "surprised",
+        "pet": "love",
+        "energy": 6,
+        "blink": 6,
+        "sociable": 7
+      },
+      "expr": {
+        "neutral": {
+          "arms": "out"
+        },
+        "happy": {
+          "pose": "hop"
+        },
+        "laugh": {
+          "mouth": "tongue",
+          "pose": "hop"
+        },
+        "love": {
+          "pose": "hop"
+        },
+        "angry": {
+          "mouth": "flat",
+          "arms": "out",
+          "pose": "still"
+        },
+        "sad": {
+          "mouth": "wavy"
+        },
+        "smug": {
+          "mouth": "smirk"
+        }
+      },
+      "skin": {
+        "tone": 1
+      },
+      "colour": {
+        "skin": "#fbe8d8",
+        "hair": "#f6d63a",
+        "outfit": "#8c9bb0",
+        "outfit2": "#f4f1ea"
+      }
+    },
+    "ruckus": {
+      "notes": "Bio: volunteered to work the gate, then walked to the shed to read the records himself; in the threads he is out six days a week on the grounds and 'not going to lie about it or feel bad about it'. Drawn from that, not from the show: a broad frame, boots, heavy brows, stubble, a frown at rest and the gate key in his hand, which pairs him with Huey's water log across the Sprouts row (the show's bulging eye is left out on purpose). Grumpy: poked he clenches and steams, his smug is a sly 'I know who took the water', asked to name names (nervous) he folds his arms, and his sad and cry hold back. Petted he is proud of the work, hands on hips; blink 1 because he watches everything.",
+      "body": {
+        "build": "adult",
+        "width": 2,
+        "outfit": "jacket",
+        "tone": "mid",
+        "emblem": "none",
+        "feet": "boots"
+      },
+      "head": {
+        "shape": "round",
+        "size": -1
+      },
+      "ears": {
+        "style": "none"
+      },
+      "hair": {
+        "style": "sides",
+        "tone": "mid",
+        "volume": -1,
+        "fringe": "none"
+      },
+      "hat": {
+        "style": "none"
+      },
+      "eyes": {
+        "style": "dot",
+        "spacing": 0,
+        "y": 0
+      },
+      "brows": {
+        "style": "thick"
+      },
+      "glasses": {
+        "style": "none"
+      },
+      "nose": {
+        "style": "dot"
+      },
+      "mouth": {
+        "rest": "frown",
+        "teeth": "none",
+        "y": 1
+      },
+      "face": {
+        "cheeks": "none",
+        "extra": "stubble"
+      },
+      "held": "key",
+      "personality": {
+        "temperament": "grumpy",
+        "rest": "neutral",
+        "poke": "angry",
+        "pet": "happy",
+        "energy": 6,
+        "blink": 1,
+        "sociable": 6
+      },
+      "expr": {
+        "happy": {
+          "eye": "happy",
+          "mouth": "smirk",
+          "arms": "hips",
+          "pose": "still"
+        },
+        "laugh": {
+          "eye": "closed",
+          "mouth": "laugh",
+          "arms": "hips",
+          "pose": "shake"
+        },
+        "sad": {
+          "mouth": "frown",
+          "arms": "down",
+          "pose": "slump",
+          "fx": "none"
+        },
+        "cry": {
+          "eye": "squeeze",
+          "mouth": "grit",
+          "arms": "cross",
+          "pose": "still",
+          "fx": "tear"
+        },
+        "angry": {
+          "eye": "angry",
+          "mouth": "grit",
+          "arms": "out",
+          "pose": "shake",
+          "fx": "steam"
+        },
+        "surprised": {
+          "arms": "out"
+        },
+        "scared": {
+          "eye": "wide",
+          "mouth": "grit",
+          "arms": "cross",
+          "pose": "jitter",
+          "fx": "sweat"
+        },
+        "smug": {
+          "eye": "sly",
+          "mouth": "smirk",
+          "arms": "hips"
+        },
+        "nervous": {
+          "mouth": "wavy",
+          "arms": "cross"
+        }
+      },
+      "skin": {
+        "tone": 5
+      },
+      "colour": {
+        "skin": "#3b2a20",
+        "hair": "#1a1512",
+        "outfit": "#8a5a5e",
+        "outfit2": "#ede8de",
+        "shoes": "#2a2420"
+      }
+    }
+  }
+}

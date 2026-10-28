@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>WallFlowers</title>
+<link rel="icon" type="image/svg+xml" href="brand/wallflowers-icon.svg">
+<link rel="icon" type="image/png" sizes="120x120" href="brand/wallflowers-icon-120.png">
+<link rel="stylesheet" href="assets/map/maplibre-gl.css?v=6.13.0">
+<style>
+  /* Paper under the map, sky under the walk (ceremony.js: P.paper, SKY). */
+  html, body { height: 100%; margin: 0; overflow: hidden; background: #FFF8E8; }
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; font: 13px/1.2 ui-monospace, Menlo, monospace; }
+  body[data-mode="walk"] { background: #8EC5EA; }
+  #map, #world { position: fixed; inset: 0; width: 100%; height: 100%; }
+  #world { display: block; touch-action: none; }
+  #mark { position: fixed; top: max(16px, env(safe-area-inset-top)); left: 50%; width: 52px; height: 52px; margin-left: -26px; pointer-events: none; }
+  /* A name: the panel's colours, in whatever script the place is written in. */
+  .name { position: absolute; left: 0; top: 0; margin: 0; padding: 3px 7px; border: 2px solid #15131A; background: #26232C; color: #F3EFE6;
+          font: inherit; white-space: nowrap; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
+  .name.chosen { background: #F0BC38; color: #15131A; }
+  button.name { cursor: pointer; }
+  #tip { position: fixed; transform: translate(-50%, -100%); pointer-events: none; }
+  #names { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  /* The radar: bottom left, where San Andreas has it; above the stick on a screen that is touched. */
+  #radar { position: fixed; left: max(18px, env(safe-area-inset-left)); bottom: max(24px, env(safe-area-inset-bottom)); image-rendering: pixelated; pointer-events: none; }
+  #say { position: fixed; left: auto; top: auto; right: max(28px, env(safe-area-inset-right)); bottom: max(34px, env(safe-area-inset-bottom)); padding: 6px 12px; font-size: 20px; max-width: 70vw; }
+  /* The looks: a row along the foot, the one being worn in gold. A number each, and a name where there is room. */
+  #looks { position: fixed; left: 50%; bottom: max(26px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 6px; }
+  #looks .look { position: static; max-width: none; }
+  @media (max-width: 899px) { #looks .look span { display: none; } #looks .look { padding: 6px 9px; } }
+  .key { position: fixed; padding: 0; border: 0; background: none; font-size: 0; cursor: pointer; }
+  .key canvas, .pad { image-rendering: pixelated; }
+  #go { right: max(20px, env(safe-area-inset-right)); bottom: max(26px, env(safe-area-inset-bottom)); }
+  #go[data-ready="no"] { opacity: .35; }
+  #back { left: max(16px, env(safe-area-inset-left)); top: max(16px, env(safe-area-inset-top)); }
+  .pad { position: fixed; display: none; touch-action: none; }
+  #stick { left: max(4px, env(safe-area-inset-left)); }
+  #jump { right: max(20px, env(safe-area-inset-right)); }
+  #words, #line { display: none; }
+  body[data-mode="map"] :is(#world, #mark, #names, #back, #radar, #say, #looks, .pad) { display: none; }
+  body[data-mode="walk"] :is(#map, #go, #tip) { display: none; }
+  @media (pointer: coarse) {
+    body[data-mode="walk"] .pad { display: block; }
+    #radar { bottom: auto; top: calc(max(16px, env(safe-area-inset-top)) + 84px); left: max(16px, env(safe-area-inset-left)); }
+    #say { right: auto; left: 50%; transform: translateX(-50%); bottom: auto; top: calc(max(16px, env(safe-area-inset-top)) + 84px); }
+    #looks { bottom: auto; top: calc(max(16px, env(safe-area-inset-top)) + 84px); left: auto; right: max(12px, env(safe-area-inset-right)); transform: none; gap: 5px; flex-direction: column; }
+  }
+</style>
+</head>
+<body data-mode="map">
+<div id="map" data-tiles="assets/map/tiles/seoul-gangnam.pmtiles"></div>
+<canvas id="world" aria-hidden="true"></canvas>
+<img id="mark" src="brand/wallflowers-icon.svg" alt="WallFlowers" width="52" height="52">
+<span id="tip" class="name" hidden></span>
+<div id="names"></div>
+<canvas id="radar" aria-hidden="true"></canvas>
+<span id="say" class="name chosen" role="status" hidden></span>
+<div id="looks" role="group" aria-label="Look"></div>
+<button id="go" class="key" type="button" aria-label="Walk between them" data-ready="no"><canvas></canvas></button>
+<button id="back" class="key" type="button" aria-label="Back to the map"><canvas></canvas></button>
+<canvas id="words" aria-hidden="true"></canvas>
+<p id="line"></p>
+<canvas id="stick" class="pad" aria-hidden="true"></canvas>
+<canvas id="jump" class="pad" role="button" aria-label="Jump"></canvas>
+<script src="assets/tiles/tama/tama.js?v=61b27f81b2"></script>
+<script src="assets/how/ceremony.js?v=38"></script>
+<script src="assets/map/pmtiles.js?v=4.5.0"></script>
+<script src="assets/play/vox.js?v=1"></script>
+<script src="assets/play/geo.js?v=1"></script>
+<script src="assets/play/land.js?v=3"></script>
+<script src="assets/play/world.js?v=3"></script>
+<script src="assets/play/engine.js?v=3"></script>
+<script src="assets/play/roam.js?v=3"></script>
+<script src="assets/play/skins.js?v=1"></script>
+<script src="assets/play/townmesh.js?v=1"></script>
+<script src="assets/play/folk.js?v=1"></script>
+<script src="assets/play/town.js?v=1"></script>
+<script src="assets/play/hud.js?v=3"></script>
+<script type="module" src="assets/play/pick.mjs?v=4"></script>
+</body>
+</html>

@@ -11,3 +11,6 @@ arc/library/flower/
 
 # The one Rust workspace's build output.
 /target/
+
+# /map's tile archive: cut by play/scripts/cut-tiles.sh, checked by play/tests/test_vendor.js.
+/play/assets/map/tiles/

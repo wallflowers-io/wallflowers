@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>WallFlowers</title>
+<link rel="icon" type="image/svg+xml" href="brand/wallflowers-icon.svg">
+<link rel="icon" type="image/png" sizes="120x120" href="brand/wallflowers-icon-120.png">
+<style>
+  /* The sky's top blue, so the page is sky before the first frame (ceremony.js, SKY). */
+  html, body { height: 100%; margin: 0; overflow: hidden; background: #8EC5EA; }
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
+  #world { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  /* The page's mark is the sun's face: the sky draws only the glow behind it. */
+  #mark { position: fixed; top: max(16px, env(safe-area-inset-top)); left: 50%; width: 52px; height: 52px; margin-left: -26px; pointer-events: none; }
+  #dial { position: fixed; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); image-rendering: pixelated; pointer-events: none; }
+  /* On a narrow screen the dial would lie over the mark: it goes under it. */
+  @media (max-width: 640px) { #dial { top: calc(max(16px, env(safe-area-inset-top)) + 62px); } }
+  #words { position: fixed; left: 50%; bottom: max(10px, env(safe-area-inset-bottom)); transform: translateX(-50%); image-rendering: pixelated; pointer-events: none; }
+  #line { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); }
+  .pad { position: fixed; display: none; image-rendering: pixelated; touch-action: none; }
+  #stick { left: max(4px, env(safe-area-inset-left)); }
+  #jump { right: max(20px, env(safe-area-inset-right)); padding: 0; border: 0; background: none; font-size: 0; }
+  @media (pointer: coarse) { .pad { display: block; } }
+</style>
+</head>
+<body data-play="sail">
+<canvas id="world" aria-hidden="true"></canvas>
+<img id="mark" src="brand/wallflowers-icon.svg" alt="WallFlowers" width="52" height="52">
+<canvas id="dial" role="img" aria-label="Heading, speed and wind"></canvas>
+<canvas id="words" aria-hidden="true"></canvas>
+<p id="line" role="status" aria-live="polite"></p>
+<canvas id="stick" class="pad" aria-hidden="true"></canvas>
+<canvas id="jump" class="pad" role="button" aria-label="Let the sail fly"></canvas>
+<script src="assets/tiles/tama/tama.js?v=61b27f81b2"></script>
+<script src="assets/how/ceremony.js?v=38"></script>
+<script src="assets/play/vox.js?v=1"></script>
+<script src="assets/play/geo.js?v=1"></script>
+<script src="assets/play/land.js?v=2"></script>
+<script src="assets/play/world.js?v=3"></script>
+<script src="assets/play/engine.js?v=2"></script>
+<script src="assets/play/ocean.js?v=1"></script>
+<script src="assets/play/sail.js?v=1"></script>
+<script src="assets/play/hud.js?v=3"></script>
+</body>
+</html>
