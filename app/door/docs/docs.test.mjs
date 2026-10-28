@@ -135,3 +135,15 @@ test('each example app is built under starter/, filled, its own test left out', 
     assert.ok(out[`starter/${d}/app.js`].includes(sri()), `${d}: the sign-in script pinned`);
   }
 });
+
+test('What WallFlowers is: built, filled, its picture built, and each example app linked for download', () => {
+  const { out } = build();
+  const about = out['about.html'];
+  assert.ok(about, 'about.html is built');
+  assert.doesNotMatch(about, /\{\{\w+\}\}/, 'nothing left unfilled');
+  for (const [, src] of about.matchAll(/<img src="([^"]+)"/g)) assert.ok(out[src], `${src} is built`);
+  const EX = path.join(HERE, 'examples');
+  for (const d of readdirSync(EX)) for (const f of readdirSync(path.join(EX, d)).filter((f) => !/\.test\.m?js$/.test(f))) {
+    assert.ok(about.includes(`href="starter/${d}/${f}" download`), `about.html links starter/${d}/${f} for download`);
+  }
+});

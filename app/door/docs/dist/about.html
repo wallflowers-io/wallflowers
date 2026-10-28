@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What WallFlowers is · WallFlowers Community API</title>
+<meta name="description" content="Build on a WallFlowers community: sign in with a passkey, read its rooms and people, write as the member.">
+<link rel="stylesheet" href="docs.css">
+<link rel="icon" href="data:,">
+<link rel="alternate" type="text/markdown" href="agents.md" title="For AI coding agents">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">WallFlowers <span>Community API</span></a></header>
+<div class="wrap">
+<nav class="side" aria-label="Pages"><p class="ng">Start</p><ul><li><a href="./">Overview</a></li><li><a href="about.html" aria-current="page">What WallFlowers is</a></li><li><a href="start.html">Start here</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="register.html">Register your app</a></li><li><a href="signin.html">Sign in</a></li><li><a href="session.html">The session</a></li></ul><p class="ng">Read and write</p><ul><li><a href="routes.html">Routes</a></li><li><a href="views.html">What you read</a></li><li><a href="model.html">The model: kinds and ops</a></li></ul><p class="ng">Recipes</p><ul><li><a href="rooms.html">Rooms and threads</a></li><li><a href="members.html">Members and roles</a></li><li><a href="decisions.html">Decisions</a></li><li><a href="page.html">The page and its pictures</a></li><li><a href="public.html">Events and resources</a></li><li><a href="resources.html">The Resources editor</a></li><li><a href="trade.html">The listings board</a></li><li><a href="client.html">A client that holds up</a></li></ul><p class="ng">Reference</p><ul><li><a href="errors.html">Errors</a></li><li><a href="limits.html">Limits</a></li><li><a href="changelog.html">Model changelog</a></li><li><a href="agents.md">For AI agents</a></li></ul></nav>
+<main>
+<h1>What WallFlowers is</h1>
+<p class="lede">WallFlowers is the digital interior for your online presence: messaging, forums and events, embedded into your existing website, or linked from your Instagram page. You can visit a site, or join as a member.</p>
+<figure style="margin:8px 0 22px"><img src="media/wallflowers-community.svg" alt="A community, Harbour Lane, holds its members, Rooms, Events, Resources and Listings. Its public page, wallflowers.io/harbour-lane, is public. WallFlowers' app and your app (on localhost or at your URL) sign members in and read and write it through the Community API." style="width:100%;height:auto;border:1px solid var(--hair);border-radius:12px"><figcaption style="font-size:13px;color:var(--i3);margin-top:6px">A community and what reaches it. Links between members (dashed) are not yet available.</figcaption></figure>
+<h2>A community, and its members</h2>
+<ul>
+<li><strong>A community</strong> is what a person makes at <a href="https://wallflowers.io/signup">wallflowers.io/signup</a>: its rooms, its events, its resources, its members, and its public page at <code>wallflowers.io/&lt;address&gt;</code>, where the address is the short name chosen at signup (such as <code>harbour-lane</code>; no angle brackets). Whoever makes it owns it; admins help run it.</li>
+<li><strong>A member</strong> signs in with a passkey (no password) and, in WallFlowers' app or on a site built on it, talks in its rooms, goes to its events, reads its resources and lists things on its board.</li>
+<li><strong>Who sees what.</strong> Rooms and what is said in them are for the community's members. Its public page (its look, its events, its resources) is for anyone.</li>
+<li><strong>Your data.</strong> WallFlowers doesn't sell or share it. End-to-end encryption is coming soon. The protocol is open, and WallFlowers is one operator of it.</li>
+</ul>
+<h2>What a community holds</h2>
+<table><thead><tr><th></th><th>In the model</th><th>Read</th><th>Write</th></tr></thead><tbody>
+<tr><td><a href="rooms.html">Rooms</a></td><td><code>forum</code>, a part of the community with role <code>room</code></td><td>a room's <code>view.messages</code> in <code>GET /v2/graph</code></td><td><code>forum.post</code>, by <code>POST /v2/apply</code></td></tr>
+<tr><td><a href="public.html">Events</a></td><td><code>event</code>, made by the community</td><td><code>https://arc.wallflowers.io/v1/face/&lt;address&gt;/items</code> (no session; its fields: <a href="public.html">Events and resources</a>)</td><td>made in WallFlowers (<em>Events</em>, then <strong>New event</strong>); a member answers with <code>group.rsvp</code> on the community: <code>event</code> (its id), <code>status</code> (<code>going</code> · <code>maybe</code> · <code>declined</code>), <code>at</code> (ms)</td></tr>
+<tr><td><a href="resources.html">Resources</a></td><td><code>post</code>, made by the community</td><td><code>/v1/face/&lt;address&gt;/items</code> and <code>…/post/&lt;id&gt;</code> (no session)</td><td>the Resources editor (<code>/v2/resources.js</code>)</td></tr>
+<tr><td><a href="trade.html">Trade</a></td><td>listings on the community; <code>thing</code></td><td>the community's <code>view.listings</code> in <code>/v2/graph</code></td><td><code>group.publishListing</code>; <code>thing.*</code></td></tr>
+<tr><td><a href="members.html">Members</a></td><td>the community's members, roles and cards</td><td><code>GET /v2/members</code></td><td><code>base.setRole</code> (the owner)</td></tr>
+<tr><td>Links</td><td><code>contact</code>, between two members</td><td colspan="2">Not yet available (<a href="model.html">the model</a>, <code>contact</code>)</td></tr>
+</tbody></table>
+<p>Each change is one named operation (an <em>op</em>, such as <code>forum.post</code>) on one object, and <a href="model.html">the model</a> lists them all. Your app reaches only this community, its rooms and its page, and what your app itself made: never the member's other communities.</p>
+<h2 id="examples">What you can build</h2>
+<p><strong>Working code to copy</strong>, each two static files with no build step:</p>
+<ul>
+<li>the <a href="quickstart.html">starter</a>: sign in, rooms, posting;</li>
+<li>members and events: upcoming events with Going or Not going, and the members (<a href="starter/members-events/index.html" download>index.html</a>, <a href="starter/members-events/app.js" download>app.js</a>). Until the community is published, it lists only the events its own session made. On your own machine, the shared client signs in only the community's owner and admins: for members to answer, register the page's own client (<a href="register.html">Register your app</a>).</li>
+<li>a resource library: the community's resources for anyone; a member writes and publishes with the Resources editor (<a href="starter/resource-library/index.html" download>index.html</a>, <a href="starter/resource-library/app.js" download>app.js</a>);</li>
+<li>a listings board: list, browse and take down (<a href="starter/listings/index.html" download>index.html</a>, <a href="starter/listings/app.js" download>app.js</a>).</li>
+</ul>
+<p>Members and events and the resource library read the public page by the community's address: set <code>CONFIG.address</code>, since a session can't read it. Each <code>app.js</code> names the port to serve it on.</p>
+<table><thead><tr><th>A…</th><th>Uses</th></tr></thead><tbody>
+<tr><td>community's own site</td><td>its look and pictures (<code>/v1/face/&lt;address&gt;</code>, <code>/m/mark</code>), its events and resources (<code>/items</code>); no session needed to show them</td></tr>
+<tr><td>events app</td><td>events from <code>/items</code>; a signed-in member answers with <code>group.rsvp</code></td></tr>
+<tr><td>member directory</td><td><code>GET /v2/members</code>: names, pictures, what members say about themselves</td></tr>
+<tr><td>resource library</td><td>the Resources editor to write; <code>/items</code> and <code>…/post/&lt;id&gt;</code> to read</td></tr>
+<tr><td>marketplace board</td><td><code>group.publishListing</code> and the community's <code>view.listings</code>; a thing's condition and photos</td></tr>
+<tr><td>chat view or room helper</td><td>a room's messages from <code>/v2/graph</code>, kept fresh by <code>session.events</code>; <code>forum.post</code> to answer</td></tr>
+</tbody></table>
+<h2 id="example">Built on WallFlowers: egregores-echoes.com</h2>
+<p>The website of <em>Egregore's Echoes</em>, an art installation: a Next.js site on its own server. Its community (the members, their rooms and what they say) lives on WallFlowers, so the site holds no accounts, no passwords and no member data. It signs people in with WallFlowers, and reads and writes the community as the signed-in member.</p>
+<table><thead><tr><th>On the site</th><th>Through the API</th></tr></thead><tbody>
+<tr><td>Sign in: one page in the installation's own look, one passkey</td><td>the <a href="signin.html">sign-in script</a>, pinned; <code>signIn</code>, then <code>finish</code> on its own callback page</td></tr>
+<tr><td>Join from a QR code on the installation</td><td>the scanned claim comes back as <code>#join=…</code>; the site sends <a href="routes.html#post-v2-join"><code>POST /v2/join</code></a></td></tr>
+<tr><td>Rooms: read, post, reply, react</td><td><code>GET /v2/graph</code>; <code>forum.post</code>, <code>forum.react</code>; <code>session.events</code> to know when to read again</td></tr>
+<tr><td>Members: who's here, their bio and answers</td><td><code>GET /v2/members</code>; <code>base.publishAbout</code>, <code>base.answerQuestion</code></td></tr>
+<tr><td>Names and pictures</td><td>each member's card (<code>profiles</code> on the views); the site never writes a card</td></tr>
+</tbody></table>
+<p>What it had to get right: <a href="signin.html#callback">a callback page of its own</a>, <a href="routes.html#post-v2-join">the claim handled as a single-use way in</a>, <a href="session.html#your-page">a Content-Security-Policy that allows WallFlowers</a>, names from cards, never keys, and one change stream per page.</p>
+<h2>How to start</h2>
+<ol>
+<li>Make your community at <a href="https://wallflowers.io/signup">wallflowers.io/signup</a>. Already have a WallFlowers account? Press <strong>Create my account</strong>, then, on the next page, choose <strong>Sign in with a passkey</strong>, so the community is made for the account you already have.</li>
+<li>On your machine, follow the <a href="quickstart.html">Quickstart</a>, or take one of the <a href="#examples">examples</a>.</li>
+<li>Building with others: <a href="register.html#teams">add them to your community</a>.</li>
+<li>Put it on the web: <a href="start.html">Start here</a>, step 3.</li>
+</ol>
+<h2 id="words">Words used here</h2>
+<table><tbody>
+<tr><td>object, kind</td><td>everything in a community is an object of some kind: a room is a <code>forum</code>, an event an <code>event</code></td></tr>
+<tr><td>view</td><td>an object's current state, as <code>GET /v2/graph</code> gives it</td></tr>
+<tr><td>part</td><td>an object that belongs to the community, with a role: <code>room</code> for a room, <code>host</code> for its public page</td></tr>
+<tr><td>session</td><td>a member signed in on your app, through WallFlowers' sign-in; <code>session.fetch</code> calls the API as them</td></tr>
+<tr><td>card</td><td>a member's name and picture, which they set in WallFlowers</td></tr>
+</tbody></table>
+<p>The community, its other names (<em>Site</em>, <code>group</code>) and the Door: the <a href="./">Overview</a>.</p>
+
+<footer class="facts">Generated from the Door at <code>1aab5b9f</code>, the one production serves (its routes, its model, its settings, its sign-in script), the routers' inventory (app/door/routes.json), the model version 2.3.1 (sha256 <code>a71fb32573731ca2…</code>), and latencies measured 2026-09-30. Sign-in script integrity <code>sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/</code>. The source will be public with WallFlowers' open-source release.</footer>
+</main>
+</div>
+</body>
+</html>

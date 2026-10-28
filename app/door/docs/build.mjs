@@ -215,7 +215,7 @@ export const anchor = (r) => (r.method + '-' + r.path).toLowerCase().replace(/[^
 /* The ICD's changelog (SCM's, icd-changelog.md beside this file): a page when it is there. */
 const CHANGELOG = path.join(HERE, 'icd-changelog.md');
 export const NAV = [
-  ['Start', [['index', 'Overview'], ['start', 'Start here'], ['quickstart', 'Quickstart'], ['register', 'Register your app'], ['signin', 'Sign in'], ['session', 'The session']]],
+  ['Start', [['index', 'Overview'], ['about', 'What WallFlowers is'], ['start', 'Start here'], ['quickstart', 'Quickstart'], ['register', 'Register your app'], ['signin', 'Sign in'], ['session', 'The session']]],
   ['Read and write', [['routes', 'Routes'], ['views', 'What you read'], ['model', 'The model: kinds and ops']]],
   ['Recipes', [['rooms', 'Rooms and threads'], ['members', 'Members and roles'], ['decisions', 'Decisions'], ['page', 'The page and its pictures'], ['public', 'Events and resources'], ['resources', 'The Resources editor'], ['trade', 'The listings board'], ['client', 'A client that holds up']]],
   ['Reference', [['errors', 'Errors'], ['limits', 'Limits'], ...(existsSync(CHANGELOG) ? [['changelog', 'Model changelog']] : []), ['agents', 'For AI agents']]]
@@ -541,17 +541,18 @@ export function agentsMd(ctx) {
 You are building a web app that signs a person in with WallFlowers and reads and writes their community.
 Read the linked pages before writing code; they are generated from the running system and are the truth.
 
-- Docs: ${SITE}/  (quickstart: ${SITE}/quickstart.html, routes: ${SITE}/routes.html, model: ${SITE}/model.html)
+- Docs: ${SITE}/  (what WallFlowers is: ${SITE}/about.html, quickstart: ${SITE}/quickstart.html, routes: ${SITE}/routes.html, model: ${SITE}/model.html)
 - API origin: ${DOOR}  (every call is \`session.fetch('/v2/...')\`, JSON in and out)
 - Sign-in script: \`<script src="${DOOR}/v2/signin.js" integrity="${ctx.sri}" crossorigin="anonymous"></script>\`
 - Machine-readable routes: ${SITE}/routes.json · the data model: ${DOOR}/v2/icd (no session needed; from a browser, only on an origin WallFlowers allows)
+- The model's ops are in two places: \`kinds.<kind>.ops\` and \`facets.<facet>.ops\`. A facet's ops (every \`base.*\` op, e.g. \`base.setPart\`, \`base.answerQuestion\`) belong to each kind its \`on\` lists. Read both before saying an op does not exist.
 - Baseline these docs describe: model ${ctx.icd} (sha256 ${ctx.icdSha})${ctx.door ? ', the Door at ' + ctx.door.slice(0, 8) : ''}; machine-readable: ${SITE}/baseline.json
 - A working starter to begin from (two files, no build): ${SITE}/starter/index.html and ${SITE}/starter/app.js
 ${REPO ? '- Source: ' + REPO + '\n' : ''}
 ## Do
 
 ${local}
-2. Load the sign-in script once per page with the integrity attribute above. Never copy it, bundle it, or load it unpinned.
+2. Load the sign-in script once per page with the integrity attribute above. Never copy it, bundle it, or load it unpinned. Take the integrity value from ${SITE}/baseline.json (\`signin_sri\`), not from a summary of a page.
 3. On the callback page call \`WallFlowers.finish({client, callback})\`; on every other page \`WallFlowers.current({client})\`. \`null\` means signed out: show a button that calls \`WallFlowers.signIn({client, callback})\`.
 4. Read everything with \`GET /v2/graph\` and draw from it. Write one change with \`POST /v2/apply {object, op, args}\`, several in order with \`POST /v2/batch\`.
 5. Open one change stream per page (\`session.events\`), and on \`changed\` re-read \`/v2/graph\` about 300 ms after the last one. Re-read after your own writes too.
@@ -639,6 +640,9 @@ export function build(ev = event()) {
     PUBLISHED_ROUTE: ev.register_publishes ? 'A community made at signup is published as it is made; one made before 1 October, 14:00 KST, may not be yet, and answers <code>404</code> (ask the organisers).'
       : 'Only a published community has one: a community made today isn\'t published yet, and answers <code>404</code>; signed in, your page reads the events and resources its own session created in <code>/v2/graph</code>.',
     SIGNUP_APP_QS: ev.signup_app ? '<p>Made your community with <strong>Your app</strong>? Signup\'s last page lists its Site id, Address, Client and Callback: the starter needs only Client and Callback (<code>CONFIG.client</code>, <code>CONFIG.callback</code>); keep the Address for the public page.</p>' : '',
+    // What WallFlowers is: the shared client's reach, and Teams once contact codes are open.
+    EXAMPLE_OWNERS: dev ? ' On your own machine, the shared client signs in only the community\'s owner and admins: for members to answer, register the page\'s own client (<a href="register.html">Register your app</a>).' : '',
+    TEAMS_STEP: ev.contact_codes ? '<li>Building with others: <a href="register.html#teams">add them to your community</a>.</li>\n' : '',
     START_DEV_SCOPE: qsDev ? ` <code>${esc(qsDev.id)}</code> covers only your own machine.` : '',
     BODY: mib(lim.body), SKEW: String(cfg.PROOF_SKEW ?? 60), STEPS: String(lim.steps), POW: String(lim.pow), TEAMS: ev.contact_codes ? teamsHtml(cfg) : '' })[k] ?? `{{${k}}}`);
   const out = {};
@@ -660,6 +664,7 @@ export function build(ev = event()) {
     }
   }
   out['docs.css'] = CSS;
+  for (const f of readdirSync(path.join(HERE, 'media'))) out['media/' + f] = readFileSync(path.join(HERE, 'media', f), 'utf8');   // text (SVG) only: dist/ is checked as text
   for (const f of readdirSync(path.join(HERE, 'starter'))) out['starter/' + f] = fill(readFileSync(path.join(HERE, 'starter', f), 'utf8'));
   // The example apps, in the starter's shape and filled the same way, served beside it under starter/
   // (a download: nginx.conf). An example's own test (*.test.mjs) is not for download.

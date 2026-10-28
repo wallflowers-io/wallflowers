@@ -3,17 +3,18 @@
 You are building a web app that signs a person in with WallFlowers and reads and writes their community.
 Read the linked pages before writing code; they are generated from the running system and are the truth.
 
-- Docs: https://docs.wallflowers.io/  (quickstart: https://docs.wallflowers.io/quickstart.html, routes: https://docs.wallflowers.io/routes.html, model: https://docs.wallflowers.io/model.html)
+- Docs: https://docs.wallflowers.io/  (what WallFlowers is: https://docs.wallflowers.io/about.html, quickstart: https://docs.wallflowers.io/quickstart.html, routes: https://docs.wallflowers.io/routes.html, model: https://docs.wallflowers.io/model.html)
 - API origin: https://app.wallflowers.io  (every call is `session.fetch('/v2/...')`, JSON in and out)
 - Sign-in script: `<script src="https://app.wallflowers.io/v2/signin.js" integrity="sha384-tlelF9i6GEcF6TboulAVcsSZoIVw6WnnBFG/cvUqcASGz3MuwBrF8jtAh5f5RfW/" crossorigin="anonymous"></script>`
 - Machine-readable routes: https://docs.wallflowers.io/routes.json · the data model: https://app.wallflowers.io/v2/icd (no session needed; from a browser, only on an origin WallFlowers allows)
+- The model's ops are in two places: `kinds.<kind>.ops` and `facets.<facet>.ops`. A facet's ops (every `base.*` op, e.g. `base.setPart`, `base.answerQuestion`) belong to each kind its `on` lists. Read both before saying an op does not exist.
 - Baseline these docs describe: model 2.3.1 (sha256 a71fb32573731ca2de99e637834c279fd44d661a947b9542c2d3b088dd10cb13), the Door at 1aab5b9f; machine-readable: https://docs.wallflowers.io/baseline.json
 - A working starter to begin from (two files, no build): https://docs.wallflowers.io/starter/index.html and https://docs.wallflowers.io/starter/app.js
 
 ## Do
 
 1. On the person's own machine, use the shared client `hackathon-local`: nothing to register. Callbacks, matched exactly: `http://localhost:<port>/callback` on 3000–3009; `http://localhost:<port>/` on 3000–3009, 5173–5175, 8000, 8080 (the same on 127.0.0.1). The person must own or administer a community first (made at https://wallflowers.io/signup); at sign-in they pick it, and the session reaches only it. A site on the web gets registered (https://docs.wallflowers.io/register.html).
-2. Load the sign-in script once per page with the integrity attribute above. Never copy it, bundle it, or load it unpinned.
+2. Load the sign-in script once per page with the integrity attribute above. Never copy it, bundle it, or load it unpinned. Take the integrity value from https://docs.wallflowers.io/baseline.json (`signin_sri`), not from a summary of a page.
 3. On the callback page call `WallFlowers.finish({client, callback})`; on every other page `WallFlowers.current({client})`. `null` means signed out: show a button that calls `WallFlowers.signIn({client, callback})`.
 4. Read everything with `GET /v2/graph` and draw from it. Write one change with `POST /v2/apply {object, op, args}`, several in order with `POST /v2/batch`.
 5. Open one change stream per page (`session.events`), and on `changed` re-read `/v2/graph` about 300 ms after the last one. Re-read after your own writes too.
