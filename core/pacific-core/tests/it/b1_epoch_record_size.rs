@@ -23,7 +23,7 @@
 //! it DOES scale with membership. §1 measures the slope; §1b measures the part
 //! that is NOT a function of membership alone.
 //!
-//! WHY NOT THE RELAY HARNESS. `tests/common/mod.rs` drives one `Node` at a time
+//! WHY NOT THE RELAY HARNESS. `tests/it/common/mod.rs` drives one `Node` at a time
 //! through a real relay, which is the right instrument for convergence and the
 //! wrong one for a size sweep at 50 leaves. This forms the group through the
 //! SAME `mls::` calls `node.rs` uses (`create_group_named`, `add_member`,
