@@ -164,13 +164,10 @@ class IOSAgent(Agent):
         "dm_view": "no DevLinks verb writes a DM transcript out — dump-thread covers rooms "
                    "and dump-profiles covers connections; a DM read needs a dump handler "
                    "in DevLinks.swift",
-        "commit": "that is the web keyholder's op vocabulary (say, post, rsvp…); the phone "
-                  "authors core deltas into GroupObjects, and the two do not fold the same "
-                  "thing yet",
-        "device_offer": "that is the web's X25519 pairing of one person's own devices; the "
-                        "phone pairs by MLS contact bundle (bundle, then pair_scan or room_add)",
-        "device_accept": "that is the web's X25519 pairing of one person's own devices — see "
-                         "device_offer",
+        "commit": "the phone authors core deltas into GroupObjects (obj_post, room_new); "
+                  "there is no raw op log to commit to",
+        "device_offer": "the phone pairs by MLS contact bundle (bundle, then pair_scan or room_add)",
+        "device_accept": "the phone pairs by MLS contact bundle — see device_offer",
     }
 
     #: How long the app gets to take a line off the command file. It drains every second.

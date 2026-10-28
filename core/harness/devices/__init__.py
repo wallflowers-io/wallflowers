@@ -1,11 +1,9 @@
-"""devices — the harness's hands on real platforms: a browser, an embedded site, a phone.
+"""devices — the harness's hands on real platforms: a phone.
 
 Every device is its own process and speaks the verb protocol in `protocol.py`.
 `runner.Runner` drives them and is the only place their answers are judged.
-Platform agents import on demand, so a machine without Xcode can still drive a
-browser and a machine without bun can still drive a phone:
+Platform agents import on demand:
 
-    from harness.devices.web import WebAgent, EmbedAgent
     from harness.devices.ios import IOSAgent
 """
 from .protocol import Agent, AgentError, Answer, Sidecar, Unsupported
