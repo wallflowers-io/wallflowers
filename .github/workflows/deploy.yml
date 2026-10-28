@@ -40,7 +40,7 @@ env:
 jobs:
   arc:
     if: inputs.arc && github.ref == 'refs/heads/main' && github.actor == 'phezman'
-    runs-on: [self-hosted, wf-ci]
+    runs-on: [self-hosted, wf-ci, wf-ci-deploy-arc]
     environment: production
     timeout-minutes: 60
     steps:
@@ -66,7 +66,7 @@ jobs:
   door:
     needs: arc
     if: ${{ !cancelled() && !failure() && inputs.door && github.ref == 'refs/heads/main' && github.actor == 'phezman' }}
-    runs-on: [self-hosted, wf-ci]
+    runs-on: [self-hosted, wf-ci, wf-ci-deploy-door]
     environment: production
     timeout-minutes: 60
     steps:
@@ -78,7 +78,7 @@ jobs:
   app:
     needs: door
     if: ${{ !cancelled() && !failure() && inputs.app && github.ref == 'refs/heads/main' && github.actor == 'phezman' }}
-    runs-on: [self-hosted, wf-ci]
+    runs-on: [self-hosted, wf-ci, wf-ci-deploy-app]
     environment: production
     timeout-minutes: 15
     steps:
@@ -89,7 +89,7 @@ jobs:
 
   docs:
     if: inputs.docs && github.ref == 'refs/heads/main' && github.actor == 'phezman'
-    runs-on: [self-hosted, wf-ci]
+    runs-on: [self-hosted, wf-ci, wf-ci-deploy-docs]
     environment: production
     timeout-minutes: 15
     steps:
