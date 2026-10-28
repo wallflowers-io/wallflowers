@@ -2046,6 +2046,23 @@
     "writes": false
   },
   {
+    "audience": "asset",
+    "auth": "none",
+    "errors": [
+      {
+        "source": "door",
+        "status": "NOT_FOUND",
+        "words": null
+      }
+    ],
+    "handler": "aasa",
+    "limits": {},
+    "method": "GET",
+    "path": "/.well-known/apple-app-site-association",
+    "router": "door",
+    "writes": false
+  },
+  {
     "audience": "webapp",
     "auth": "none",
     "errors": [],

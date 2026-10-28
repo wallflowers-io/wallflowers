@@ -372,6 +372,23 @@ async fn dt26_sec8_the_listed_origin_is_granted_by_name() {
     );
 }
 
+/// D-33's exception: the Door names the iOS app that may ask for its passkeys, and with
+/// `DOOR_APPLE_APPS` empty, none.
+#[tokio::test(flavor = "multi_thread")]
+async fn d33_the_ios_app_is_named_and_only_it() {
+    const AASA: &str = "/.well-known/apple-app-site-association";
+    let door = Door::start();
+    let r = door.http().get(format!("{}{AASA}", door.base)).send().await.expect("reach the door");
+    assert_eq!(r.status(), 200);
+    assert_eq!(r.headers()["content-type"], "application/json");
+    let body: serde_json::Value = r.json().await.expect("JSON");
+    assert_eq!(body, serde_json::json!({ "webcredentials": { "apps": ["9LFA85922G.network.pacific"] } }));
+
+    let none = Door::start_with(&[("DOOR_APPLE_APPS", "")]);
+    let r = none.http().get(format!("{}{AASA}", none.base)).send().await.expect("reach the door");
+    assert_eq!(r.status(), 404, "an empty list vouches for no app");
+}
+
 /// O-69, FC-15: a quiet session makes no relay round trip. Its held connection subscribed
 /// once, at the open; its tick (every 3 s) neither syncs nor dials, and its reconciler runs
 /// at 60 s, outside the window. The relay's own log is the witness: no connection opened and

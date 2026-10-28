@@ -237,9 +237,11 @@ struct Cfg {
     joining: usize,
     max: usize,
     sync_secs: u64,
-    /// The passkey's relying party (D-33 decides it; `wallflowers.io` holds every
-    /// passkey made so far).
+    /// The passkey's relying party (D-33 decides it: this Door's own host).
     rp_id: String,
+    /// The apps that may ask for this relying party's passkeys (D-33's one exception: the
+    /// first-party iOS app, which opens the wrap on its device). Empty: none, and a 404.
+    apple_apps: Vec<String>,
     /// Open attempts one address may hold.
     per_addr: usize,
     /// Behind an edge that names the client (`CF-Connecting-IP`), believe it; on
@@ -386,6 +388,13 @@ fn main() {
         sync_secs: env("DOOR_SYNC_SECS", "3").parse().expect("DOOR_SYNC_SECS"),
         rp_id: rp_id_for(&public, std::env::var("DOOR_RP_ID").ok().filter(|s| !s.is_empty()).as_deref())
             .unwrap_or_else(|e| panic!("DOOR_RP_ID: {e}")),
+        // Defaulted, not written in door.env: a deploy ships the binary, never the env.
+        apple_apps: std::env::var("DOOR_APPLE_APPS")
+            .unwrap_or_else(|_| "9LFA85922G.network.pacific".into())
+            .split(',')
+            .map(|a| a.trim().to_string())
+            .filter(|a| !a.is_empty())
+            .collect(),
         per_addr: env("DOOR_ATTEMPTS_PER_ADDR", "4").parse().expect("DOOR_ATTEMPTS_PER_ADDR"),
         trust_forwarded: env("DOOR_TRUST_FORWARDED", "0") == "1",
     };
@@ -538,6 +547,7 @@ fn router(door: &Door, webapp: &str) -> Router {
         .route("/door/wallflowers.png", get(wallflowers_png))
         .route("/door/face.css", get(face_css))
         .route("/door/face-mark", get(face_mark))
+        .route("/.well-known/apple-app-site-association", get(aasa))
         .route("/", get(page.clone()))
         .route("/index.html", get(page))
         .fallback_service(tower_http::services::ServeDir::new(&webapp));
@@ -557,7 +567,8 @@ fn router(door: &Door, webapp: &str) -> Router {
 }
 
 /// THE PASSKEY'S RP ID IS THIS DOOR'S OWN HOST (D-33, O-58): the ceremony's output is
-/// the seed, so no other host may be able to ask for it. `localhost` on loopback.
+/// the seed, so no other host may be able to ask for it. `localhost` on loopback. One app
+/// may: the iOS app `aasa` names, which opens the wrap on its own device.
 /// Anything else is refused, and the Door does not start.
 fn rp_id_for(public: &str, set: Option<&str>) -> Result<String, String> {
     let host = host_of(public);
@@ -1007,6 +1018,15 @@ const RESOURCES_JS: &str = concat!(
 
 async fn resources_js() -> impl IntoResponse {
     ([(header::CONTENT_TYPE, "text/javascript")], RESOURCES_JS)
+}
+
+/// D-33's exception: the apps iOS lets ask for this relying party's passkeys.
+async fn aasa(State(door): State<Door>) -> Response {
+    if door.cfg.apple_apps.is_empty() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let body = serde_json::json!({ "webcredentials": { "apps": door.cfg.apple_apps } });
+    ([(header::CONTENT_TYPE, "application/json")], body.to_string()).into_response()
 }
 
 /// The window's mark, from the binary, so the window depends on no webapp files.
@@ -2577,6 +2597,7 @@ mod tests {
                 max: 8,
                 sync_secs: 3,
                 rp_id: "localhost".into(),
+                apple_apps: vec![],
                 per_addr: 4,
                 trust_forwarded: false,
             }),
