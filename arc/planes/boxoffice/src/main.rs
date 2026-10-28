@@ -22,7 +22,8 @@
 //!   ARC_STATE_DIR               sqlite lives at $ARC_STATE_DIR/boxoffice.db (default .)
 //!   STRIPE_SECRET_KEY           the platform secret (sk_...)
 //!   STRIPE_WEBHOOK_SECRET       the endpoint secret (whsec_...)
-//!   ARC_BOXOFFICE_SUCCESS_URL   the hosted "return to Pacific" page (D21 — no deep links)
+//!   ARC_BOXOFFICE_SUCCESS_URL   the hosted return page (D21 — no deep links); required with the
+//!                               Stripe keys, no default: unset, the rail stays down, named
 //!   ARC_BOXOFFICE_MOCK_RAIL     "1" + --mock-rail = TEST-ONLY mock rail (harness only)
 //!
 //! Routes (all proxied by arc-gateway at Guest — deliberately enrolled, design §5 v1.1;
@@ -659,6 +660,11 @@ async fn acct_status(
     }
 }
 
+/// Where a paid checkout returns: `ARC_BOXOFFICE_SUCCESS_URL`, when set and not empty.
+fn success_url(set: Option<String>) -> Option<String> {
+    set.filter(|u| !u.trim().is_empty())
+}
+
 fn router(app: App) -> Router {
     Router::new()
         // Bare /health too: arcup and the gateway's liveness probe expect it on planes.
@@ -710,9 +716,17 @@ async fn main() {
             std::env::var("STRIPE_WEBHOOK_SECRET").ok(),
         ) {
             (Some(sk), Some(ws)) if !sk.trim().is_empty() && !ws.trim().is_empty() => {
-                let success_url = std::env::var("ARC_BOXOFFICE_SUCCESS_URL")
-                    .unwrap_or_else(|_| "https://kenjin.cc/tickets/return".to_string());
-                Some(Arc::new(stripe::StripeRail::new(sk, ws, success_url)))
+                match success_url(std::env::var("ARC_BOXOFFICE_SUCCESS_URL").ok()) {
+                    Some(success_url) => Some(Arc::new(stripe::StripeRail::new(sk, ws, success_url))),
+                    None => {
+                        eprintln!(
+                            "boxoffice: ERROR — ARC_BOXOFFICE_SUCCESS_URL unset: the payment rail is DOWN. \
+                             A checkout returns to a page that exists, so there is no default. Serving \
+                             the free path only; priced checkout answers 503 rail_unconfigured."
+                        );
+                        None
+                    }
+                }
             }
             _ => {
                 eprintln!(
@@ -755,6 +769,18 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
+    /// The return page is configuration, never a default: an unset or empty
+    /// ARC_BOXOFFICE_SUCCESS_URL leaves no URL, so the rail stays down, named, rather
+    /// than sending a payer to a page nobody serves (kenjin.cc's retired domain).
+    #[test]
+    fn the_return_page_has_no_default() {
+        assert_eq!(super::success_url(None), None);
+        assert_eq!(super::success_url(Some("  ".into())), None);
+        assert_eq!(super::success_url(Some("https://example.org/r".into())).as_deref(), Some("https://example.org/r"));
+        let src = include_str!("main.rs");
+        assert!(!src.contains(concat!("kenjin", ".cc/tickets")), "no hard-coded return page");
+    }
+
     use super::*;
     use axum::body::Body;
     use axum::http::Request;
