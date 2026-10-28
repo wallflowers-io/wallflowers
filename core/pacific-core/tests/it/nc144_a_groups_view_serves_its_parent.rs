@@ -3,7 +3,7 @@
 //! must say what it is part of (`reciprocity`, ruled 25 Sep): the edge walks from either end. Make
 //! admin's second step (node.rs add_part_member) reads view["parent"]["parent"] for the same reason.
 
-mod common;
+use crate::common;
 
 use common::Harness;
 use pacific_core::authoring::{self, Ctx};
