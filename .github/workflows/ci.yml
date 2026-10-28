@@ -24,7 +24,6 @@ env:
   # Tests built at opt-level 1: in debug, core's MLS suites run several times slower.
   # Debug assertions and overflow checks are separate settings and stay on.
   CARGO_PROFILE_DEV_OPT_LEVEL: "1"
-  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   icd:
