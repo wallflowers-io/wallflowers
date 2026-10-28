@@ -807,6 +807,37 @@ fn seal_write(n: &Node, rt: &tokio::runtime::Runtime, cfg: &Cfg, keeper: &mut Op
     keeper.as_mut().map_or(Ok(()), |k| k.seal(n, &cfg.door))
 }
 
+/// ANSWERED ONCE IT IS AT THE RELAY (RD.7, NC-93): a write's Deltas published, and the sent
+/// ledger sealed with them (NC-76), before its answer, so a Door that dies at once has lost
+/// nothing another device cannot read. A mint's object has no pool leaf until the upkeep gives
+/// it one, and nothing of it is sent until then. What is left (the card, the self record, the
+/// head, the confirm) is the tail. The webapp shows the write at once and does not wait for this.
+fn relay_write(n: &Node, rt: &tokio::runtime::Runtime, cfg: &Cfg, keeper: &mut Option<keep::Keeper>, made: bool, objects: &[String]) -> Result<(), String> {
+    if made {
+        rt.block_on(n.upkeep()).map_err(|e| e.to_string())?;
+    }
+    let mut sent = 0;
+    for o in objects {
+        sent += rt.block_on(n.publish_pending(o)).map_err(|e| e.to_string())?;
+    }
+    match rt.block_on(n.publish_all_pending()) {
+        Ok(k) => sent += k,
+        Err(e) => eprintln!("door: a write's other Deltas stay in the outbox for the tail — {e}"),
+    }
+    if sent > 0 {
+        eprintln!("door: {sent} delta(s) at the relay before the answer");
+    }
+    match keeper.as_mut() {
+        Some(k) if k.behind(n) => k.seal(n, &cfg.door).map_err(|e| redacted(&e, cfg)),
+        _ => Ok(()),
+    }
+}
+
+/// A write kept on this Door that did not reach the relay: refused, in words that say so.
+fn unrelayed(e: String) -> String {
+    format!("the write is kept on this Door but not at the relay yet ({e}); it is sent with the next sync")
+}
+
 /// WHAT A WRITE LEAVES ONCE IT IS ANSWERED (O-69): its outbox to send, and whether it
 /// made objects (which need their pool leaves, and the self record to name them). Run
 /// when no ask waits, and within TAIL_WITHIN of the first answer however busy the
@@ -1763,6 +1794,10 @@ fn actor(
                             break;
                         }
                         let made = out.is_ok();
+                        let out = match out {
+                            Ok(id) => relay_write(n, &rt, &cfg, &mut keeper, true, std::slice::from_ref(&id)).map(|_| id).map_err(unrelayed),
+                            e => e,
+                        };
                         let _ = back.send(out);
                         tail.get_or_insert_with(Tail::default).add(made);
                     }
@@ -1790,13 +1825,17 @@ fn actor(
                                 Some(d) => rt.block_on(n.apply_local(&object, d.op_id, args)).map_err(|e| e.to_string()),
                             },
                         };
-                        // ANSWERED ONCE IT IS HERE AND KEPT (O-69): the local commit is what
-                        // a following read sees; the publish and the rest are its tail.
+                        // KEPT, THEN AT THE RELAY, THEN ANSWERED (RD.7): the local commit is what a
+                        // following read sees; the card and the rest are its tail.
                         if let Err(e) = seal_write(n, &rt, &cfg, &mut keeper, spine_unreached) {
                             let _ = back.send(Err(format!("the write was made, but this Door could not keep it ({e}); sign in again")));
                             break;
                         }
                         let wrote = out.is_ok();
+                        let out = match out {
+                            Ok(id) => relay_write(n, &rt, &cfg, &mut keeper, false, std::slice::from_ref(&object)).map(|_| id).map_err(unrelayed),
+                            e => e,
+                        };
                         let _ = back.send(out);
                         if wrote {
                             tail.get_or_insert_with(Tail::default).add(false);
@@ -1825,6 +1864,10 @@ fn actor(
                             let _ = back.send(Err(format!("the member was added, but this Door could not keep it ({e}); sign in again")));
                             break;
                         }
+                        let out = match out {
+                            Ok(m) => relay_write(n, &rt, &cfg, &mut keeper, false, std::slice::from_ref(&object)).map(|_| m).map_err(unrelayed),
+                            e => e,
+                        };
                         let _ = back.send(out);
                         tail.get_or_insert_with(Tail::default).add(false);
                     }
@@ -1852,6 +1895,7 @@ fn actor(
                         // checks, so no tick lands between the halves of an edge. The first
                         // refusal ends it; what was made stands, and is named.
                         let mut made: Vec<String> = Vec::new();
+                        let mut minted_any = false;
                         let mut refused = None;
                         for (i, step) in steps.into_iter().enumerate() {
                             let r = match step {
@@ -1863,6 +1907,7 @@ fn actor(
                                     if let (Some(_), Ok(id)) = (&scope, &r) {
                                         minted.entry(who.clone()).or_default().insert(id.clone());
                                     }
+                                    minted_any |= r.is_ok();
                                     r
                                 }
                                 Step::Apply { object, op, args } => {
@@ -1898,10 +1943,14 @@ fn actor(
                                 break;
                             }
                         }
+                        let out = match relay_write(n, &rt, &cfg, &mut keeper, minted_any, &made) {
+                            Ok(()) => Ok(serde_json::json!({ "made": made, "refused": refused })),
+                            Err(e) => Err(unrelayed(e)),
+                        };
                         if !made.is_empty() {
                             tail.get_or_insert_with(Tail::default).add(true);
                         }
-                        let _ = back.send(Ok(serde_json::json!({ "made": made, "refused": refused })));
+                        let _ = back.send(out);
                     }
                     Ask::Address { slug, host, scope, who, back } => {
                         let out = (|| {
