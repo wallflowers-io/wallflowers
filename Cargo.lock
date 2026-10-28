@@ -2940,11 +2940,14 @@ name = "node"
 version = "0.1.0"
 dependencies = [
  "arc-build",
+ "base64",
+ "ed25519-dalek",
  "gmail",
  "hex",
  "nango",
  "nango-rag",
  "pacific-core",
+ "relay",
  "serde",
  "serde_json",
  "tiny_http",
