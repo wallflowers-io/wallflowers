@@ -375,7 +375,8 @@ pub struct Admitted {
     /// The Site's rooms the member is in now (D-58).
     pub rooms: Vec<String>,
     /// A room this node admits to that the member is not in yet, and why: named, never
-    /// skipped, and completed by presenting the same claim again.
+    /// skipped, and completed by presenting the same claim again. When it admits to none of
+    /// the Site's rooms for the claim, each of those, and why (NC-140).
     pub unjoined: Vec<(String, String)>,
     /// The claim's choice when no room of this node's carries it, and the member went to
     /// its rooms without a choice instead (ICD 2.1.0 row 3): a Site set up short.
@@ -408,6 +409,35 @@ pub struct HistorySent {
 /// What a history send publishes (`Node::history_planned`): the spine's bundle, if any rows go;
 /// the card bundles; the report of both.
 type HistoryPlan = (Option<crate::history::Bundle>, Vec<crate::history::Bundle>, HistorySent);
+
+/// How long an admitter waits for a Site not yet on its Node (NC-140), inside the Door's 20 s
+/// call to the Arc, and the pause between its checks ([`Node::site_ready`]). The wait holds no
+/// lock: each check takes the Node alone, and the admission after it.
+pub const SITE_WAIT: std::time::Duration = std::time::Duration::from_millis(2500);
+pub const SITE_WAIT_PAUSE: std::time::Duration = std::time::Duration::from_millis(400);
+/// A Site not on this Node after the wait: `NotReady`'s words, which the Arc answers 503.
+pub const SITE_NOT_HERE: &str = "the Site is not on this Arc yet; try again";
+
+/// ONE PERSON: the identity every key package names (Software Security, D-58).
+fn one_person(bundles: &[String]) -> Result<[u8; 32], CoreError> {
+    let ids = bundles
+        .iter()
+        .map(|b| handshake::parse_and_verify(b).map(|c| c.identity_pk))
+        .collect::<Result<Vec<_>, _>>()?;
+    let member = *ids.first().ok_or_else(|| CoreError::Membership("no contact bundle".into()))?;
+    if ids.iter().any(|i| *i != member) {
+        return Err(CoreError::Membership("the bundles name more than one identity".into()));
+    }
+    Ok(member)
+}
+
+/// An admission's checks that need no Node (NC-140): the claim's shape, its terms and, under
+/// a key the deploy trusts (`stand_in`), its signature (`claim::precheck`); the bundles' one
+/// identity. A claim that fails them is refused before an admitter waits for its Site.
+pub fn admission_precheck(token: &str, bundles: &[String], stand_in: &std::collections::HashMap<String, [u8; 32]>) -> Result<(), CoreError> {
+    crate::claim::precheck(token, stand_in, unix_now() as u64).map_err(CoreError::Membership)?;
+    one_person(bundles).map(|_| ())
+}
 
 /// What one admission carries of an object's members' cards, at most, over all its card
 /// bundles (O-75 cards): the ICD's `cardsTotal` (`history::CARDS_TOTAL`), one number, read at
@@ -4002,14 +4032,12 @@ impl Node {
         stand_in: &std::collections::HashMap<String, [u8; 32]>,
     ) -> Result<Admitted, CoreError> {
         use base64::Engine as _;
-        // ONE PERSON: every key package is the same identity's (Software Security, D-58).
-        let ids = bundles
-            .iter()
-            .map(|b| handshake::parse_and_verify(b).map(|c| c.identity_pk))
-            .collect::<Result<Vec<_>, _>>()?;
-        let member = *ids.first().ok_or_else(|| CoreError::Membership("no contact bundle".into()))?;
-        if ids.iter().any(|i| *i != member) {
-            return Err(CoreError::Membership("the bundles name more than one identity".into()));
+        let member = one_person(bundles)?;
+        // THE SITE ON THIS NODE (NC-140): one minted seconds ago may still wait in the intro
+        // mailbox. Not here, `NotReady`, never the directory's error; the admitter waits for
+        // it outside this call (`site_ready`), and asks again.
+        if !self.site_ready(site_hex).await? {
+            return Err(CoreError::NotReady(SITE_NOT_HERE.into()));
         }
         // The Site and its parts as the relay holds them now, not as the last poll left them
         // (TEST run 77): the rooms' marks, the admitter grants and the spent claims.
@@ -4086,6 +4114,22 @@ impl Node {
                     }
                     Err(e) => unjoined.push((part.clone(), e.to_string())),
                 },
+            }
+        }
+        // A CLAIM THAT CANNOT SEE THE SITE'S ROOMS FOR IT SAYS SO (NC-140): the rooms the
+        // Site's fold names for this claim, by the same rule. When this Node admits to none
+        // of them, each is named with why, and the Door keeps the claim for a retry. A closed
+        // room beside one it admits to stays unnamed (D-58 point 3).
+        let rooms_for = |c: Option<&String>| state.parts.iter().filter(|(_, r)| room(r) && r.choice.as_ref() == c).map(|(p, _)| p).collect::<Vec<_>>();
+        let wanted = claim.choice.as_ref().map(|c| rooms_for(Some(c))).filter(|v| !v.is_empty()).unwrap_or_else(|| rooms_for(None));
+        if !wanted.iter().any(|p| mine.iter().any(|(m, _)| m == p)) {
+            for part in wanted {
+                let why = if !self.holds(part) {
+                    "this Arc is not in the room".to_string()
+                } else {
+                    self.object_compliance(part).err().map_or_else(|| "this Arc is not the room's admitter".to_string(), |e| e.to_string())
+                };
+                unjoined.push((part.clone(), why));
             }
         }
         Ok(Admitted { member, choice: claim.choice, artifact: claim.artifact, rooms, unjoined, fallback, history })
@@ -4326,8 +4370,47 @@ impl Node {
         self.send_planned(object_hex, &contact.intro_tag, plan).await
     }
 
+    /// Whether this Node holds the object: its directory row, which a mint or a Welcome
+    /// writes. Not held, its fold is "group … has no owner".
+    fn holds(&self, object_hex: &str) -> bool {
+        self.object_group_id(object_hex).is_ok_and(|g| self.dir.group_owner(&g).is_ok_and(|o| o.is_some()))
+    }
+
+    /// Take the intro mailbox on `sess`, each Welcome joined (`drain_intro`). A join owes
+    /// the full pass, which the next sync makes, as `catch_up`'s does.
+    async fn take_welcomes(&self, sess: &mut Router) -> Result<usize, CoreError> {
+        let joined = self.drain_intro(sess).await?;
+        if joined > 0 {
+            self.live_state().joined = true;
+        }
+        Ok(joined)
+    }
+
+    /// NC-140: WHETHER THE SITE IS ON THIS NODE, its intro mailbox taken first when it is not:
+    /// a Site minted seconds ago may wait there as a Welcome. One check, never a wait: an
+    /// admitter waiting for a Site calls this every `SITE_WAIT_PAUSE`, up to `SITE_WAIT`, and
+    /// holds nothing between.
+    pub async fn site_ready(&self, site_hex: &str) -> Result<bool, CoreError> {
+        if self.holds(site_hex) {
+            return Ok(true);
+        }
+        let mut sess = self.home_session().await?;
+        match self.take_welcomes(&mut sess).await {
+            Ok(_) => {
+                self.keep_session(sess);
+                Ok(self.holds(site_hex))
+            }
+            Err(e) => {
+                sess.close().await;
+                Err(e)
+            }
+        }
+    }
+
     /// Drain a Site and the parts it names over the home session: one pipelined round, and a
-    /// second only for parts the first revealed. Groups on another relay are left to it.
+    /// second for parts the first did not reach. Groups on another relay are left to it. A
+    /// part this Node does not hold sends it to its intro mailbox first (NC-140): a room it
+    /// was added to seconds ago is joined, and drained in the second round.
     async fn drain_site(&self, site_hex: &str) -> Result<(), CoreError> {
         let home = self.routes.to_spec();
         let ours = |id: &String| self.object_group_id(id).ok().filter(|g| self.routes_for(g).to_spec() == home);
@@ -4335,12 +4418,17 @@ impl Node {
             Ok(n.group_state(site_hex)?.parts.into_keys().collect())
         };
         let before = parts(self)?;
+        let held: std::collections::BTreeSet<&String> = before.iter().filter(|p| self.holds(p)).collect();
         let mut sess = self.home_session().await?;
         let drained = async {
-            let first = std::iter::once(site_hex.to_string()).chain(before.iter().cloned()).filter_map(|id| ours(&id)).collect();
+            let first = std::iter::once(site_hex.to_string()).chain(held.iter().map(|p| p.to_string())).filter_map(|id| ours(&id)).collect();
             self.drain_groups_at_once(&mut sess, &first).await?;
-            let revealed = parts(self)?.difference(&before).filter_map(ours).collect();
-            self.drain_groups_at_once(&mut sess, &revealed).await
+            let now = parts(self)?;
+            if now.iter().any(|p| !self.holds(p)) {
+                self.take_welcomes(&mut sess).await?;
+            }
+            let second = now.iter().filter(|p| !held.contains(p)).filter_map(ours).collect();
+            self.drain_groups_at_once(&mut sess, &second).await
         }
         .await;
         match drained {

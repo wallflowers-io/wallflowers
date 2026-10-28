@@ -109,6 +109,31 @@ pub fn site_of(token: &str) -> Option<String> {
 /// Check `token` against the kiosk keys this admitter trusts, for `site`, at `now`
 /// (unix seconds). Every refusal says what failed and never repeats the token.
 pub fn verify(token: &str, keys: &HashMap<String, [u8; 32]>, site: &str, now: u64) -> Result<Claim, String> {
+    let (p, s, pay) = parse(token)?;
+    let key = keys.get(&pay.k).ok_or_else(|| format!("no kiosk key {} is trusted here", pay.k))?;
+    signed(key, &pay.k, p, s)?;
+    if site.is_empty() || pay.s != site {
+        return Err("the claim is not for this Site".into());
+    }
+    let nonce = terms(&pay, now)?;
+    Ok(Claim { kid: pay.k, site: pay.s, nonce, iat: pay.iat, exp: pay.exp, choice: pay.c, artifact: pay.a })
+}
+
+/// What can be checked before the Site is read (NC-140): the shape and the terms, and the
+/// signature when its key is one of `stand_in`, the keys the deploy trusts. A token that
+/// fails is refused before an admitter waits for its Site; one that passes is checked whole
+/// by [`verify`], against the Site's issuers too.
+pub fn precheck(token: &str, stand_in: &HashMap<String, [u8; 32]>, now: u64) -> Result<(), String> {
+    let (p, s, pay) = parse(token)?;
+    terms(&pay, now)?;
+    match stand_in.get(&pay.k) {
+        Some(key) => signed(key, &pay.k, p, s),
+        None => Ok(()),
+    }
+}
+
+/// `v1.<payload>.<sig>`: the payload and the signature, base64url, and the payload read.
+fn parse(token: &str) -> Result<(&str, &str, Payload), String> {
     let mut parts = token.split('.');
     let (Some(v), Some(p), Some(s), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else {
         return Err("a claim is v1.<payload>.<sig>".into());
@@ -118,8 +143,12 @@ pub fn verify(token: &str, keys: &HashMap<String, [u8; 32]>, site: &str, now: u6
     }
     let body = B64.decode(p).map_err(|_| "the claim's payload is not base64url")?;
     let pay: Payload = serde_json::from_slice(&body).map_err(|e| format!("the claim's payload is not its JSON: {e}"))?;
-    let key = keys.get(&pay.k).ok_or_else(|| format!("no kiosk key {} is trusted here", pay.k))?;
-    if kid_of(key) != pay.k {
+    Ok((p, s, pay))
+}
+
+/// The signature `s` over `v1.<p>`, by `key`, which `kid` names.
+fn signed(key: &[u8; 32], kid: &str, p: &str, s: &str) -> Result<(), String> {
+    if kid_of(key) != kid {
         return Err("the kiosk key registered under this id is not the one it names".into());
     }
     let sig: [u8; 64] = B64
@@ -129,10 +158,12 @@ pub fn verify(token: &str, keys: &HashMap<String, [u8; 32]>, site: &str, now: u6
         .ok_or("the claim's signature is not 64 bytes of base64url")?;
     let vk = ed25519_dalek::VerifyingKey::from_bytes(key).map_err(|_| "the kiosk key is not an Ed25519 key")?;
     vk.verify_strict(format!("v1.{p}").as_bytes(), &ed25519_dalek::Signature::from_bytes(&sig))
-        .map_err(|_| "the claim's signature does not verify")?;
-    if site.is_empty() || pay.s != site {
-        return Err("the claim is not for this Site".into());
-    }
+        .map_err(|_| "the claim's signature does not verify".to_string())
+}
+
+/// The terms no key and no Site is needed for: the nonce, the life, the clock, the choice
+/// and the share id. The nonce.
+fn terms(pay: &Payload, now: u64) -> Result<[u8; 16], String> {
     let nonce: [u8; 16] = B64
         .decode(&pay.n)
         .ok()
@@ -157,7 +188,7 @@ pub fn verify(token: &str, keys: &HashMap<String, [u8; 32]>, site: &str, now: u6
             return Err("the claim's artifact is not a 20-character share id".into());
         }
     }
-    Ok(Claim { kid: pay.k, site: pay.s, nonce, iat: pay.iat, exp: pay.exp, choice: pay.c, artifact: pay.a })
+    Ok(nonce)
 }
 
 #[cfg(test)]
@@ -216,6 +247,25 @@ mod tests {
         assert!(parse_keys(&misnamed).unwrap_err().contains("not the id of its key"));
         assert!(parse_keys(r#"{"ab":"short"}"#).unwrap_err().contains("32-byte"));
         assert!(load_keys(None).unwrap().is_empty());
+    }
+
+    /// NC-140: before the Site is read, a token is refused for its shape, its terms, and a
+    /// stand-in key's signature; one under a key only the Site could vouch for passes on to
+    /// `verify`.
+    #[test]
+    fn a_precheck_refuses_what_it_can_without_the_site() {
+        let now = 1_790_000_100;
+        let good = issue(&payload(1_790_000_000, 1_790_000_900));
+        assert_eq!(precheck(&good, &keys(), now), Ok(()));
+        assert_eq!(precheck(&good, &HashMap::new(), now), Ok(()), "a key the Site's issuers hold");
+        assert!(precheck("v1.e30.AA", &keys(), now).unwrap_err().contains("JSON"));
+        assert!(precheck(&good, &HashMap::new(), 1_790_000_900 + SKEW + 1).unwrap_err().contains("expired"));
+        let (head, sig) = good.rsplit_once('.').unwrap();
+        let mut bad = B64.decode(sig).unwrap();
+        bad[0] ^= 1;
+        let forged = format!("{head}.{}", B64.encode(bad));
+        assert!(precheck(&forged, &keys(), now).unwrap_err().contains("does not verify"));
+        assert_eq!(precheck(&forged, &HashMap::new(), now), Ok(()), "left to verify, against the Site's issuers");
     }
 
     const VECTOR: &str ="v1.eyJrIjoiZGJjMjk4MjUxYzUxMzIxYiIsInMiOiI1ZTdlNWU3ZTVlN2U1ZTdlNWU3ZTVlN2U1ZTdlNWU3ZTVlN2U1ZTdlNWU3ZTVlN2U1ZTdlNWU3ZTVlN2U1ZTdlIiwibiI6IkJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQnciLCJpYXQiOjE3OTAwMDAwMDAsImV4cCI6MTc5MDAwMDkwMCwiYyI6InNraWxscyIsImEiOiJrMm0zbjRwNXE2cjdzOHQ5dXZ3eCJ9.XHMDkyux2VKE5dbEaoBVZCaHQaYjlb1LrODTz9nk1u5pPfaEH7OOFylQ8IommibeMs7koCG1Ugn4D2W5cKNBAA";

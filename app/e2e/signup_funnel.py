@@ -105,6 +105,18 @@ def say(*a):
     print(time.strftime("%H:%M:%SZ", time.gmtime()), *a, flush=True)
 
 
+def clock() -> tuple[float, float]:
+    """Now, by the wall and by this Mac's awake time (CLOCK_UPTIME_RAW stops while it sleeps)."""
+    return time.time(), time.clock_gettime(time.CLOCK_UPTIME_RAW)
+
+
+def slept(since: tuple[float, float]) -> float:
+    """Seconds asleep since `since`: a walk that spans a sleep times the sleep, and is dropped
+    (TEST, 30 Sep: this Mac in clamshell sleep from 13:09:50Z, waking a few minutes in twenty)."""
+    now = clock()
+    return round((now[0] - since[0]) - (now[1] - since[1]), 1)
+
+
 class Walk:
     """One browser at one viewport, and the screens it passes, in order."""
 
@@ -184,7 +196,7 @@ def rtt(host: str, n: int = 5) -> dict:
 async def walk(work: Path, view: str, leg: str, run: int, out: dict, body, loopback: bool, rtt_ms: int = 0) -> None:
     """One browser through `body`; a stall is kept with the screen it followed, as a visitor meets it."""
     proc, tab = await browser(work, f"{leg}{run}-{view}", rtt=rtt_ms, loopback=loopback)
-    w, (width, height, mobile) = Walk(tab, view, leg, run), VIEWPORTS[view]
+    w, (width, height, mobile), since = Walk(tab, view, leg, run), VIEWPORTS[view], clock()
     try:
         await tab.cdp("Emulation.setDeviceMetricsOverride", width=width, height=height, deviceScaleFactor=1, mobile=mobile)
         if mobile:
@@ -196,7 +208,9 @@ async def walk(work: Path, view: str, leg: str, run: int, out: dict, body, loopb
         out.setdefault("stalls", []).append({"leg": leg, "view": view, "run": run, "after": after, "error": str(e) or type(e).__name__})
         say(f"{leg}/{view} run {run}: stalled after {after}: {str(e)[:120] or type(e).__name__}")
     finally:
-        out.setdefault("visits", []).extend(w.visits)
+        asleep = slept(since)
+        out.setdefault("walks", []).append({"leg": leg, "view": view, "run": run, "screens": len(w.visits), "slept": asleep})
+        out.setdefault("visits", []).extend(w.visits if asleep < 2 else [])
         await tab.ws.close()
         proc.kill()
         proc.wait(10)

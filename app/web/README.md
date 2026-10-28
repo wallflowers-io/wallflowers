@@ -118,7 +118,7 @@ six invented ops into a demo world.
 
 The profile icon in the title bar is the door. Signed out it is a dashed outline
 with no initial in it — a face that is not yours is worse than no face — and
-clicking it opens `kenjin.cc/signin`, which already implements the three doors: a
+clicking it opens the Door's sign-in at `app.wallflowers.io`, which already implements the three doors: a
 Kenjin passkey (WebAuthn), Apple, and AI Passport. **None of that is
 reimplemented here.**
 

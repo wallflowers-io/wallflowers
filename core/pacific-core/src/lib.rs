@@ -219,6 +219,10 @@ pub enum CoreError {
     /// `Transport` failure, which means "not yet" and is answered by the outbox.
     #[error("too large: {0}")]
     TooLarge(String),
+    /// What the call needs has not reached this device yet (a Welcome not taken, NC-140).
+    /// Not a refusal: the same request may pass on a retry.
+    #[error("not ready: {0}")]
+    NotReady(String),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
 }
