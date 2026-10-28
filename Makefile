@@ -110,10 +110,10 @@ e2e-browser:  ## the path in a visible browser: the real window, a virtual passk
 
 # ── the CI runner ───────────────────────────────────────────────────────────
 # GitHub's CI jobs (label wf-ci) run here, in a container per job on Colima's wf-ci VM, for as
-# long as any are queued; then the VM stops. tools/ci/serve.sh says how.
+# long as any are queued; then the VM stops. The harness is dev/ci.sh (CLAUDE.md § Build).
 
 ci:  ## serve GitHub's queued CI jobs on this Mac, then tear down; one run per machine
-	@$(PRODUCT)/tools/ci/serve.sh
+	@$(WS)/dev/ci.sh
 
 ci-hooks:  ## a push starts `make ci` in the background (tools/hooks/pre-push)
 	@git -C $(PRODUCT) config core.hooksPath tools/hooks && echo '  pushes now start make ci'

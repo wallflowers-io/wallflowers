@@ -1,6 +1,6 @@
 # Every job calls a Makefile target: the Makefile is the one way to build and test.
 # Jobs (label wf-ci) run on Ralph's Mac, each in its own container, while `make ci` serves them
-# (tools/ci/serve.sh; a push starts it once `make ci-hooks` is set), and only for Ralph's pushes.
+# (~/wallflowers/dev/ci.sh, CLAUDE.md § Build; a push starts it once `make ci-hooks` is set), and only for Ralph's pushes.
 # There is no pull_request trigger, so a fork runs nothing on that machine; a push run's checks
 # land on the commit, which is what a PR's required checks read. One job at a time.
 # Not here yet: check-harness (red on main: the ICD has no components.messages).

@@ -1,5 +1,5 @@
 # The CI runner: the toolchain ci.yml and deploy.yml need, and the Actions runner, for one job.
-# Built and run by serve.sh (make ci); the two lock files arrive as named build contexts.
+# Built and run by ~/wallflowers/dev/ci.sh (make ci); the two lock files arrive as named build contexts.
 FROM ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
 
 ARG NODE=v24.22.1
