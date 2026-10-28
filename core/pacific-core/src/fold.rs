@@ -595,6 +595,10 @@ pub fn view_of(
             };
             // The Trade board (group.publishListing): the live listings, by (lister, Thing).
             v["listings"] = serde_json::to_value(st.listings.values().collect::<Vec<_>>()).map_err(|e| CoreError::Coordinator(e.to_string()))?;
+            // The part's half of part_of (base.setParent; the `parent` facet is on group), as a
+            // Forum's and a Host's views serve it: read alone, a sub-group says what it is part
+            // of (`reciprocity`; NC-144). Null when it is part of nothing.
+            v["parent"] = serde_json::to_value(&st.parent).map_err(|e| CoreError::Coordinator(e.to_string()))?;
             v.to_string()
         }
         ObjectKind::Event => {
