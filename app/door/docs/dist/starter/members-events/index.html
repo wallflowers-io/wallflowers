@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Members and events</title>
+  <link rel="icon" href="data:,">
+  <!-- Keep third-party scripts off this page: anything running here can use the session. -->
+  <style>
+    :root { --bg: #fbfaf7; --fg: #1d1c19; --muted: #6b675f; --line: #e3dfd6; --accent: #2f5d50; --on-accent: #fff; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #151513; --fg: #ecebe6; --muted: #a29e94; --line: #2f2e2a; --accent: #8fc7b4; --on-accent: #10201b; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 42rem; margin: 0 auto; padding: 24px 16px 48px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 1.4rem; margin: 0; }
+    h2 { font-size: 1.1rem; margin: 24px 0 8px; }
+    button { font: inherit; border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+    button.lead, button[type="submit"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    #status, .muted { color: var(--muted); }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { padding: 8px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+    #events li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+    #events li span { display: flex; gap: 8px; }
+    button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    #app:not([hidden]) { display: grid; gap: 0 32px; }
+    @media (min-width: 720px) { main { max-width: 60rem; } #app:not([hidden]) { grid-template-columns: 2fr 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1 id="community">Community</h1>
+      <div>
+        <button id="signin" class="lead" type="button" hidden>Sign in with WallFlowers</button>
+        <button id="signout" type="button" hidden>Sign out</button>
+      </div>
+    </header>
+    <p id="status" role="status" hidden></p>
+
+    <div id="app" hidden>
+      <section>
+        <h2>Events</h2>
+        <ul id="events"></ul>
+        <p class="muted">Members see who answered, and how.</p>
+      </section>
+      <section>
+        <h2>Members</h2>
+        <ul id="members"></ul>
+      </section>
+    </div>
+  </main>
+  <script>
+    // Opened as a file (file://), the module below can't load: say so, rather than a blank page.
+    if (location.protocol === 'file:') {
+      var s = document.getElementById('status');
+      s.hidden = false;
+      s.textContent = 'This page has to be served, not opened as a file: see the Quickstart (serve the folder, then open http://localhost:5173/).';
+    }
+  </script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

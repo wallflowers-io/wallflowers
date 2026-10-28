@@ -661,6 +661,10 @@ export function build(ev = event()) {
   }
   out['docs.css'] = CSS;
   for (const f of readdirSync(path.join(HERE, 'starter'))) out['starter/' + f] = fill(readFileSync(path.join(HERE, 'starter', f), 'utf8'));
+  // The example apps, in the starter's shape and filled the same way, served beside it under starter/
+  // (a download: nginx.conf). An example's own test (*.test.mjs) is not for download.
+  const EX = path.join(HERE, 'examples');
+  for (const d of readdirSync(EX)) for (const f of readdirSync(path.join(EX, d)).filter((f) => !/\.test\.m?js$/.test(f))) out[`starter/${d}/${f}`] = fill(readFileSync(path.join(EX, d, f), 'utf8'));
   out['agents.md'] = agentsMd(ctx);
   out['llms.txt'] = llmsTxt();
   out['baseline.json'] = JSON.stringify({ icd: { version: m.version, sha256: m.sha256 }, door: RELEASE, signin_sri: ctx.sri, ...(ctx.resourcesSri ? { resources_sri: ctx.resourcesSri } : {}) }, null, 2) + '\n';

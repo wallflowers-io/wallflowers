@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resource library</title>
+  <link rel="icon" href="data:,">
+  <!-- Keep third-party scripts off this page: anything running here can use the session. -->
+  <style>
+    :root { --bg: #fbfaf7; --fg: #1d1c19; --muted: #6b675f; --line: #e3dfd6; --accent: #2f5d50; --on-accent: #fff; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #151513; --fg: #ecebe6; --muted: #a29e94; --line: #2f2e2a; --accent: #8fc7b4; --on-accent: #10201b; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 42rem; margin: 0 auto; padding: 24px 16px 48px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 1.4rem; margin: 0; }
+    h2 { font-size: 1.1rem; margin: 24px 0 8px; display: flex; justify-content: space-between; }
+    a { color: var(--accent); }
+    button { font: inherit; border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 8px; padding: 4px 12px; cursor: pointer; }
+    button.lead { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    #status, small, li p { color: var(--muted); }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { padding: 8px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+    li p { margin: 2px 0 0; }
+    #editor { margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Resource library</h1>
+      <div>
+        <button id="signin" class="lead" type="button" hidden>Sign in with WallFlowers</button>
+        <button id="signout" type="button" hidden>Sign out</button>
+      </div>
+    </header>
+    <p id="status" role="status" hidden></p>
+
+    <h2>Library</h2>
+    <ul id="library"></ul>
+
+    <section id="member" hidden>
+      <h2>Yours <button id="new" class="lead" type="button">New resource</button></h2>
+      <ul id="mine"></ul>
+      <div id="editor" hidden></div>
+    </section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

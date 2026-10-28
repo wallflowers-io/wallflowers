@@ -120,3 +120,18 @@ test('registration as the Door release has it: the dev client from its registry,
   else assert.match(reg, /adds registrations in batches/);
   assert.doesNotMatch(reg + qs, /\{\{[A-Z_]+\}\}/, 'nothing left unfilled');
 });
+
+test('each example app is built under starter/, filled, its own test left out', () => {
+  const { out } = build();
+  const EX = path.join(HERE, 'examples');
+  for (const d of readdirSync(EX)) {
+    const files = readdirSync(path.join(EX, d));
+    for (const f of files.filter((f) => !/\.test\.m?js$/.test(f))) {
+      const s = out[`starter/${d}/${f}`];
+      assert.ok(s, `starter/${d}/${f} is built`);
+      assert.doesNotMatch(s, /\{\{\w+\}\}/, `starter/${d}/${f}: nothing left unfilled`);
+    }
+    for (const f of files.filter((f) => /\.test\.m?js$/.test(f))) assert.equal(out[`starter/${d}/${f}`], undefined, `${d}/${f} is not for download`);
+    assert.ok(out[`starter/${d}/app.js`].includes(sri()), `${d}: the sign-in script pinned`);
+  }
+});
