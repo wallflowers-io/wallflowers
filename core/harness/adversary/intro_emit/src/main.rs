@@ -55,7 +55,7 @@ fn arg(argv: &[String], name: &str, default: &str) -> String {
 }
 
 /// `PACIFIC_STATE_DIR` is process-global — the same env-switching discipline
-/// `core/pacific-core/tests/common/mod.rs` documents. One device is "active" at a time.
+/// `core/pacific-core/tests/it/common/mod.rs` documents. One device is "active" at a time.
 fn activate(dir: &Path) {
     std::env::set_var("PACIFIC_STATE_DIR", dir);
 }
