@@ -43,6 +43,16 @@ jobs:
         run: git clean -ffdx -e target/
       - run: make check-icd
 
+  play:
+    name: play
+    if: github.actor == 'phezman'
+    runs-on: [self-hosted, wf-ci]
+    timeout-minutes: 10
+    steps:
+      - *checkout
+      - *clean
+      - run: make check-play
+
   auth:
     name: auth
     if: github.actor == 'phezman'
