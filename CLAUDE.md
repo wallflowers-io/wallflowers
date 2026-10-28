@@ -67,7 +67,7 @@ wire type ids, every op and its id, authority and commutativity: the ICD says, a
 **What this enables, concretely:**
 
 - **Parametric Modelling.** To the greatest extent possible, numbers, counts, operations, should be read at build/runtime directly from the ICD, because copies break.
-   ~/wallflowers/wallflowers_backup/product/core/docs/ref/ECSS_DATA_EXCHANGE.md is a useful reference for this, published by the European Space Agency. Read it.
+   ~/wallflowers/archive/wallflowers/core/docs/ref/ECSS_DATA_EXCHANGE.md is a useful reference for this, published by the European Space Agency. Read it.
 
 *Parallel implementations of the delta model, including for testing, are expressly forbidden.*
 
@@ -77,7 +77,7 @@ Failing tests inform fixes or PRs. Weakening a test for a 'special case' or unim
 ## Repositories
 
 - `wallflowers_public`, this one: all code. Public on GitHub, AGPL.
-- `~/wallflowers/wallflowers_backup/product`: the pre-release backup, private on Codeberg. Its history never goes public; code from it is ported here as a PR.
+- `~/wallflowers/archive/wallflowers`: the pre-release backup, private on Codeberg. Its history never goes public; code from it is ported here as a PR.
 - `~/wallflowers/business/website`: www.wallflowers.io, private on Codeberg, deployed on its own path.
 
 ## Changes
