@@ -11,7 +11,7 @@ ARG NEXTEST_SHA=6f82e375187cf3a1f3e336879a51940c315a5d0ce7253f7e517ad28295b74189
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -q && apt-get install -yq --no-install-recommends \
-      build-essential pkg-config git curl jq unzip xz-utils ca-certificates \
+      build-essential pkg-config git curl jq unzip xz-utils ca-certificates openssh-client \
       libopenblas-dev postgresql-16 sqlite3 age python3.12 python3.12-venv python3-pip \
     && rm -rf /var/lib/apt/lists/*
 

@@ -17,7 +17,7 @@
 //! M joiners, D posts in the forum (default 10). Prints one JSON line. State lives in
 //! temp dirs; nothing leaves 127.0.0.1.
 
-#[path = "../tests/common/mod.rs"]
+#[path = "../tests/it/common/mod.rs"]
 #[allow(dead_code)]
 mod common;
 

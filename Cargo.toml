@@ -99,3 +99,15 @@ pacific-wire = { path = "core/pacific-wire" }
 # `app/web/build-wasm.sh` asserts it still applies on every build.
 [patch.crates-io]
 mls-rs = { path = "core/vendor/mls-rs" }
+
+# Line tables for our crates' backtraces, no debug info for dependencies (Cargo Book, Optimizing
+# Build Performance). `--profile debugging` for a debugger.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.debugging]
+inherits = "dev"
+debug = true
