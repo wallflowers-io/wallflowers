@@ -67,7 +67,7 @@ class Credential:
     # THE HANDLE CARRIES THE ACCOUNT: `public key ‖ arc host`. Those are exactly
     # the two things a fresh device cannot derive for itself -- the address IS
     # the public key, and the public key is downstream of the seed it is
-    # fetching. `pacific-account.js` createPasskey builds the same 32+n bytes.
+    # fetching. The iOS app (SignIn.swift) and the Door build the same 32+n bytes.
     user_handle: bytes
 
 
@@ -95,8 +95,8 @@ class Authenticator:
         THE OPTIONS ARE THE CLIENT'S NOW. There is no
         `/auth/passkey/register/options` to fetch them from: the arc is not part
         of a passkey ceremony at all, so the RP ID, the handle and the challenge
-        are built by the device -- which is what `pacific-account.js`
-        createPasskey does, and this is that call's other half.
+        are built by the device -- as the iOS app and the Door's window do, and
+        this is that call's other half.
 
         `rp_id` names a host: a credential is bound to it for life. Production's
         is the Door's own host, `app.wallflowers.io` (D-33), and one made

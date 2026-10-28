@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""The docs origin (:8100) for development: pacific.js and the files other sites
-load beside it (the social client, the fold, the op table, the sims).
+"""A development server for app/web's tools (the graph explorer, graph/serve.sh).
 
 `python3 -m http.server` with ONE change: every answer says `Cache-Control:
 no-cache`. The plain server sends Last-Modified and nothing else, so a browser
-caches heuristically and a page can keep running yesterday's client against a
-keyholder staged a minute ago, with mismatches that look like bugs (thedoor,
-22 Sep). no-cache still lets the browser keep a copy; it just asks first, and an
+caches heuristically and a page can keep running yesterday's wasm against a core
+rebuilt a minute ago, with mismatches that look like bugs (thedoor, 22 Sep). no-cache still lets the browser keep a copy; it just asks first, and an
 unchanged file costs a 304.
 
     python3 docs-serve.py <port> [dir]  serves ./docs (or <dir>), 127.0.0.1 only

@@ -8,8 +8,7 @@
 // `env` is a bare specifier the glue imports, and a page satisfies it with an
 // import map. Node has no import map, so a resolve hook maps it to a data: URL
 // module whose one export forwards to a global this script binds once the
-// memory exists — the same "closes over a getter the instance fills in later"
-// shape docs/pacific-wasm-test.html uses.
+// memory exists: a getter the instance fills in later.
 //
 //   node smoke/core-wasm.mjs                       (b) pairing + seal + join
 //   WASM_ARCHIVE_FIXTURE_DIR=… node smoke/core-wasm.mjs
