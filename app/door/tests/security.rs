@@ -5123,7 +5123,8 @@ fn d60_reach(router: &str, method: &str, path: &str) -> Option<Reach> {
     use Reach::*;
     Some(match (router, method, path) {
         ("door", "GET", "/v2/icd" | "/v2/icd/:hash" | "/v2/signin.js" | "/v2/me" | "/v2/kinds" | "/v2/graph" | "/v2/draft/:kind" | "/v2/work" | "/signin" | "/" | "/index.html" | "/v2/site/:site/items" | "/v2/resources.js" | "/v2/members" | "/v2/members/:site" | "/signin/site") => Wire,
-        ("door", "POST", "/v2/mint" | "/v2/apply" | "/v2/batch" | "/v2/add" | "/v2/bundle" | "/v2/site/address" | "/v2/signup/continue" | "/v2/history" | "/signin/site") => Wire,
+        ("door", "POST", "/v2/mint" | "/v2/apply" | "/v2/batch" | "/v2/add" | "/v2/bundle" | "/v2/site/address" | "/v2/signup/continue" | "/v2/history" | "/signin/site"
+            | "/v2/connect" | "/v2/link" | "/v2/conversation") => Wire,
         ("door", "POST", "/v2/signup" | "/v2/signup/finish" | "/v2/signin" | "/v2/signin/finish" | "/v2/signout" | "/v2/token" | "/v2/join") => Exercised,
         ("door", "GET", "/join") => Exercised,
         ("door", "GET", "/v2/events") => Stream,

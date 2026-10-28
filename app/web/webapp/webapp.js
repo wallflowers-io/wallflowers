@@ -862,6 +862,9 @@
       siteDone = true;
       if (!host) return 'no Host';
       var onHost = hostObj && (hostObj.members || []).indexOf(pk) >= 0;
+      /* The Door adds someone to the page only by a connection's prekey: not connected, it
+         would refuse, so the page waits for the connection. */
+      if (!onHost && !connected(pk)) throw new Error('connect with them first, from their card');
       say('Adding them to the page (the Host)…');
       /* A role overlays a member of that object (roles.rs), so the Host's role waits on the add. */
       return (onHost ? Promise.resolve() : door('/v2/add', { method: 'POST', body: { object: host.part, member: pk } }))
@@ -2459,7 +2462,8 @@
   function receipt(id, ms) {
     var said = RECEIPTED[id] = RECEIPTED[id] || {};
     var fresh = ms.filter(function (m) { return m.author !== M.me.pk && !said[mref(m)]; });
-    var words = ICD && ICD.kinds.forum.ops['forum.receipt'].args.status.vocabulary;
+    var op = ICD && ICD.kinds && ICD.kinds.forum && ICD.kinds.forum.ops['forum.receipt'];
+    var words = op && op.args.status.vocabulary;
     var read = words && Object.keys(words).filter(function (k) { return words[k] === 'read'; })[0];
     if (!fresh.length || !read) return;
     fresh.forEach(function (m) { said[mref(m)] = true; });
