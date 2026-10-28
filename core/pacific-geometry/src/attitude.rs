@@ -40,7 +40,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use crate::chromodynamics::{self, Charge};
-use crate::ontology_anchors::KindAnchor;
+use crate::kind_anchor::KindAnchor;
 use crate::space_calibration::SpaceCalibration;
 use crate::transmission::TransmissionEpisode;
 use crate::vec::{dot, normalize};
@@ -358,7 +358,7 @@ pub(crate) fn clamp(x: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology_anchors::OntologyKind;
+    use crate::kind_anchor::OntologyKind;
 
     const HOUR: u64 = 3_600_000;
     const DAY: u64 = 24 * HOUR;
