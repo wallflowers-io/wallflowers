@@ -25,7 +25,7 @@ PKGS = $(shell cd $(PRODUCT) && PATH='$(PATH)' cargo metadata --no-deps --format
 ARC_HOST   := https://arc.wallflowers.io
 
 .DEFAULT_GOAL := help
-.PHONY: help status check check-icd check-core check-arc check-auth check-harness check-door e2e e2e-browser ci ci-hooks \
+.PHONY: help status check check-icd check-play check-core check-arc check-auth check-harness check-door e2e e2e-browser ci ci-hooks \
         wasm serve stop deploy-app deploy-door deploy-arc deploy-docs live site-setup
 
 help:  ## this list
@@ -66,13 +66,17 @@ status:  ## what is committed, what is pushed, what is live
 # which the old awk pipeline swallowed: `check` printed "all suites green"
 # unconditionally, including over a red suite.
 
-check: check-icd check-auth check-harness check-core check-arc check-door  ## every suite, cheapest first
+check: check-icd check-play check-auth check-harness check-core check-arc check-door  ## every suite, cheapest first
 	@echo "  all suites green, on a tree that did not move"
 
 # O-68 (mdr/icd-pin.md): the ICD at its pin, first. Not under pinned.sh, which keeps one line
 # of 72 characters: a refusal here names two hashes.
 check-icd:  ## the ICD's bytes at their pin, icd.rs conformance, the web's op bindings (O-68)
 	@$(CORE)/coordination/icd-pin.sh check
+
+check-play:  ## /play: its engine, land, town and sea, and the map code it vendors (node)
+	@printf '  play    '
+	@cd $(PRODUCT)/play && for t in tests/test_*.js; do node $$t > /dev/null || { echo "$$t failed"; exit 1; }; done; echo ok
 
 check-auth:  ## the Arc account store (pytest; a check needing the website says when it skips)
 	@printf '  auth    '
