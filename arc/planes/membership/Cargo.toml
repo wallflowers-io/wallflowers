@@ -50,3 +50,10 @@ arc-build = { workspace = true }
 # `pacific::sync`, ...). Without a subscriber every one of those events is dropped, which
 # is what this plane did until 19 Sep 2026. Same crate and features as the relay plane.
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+# NC-140's lock test runs the Arc's request loop against a real relay on loopback, as
+# pacific-core's harness does, and forges claims in the kiosk's shape.
+relay = { path = "../relay" }
+base64 = { workspace = true }
+ed25519-dalek = "2.1"

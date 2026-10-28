@@ -72,6 +72,119 @@ fn respond(req: tiny_http::Request, code: u16, ctype: &str, body: String) {
     let _ = req.respond(resp);
 }
 
+/// /admit's answer to an admission (A-3, D-58), its status and body, each outcome named in the
+/// journal. A definite refusal is 409, so the Door ends the attempt; anything else is 503, so
+/// it keeps the claim for a retry.
+fn admit_answer(site: &str, outcome: Result<pacific_core::node::Admitted, CoreError>) -> (u16, String) {
+    match outcome {
+        Ok(a) => {
+            if let Some(c) = &a.fallback {
+                eprintln!("arc-node: Site {site}: no room carries the choice {c}; admitted to the rooms without one");
+            }
+            // O-75: a history that could not go is named, one line each.
+            for h in a.history.iter().filter(|h| h.unsent.is_some()) {
+                eprintln!("arc-node: Site {site}: no history of {} sent: {}", h.object, h.unsent.as_deref().unwrap_or_default());
+            }
+            for h in a.history.iter().filter(|h| h.cards_unsent > 0) {
+                eprintln!("arc-node: Site {site}: {} card(s) of {} not sent, past the {} bytes an admission carries or alone over a blob", h.cards_unsent, h.object, pacific_core::node::CARDS_MAX);
+            }
+            let body = serde_json::json!({
+                "admitted": hex::encode(a.member),
+                "c": a.choice,
+                "a": a.artifact,
+                "rooms": a.rooms,
+                "unjoined": a.unjoined.iter().map(|(room, why)| serde_json::json!({ "room": room, "why": why })).collect::<Vec<_>>(),
+                "fallback": a.fallback,
+            });
+            (200, body.to_string())
+        }
+        Err(CoreError::Membership(why)) => {
+            eprintln!("arc-node: a claim refused: {why}");
+            (409, err_json(&why))
+        }
+        // NC-140: the Site's Welcome not taken after the node's wait; the claim kept, untouched.
+        Err(CoreError::NotReady(why)) => {
+            eprintln!("arc-node: Site {site}: a claim kept for a retry: {why}");
+            (503, err_json(&why))
+        }
+        Err(e) => {
+            eprintln!("arc-node: an admission failed, the claim kept: {e}");
+            (503, err_json("the admission could not complete; try again"))
+        }
+    }
+}
+
+/// POST /admit: ADMISSION BY A KIOSK CLAIM (A-3, D-58): the claim checked against the Site's
+/// kiosk keys (ARC_CLAIM_KEYS until the founders register one), spent once under the node
+/// lock, and the bundles' one identity added to the Site and to every room of it this node
+/// admits to, a fresh key package each. The token is the bearer credential: it is never
+/// logged. A definite refusal is 409, so the Door ends the attempt; anything else is 503, so
+/// it keeps the claim for a retry.
+/// An admission's thread fails as the request loop did before NC-140 moved it off the loop: a
+/// panic exits the process at once (`exit`), so the unit restarts, rather than poisoning
+/// node_lock and leaving the sync loop and the next request to find it.
+fn fail_fast(work: impl FnOnce(), exit: impl FnOnce()) {
+    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)).is_err() {
+        exit();
+    }
+}
+
+fn admit_request(mut req: tiny_http::Request, node_lock: &Mutex<()>, claim_keys: &std::collections::HashMap<String, [u8; 32]>) {
+    let mut body = String::new();
+    if req.as_reader().read_to_string(&mut body).is_err() {
+        return respond(req, 400, "application/json", err_json("could not read request body"));
+    }
+    #[derive(serde::Deserialize)]
+    struct AdmitIn {
+        claim: String,
+        #[serde(default)]
+        bundles: Vec<String>,
+        #[serde(default)]
+        bundle: Option<String>,
+    }
+    let Ok(mut ask) = serde_json::from_str::<AdmitIn>(&body) else {
+        return respond(req, 400, "application/json", err_json("expected {claim, bundles}"));
+    };
+    ask.bundles.extend(ask.bundle.take());
+    let Some(site) = pacific_core::claim::site_of(&ask.claim) else {
+        return respond(req, 409, "application/json", err_json("not a claim"));
+    };
+    let (code, body) = admit_answer(&site, admit(node_lock, claim_keys, &site, &ask.claim, &ask.bundles));
+    respond(req, code, "application/json", body);
+}
+
+/// NC-140: AN ADMISSION NEVER WAITS HOLDING THE NODE LOCK. A claim that can be refused without
+/// its Site is refused first, with no wait. A Site not on this node yet is waited for, up to
+/// `SITE_WAIT`: the lock taken for each check (`site_ready`) and released before the pause.
+/// Then the lock is taken once for the admission, where the claim is verified whole and spent
+/// once.
+fn admit(
+    node_lock: &Mutex<()>,
+    claim_keys: &std::collections::HashMap<String, [u8; 32]>,
+    site: &str,
+    claim: &str,
+    bundles: &[String],
+) -> Result<pacific_core::node::Admitted, CoreError> {
+    use pacific_core::node::{SITE_NOT_HERE, SITE_WAIT, SITE_WAIT_PAUSE};
+    pacific_core::node::admission_precheck(claim, bundles, claim_keys)?;
+    let until = std::time::Instant::now() + SITE_WAIT;
+    loop {
+        let ready = {
+            let _g = node_lock.lock().unwrap();
+            Node::open().and_then(|node| block_on(node.site_ready(site)))?
+        };
+        if ready {
+            break;
+        }
+        if std::time::Instant::now() + SITE_WAIT_PAUSE > until {
+            return Err(CoreError::NotReady(SITE_NOT_HERE.into()));
+        }
+        std::thread::sleep(SITE_WAIT_PAUSE);
+    }
+    let _g = node_lock.lock().unwrap();
+    Node::open().and_then(|node| block_on(node.admit_by_claim(site, claim, bundles, claim_keys)))
+}
+
 /// Author the signup default role ONTO the member's tether, so the role reaches the device by
 /// the same path as membership. Called right after `pair_scan_kind`, while we hold the node lock.
 fn grant_default_role(node: &Node, peer: &[u8; 32], relay_url: &str) -> Result<(), CoreError> {
@@ -268,6 +381,22 @@ fn main() {
     eprintln!("arc-node: fingerprint {fingerprint}");
     eprintln!("arc-node: signup on http://{bind}   ·   relay {relay_url}");
 
+    serve(&server, Serve { name, identity_key, relay_url, arc_info, claim_keys: Arc::new(claim_keys), node_lock });
+}
+
+/// What the request loop reads, fixed at boot.
+struct Serve {
+    name: String,
+    identity_key: String,
+    relay_url: String,
+    arc_info: String,
+    claim_keys: Arc<std::collections::HashMap<String, [u8; 32]>>,
+    node_lock: Arc<Mutex<()>>,
+}
+
+/// The request loop, each Node access under `node_lock`.
+fn serve(server: &tiny_http::Server, s: Serve) {
+    let Serve { name, identity_key, relay_url, arc_info, claim_keys, node_lock } = s;
     for mut req in server.incoming_requests() {
         let method = req.method().clone();
         let path = req.url().split('?').next().unwrap_or("/").to_string();
@@ -333,73 +462,20 @@ fn main() {
                 ),
             }
         } else if method == tiny_http::Method::Post && path == "/admit" {
-            // ADMISSION BY A KIOSK CLAIM (A-3, D-58): the claim checked against the Site's
-            // kiosk keys (ARC_CLAIM_KEYS until the founders register one), spent once under
-            // the node lock, and the bundles' one identity added to the Site and to every
-            // room of it this node admits to, a fresh key package each. The token is the
-            // bearer credential: it is never logged. A definite refusal is 409, so the Door
-            // ends the attempt; anything else is 503, so it keeps the claim for a retry.
-            let mut body = String::new();
-            if req.as_reader().read_to_string(&mut body).is_err() {
-                respond(req, 400, "application/json", err_json("could not read request body"));
-                continue;
-            }
-            #[derive(serde::Deserialize)]
-            struct AdmitIn {
-                claim: String,
-                #[serde(default)]
-                bundles: Vec<String>,
-                #[serde(default)]
-                bundle: Option<String>,
-            }
-            let Ok(mut ask) = serde_json::from_str::<AdmitIn>(&body) else {
-                respond(req, 400, "application/json", err_json("expected {claim, bundles}"));
-                continue;
+            // On its own thread: a claim may wait for its Site (NC-140), and no other
+            // request waits on it.
+            let (lock, keys) = (Arc::clone(&node_lock), Arc::clone(&claim_keys));
+            let admission = move || {
+                fail_fast(
+                    || admit_request(req, &lock, &keys),
+                    || {
+                        eprintln!("arc-node: an admission panicked; exiting, so the unit restarts (as on the request loop before NC-140)");
+                        std::process::exit(101)
+                    },
+                )
             };
-            ask.bundles.extend(ask.bundle.take());
-            let Some(site) = pacific_core::claim::site_of(&ask.claim) else {
-                respond(req, 409, "application/json", err_json("not a claim"));
-                continue;
-            };
-            let outcome = {
-                let _g = node_lock.lock().unwrap();
-                Node::open().and_then(|node| block_on(node.admit_by_claim(&site, &ask.claim, &ask.bundles, &claim_keys)))
-            };
-            match outcome {
-                Ok(a) => {
-                    if let Some(c) = &a.fallback {
-                        eprintln!("arc-node: Site {site}: no room carries the choice {c}; admitted to the rooms without one");
-                    }
-                    // O-75: a history that could not go is named, one line each.
-                    for h in a.history.iter().filter(|h| h.unsent.is_some()) {
-                        eprintln!("arc-node: Site {site}: no history of {} sent: {}", h.object, h.unsent.as_deref().unwrap_or_default());
-                    }
-                    for h in a.history.iter().filter(|h| h.cards_unsent > 0) {
-                        eprintln!("arc-node: Site {site}: {} card(s) of {} not sent, past the {} bytes an admission carries or alone over a blob", h.cards_unsent, h.object, pacific_core::node::CARDS_MAX);
-                    }
-                    respond(
-                        req,
-                        200,
-                        "application/json",
-                        serde_json::json!({
-                            "admitted": hex::encode(a.member),
-                            "c": a.choice,
-                            "a": a.artifact,
-                            "rooms": a.rooms,
-                            "unjoined": a.unjoined.iter().map(|(room, why)| serde_json::json!({ "room": room, "why": why })).collect::<Vec<_>>(),
-                            "fallback": a.fallback,
-                        })
-                        .to_string(),
-                    )
-                }
-                Err(CoreError::Membership(why)) => {
-                    eprintln!("arc-node: a claim refused: {why}");
-                    respond(req, 409, "application/json", err_json(&why));
-                }
-                Err(e) => {
-                    eprintln!("arc-node: an admission failed, the claim kept: {e}");
-                    respond(req, 503, "application/json", err_json("the admission could not complete; try again"));
-                }
+            if let Err(e) = std::thread::Builder::new().name("admit".into()).spawn(admission) {
+                eprintln!("arc-node: an admission not started, 500: {e}");
             }
         } else if method == tiny_http::Method::Get && path == "/faces" {
             // EVERY FACE THIS ARC SERVES, folded from the Hosts it is on. The gateway
@@ -657,5 +733,177 @@ fn main() {
                 err_json("not found — try GET /arc, GET /bundle, GET /console/state, POST /signup, or POST /tether"),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// NC-140 moved /admit onto its own thread; a panic there must still end the process at
+    /// once, as it did on the request loop, never leave node_lock poisoned behind it.
+    #[test]
+    fn a_panicking_admission_ends_the_process_at_once() {
+        let mut exited = false;
+        super::fail_fast(|| panic!("an admission that panics"), || exited = true);
+        assert!(exited, "a panic in an admission's thread exits the process");
+        let mut exited = false;
+        super::fail_fast(|| (), || exited = true);
+        assert!(!exited, "an admission that returns does not");
+    }
+
+    use super::*;
+
+    /// NC-140: a Site not on this Arc yet is a retry, and says so: 503 with its reason, which
+    /// the Door's 503 keeps the claim for. A definite refusal stays 409; any other failure,
+    /// 503 with no detail.
+    #[test]
+    fn a_site_not_ready_is_a_503_named_for_what_it_is() {
+        let (code, body) = admit_answer("s", Err(CoreError::NotReady("the Site is not on this Arc yet; try again".into())));
+        assert_eq!(code, 503);
+        assert!(body.contains("not on this Arc yet"), "{body}");
+        assert_eq!(admit_answer("s", Err(CoreError::Membership("this claim has been used".into()))).0, 409);
+        let (code, body) = admit_answer("s", Err(CoreError::Directory("database is locked".into())));
+        assert_eq!(code, 503);
+        assert!(body.contains("could not complete") && !body.contains("database"), "{body}");
+    }
+
+    // ---- NC-140 (Software Assurance): a claim's wait never holds the node lock ----
+
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
+    use base64::Engine as _;
+    use pacific_core::node::{SITE_WAIT, SITE_WAIT_PAUSE};
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
+
+    /// One local Arc at a time: PACIFIC_STATE_DIR is the process's.
+    static ONE: Mutex<()> = Mutex::new(());
+
+    /// A Site no node here holds.
+    const NOWHERE: &str = "5e7e5e7e5e7e5e7e5e7e5e7e5e7e5e7e5e7e5e7e5e7e5e7e5e7e5e7e5e7e5e7e";
+    /// A key id no deploy trusts: only a Site's own issuers could vouch for it.
+    const UNTRUSTED: &str = "0123456789abcdef";
+
+    /// AN ARC ON THIS MACHINE: a relay, a node's state in its own dir pinned to it, and the
+    /// Arc's request loop (`serve`) on a loopback port, trusting the kiosk keys `stand_in`.
+    struct Local {
+        addr: std::net::SocketAddr,
+        server: Arc<tiny_http::Server>,
+        dir: std::path::PathBuf,
+        _relay: tokio::runtime::Runtime,
+        _one: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl Drop for Local {
+        fn drop(&mut self) {
+            self.server.unblock();
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    fn unix() -> u64 {
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+    }
+
+    fn local(stand_in: HashMap<String, [u8; 32]>) -> Local {
+        let one = ONE.lock().unwrap_or_else(|p| p.into_inner());
+        let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
+        let l = rt.block_on(tokio::net::TcpListener::bind("127.0.0.1:0")).unwrap();
+        let relay = format!("ws://{}", l.local_addr().unwrap());
+        rt.spawn(relay::serve(l));
+        let dir = std::env::temp_dir().join(format!("nc140-arc-{}-{}", std::process::id(), now_millis()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("PACIFIC_STATE_DIR", &dir);
+        pacific_core::router::Routes::parse(&relay).save().unwrap();
+        pacific_core::node::set_default_arc(&relay).unwrap();
+        Node::init_identity("arc").unwrap();
+        let server = Arc::new(tiny_http::Server::http("127.0.0.1:0").unwrap());
+        let addr = server.server_addr().to_ip().unwrap();
+        let s = Arc::clone(&server);
+        let boot = Serve {
+            name: "arc".into(),
+            identity_key: String::new(),
+            relay_url: relay,
+            arc_info: "{}".into(),
+            claim_keys: Arc::new(stand_in),
+            node_lock: Arc::new(Mutex::new(())),
+        };
+        std::thread::spawn(move || serve(&s, boot));
+        Local { addr, server, dir, _relay: rt, _one: one }
+    }
+
+    impl Local {
+        /// One request: its status, its body, how long it took.
+        fn call(&self, method: &str, path: &str, body: &str) -> (u16, String, Duration) {
+            use std::io::{Read, Write};
+            let t = Instant::now();
+            let mut c = std::net::TcpStream::connect(self.addr).unwrap();
+            write!(c, "{method} {path} HTTP/1.1\r\nHost: arc\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            let mut out = String::new();
+            c.read_to_string(&mut out).unwrap();
+            let code = out.split(' ').nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
+            (code, out.split_once("\r\n\r\n").map(|(_, b)| b.to_string()).unwrap_or_default(), t.elapsed())
+        }
+
+        fn admit(&self, claim: &str, bundles: &[String]) -> (u16, String, Duration) {
+            self.call("POST", "/admit", &serde_json::json!({ "claim": claim, "bundles": bundles }).to_string())
+        }
+    }
+
+    /// A claim in the kiosk's shape for `site` under key id `kid`, live `iat`..`exp`, signed
+    /// with 64 zero bytes: a forgery.
+    fn forged(kid: &str, site: &str, iat: u64, exp: u64) -> String {
+        let p = B64.encode(format!(r#"{{"k":"{kid}","s":"{site}","n":"{}","iat":{iat},"exp":{exp}}}"#, B64.encode([1u8; 16])));
+        format!("v1.{p}.{}", B64.encode([0u8; 64]))
+    }
+
+    /// Forged claims for a Site this Arc does not hold, under a key only that Site could
+    /// vouch for, wait for it. While they wait, the public Face read, which takes the node
+    /// lock, answers within one poll of their wait.
+    #[test]
+    fn a_forged_claim_never_holds_the_node_lock() {
+        let arc = local(HashMap::new());
+        let bundle = vec![Node::open().unwrap().build_contact_bundle().unwrap()];
+        let now = unix();
+        let claim = forged(UNTRUSTED, NOWHERE, now, now + 600);
+        std::thread::scope(|s| {
+            let forgeries: Vec<_> = (0..4).map(|_| s.spawn(|| arc.admit(&claim, &bundle))).collect();
+            std::thread::sleep(Duration::from_millis(200));
+            for _ in 0..4 {
+                let (code, body, took) = arc.call("GET", "/faces", "");
+                assert!(took < SITE_WAIT_PAUSE, "a Face read waited {took:?} while forged claims waited (a poll is {SITE_WAIT_PAUSE:?})");
+                assert_eq!(code, 200, "{body}");
+                std::thread::sleep(SITE_WAIT_PAUSE);
+            }
+            for f in forgeries {
+                let (code, body, took) = f.join().unwrap();
+                assert_eq!(code, 503, "{body}");
+                assert!(body.contains("not on this Arc yet"), "{body}");
+                assert!(took >= SITE_WAIT - SITE_WAIT_PAUSE, "it waited for its Site: {took:?}");
+            }
+        });
+    }
+
+    /// A claim that can be refused without its Site is refused before any wait, for a Site
+    /// this Arc does not hold: malformed; expired; under a kiosk key this deploy trusts
+    /// (ARC_CLAIM_KEYS) and not signed by it; key packages that are not one person's.
+    #[test]
+    fn a_claim_that_can_be_refused_is_refused_before_any_wait() {
+        let kiosk = ed25519_dalek::SigningKey::from_bytes(&[9u8; 32]).verifying_key().to_bytes();
+        let kid = pacific_core::claim::kid_of(&kiosk);
+        let arc = local(HashMap::from([(kid.clone(), kiosk)]));
+        let bundle = vec![Node::open().unwrap().build_contact_bundle().unwrap()];
+        let now = unix();
+        let refused = |what: &str, claim: &str, bundles: &[String]| {
+            let (code, body, took) = arc.admit(claim, bundles);
+            assert!(took < SITE_WAIT_PAUSE, "{what}: answered after {took:?}, not before any wait: {code} {body}");
+            (code, body)
+        };
+        let (code, body) = refused("malformed", "v1.e30.AA", &bundle);
+        assert_eq!((code, body.contains("not a claim")), (409, true), "{body}");
+        let (code, body) = refused("expired", &forged(UNTRUSTED, NOWHERE, now - 3600, now - 3000), &bundle);
+        assert_eq!((code, body.contains("expired")), (409, true), "{body}");
+        let (code, body) = refused("a trusted key's id, not its signature", &forged(&kid, NOWHERE, now, now + 600), &bundle);
+        assert_eq!((code, body.contains("does not verify")), (409, true), "{body}");
+        let (code, body) = refused("no key package", &forged(UNTRUSTED, NOWHERE, now, now + 600), &["not a bundle".into()]);
+        assert_ne!(code, 200, "{body}");
     }
 }
