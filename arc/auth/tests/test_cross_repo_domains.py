@@ -1,8 +1,9 @@
-"""The strings that must be identical in three languages, pinned in one place.
+"""The strings that must be identical in every language that signs or verifies them.
 
 WHY THIS EXISTS. Two payloads in this system are signed by a device and verified
-here, and each one is written out separately in Rust, in Python and in
-JavaScript:
+here, and each one is written out separately in Rust and in Python (the service,
+and the independent smoke client). No browser signs them: the Door and the iOS app
+sign through the core. The JavaScript copy went with the keyholder (28 Oct 2026).
 
     pacific-auth:v1        the challenge-response that proves an identity
     pacific-arc-write:v1   the write authorisation behind first-write-claims
@@ -20,7 +21,7 @@ impostor. Whoever wrote first keeps the address.
 
 THE CORE IS THE DEFINITION. `pacific_core::identity` and
 `pacific_core::locator` are where these bytes are decided; this file reads them
-out of the Rust source and holds the Python and JavaScript copies against them.
+out of the Rust source and holds the Python copies against them.
 
 FAILS WHEN A FILE IS ABSENT. The service, `core/` and `app/` are one
 repository since 22 Oct 2026, so a missing file is a moved or renamed one, and
@@ -36,7 +37,6 @@ import pytest
 # arc/auth/tests/ -> auth -> arc -> the repository root.
 PRODUCT = Path(__file__).resolve().parents[3]
 CORE = PRODUCT / "core" / "pacific-core" / "src"
-WEB = PRODUCT / "app" / "web" / "account" / "pacific-account.js"
 SMOKE = PRODUCT / "app" / "web" / "smoke" / "e2e.py"
 
 
@@ -88,19 +88,6 @@ def test_key_prefix_matches_the_core():
 
     core = _rust_const(_read(CORE / "identity.rs"), "IDENTITY_KEY_PREFIX")
     assert auth.KEY_PREFIX == core
-
-
-# ── the JavaScript copy, which is the one nobody greps ──────────────────────
-
-def test_the_browser_carries_the_same_auth_domain():
-    from app import auth
-
-    js = _read(WEB)
-    m = re.search(r"var AUTH_DOMAIN\s*=\s*'([^']+)'", js)
-    assert m, "pacific-account.js no longer declares AUTH_DOMAIN the way this test reads it"
-    assert m.group(1) == auth.DOMAIN, (
-        f"pacific-account.js says {m.group(1)!r}, this service says {auth.DOMAIN!r}"
-    )
 
 
 def test_the_smoke_suite_carries_the_same_auth_domain():
