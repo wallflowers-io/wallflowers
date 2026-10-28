@@ -130,8 +130,7 @@ definition — which is the failure `locator.rs`'s own doc says nothing currentl
 catches.
 
 **This is free until the first PUT.** No account has a locator-addressed record
-anywhere (`pacific-account.js` still addresses `/auth/users/{pk}`, five call
-sites). First-write-claims means the first write fixes an address for that account
+anywhere (the Door and the iOS app still address `/auth/users/{pk}`). First-write-claims means the first write fixes an address for that account
 permanently.
 
 ## Who builds what

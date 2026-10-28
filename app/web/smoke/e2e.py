@@ -54,9 +54,11 @@ wasm the browser loads, in both directions. Without that step the derivations
 here would agree with themselves just as happily if every constant were wrong
 together, and the failure would be silent: a wrong tag raises nothing at all.
 
-WHAT IS NOT COVERED HERE: the browser's own ceremony, and keyholder.js deriving
-the channel from the seed it holds. That runs in browser.py, against the same
-service, so the two can be compared byte for byte.
+WHAT IS NOT COVERED HERE: a real authenticator (authn.py stands in), and the
+clients that call this protocol: the Door and the iOS app.
+
+RUN IT against an Arc's auth service and relay:
+    AUTH=http://127.0.0.1:8021 RELAY=ws://localhost:8787 .venv/bin/python app/web/smoke/e2e.py
 """
 from __future__ import annotations
 
@@ -90,8 +92,7 @@ AUTH = os.environ.get("AUTH", "http://127.0.0.1:8021")
 RELAY = os.environ.get("RELAY", "ws://localhost:8787")
 
 # Everything sealed for this Arc is bound to its HOST, exactly as the user handle
-# carries it, port included (wrap.rs `aad`). In the harness the keyholder proxies
-# /auth, so the host a device signs and seals for is the keyholder's, not :8021's.
+# carries it, port included (wrap.rs `aad`).
 HOST = AUTH.split("//", 1)[-1].rstrip("/")
 # The passkey's RP ID. localhost in the harness; in production the Door's own
 # host, app.wallflowers.io (D-33).
@@ -210,7 +211,7 @@ def split(secret: bytes) -> tuple[str, bytes]:
 
 
 def seal(key: bytes, obj) -> str:
-    """AES-GCM with the IV prefixed, base64 -- keyholder.js's seal()."""
+    """AES-GCM with the IV prefixed, base64."""
     iv = os.urandom(12)
     ct = AESGCM(key).encrypt(iv, json.dumps(obj, separators=(",", ":")).encode(), None)
     return base64.b64encode(iv + ct).decode()

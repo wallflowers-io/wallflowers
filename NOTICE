@@ -9,8 +9,7 @@ version (LICENSE), except where a file or directory says otherwise. Those are:
 - app/web/webapp/vendor/pdfjs: PDF.js, Apache-2.0 (its LICENSE).
 - app/web/resources/vendor: commonmark.js, BSD-2-Clause (commonmark.LICENSE).
 - app/web/webapp/brand/fonts: Asap Condensed and IBM Plex Mono, SIL Open Font License 1.1
-  (OFL-asap-condensed.txt, OFL-ibm-plex-mono.txt); app/web/docs/vendor/ibm-plex-mono, the same
-  (OFL.txt).
+  (OFL-asap-condensed.txt, OFL-ibm-plex-mono.txt).
 
 The WallFlowers name, wordmark and icon, and the WallFlowers typeface (wallflowers-regular.woff2),
 are not licensed under the AGPL or any licence above. All rights reserved.

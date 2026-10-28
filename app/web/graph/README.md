@@ -9,9 +9,13 @@ app/door/run.sh         http://127.0.0.1:8233 — the door image, and its relay
 ./serve.sh              http://127.0.0.1:8232/graph/
 ```
 
-The document root is `app/web`, not `graph/`, so the page reads the account module, the shared
-op bindings and the staged wasm by relative path. Run `app/web/build-wasm.sh` first if
-`docs/core` is empty.
+The document root is `app/web`, not `graph/`, so the page reads the shared op bindings and the
+staged wasm by relative path. Run `app/web/build-wasm.sh` first if `docs/core` is empty.
+
+**Its data routes are gone.** `/v1/personas`, `/v1/graph` and `/v1/mint` were the Door's
+development routes, removed under SEC-5 (`app/door/tests/security.rs` `dt24`). Until the page
+reads the Community API (`/v2/graph`, `/v2/kinds`, `/v2/icd` through a signed-in session), it
+draws the model and no account.
 
 ## Where the keys are
 

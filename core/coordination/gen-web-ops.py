@@ -26,8 +26,7 @@ op on an object with no gen floor, and anything its probe says would do
 nothing, per object, in its own words.  So this table marks only what is
 refused EVERYWHERE: the membership ops, which a `memberJoined` with no MLS
 operation behind it would forge, and which are recorded by the MLS doors.
-Which KINDS declare an op is the core's to say too (`ops_catalogue`), and the
-keyholder's `ops.capabilities` reads it there rather than from here.
+Which KINDS declare an op is the core's to say too (`ops_catalogue`).
 
 WHAT IT USED TO DO, and why it stopped (22 Sep 2026).  It refused ops whose
 prefix had no `<kind>_author` door in node.rs, and every commutative op behind
