@@ -89,10 +89,12 @@ Failing tests inform fixes or PRs. Weakening a test for a 'special case' or unim
 
 ## Build
 
-- **Build happens on the VM.** CI's suites and the deploys' builds run in one VM on Ralph's Mac, GitHub Actions' only runner for this repository. Not on the Mac itself.
-- **Exactly one harness.** One VM, one runner setup, one build target. No session starts a second runner, VM, scaler or agent, nor runs a suite beside the VM's.
-- **Scale to zero.** The VM starts when GitHub has a job for it and stops when there is none. Nothing persists between jobs: no agent, no idle VM.
-- A change to the harness is one PR, on Ralph's word.
+- **The harness is `/Users/ralph/wallflowers/dev/ci.sh`** (private, Codeberg `wallflowers/dev`). Nothing else starts a runner. It starts Colima VM `wf-ci`, builds the image from `$CI_PUBLIC/tools/ci/Dockerfile` (so a change to `tools/ci` reaches CI once it is in that checkout), serves each queued `wf-ci` job in its own one-job container, and stops the VM after `CI_IDLE` seconds with nothing queued. A push starts it (`make ci-hooks`); a second start exits at once.
+- **Build happens on the VM.** CI's suites and the deploys' builds run there, GitHub Actions' only runner for this repository. Not on the Mac itself.
+- **Exactly one harness.** One script, one VM, one build target. No session starts a second runner, VM, scaler or agent, nor runs a suite beside the VM's.
+- **Scale to zero.** Nothing persists between runs: no agent, no idle VM. The VM's disk keeps the image and build caches.
+- **Settings:** `dev/.env` (gitignored; `dev/.env.example`). `CI_LOGS` (default `~/Library/Logs/wf-ci`) holds `ci.log`, `colima.log` and `jobs/<runner>/` (runner output, `_diag`, suite output), kept `CI_LOG_DAYS`. `CI_CPUS`, `CI_MEMORY`, `CI_DISK` size the VM.
+- A change to the harness, `ci.sh` or `tools/ci/`, is on Ralph's word.
 
 ## Deploy
 
