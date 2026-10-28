@@ -29,7 +29,7 @@ jobs:
   icd:
     name: icd
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-ci]
+    runs-on: [self-hosted, wf-ci, wf-ci-icd]
     timeout-minutes: 30
     steps:
       - &checkout
@@ -46,7 +46,7 @@ jobs:
   play:
     name: play
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-ci]
+    runs-on: [self-hosted, wf-ci, wf-ci-play]
     timeout-minutes: 10
     steps:
       - *checkout
@@ -56,7 +56,7 @@ jobs:
   auth:
     name: auth
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-ci]
+    runs-on: [self-hosted, wf-ci, wf-ci-auth]
     timeout-minutes: 10
     steps:
       - *checkout
@@ -66,7 +66,7 @@ jobs:
   core:
     name: core
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-ci]
+    runs-on: [self-hosted, wf-ci, wf-ci-core]
     timeout-minutes: 60
     steps:
       - *checkout
@@ -80,7 +80,7 @@ jobs:
   arc:
     name: arc
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-ci]
+    runs-on: [self-hosted, wf-ci, wf-ci-arc]
     timeout-minutes: 60
     steps:
       - *checkout
@@ -91,7 +91,7 @@ jobs:
   door:
     name: door
     if: github.actor == 'phezman'
-    runs-on: [self-hosted, wf-ci]
+    runs-on: [self-hosted, wf-ci, wf-ci-door]
     timeout-minutes: 45
     steps:
       - *checkout

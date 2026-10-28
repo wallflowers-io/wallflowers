@@ -89,12 +89,15 @@ Failing tests inform fixes or PRs. Weakening a test for a 'special case' or unim
 
 ## Build
 
-- **The harness is `/Users/ralph/wallflowers/dev/ci.sh`** (private, Codeberg `wallflowers/dev`). Nothing else starts a runner. It starts Colima VM `wf-ci`, builds the image from `$CI_PUBLIC/tools/ci/Dockerfile` (so a change to `tools/ci` reaches CI once it is in that checkout), serves each queued `wf-ci` job in its own one-job container, and stops the VM after `CI_IDLE` seconds with nothing queued. A push starts it (`make ci-hooks`); a second start exits at once.
+- **The harness is `/Users/ralph/wallflowers/dev/ci.sh`** (private, Codeberg `wallflowers/dev`; its loop is `dev/ci.py`). Nothing else starts a runner. It starts Colima VM `wf-ci`, builds the image from `origin/main`'s `tools/ci/Dockerfile` (a change to `tools/ci` reaches CI once merged), serves queued `wf-ci` jobs, and stops the VM after `CI_IDLE` seconds with nothing queued. A push starts it (`make ci-hooks`); a second start exits at once.
 - **Build happens on the VM.** CI's suites and the deploys' builds run there, GitHub Actions' only runner for this repository. Not on the Mac itself.
-- **Exactly one harness.** One script, one VM, one build target. No session starts a second runner, VM, scaler or agent, nor runs a suite beside the VM's.
+- **Exactly one harness.** One script, one VM, one build target. No session starts a second runner, VM, scaler or agent, nor runs a suite or a container on the VM beside the harness.
 - **Scale to zero.** Nothing persists between runs: no agent, no idle VM. The VM's disk keeps the image and build caches.
-- **Settings:** `dev/.env` (gitignored; `dev/.env.example`). `CI_LOGS` (default `~/Library/Logs/wf-ci`) holds `ci.log`, `colima.log` and `jobs/<runner>/` (runner output, `_diag`, suite output), kept `CI_LOG_DAYS`. `CI_CPUS`, `CI_MEMORY`, `CI_DISK` size the VM.
-- A change to the harness, `ci.sh` or `tools/ci/`, is on Ralph's word.
+- **In parallel, by measured memory.** Each job has its own label (`wf-ci-<job>`, `wf-ci-deploy-<route>`) and its own one-job container. A job is admitted while the peak memory its last runs measured fits beside what is running (`CI_HEADROOM` kept free); no history, or an OOM kill, and it runs alone. Longest first.
+- **Measured and recorded.** Every job's memory, swap, CPU time, steps and lockfiles go to `CI_DB` (sqlite), read from outside the job. `dev/ci.sh report [job]` shows them, and `ci.log` names a job whose cost rose with what changed in its locks.
+- **Contained.** Only pushes and dispatches of this repository by `CI_TRUSTED` are served, and the image's job-started hook (`tools/ci/job-started.sh`) fails anything else before a step runs. Deploys have their own caches; containers reach the internet only; each job has a time limit.
+- **Settings:** `dev/.env` (gitignored; `dev/.env.example`). `CI_LOGS` (default `~/Library/Logs/wf-ci`) holds `ci.log`, `colima.log`, `ci.db` and `jobs/<runner>/`, kept `CI_LOG_DAYS`. `CI_CPUS`, `CI_MEMORY`, `CI_DISK` size the VM.
+- A change to the harness, `dev/` or `tools/ci/`, is on Ralph's word.
 
 ## Deploy
 
