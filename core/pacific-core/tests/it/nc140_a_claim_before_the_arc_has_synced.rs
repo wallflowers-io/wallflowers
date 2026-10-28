@@ -9,7 +9,7 @@
 //!    in `unjoined` with why. `rooms: [], unjoined: []` only for a Site with no room for
 //!    the claim. The same claim presented again completes the rooms, spent once.
 
-mod common;
+use crate::common;
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
 use base64::Engine;
