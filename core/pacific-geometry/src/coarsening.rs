@@ -50,7 +50,7 @@
 use std::collections::BTreeMap;
 
 use crate::graph_resolution::GraphEdgeRow;
-use crate::ontology_anchors::KindAnchor;
+use crate::kind_anchor::KindAnchor;
 use crate::space_calibration::SpaceCalibration;
 use crate::vec::{dot, normalize};
 
@@ -532,7 +532,7 @@ fn persistence_of(levels: &[PyramidLevel], died: &BTreeMap<String, usize>) -> BT
 mod tests {
     use super::*;
     use crate::graph_resolution::{BiTime, Provenance};
-    use crate::ontology_anchors::OntologyKind;
+    use crate::kind_anchor::OntologyKind;
     use crate::spectral::SplitMix64;
 
     fn unit(v: &[f32]) -> Vec<f32> {

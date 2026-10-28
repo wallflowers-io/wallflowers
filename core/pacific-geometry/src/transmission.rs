@@ -13,8 +13,8 @@
 //!              own geometry — a cluster is a CANDIDATE INSTANCE (this person,
 //!              this place), not a category.
 //!   CATEGORY   an orthogonal read: each cluster's original-space centroid is
-//!              projected against the ontology's kind anchors (OntologyAnchors,
-//!              from the .ttl at load time). The affinity VECTOR is the output —
+//!              projected against the kind anchors the caller supplies
+//!              (`kind_anchor::KindAnchor`). The affinity VECTOR is the output —
 //!              never an argmax. Category may be orthogonal to instance.
 //!   RANK       sentiment, scored per episode on device (Apple NL — a gauge, not
 //!              a generator), aggregated per cluster, and TRANSDUCED through the
@@ -38,7 +38,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::ontology_anchors::KindAnchor;
+use crate::kind_anchor::KindAnchor;
 use crate::space_calibration::SpaceCalibration;
 use crate::spectral::{cluster, SpectralParams};
 use crate::vec::dot;
@@ -283,7 +283,7 @@ fn first_id(c: &TransmissionCandidate) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ontology_anchors::OntologyKind;
+    use crate::kind_anchor::OntologyKind;
     use crate::spectral::SplitMix64;
 
     // Deterministic blob generator — SplitMix64, never SystemRandom.
