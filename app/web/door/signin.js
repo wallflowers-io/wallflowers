@@ -268,11 +268,7 @@
      provider is the passkey's AAGUID, in its authenticator data (flags at 32, AT 0x40; the AAGUID
      at 37-53). A pair joins this list once it is witnessed. */
   var WITNESSED = [
-    ['fbfc3007154e4ecc8c0b6e020557d7bd', function (ua) { return ios() || macSafari(ua); }],   // iCloud Keychain, in WebKit
-    ['ea9b8d664d011d213ce4b6b48cb575d4', desktopChrome]                                       // Google Password Manager
   ];
-  function macSafari(ua) { return /Macintosh/.test(ua) && /Version\/[\d.]+ Safari\//.test(ua) && !/Chrome|Chromium|Firefox|Edg|OPR/.test(ua); }
-  function desktopChrome(ua) { return /Chrome\/\d/.test(ua) && !/Android|Mobile|Edg\/|OPR\/|SamsungBrowser|YaBrowser/.test(ua); }
   function witnessed(cred) {
     var d;
     try { d = new Uint8Array(cred.response.getAuthenticatorData()); } catch (e) { return false; }
