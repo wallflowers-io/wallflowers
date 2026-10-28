@@ -69,6 +69,7 @@ mod m8_thing_market;
 mod m9_place_location;
 mod nc111_a_room_as_its_reader_sees_it;
 mod nc135_claim_spent_authority;
+mod nc140_a_claim_before_the_arc_has_synced;
 mod nc144_a_groups_view_serves_its_parent;
 mod nc65_a_late_device_is_refused_the_chain;
 mod nc65_late_joiner_gets_the_standing_state;
