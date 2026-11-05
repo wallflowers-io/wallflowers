@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pacific — the n+1 journey</title>
+<style>
+  :root{ --teal:#14b8a6; --teal-d:#0d9488; --ink:#0f172a; --muted:#64748b; --card:#ffffff; --bg-screen:#f2f2f7; --indigo:#4f46e5; }
+  *{ box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+  html,body{ height:100%; margin:0; }
+  body{ font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:#e2e8f0; display:flex; flex-direction:column; align-items:center; min-height:100%; padding:20px 18px 30px; position:relative; }
+  .bg{ position:fixed; inset:0; z-index:-1; transition:opacity .9s ease; }
+  .bg.day{ background:radial-gradient(1200px 600px at 50% -10%, #1b2742 0%, #0b1220 55%, #070b14 100%); opacity:1; }
+  .bg.eve{ background:radial-gradient(1200px 600px at 50% -10%, #2a2140 0%, #120e20 55%, #08060f 100%); opacity:0; }
+  body[data-act="2"] .bg.day{ opacity:0; } body[data-act="2"] .bg.eve{ opacity:1; }
+
+  .title{ font-weight:700; font-size:15px; color:#cbd5e1; } .title b{ color:var(--teal); }
+  .chapters{ display:flex; gap:8px; margin-top:10px; }
+  .chap{ font:inherit; font-size:12px; font-weight:600; color:#9fb0c9; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); padding:6px 13px; border-radius:999px; cursor:pointer; transition:.15s; }
+  .chap:hover{ background:rgba(255,255,255,.12); } .chap.on{ background:var(--teal); color:#042a26; border-color:transparent; }
+
+  .stage{ width:min(1760px,99vw); display:grid; grid-template-columns:0.78fr 1fr 1.08fr 1fr 0.78fr; gap:10px; align-items:start; margin-top:16px; }
+  .third{ display:flex; flex-direction:column; align-items:center; gap:11px; }
+  .who{ font-size:12px; color:#8aa; letter-spacing:.3px; text-transform:uppercase; opacity:.8; } .who b{ color:#cbd5e1; text-transform:none; font-size:13px; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; min-height:44px; max-width:340px; }
+  .actbtn{ font:inherit; font-size:12.5px; font-weight:700; padding:9px 13px; border-radius:11px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.06); color:#dbe4f0; cursor:pointer; transition:transform .12s, background .15s; }
+  .actbtn:hover{ background:rgba(255,255,255,.13); transform:translateY(-1px); } .actbtn.primary{ background:var(--teal); border-color:transparent; color:#042a26; box-shadow:0 8px 16px -8px rgba(20,184,166,.6); }
+  .actbtn.primary:hover{ background:#2dd4bf; } .actbtn.ghost{ background:transparent; color:#9fb0c9; } .actbtn.chip{ border-radius:999px; padding:8px 12px; }
+  .actions .hint{ font-size:11.5px; color:#5d6b82; align-self:center; font-style:italic; } .actions .hint.ok{ color:var(--teal); font-style:normal; }
+
+  /* engine rails — "what the app is doing", flanking the phones */
+  .engine{ align-self:start; align-items:stretch; text-align:left; gap:9px; padding-top:8px; min-width:0; }
+  .engine .ehead{ font-size:11px; color:#7c8aa3; display:flex; align-items:center; gap:6px; } .engine .ehead b{ color:#aab8cf; font-size:12px; }
+  .engine .estatus{ font-size:10.5px; color:#7df3e4; display:flex; align-items:center; gap:7px; font-weight:600; }
+  .engine .estatus .sdot{ width:7px; height:7px; border-radius:50%; background:#7df3e4; box-shadow:0 0 8px 1px rgba(20,184,166,.7); animation:epulse 1.6s ease-in-out infinite; flex:none; }
+  @keyframes epulse{ 0%,100%{ opacity:.45 } 50%{ opacity:1 } }
+  .engine .ecard{ background:rgba(13,18,32,.66); border:1px solid rgba(148,163,184,.16); border-radius:13px; padding:9px 11px; }
+  .engine .etitle{ font-size:9px; letter-spacing:.5px; text-transform:uppercase; color:#5d6b82; margin-bottom:5px; font-weight:700; }
+  .engine .op{ display:flex; gap:7px; align-items:baseline; font-size:11px; line-height:1.3; padding:4px 0; }
+  .engine .op .ic{ width:6px; height:6px; border-radius:50%; background:#475569; flex:none; align-self:flex-start; transform:translateY(3px); }
+  .engine .op.ok .ic{ background:var(--teal); } .engine .op.run .ic{ background:#7df3e4; animation:epulse 1.1s ease-in-out infinite; } .engine .op.queue .ic{ background:#7c3aed; } .engine .op.dim{ opacity:.4; }
+  .engine .op .lbl{ color:#c3cee0; flex:1; } .engine .op .val{ color:#7df3e4; font-weight:600; font-size:9.5px; text-align:right; }
+  .engine .frowE{ display:flex; justify-content:space-between; gap:8px; font-size:11px; padding:4px 0; border-bottom:1px solid rgba(148,163,184,.07); } .engine .frowE:last-child{ border-bottom:none; }
+  .engine .frowE .fk{ color:#7c8aa3; } .engine .frowE .fv{ color:#7df3e4; font-weight:600; } .engine .frowE.dim .fv{ color:#475569; font-weight:400; }
+
+  .phone{ width:min(310px,27vw); aspect-ratio:9/19.3; background:#05070c; border-radius:46px; padding:11px; box-shadow:0 0 0 2px #1e2636,0 30px 60px -20px rgba(0,0,0,.7),inset 0 0 2px #313a4f; position:relative; }
+  .screen{ position:relative; width:100%; height:100%; border-radius:35px; overflow:hidden; background:var(--bg-screen); }
+  .island{ position:absolute; top:9px; left:50%; transform:translateX(-50%); width:33%; height:21px; background:#000; border-radius:13px; z-index:40; }
+  .statusbar{ position:absolute; top:0; left:0; right:0; height:38px; z-index:35; display:flex; align-items:center; justify-content:space-between; padding:13px 22px 0; font-size:12px; font-weight:600; color:var(--ink); }
+  .statusbar.dark{ color:#fff; } .statusbar .dots{ letter-spacing:1px; }
+  .homebar{ position:absolute; bottom:7px; left:50%; transform:translateX(-50%); width:36%; height:5px; border-radius:3px; background:rgba(0,0,0,.35); z-index:40; }
+  .layer{ position:absolute; inset:0; padding:46px 15px 26px; opacity:0; transform:translateY(10px) scale(.985); transition:opacity .5s, transform .5s; pointer-events:none; display:flex; flex-direction:column; }
+  .layer.active{ opacity:1; transform:none; }
+
+  .av{ border-radius:30%; display:grid; place-items:center; color:#fff; font-weight:800; box-shadow:0 4px 10px -3px rgba(0,0,0,.35); flex:none; }
+  .av-r{ background:linear-gradient(150deg,var(--teal),var(--teal-d)); } .av-s{ background:linear-gradient(150deg,#6366f1,var(--indigo)); }
+  .card{ background:var(--card); border-radius:15px; padding:12px 13px; box-shadow:0 6px 18px -10px rgba(15,23,42,.25); }
+  .h1{ font-size:18px; font-weight:800; color:var(--ink); } .h2{ font-size:14px; font-weight:700; color:var(--ink); } .p{ font-size:12px; color:var(--muted); line-height:1.38; }
+  .chip{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; padding:4px 8px; border-radius:999px; background:#eef0f4; color:#475569; }
+  .chip.on{ background:rgba(20,184,166,.15); color:var(--teal-d); } .chip.tag{ background:rgba(20,184,166,.12); color:var(--teal-d); } .chip.warn{ background:rgba(124,58,237,.12); color:#6d28d9; }
+  .btn{ display:flex; align-items:center; justify-content:center; gap:6px; font-size:13.5px; font-weight:700; padding:11px; border-radius:12px; background:var(--teal); color:#fff; box-shadow:0 8px 18px -8px rgba(13,148,136,.7); }
+  .btn.app{ background:#0a84ff; box-shadow:0 8px 18px -8px rgba(10,132,255,.7); }
+  .trust{ display:flex; align-items:center; gap:6px; font-size:10px; color:#8a93a3; justify-content:center; margin-top:auto; } .seal{ color:var(--teal); }
+  .row{ display:flex; gap:8px; } .grow{ flex:1; } .center-col{ align-items:center; text-align:center; }
+  .qrwrap{ background:#fff; border-radius:16px; padding:12px; display:grid; place-items:center; box-shadow:0 8px 22px -12px rgba(15,23,42,.3); } svg.qr{ width:100%; height:100%; display:block; }
+  .links{ display:flex; gap:7px; flex-wrap:wrap; margin:9px 2px 0; } .lnk{ font-size:11px; font-weight:600; color:var(--teal-d); background:rgba(20,184,166,.12); padding:5px 9px; border-radius:8px; }
+  .frow{ display:flex; justify-content:space-between; gap:10px; padding:9px 13px; border-bottom:1px solid #eef0f4; font-size:12px; } .frow:last-child{ border-bottom:none; }
+  .frow.note{ flex-direction:column; gap:3px; align-items:flex-start; } .flbl{ color:var(--teal-d); font-weight:600; } .fval{ color:var(--ink); } .frow.note .fval{ color:var(--muted); font-style:italic; }
+
+  .selfie{ position:relative; border-radius:12px; overflow:hidden; background:linear-gradient(160deg,#fde0b8,#f4a8a0 55%,#caa0d8); flex:none; }
+  .selfie .face{ position:absolute; bottom:-9%; width:56%; height:74%; border-radius:48% 48% 42% 42%; display:grid; place-items:center; color:#fff; font-weight:800; }
+  .selfie .face.av-r{ left:3%; background:linear-gradient(150deg,var(--teal),var(--teal-d)); } .selfie .face.av-s{ right:3%; background:linear-gradient(150deg,#6366f1,var(--indigo)); }
+  .selfie .stamp{ position:absolute; top:5px; right:6px; font-size:9px; color:#fff; background:rgba(0,0,0,.32); padding:2px 5px; border-radius:5px; font-weight:600; }
+  .selfieFrame{ position:relative; margin:auto; width:60%; aspect-ratio:1; }
+  .selfieFrame .c1,.selfieFrame .c2,.selfieFrame .c3,.selfieFrame .c4{ position:absolute; width:24px; height:24px; }
+  .selfieFrame .c1{ top:-6px; left:-6px; border-top:3px solid #fff; border-left:3px solid #fff; border-radius:8px 0 0 0; } .selfieFrame .c2{ top:-6px; right:-6px; border-top:3px solid #fff; border-right:3px solid #fff; border-radius:0 8px 0 0; }
+  .selfieFrame .c3{ bottom:-6px; left:-6px; border-bottom:3px solid #fff; border-left:3px solid #fff; border-radius:0 0 0 8px; } .selfieFrame .c4{ bottom:-6px; right:-6px; border-bottom:3px solid #fff; border-right:3px solid #fff; border-radius:0 0 8px 0; }
+
+  .layer.cam{ background:linear-gradient(180deg,#0b0f17,#11161f); padding-top:46px; }
+  .reticle{ width:60%; aspect-ratio:1; margin:auto; position:relative; }
+  .reticle .c1,.reticle .c2,.reticle .c3,.reticle .c4{ position:absolute; width:26px; height:26px; }
+  .reticle .c1{ top:-2px; left:-2px; border-top:3px solid #fff; border-left:3px solid #fff; border-radius:8px 0 0 0; } .reticle .c2{ top:-2px; right:-2px; border-top:3px solid #fff; border-right:3px solid #fff; border-radius:0 8px 0 0; }
+  .reticle .c3{ bottom:-2px; left:-2px; border-bottom:3px solid #fff; border-left:3px solid #fff; border-radius:0 0 0 8px; } .reticle .c4{ bottom:-2px; right:-2px; border-bottom:3px solid #fff; border-right:3px solid #fff; border-radius:0 0 8px 0; }
+  .reticle .mini-qr{ position:absolute; inset:18%; opacity:.85; } .reticle .scanline{ position:absolute; left:6%; right:6%; height:2px; top:10%; background:linear-gradient(90deg,transparent,var(--teal),transparent); box-shadow:0 0 12px 2px rgba(20,184,166,.7); animation:scan 1.7s ease-in-out infinite; }
+  @keyframes scan{ 0%,100%{ top:10% } 50%{ top:86% } }
+  .cam .hint{ color:#cbd5e1; font-size:12px; text-align:center; margin-top:14px; }
+  .clip{ margin-top:auto; background:#fff; border-radius:22px 22px 18px 18px; padding:15px 15px 13px; box-shadow:0 -10px 30px -12px rgba(0,0,0,.25); } .grabber{ width:38px; height:5px; border-radius:3px; background:#d4d9e0; margin:0 auto 11px; }
+  .selfieBadge{ display:flex; align-items:center; gap:8px; margin-top:10px; padding:7px 9px; border-radius:10px; background:rgba(20,184,166,.10); } .selfieBadge .txt{ font-size:11px; font-weight:600; color:var(--teal-d); }
+
+  /* Act 2 screens */
+  .notif{ margin:auto 4px; background:rgba(255,255,255,.82); backdrop-filter:blur(10px); border-radius:18px; padding:13px 14px; box-shadow:0 12px 30px -12px rgba(0,0,0,.4); } .notif .row2{ display:flex; gap:10px; align-items:center; }
+  .thread{ flex:1; overflow:hidden; display:flex; flex-direction:column; gap:8px; padding-top:2px; }
+  .msg{ max-width:88%; font-size:11.6px; line-height:1.35; padding:8px 11px; border-radius:14px; }
+  .msg.agent{ align-self:flex-start; background:#fff; color:var(--ink); border-bottom-left-radius:5px; box-shadow:0 3px 10px -6px rgba(0,0,0,.2); } .msg.me{ align-self:flex-end; background:var(--teal); color:#fff; border-bottom-right-radius:5px; }
+  .msg .ag{ font-size:9.5px; font-weight:700; color:var(--teal-d); margin-bottom:3px; }
+  .research{ align-self:flex-start; max-width:92%; background:#0f172a; color:#cbd5e1; border-radius:12px; padding:9px 11px; font-size:10.5px; } .research .lbl{ font-size:9px; color:#7dd3c8; font-weight:700; letter-spacing:.3px; margin-bottom:4px; } .research b{ color:#fff; }
+  .askline{ font-size:10.5px; color:#5d6b82; text-align:center; padding:6px 0 2px; font-style:italic; }
+  .split .lbl{ font-size:9.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; margin-bottom:6px; } .split.private .lbl{ color:#6d28d9; } .split.shared .lbl{ color:var(--teal-d); }
+  .private{ border:1px solid rgba(124,58,237,.25); } .shared{ border:1px solid rgba(20,184,166,.3); }
+  .actrow{ display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--ink); padding:5px 0; } .actrow .dot{ width:7px; height:7px; border-radius:50%; background:var(--teal); flex:none; }
+  .mailhead{ display:flex; gap:10px; align-items:center; padding-bottom:10px; border-bottom:1px solid #e6e9ef; }
+  .mailbody{ font-size:11.6px; color:var(--ink); line-height:1.5; padding-top:10px; } .mailbody p{ margin:0 0 8px; } .mailbody .small{ color:var(--muted); }
+  .promo{ margin-top:10px; background:rgba(20,184,166,.10); border-radius:11px; padding:9px 11px; font-size:11px; color:var(--teal-d); font-weight:600; display:flex; align-items:center; gap:7px; }
+  .gearbar{ display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted); } .toggle{ width:34px; height:20px; border-radius:11px; background:var(--teal); position:relative; flex:none; } .toggle::after{ content:""; position:absolute; top:2px; right:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.3); } .toggle.off{ background:#cbd5e1; } .toggle.off::after{ right:auto; left:2px; }
+
+  /* Act 1 centre scene */
+  .scene{ position:relative; width:100%; height:min(560px,64vh); }
+  .scene.hide{ display:none; }
+  .ground{ position:absolute; left:6%; right:6%; bottom:14%; height:2px; background:linear-gradient(90deg,transparent,rgba(148,163,184,.35),transparent); }
+  .figure{ position:absolute; bottom:13%; width:120px; text-align:center; transition:transform .4s ease; } .figL{ left:4%; } .figR{ right:4%; }
+  .figure .head{ width:58px; height:58px; font-size:22px; margin:0 auto; } .figure .body{ width:76px; height:52px; margin:7px auto 0; border-radius:30px 30px 14px 14px; background:linear-gradient(180deg,#24304a,#1a2235); }
+  .figure .name{ font-size:11.5px; color:#9fb0c9; margin-top:8px; } .figure .name b{ color:#e2e8f0; } .figure .tag{ font-size:10px; color:#6b7a93; }
+  .hphone{ position:absolute; bottom:30%; width:38px; height:74px; border-radius:11px; background:#05070c; box-shadow:0 0 0 1.5px #283248,0 12px 22px -10px rgba(0,0,0,.7); display:grid; place-items:center; transition:transform .5s ease; z-index:4; }
+  .hphone .scr{ width:30px; height:58px; border-radius:7px; overflow:hidden; display:grid; place-items:center; }
+  .hpL{ left:21%; transform:rotate(12deg); } .hpL .scr{ background:#fff; } .hpR{ right:21%; transform:rotate(-12deg); } .hpR .scr{ background:linear-gradient(180deg,#0b0f17,#141b27); }
+  .hphone .tinyqr{ width:22px; height:22px; } .hpR .scr::after{ content:""; width:16px; height:16px; border:2px solid var(--teal); border-radius:5px; opacity:.9; }
+  .beam{ position:absolute; top:34%; left:30%; width:40%; height:46px; opacity:0; transition:opacity .2s; } .beam .ray{ position:absolute; inset:0; background:linear-gradient(90deg,rgba(20,184,166,0),rgba(20,184,166,.35) 50%,rgba(20,184,166,0)); -webkit-mask:linear-gradient(90deg,transparent,#000 30%,#000 70%,transparent); border-radius:40px; }
+  .beam .pulse{ position:absolute; top:50%; width:14px; height:14px; border-radius:50%; background:#7df3e4; box-shadow:0 0 18px 5px rgba(20,184,166,.8); transform:translateY(-50%); }
+  .scene.beam-play .beam{ opacity:1; } .scene.beam-play .beam .pulse{ animation:beamPulse .9s ease-out 2; }
+  @keyframes beamPulse{ 0%{ right:4%; opacity:0 } 15%{ opacity:1 } 100%{ right:88%; opacity:0 } }
+  .nfc{ position:absolute; top:28%; left:50%; transform:translateX(-50%); opacity:0; text-align:center; transition:opacity .25s; z-index:6; } .nfc .rings{ position:relative; width:60px; height:60px; margin:0 auto; } .nfc .ring{ position:absolute; inset:0; margin:auto; width:60px; height:60px; border:2px solid var(--teal); border-radius:50%; opacity:0; } .nfc .nfclbl{ font-size:11px; color:var(--teal); margin-top:8px; font-weight:700; }
+  .scene.tap-play .nfc{ opacity:1; } .scene.tap-play .nfc .ring{ animation:ripple 1.2s ease-out infinite; } .scene.tap-play .nfc .ring:nth-child(2){ animation-delay:.4s; } .scene.tap-play .nfc .ring:nth-child(3){ animation-delay:.8s; }
+  @keyframes ripple{ 0%{ transform:scale(.25); opacity:.85 } 100%{ transform:scale(1.5); opacity:0 } }
+  .scene.tap-play .hpL{ transform:rotate(9deg) translate(34px,-13px); } .scene.tap-play .hpR{ transform:rotate(-9deg) translate(-34px,-13px); }
+  .flash{ position:absolute; inset:0; background:#fff; opacity:0; z-index:20; } .scene.selfie-play .flash{ animation:flash .6s ease; } @keyframes flash{ 0%{opacity:0} 18%{opacity:.85} 100%{opacity:0} }
+  .scene.selfie-play .figL{ transform:translateX(32px); } .scene.selfie-play .figR{ transform:translateX(-32px); }
+  .polaroid{ position:absolute; top:40%; left:50%; transform:translate(-50%,-50%) scale(.4) rotate(-6deg); opacity:0; z-index:21; background:#fff; padding:6px 6px 16px; border-radius:6px; box-shadow:0 16px 30px -10px rgba(0,0,0,.6); }
+  .scene.selfie-play .polaroid{ animation:pop 1.6s ease forwards; } @keyframes pop{ 0%{opacity:0; transform:translate(-50%,-50%) scale(.4) rotate(-6deg)} 35%{opacity:1; transform:translate(-50%,-50%) scale(1) rotate(-6deg)} 80%{opacity:1} 100%{opacity:0; transform:translate(-50%,-58%) scale(1) rotate(-6deg)} }
+  .relay{ position:absolute; top:5%; left:50%; transform:translateX(-50%); text-align:center; } .relay .node{ width:72px; height:46px; border-radius:16px; background:rgba(148,163,184,.10); border:1px solid rgba(148,163,184,.22); display:grid; place-items:center; font-size:19px; } .relay .lbl{ font-size:10px; color:#7c8aa3; margin-top:5px; } .relay .lbl b{ color:#aab8cf; }
+  .packet{ position:absolute; width:28px; height:28px; border-radius:9px; background:linear-gradient(150deg,#1f2a44,#141d30); border:1px solid rgba(20,184,166,.5); display:grid; place-items:center; font-size:13px; opacity:0; left:0; top:0; z-index:5; }
+  .scene.packet-play .packet{ animation:fly 2s cubic-bezier(.5,0,.5,1) forwards; } @keyframes fly{ 0%{ left:74%; top:62%; opacity:0; transform:scale(.6) } 12%{ opacity:1; transform:scale(1) } 48%{ left:50%; top:11% } 52%{ left:50%; top:11% } 100%{ left:24%; top:62%; opacity:0; transform:scale(.7) } }
+  .bond{ position:absolute; inset:0; pointer-events:none; } .bond path{ fill:none; stroke:url(#bondGrad); stroke-width:3; stroke-linecap:round; stroke-dasharray:340; stroke-dashoffset:340; opacity:0; }
+  .scene.bond-play .bond path{ opacity:1; animation:draw 1.1s ease forwards; } @keyframes draw{ to{ stroke-dashoffset:0 } }
+  .heart{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:22px; opacity:0; } .scene.bond-play .heart{ opacity:1; animation:beat 1.4s ease-in-out infinite .9s; } @keyframes beat{ 0%,100%{ transform:translate(-50%,-50%) scale(1) } 50%{ transform:translate(-50%,-50%) scale(1.25) } }
+
+  /* Act 2 centre scene */
+  .scene2{ position:relative; width:100%; height:min(560px,64vh); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; text-align:center; } .scene2.hide{ display:none; }
+  .clock{ font-size:44px; } .laterlbl{ font-size:13px; color:#cbb9e8; font-weight:600; } .latersub{ font-size:11px; color:#8a7fae; max-width:200px; }
+  .twoTempo{ margin-top:12px; font-size:10.5px; color:#9183b5; line-height:1.7; max-width:230px; } .twoTempo b{ color:#cbd5e1; }
+  .envelope{ margin-top:16px; font-size:28px; opacity:0; transform:translateX(-60px); transition:.9s ease; } .stage[data-sent="1"] .envelope{ opacity:1; transform:translateX(60px); }
+  .loopmark{ margin-top:12px; font-size:11px; color:var(--teal); font-weight:700; opacity:0; transition:.5s; } .stage[data-finale="1"] .loopmark{ opacity:1; }
+
+  .caption{ margin-top:18px; font-size:18px; font-weight:600; color:#eef0f6; text-align:center; min-height:26px; opacity:0; transition:opacity .35s; max-width:820px; } .caption.in{ opacity:1; } .caption b{ color:var(--teal); }
+  .reset{ margin-top:13px; font:inherit; font-size:12px; font-weight:600; color:#8aa; background:transparent; border:1px solid rgba(255,255,255,.14); padding:7px 14px; border-radius:10px; cursor:pointer; }
+  .foot{ margin-top:14px; font-size:11.5px; color:#5d6b82; text-align:center; max-width:760px; line-height:1.5; } .foot b{ color:#8ea2bf; }
+</style>
+</head>
+<body data-act="1">
+  <div class="bg day"></div><div class="bg eve"></div>
+  <div class="title">Pacific — the <b>n + 1</b> journey</div>
+  <div class="chapters"><button class="chap on" id="ch1">① The meeting · 30s</button><button class="chap" id="ch2">② That evening · 5 min</button></div>
+
+  <div class="stage" id="stage" data-sent="0" data-finale="0">
+
+    <!-- LEFT ENGINE: what Ralph's app is doing -->
+    <div class="third engine" id="engL">
+      <div class="ehead">&#9881;&#65039; <b>Ralph&rsquo;s Pacific</b> &middot; on device</div>
+      <div class="estatus" id="engL_status"></div>
+      <div class="ecard"><div class="etitle">activity</div><div id="engL_ops"></div></div>
+      <div class="ecard" id="engL_fieldsWrap"><div class="etitle" id="engL_ftitle">Fields</div><div id="engL_fields"></div></div>
+    </div>
+
+    <!-- LEFT: Ralph -->
+    <div class="third">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="statusbar" id="sbLeft"><span id="clkL">9:41</span><span class="dots">5G &#9679;&#9679;&#9679; &#9636;</span></div>
+        <div class="phone-layers" id="phoneLeft">
+          <!-- act 1 -->
+          <div class="layer center-col" data-screen="profile">
+            <div class="av av-r" style="width:62px;height:62px;font-size:25px;margin-top:6px;">R</div>
+            <div class="h1" style="margin-top:10px;">Ralph</div><div class="p">Pacific · S26 · networking that remembers</div>
+            <div class="btn" style="margin-top:20px;width:80%;">&#9783;&nbsp; My code</div>
+            <div class="trust"><span class="seal">&#128274;</span> on device · no server has your profile</div>
+          </div>
+          <div class="layer center-col" data-screen="qr">
+            <div class="row" style="align-items:center;gap:9px;"><div class="av av-r" style="width:34px;height:34px;font-size:15px;">R</div><div style="text-align:left;"><div class="h2">Ralph</div><div class="p">Pacific · S26</div></div></div>
+            <div class="qrwrap" style="margin-top:12px;width:150px;height:150px;" id="qrBig"></div>
+            <div class="p" style="margin-top:9px;">Scan or tap to connect</div>
+            <div class="links" style="justify-content:center;"><span class="lnk">&#9656; LinkedIn</span><span class="lnk">&#127760; kenjin.cc</span></div>
+            <div class="trust" style="margin-top:8px;"><span class="seal">&#128274;</span> a preview + your links — no server</div>
+          </div>
+          <div class="layer" data-screen="incoming">
+            <div class="h2" style="margin-bottom:4px;">Needs you</div>
+            <div class="card" style="border:1px solid rgba(20,184,166,.35);">
+              <div class="row" style="align-items:flex-start;gap:10px;"><div class="av av-s" style="width:38px;height:38px;font-size:15px;">S</div>
+                <div><div class="h2">Sarah Chen wants to connect</div><div style="margin:6px 0;"><span class="chip on" id="inPurpose">&#9678; Customer</span></div><div class="p" style="font-style:italic;">"Loved the on-device sync chat — 15 min?"</div></div></div>
+              <div class="row" style="margin-top:11px;"><div class="btn grow">&#10003; Accept</div><div class="btn grow" style="background:#e9edf2;color:#334155;box-shadow:none;">Decline</div></div>
+            </div>
+            <div class="trust"><span class="seal">&#128274;</span> nothing shared until you both accept</div>
+          </div>
+          <div class="layer" data-screen="connected">
+            <div class="h2" style="margin-bottom:4px;">Connected · remembered</div>
+            <div class="card"><div class="row" style="align-items:center;gap:10px;"><div id="conPhoto"></div>
+              <div class="grow"><div class="h2">Sarah Chen <span class="seal">&#10003;</span></div><div class="p">Northwind · founder</div></div></div>
+              <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap;"><span class="chip tag" id="conPurpose">why · Customer</span><span class="chip">met today · in person</span></div></div>
+            <div class="card" style="margin-top:9px;display:flex;align-items:center;gap:9px;"><span style="font-size:18px;">&#128221;</span><div class="p"><b style="color:var(--ink);">Saved to Work.</b> Pacific remembers who &amp; why — even months later.</div></div>
+            <div class="trust"><span class="seal">&#128274;</span> end-to-end encrypted, peer-to-peer</div>
+          </div>
+          <!-- act 2 -->
+          <div class="layer center-col" data-screen="lock">
+            <div style="margin-top:48px;font-size:42px;font-weight:800;color:#0f172a;">6:41</div><div class="p" style="margin-bottom:auto;">Wednesday · home</div>
+            <div class="notif"><div class="row2"><div class="av av-r" style="width:30px;height:30px;font-size:13px;">P</div><div style="text-align:left;"><div class="h2" style="font-size:12.5px;">Pacific</div><div class="p" style="font-size:11px;">Got 5 min? Let’s think through <b style="color:#0f172a;">Sarah Chen</b> while it’s fresh.</div></div></div></div>
+          </div>
+          <div class="layer" data-screen="reflect">
+            <div class="row" style="align-items:center;gap:8px;margin-bottom:8px;"><div class="av av-r" style="width:26px;height:26px;font-size:12px;">P</div><div class="h2" style="font-size:13px;">Thinking through Sarah</div></div>
+            <div class="thread" id="thread"></div><div class="askline" id="askline"></div>
+          </div>
+          <div class="layer" data-screen="writeup">
+            <div class="h2" style="margin-bottom:8px;">Your write-up</div>
+            <div class="card shared split" style="margin-bottom:8px;"><div class="lbl">&#128229; Will send to Sarah</div><div class="p" id="shareList"></div></div>
+            <div class="card private split"><div class="lbl">&#128274; Private to you</div><div id="privList"></div></div>
+            <div class="trust" style="margin-top:10px;"><span style="color:#6d28d9;">&#128274;</span> your strategy never leaves your device</div>
+          </div>
+          <div class="layer center-col" data-screen="recap">
+            <div style="font-size:44px;margin-top:12px;" class="seal">&#10003;</div><div class="h1" style="margin-top:6px;" id="recapTitle">Digest sent to Sarah</div>
+            <div class="p" style="margin-top:8px;">2 actions saved to Work · 1 intro queued for your approval.</div>
+            <div class="card" style="margin-top:12px;width:100%;text-align:left;"><div class="gearbar"><span style="font-size:14px;">&#9881;&#65039;</span><span class="grow">Auto-send digests to <b style="color:#0f172a;">Sarah</b></span><span class="toggle" id="tgl"></span></div><div class="p" id="tglNote" style="margin-top:6px;">On by default. Tap to stop sending Sarah follow-ups.</div></div>
+            <div class="trust"><span class="seal">&#128241;</span> per-connection · behind the gear, never in your face</div>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="who" id="whoL"><b>You</b> — already on Pacific</div>
+      <div class="actions" id="actLeft"></div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="third">
+      <div class="scene" id="scene1">
+        <div class="flash"></div>
+        <div class="polaroid"><div class="selfie" style="width:80px;height:80px;font-size:34px;"><div class="face av-r">R</div><div class="face av-s">S</div><span class="stamp">YC · today</span></div></div>
+        <svg class="bond" viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="bondGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><path d="M14,76 C36,52 64,52 86,76"/></svg>
+        <div class="relay"><div class="node">&#9729;&#65039;</div><div class="lbl"><b>blind relay</b><br/>sees only ciphertext</div></div>
+        <div class="beam"><div class="ray"></div><div class="pulse"></div></div>
+        <div class="nfc"><div class="rings"><span class="ring"></span><span class="ring"></span><span class="ring"></span></div><div class="nfclbl">NFC &middot; tap to connect</div></div>
+        <div class="packet">&#128274;</div><div class="ground"></div>
+        <div class="figure figL"><div class="av av-r head">R</div><div class="body"></div><div class="name"><b>You</b></div><div class="tag">Pacific user</div></div>
+        <div class="hphone hpL"><div class="scr"><div class="tinyqr" id="qrTiny"></div></div></div>
+        <div class="figure figR"><div class="av av-s head">S</div><div class="body"></div><div class="name"><b>Sarah</b></div><div class="tag">no app yet</div></div>
+        <div class="hphone hpR"><div class="scr"></div></div><div class="heart">&#128150;</div>
+      </div>
+      <div class="scene2 hide" id="scene2">
+        <div class="clock">&#127751;</div><div class="laterlbl">later that day</div><div class="latersub">you’re home with a few minutes — the right moment to actually think</div>
+        <div class="twoTempo">⚡ <b>capture</b> at handshake-speed (30s, in person)<br>🧠 <b>reflect</b> at thought-speed (5 min, that night)</div>
+        <div class="envelope">&#9993;&#65039;&#8201;&rarr;</div><div class="loopmark">↻ and the loop begins again</div>
+      </div>
+      <div class="who" id="whoC">in person · phones out</div>
+      <div class="actions"></div>
+    </div>
+
+    <!-- RIGHT: Sarah -->
+    <div class="third">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="statusbar dark" id="sbRight"><span id="clkR">9:41</span><span class="dots">5G &#9679;&#9679;&#9679; &#9636;</span></div>
+        <div class="phone-layers" id="phoneRight">
+          <div class="layer cam center-col" data-screen="camera">
+            <div class="reticle"><span class="c1"></span><span class="c2"></span><span class="c3"></span><span class="c4"></span><div class="mini-qr" id="qrCam"></div><div class="scanline"></div></div>
+            <div class="hint">Camera &middot; point at the code</div>
+          </div>
+          <div class="layer cam center-col" data-screen="selfie">
+            <div class="p" style="color:#cbd5e1;margin-bottom:12px;">Lean in together &#128522;</div>
+            <div class="selfieFrame"><span class="c1"></span><span class="c2"></span><span class="c3"></span><span class="c4"></span><div class="selfie" style="width:100%;height:100%;font-size:50px;"><div class="face av-r">R</div><div class="face av-s">S</div></div></div>
+            <div class="hint" style="margin-top:14px;">Front camera · one tap to snap</div>
+          </div>
+          <div class="layer" data-screen="appclip">
+            <div class="clip"><div class="grabber"></div>
+              <div class="row" style="align-items:center;gap:11px;"><div class="av av-r" style="width:46px;height:46px;font-size:19px;">R</div><div class="grow"><div class="h2">Ralph Heward-Mills</div><div class="p">Founder · Pacific (S26)</div></div><span class="chip">App&nbsp;Clip</span></div>
+              <div class="links"><span class="lnk">&#9656; LinkedIn</span><span class="lnk">&#127760; kenjin.cc</span><span class="lnk">&#9993; email</span></div>
+              <div id="clipSelfie"></div>
+              <div class="p" style="margin:10px 2px;">wants to connect — no install needed.</div>
+              <div class="btn">Connect on Pacific</div>
+              <div class="trust" style="margin-top:9px;"><span class="seal">&#128229;</span> or just save his card — no app at all</div>
+            </div>
+          </div>
+          <div class="layer" data-screen="purpose">
+            <div class="clip"><div class="grabber"></div><div class="h2" style="text-align:center;">Why are you connecting?</div>
+              <div style="display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin:14px 0 14px;"><span class="chip" id="puChip">&#9678; pick below</span></div>
+              <div class="p" style="text-align:center;">&#9759; choose a purpose under Sarah&#39;s phone</div><div class="trust" style="margin-top:12px;"><span class="seal">&#9889;</span> two taps · no signup</div></div>
+          </div>
+          <div class="layer center-col" data-screen="install">
+            <div style="font-size:48px;margin-top:10px;" class="seal">&#10003;</div><div class="h1" style="margin-top:6px;">Connected with Ralph</div>
+            <div class="p" style="margin-top:8px;">Get Pacific to keep Ralph — and everyone next, and <i>why</i>.</div>
+            <div class="btn app" style="margin-top:16px;width:80%;">&#10515; Get Pacific</div><div class="trust"><span class="seal">&#128241;</span> on-device · no account</div>
+          </div>
+          <div class="layer" data-screen="rconnected">
+            <div class="h2" style="margin-bottom:4px;">Your network that remembers</div>
+            <div class="card"><div class="row" style="align-items:center;gap:10px;"><div id="rconPhoto"></div><div class="grow"><div class="h2">Ralph <span class="seal">&#10003;</span></div><div class="p">Pacific · S26</div></div></div>
+              <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap;"><span class="chip tag" id="rconPurpose">why · Customer</span><span class="chip">met today</span></div></div>
+            <div class="trust"><span class="seal">&#128274;</span> on your device · no server has your graph</div>
+          </div>
+          <div class="layer" data-screen="contact">
+            <div class="h2" style="text-align:center;margin-bottom:8px;">New Contact</div>
+            <div class="card center-col" style="padding-top:14px;"><div id="contactPhoto"></div><div class="h2" style="margin-top:8px;">Ralph Heward-Mills</div><div class="p">Founder · Pacific (S26)</div></div>
+            <div class="card" style="margin-top:8px;padding:0;"><div class="frow"><span class="flbl">LinkedIn</span><span class="fval"></span></div><div class="frow"><span class="flbl">website</span><span class="fval">kenjin.cc</span></div><div class="frow"><span class="flbl">email</span><span class="fval"></span></div><div class="frow note"><span class="flbl">notes</span><span class="fval"></span></div></div>
+            <div class="trust"><span class="seal">&#128229;</span> photo + links + the why — a real card</div>
+          </div>
+          <div class="layer center-col" data-screen="saved">
+            <div style="font-size:46px;margin-top:8px;" class="seal">&#10003;</div><div class="h1" style="margin-top:6px;">Added to Contacts</div>
+            <div class="p" style="margin-top:8px;">Ralph’s in your phone — your selfie, his links, the why. No app needed.</div>
+            <div class="card" style="margin-top:12px;width:92%;text-align:left;"><div class="p"><b style="color:var(--ink);">Want it to stay alive?</b> Pacific keeps it updated and remembers everyone you meet next.</div></div>
+            <div class="trust" style="margin-top:auto;"><span class="seal">&#128241;</span> the card is a snapshot · Pacific is the living version</div>
+          </div>
+          <!-- act 2 -->
+          <div class="layer center-col" data-screen="waiting" style="background:linear-gradient(180deg,#0b0f17,#161226);">
+            <div style="margin-top:58px;font-size:40px;font-weight:800;color:#fff;">6:48</div><div class="p" style="color:#9aa;">Sarah · no Pacific (yet)</div>
+            <div class="p" style="color:#7c8aa3;margin-top:auto;">she’ll just get an email &amp; a text…</div>
+          </div>
+          <div class="layer" data-screen="digest">
+            <div class="mailhead"><div class="av av-r" style="width:38px;height:38px;font-size:16px;">R</div><div class="grow"><div class="h2">Ralph Heward-Mills</div><div class="p">Great meeting you — a few things →</div></div><span class="chip">9:48</span></div>
+            <div class="mailbody"><p>Sarah — loved the on-device sync chat at YC today. As promised:</p>
+              <div class="selfie" style="width:100%;height:90px;font-size:38px;margin:2px 0 10px;"><div class="face av-r">R</div><div class="face av-s">S</div></div>
+              <p><b>Me:</b> Pacific (S26) · <span style="color:var(--teal-d);">kenjin.cc</span></p>
+              <p><b>The SDK</b> — our on-device sync layer: <span style="color:var(--teal-d);">kenjin.cc/sdk</span></p>
+              <p><b>An intro:</b> I’ll connect you with <b>Maya Chen</b> (Lumen) — deep in sync too.</p>
+              <p class="small">Up for 15 min next week?</p>
+              <div class="promo"><span style="font-size:15px;">&#9889;</span><span>Ralph used <b>Pacific</b> to remember everything. Get it free — on-device, no account.</span></div>
+            </div>
+          </div>
+          <div class="layer center-col" data-screen="joined">
+            <div class="av av-s" style="width:58px;height:58px;font-size:24px;margin-top:8px;">S</div><div class="h1" style="margin-top:8px;">Sarah’s on Pacific</div>
+            <div class="p" style="margin-top:6px;">That follow-up sold her. Now she remembers everyone <i>she</i> meets.</div>
+            <div class="qrwrap" style="margin-top:14px;width:118px;height:118px;" id="qrJoin"></div>
+            <div class="trust" style="margin-top:10px;"><span class="seal">&#8635;</span> her code is live — the loop begins again</div>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="who" id="whoR"><b>Sarah</b> — the new user</div>
+      <div class="actions" id="actRight"></div>
+    </div>
+
+    <!-- RIGHT ENGINE: what Sarah's phone is doing -->
+    <div class="third engine" id="engR">
+      <div class="ehead">&#128241; <b>Sarah&rsquo;s phone</b> &middot; on device</div>
+      <div class="estatus" id="engR_status"></div>
+      <div class="ecard"><div class="etitle">activity</div><div id="engR_ops"></div></div>
+      <div class="ecard" id="engR_fieldsWrap"><div class="etitle" id="engR_ftitle">Fields</div><div id="engR_fields"></div></div>
+    </div>
+  </div>
+
+  <div class="caption in" id="caption"></div>
+  <button class="reset" id="reset">&#8635; Reset</button>
+  <div class="foot"><b>Captured in 30 seconds, understood in 5 minutes.</b> The cognitive effort is yours — Pacific just researches and remembers. Even with no app, Sarah leaves with a real card; reflect, and she gets a follow-up that turns her into the next node.</div>
+
+<script>
+  function qrSVG(){ const n=21,cell=100/n; let r="";
+    for(let y=0;y<n;y++)for(let x=0;x<n;x++){ const f=(x<8&&y<8)||(x>n-9&&y<8)||(x<8&&y>n-9); if(f)continue; if(((x*7+y*13+x*y*3)%3)===0) r+='<rect x="'+(x*cell)+'" y="'+(y*cell)+'" width="'+cell+'" height="'+cell+'" fill="#0f172a"/>'; }
+    function fd(ox,oy){ r+='<rect x="'+(ox*cell)+'" y="'+(oy*cell)+'" width="'+(7*cell)+'" height="'+(7*cell)+'" rx="'+(1.6*cell)+'" fill="#0f172a"/><rect x="'+((ox+1)*cell)+'" y="'+((oy+1)*cell)+'" width="'+(5*cell)+'" height="'+(5*cell)+'" rx="'+(1*cell)+'" fill="#fff"/><rect x="'+((ox+2)*cell)+'" y="'+((oy+2)*cell)+'" width="'+(3*cell)+'" height="'+(3*cell)+'" rx="'+(.7*cell)+'" fill="#0f172a"/>'; }
+    fd(0,0); fd(n-7,0); fd(0,n-7); return '<svg viewBox="0 0 100 100" class="qr">'+r+'</svg>'; }
+  ['qrBig','qrTiny','qrCam','qrJoin'].forEach(id=>{ const e=document.getElementById(id); if(e) e.innerHTML=qrSVG(); });
+
+  function avatarHTML(w,px){ return '<div class="av '+(w==='R'?'av-r':'av-s')+'" style="width:'+px+'px;height:'+px+'px;font-size:'+Math.round(px*0.4)+'px;">'+w+'</div>'; }
+  function selfieHTML(px){ return '<div class="selfie" style="width:'+px+'px;height:'+px+'px;font-size:'+Math.round(px*0.42)+'px;"><div class="face av-r">R</div><div class="face av-s">S</div></div>'; }
+
+  const PURPOSES=['Customer','Collaborator','Hire','Investor','Just met'];
+  const beats=[
+    { research:'<div class="lbl">&#128270; Pacific researched — Bookface + web</div><b>Northwind</b> (S26) · on-device sync infra · seed · team of 4. Overlaps your Tidepool stack.', ag:'How does Sarah fit Tidepool right now — you decide:', opts:[{l:'Design partner',v:'design partner'},{l:'Customer',v:'customer'},{l:'Both',v:'both'}] },
+    { ag:'You’re both linked to <b>Maya (Lumen)</b>, also in sync. Worth an intro?', opts:[{l:'Yes — intro Maya',v:'intro'},{l:'Not yet',v:'no'}] },
+    { ag:'Your next move with Sarah herself?', opts:[{l:'Send the SDK + 15 min',v:'sdk'},{l:'Just follow up',v:'soft'}] },
+  ];
+
+  const stage=document.getElementById('stage'), cap=document.getElementById('caption');
+  const actLeft=document.getElementById('actLeft'), actRight=document.getElementById('actRight'), scene1=document.getElementById('scene1');
+  const S={ act:1, phase:'meet', method:null, purpose:null, selfie:false, accepted:false, installed:false, beat:0, picks:[], sent:false, auto:true };
+
+  function flash(c,ms){ scene1.classList.remove(c); void scene1.offsetWidth; scene1.classList.add(c); if(ms) setTimeout(()=>scene1.classList.remove(c),ms); }
+  const playBeam=()=>flash('beam-play',1900), playTap=()=>flash('tap-play',1500), playPacket=()=>flash('packet-play',2100), playSelfie=()=>flash('selfie-play',1700);
+  const playBond=()=>scene1.classList.add('bond-play');
+
+  // act 1
+  function showCode(){ S.phase='codeShown'; render(); }
+  function arrive(m){ S.method=m; S.phase='appclip'; render(); (m==='tap'?playTap:playBeam)(); }
+  function takeSelfie(){ S.phase='selfie'; render(); }
+  function snap(){ S.selfie=true; S.phase='appclip'; render(); playSelfie(); }
+  function connect(){ S.phase='purpose'; render(); }
+  function pick(p){ S.purpose=p; S.phase='sent'; render(); playPacket(); }
+  function saveCard(){ S.phase='contact'; render(); }
+  function addContact(){ S.phase='saved'; render(); }
+  function accept(){ S.accepted=true; if(S.installed) S.phase='done'; render(); if(S.phase==='done') playBond(); }
+  function install(){ S.installed=true; if(S.accepted) S.phase='done'; render(); if(S.phase==='done') playBond(); }
+  // transition + act 2
+  function toAct2(){ S.act=2; S.phase='lock'; if(!S.purpose) S.purpose='Customer'; if(!S.selfie) S.selfie=true; render(); }
+  function openReflect(){ S.phase='reflect'; render(); }
+  function pickBeat(v){ S.picks[S.beat]=v; S.beat++; if(S.beat>=beats.length) S.phase='writeup'; render(); }
+  function sendDigest(){ S.sent=true; S.phase='recap'; render(); }
+  function keepPrivate(){ S.sent=false; S.phase='recap'; render(); }
+  function toggleAuto(){ S.auto=!S.auto; render(); }
+  function toFinale(){ S.phase='finale'; render(); }
+  function reset(){ Object.assign(S,{act:1,phase:'meet',method:null,purpose:null,selfie:false,accepted:false,installed:false,beat:0,picks:[],sent:false,auto:true}); scene1.classList.remove('bond-play','beam-play','tap-play','packet-play','selfie-play'); render(); }
+  function goAct(n){ if(n===1){ reset(); } else { S.act=2; S.phase='lock'; if(!S.purpose)S.purpose='Customer'; if(!S.selfie)S.selfie=true; render(); } }
+  document.getElementById('reset').onclick=reset;
+  document.getElementById('ch1').onclick=()=>goAct(1); document.getElementById('ch2').onclick=()=>goAct(2);
+
+  function leftScreen(){
+    if(S.act===1){ if(S.phase==='meet')return'profile'; if(S.phase==='sent')return S.accepted?'connected':'incoming'; if(S.phase==='done')return'connected'; return'qr'; }
+    if(S.phase==='lock')return'lock'; if(S.phase==='reflect')return'reflect'; if(S.phase==='writeup')return'writeup'; if(S.phase==='recap')return'recap'; if(S.phase==='finale')return'connected'; return'lock';
+  }
+  function rightScreen(){
+    if(S.act===1){ if(S.phase==='meet'||S.phase==='codeShown')return'camera'; if(S.phase==='selfie')return'selfie'; if(S.phase==='appclip')return'appclip'; if(S.phase==='contact')return'contact'; if(S.phase==='saved')return'saved'; if(S.phase==='purpose')return'purpose'; if(S.phase==='sent')return S.installed?'rconnected':'install'; if(S.phase==='done')return'rconnected'; return'camera'; }
+    if(S.phase==='recap'&&S.sent)return'digest'; if(S.phase==='finale')return'joined'; return'waiting';
+  }
+  function leftButtons(){
+    if(S.act===1){ if(S.phase==='meet')return[{label:'&#9783; Show my code',primary:true,on:showCode}]; if(S.phase==='sent'&&!S.accepted)return[{label:'&#10003; Accept',primary:true,on:accept},{label:'Decline',ghost:true,on:reset}]; if(S.phase==='done')return[{label:'Later that day &rarr;',primary:true,on:toAct2}]; return[]; }
+    if(S.phase==='lock')return[{label:'Open · 5 min',primary:true,on:openReflect}];
+    if(S.phase==='reflect')return beats[S.beat].opts.map(o=>({label:o.l,chip:true,on:()=>pickBeat(o.v)}));
+    if(S.phase==='writeup')return[{label:'&#128229; Send Sarah her digest',primary:true,on:sendDigest},{label:'Keep private',ghost:true,on:keepPrivate}];
+    if(S.phase==='recap')return[{label:S.auto?'Turn off for Sarah':'Turn back on',ghost:true,on:toggleAuto},{label:'See the loop close &rarr;',primary:true,on:toFinale}];
+    if(S.phase==='finale')return[{label:'&#8635; Start over',ghost:true,on:reset}];
+    return[];
+  }
+  function rightButtons(){
+    if(S.act===1){ if(S.phase==='codeShown')return[{label:'&#9636; Scan',primary:true,on:()=>arrive('scan')},{label:'&#128241; Tap · NFC',on:()=>arrive('tap')}];
+      if(S.phase==='selfie')return[{label:'&#128247; Snap',primary:true,on:snap},{label:'Skip',ghost:true,on:()=>{S.phase='appclip';render();}}];
+      if(S.phase==='appclip'){ const b=[{label:'Connect on Pacific',primary:true,on:connect},{label:'&#128229; Save his card',on:saveCard}]; if(!S.selfie)b.splice(1,0,{label:'&#128247; Selfie together',on:takeSelfie}); return b; }
+      if(S.phase==='contact')return[{label:'&#10003; Add to Contacts',primary:true,on:addContact},{label:'Back',ghost:true,on:()=>{S.phase='appclip';render();}}];
+      if(S.phase==='saved')return[{label:'&#10515; Get Pacific too',primary:true,on:()=>{S.phase='purpose';render();}},{label:'Done',ghost:true,on:reset}];
+      if(S.phase==='purpose')return PURPOSES.map(p=>({label:p,chip:true,on:()=>pick(p)}));
+      if(S.phase==='sent'&&!S.installed)return[{label:'&#10515; Get Pacific',primary:true,on:install}]; return[]; }
+    if(S.phase==='recap'&&S.sent)return[{label:'&#10515; Get Pacific',primary:true,on:()=>{}},{label:'Reply to Ralph',ghost:true,on:()=>{}}];
+    return[];
+  }
+  function leftHint(){ if(S.act===1){ if(['codeShown','selfie','appclip','purpose','contact','saved'].includes(S.phase))return{t:'waiting for Sarah…'}; if(S.phase==='sent'&&S.accepted)return{t:'waiting for Sarah to install…'}; } return null; }
+  function rightHint(){ if(S.act===1){ if(S.phase==='meet')return{t:'waiting for Ralph’s code…'}; if(S.phase==='sent'&&S.installed)return{t:'installed ✓',ok:true}; return null; } if(S.phase==='finale')return null; if(!(S.phase==='recap'&&S.sent))return{t:'waiting on your write-up…'}; return null; }
+
+  function caption(){
+    if(S.act===1){ switch(S.phase){
+      case 'meet':return 'You meet someone worth remembering.';
+      case 'codeShown':return 'You show your code — Sarah can <b>scan</b> or <b>tap</b> it.';
+      case 'selfie':return 'A photo of you two — the strongest "who &amp; why" there is.';
+      case 'appclip':return (S.method==='tap'?'She <b>taps</b>':'She <b>scans</b>')+' — no app. '+(S.selfie?'Selfie in hand — connect or save your card.':'Connect, save your card, or grab a <b>selfie</b>.');
+      case 'contact':return 'No Pacific needed — Sarah saves Ralph: selfie, links + the why.';
+      case 'saved':return 'Even with no app, she leaves <b>richer than a business card.</b>';
+      case 'purpose':return '<b>Two taps. No signup.</b> Pick why you’re connecting.';
+      case 'sent': if(S.accepted&&!S.installed)return 'You kept the connection — Sarah’s move to install.'; if(!S.accepted&&S.installed)return 'Sarah’s in — now <b>accept</b> to keep the why.'; return 'Her hello (and your selfie) rides a <b>blind relay</b> to you.';
+      case 'done':return 'Captured in 30 seconds. Now — <b>later that day…</b>'; } }
+    else { switch(S.phase){
+      case 'lock':return 'That evening — Pacific brings you back while it’s fresh.';
+      case 'reflect': if(S.beat===0)return 'Pacific did the research. <b>You</b> make the call.'; if(S.beat===1)return 'It surfaces a warm path — <b>you</b> decide if it’s worth it.'; return 'It frames the options — <b>you</b> choose the next move.';
+      case 'writeup':return 'Two outputs: a digest <b>for Sarah</b>, strategy <b>for you alone</b>.';
+      case 'recap':return S.sent?'Sarah gets a follow-up far richer than your 30-second hello.':'Sent nothing — your call. The off-switch lives behind the gear.';
+      case 'finale':return 'One handshake → captured, understood, remembered — and a <b>new node</b> in the network.'; } }
+    return '';
+  }
+
+  function setScreen(id,name){ document.getElementById(id).querySelectorAll('.layer').forEach(l=>l.classList.toggle('active', l.dataset.screen===name)); }
+  function setActions(bar,btns,hint){ bar.innerHTML=''; if(!btns.length){ if(hint){ const h=document.createElement('span'); h.className='hint'+(hint.ok?' ok':''); h.textContent=hint.t; bar.appendChild(h);} return; } btns.forEach(b=>{ const el=document.createElement('button'); el.className='actbtn'+(b.primary?' primary':'')+(b.ghost?' ghost':'')+(b.chip?' chip':''); el.innerHTML=b.label; el.onclick=b.on; bar.appendChild(el); }); }
+  function setCaption(h){ cap.classList.remove('in'); void cap.offsetWidth; cap.innerHTML=h; cap.classList.add('in'); }
+  function setPhoto(id,who,px){ const e=document.getElementById(id); if(e) e.innerHTML = S.selfie?selfieHTML(px):avatarHTML(who,px); }
+
+  // ---- engine rails: "what the app is doing", flanking the phones ----
+  function fitLabel(v){ return v==='both'?'partner + customer':(v==='customer'?'customer':'design partner'); }
+  function engineL(){
+    const P=S.phase, A=S.act, beat=S.beat;
+    const seeded   = (A===1 && (P==='sent'||P==='done')) || A===2;
+    const reflectN = A===2 && ['reflect','writeup','recap','finale'].includes(P);
+    const researched = reflectN;                                   // Bookface fields land as reflection opens
+    const warmKnown  = reflectN && (P!=='reflect' || beat>=1);     // the Maya path surfaces at beat 1
+    const fit = (reflectN && (P!=='reflect' || beat>=1)) ? S.picks[0] : null;
+    let status='ready · idle', ops=[];
+    if(A===1){
+      if(P==='meet'){ status='ready · idle'; ops=[['ok','Pacific running','on-device'],['ok','your code','local QR · no server']]; }
+      else if(['codeShown','appclip','selfie','purpose','contact','saved'].includes(P)){ status='handshake opening'; ops=[['run','key exchange','→ blind relay'],['dim','awaiting Sarah’s hello','']]; }
+      else { status='connected · captured'; ops=[['ok','Sarah → new Group','group-of-1'],['ok','purpose + selfie','sealed'],['queue','enrich Sarah','queued · next window']]; }
+    } else {
+      if(P==='lock'){ status='reflection window'; ops=[['run','heartbeat woke Pacific',''],['queue','Sarah’s Group','→ enrich']]; }
+      else if(P==='reflect'){ status='enriching · Bookface'; ops=[['run','search companies','entity:companies · S26'],['ok','csv_results → Fields','batch·sector·stage·team']]; if(beat>=1) ops.push(['ok','warm-path','your graph × sector → Maya']); if(beat>=2) ops.push(['run','compose options','']); }
+      else if(P==='writeup'){ status='on device · private'; ops=[['ok','embed · NLEmbedding','on-device · no upload'],['ok','Fields → LocalStore',''],['ok','split','digest / private strategy']]; }
+      else if(P==='recap'){ status=S.sent?'digest sent':'kept private'; ops=[[S.sent?'ok':'dim',S.sent?'digest → Sarah':'nothing sent','your choice'],['ok','cursor saved','card stays living']]; }
+      else { status='loop · graph +1'; ops=[['ok','Sarah joined','graph += 1'],['run','keep card fresh','re-enrich on window']]; }
+    }
+    const fields=[
+      ['identity', seeded?'Sarah Chen':null],
+      ['met', seeded?'today · in person':null],
+      ['purpose', seeded?(S.purpose||'Customer'):null],
+      ['batch', researched?'S26':null],
+      ['sector', researched?'on-device sync':null],
+      ['stage', researched?'seed':null],
+      ['team', researched?'4':null],
+      ['warm-path', warmKnown?'Maya · Lumen':null],
+      ['fit', fit?fitLabel(fit):null],
+    ];
+    return {status, ops, fields, showFields:true, ftitle:'Sarah · enriched Fields'};
+  }
+  function engineR(){
+    const P=S.phase, A=S.act;
+    let status='no Pacific', ops=[], showFields=false, fields=[];
+    if(A===1){
+      if(P==='install'||P==='rconnected'||(P==='sent'&&S.installed)||P==='done'){ status='installing'; ops=[['run','Pacific on device',''],['ok','keychain · first sync','']]; }
+      else { status='no Pacific'; ops=[['dim','App Clip only','no engine'],['dim','card → Contacts','snapshot, not live']]; }
+    } else {
+      if(P==='finale'){ status='online · her turn'; ops=[['ok','Sarah’s Pacific online',''],['ok','her code live',''],['run','now SHE enriches','loop begins']]; showFields=true; fields=[['identity','Sarah'],['graph','1 · Ralph'],['next','meet → capture']]; }
+      else { status='off-platform'; ops=[['dim','email + text only',''],['dim','no engine yet','until she installs']]; }
+    }
+    return {status, ops, fields, showFields, ftitle:'Sarah’s graph'};
+  }
+  function engOpRow(o){ return '<div class="op '+o[0]+'"><span class="ic"></span><span class="lbl">'+o[1]+'</span>'+(o[2]?'<span class="val">'+o[2]+'</span>':'')+'</div>'; }
+  function engFieldRow(f){ return '<div class="frowE'+(f[1]?'':' dim')+'"><span class="fk">'+f[0]+'</span><span class="fv">'+(f[1]||'—')+'</span></div>'; }
+  function renderOneEngine(side,m){
+    const st=document.getElementById(side+'_status'); if(st) st.innerHTML='<span class="sdot"></span>'+m.status;
+    const op=document.getElementById(side+'_ops'); if(op) op.innerHTML=m.ops.map(engOpRow).join('');
+    const fw=document.getElementById(side+'_fieldsWrap');
+    if(fw){ fw.style.display=m.showFields?'block':'none'; if(m.showFields){ const t=document.getElementById(side+'_ftitle'); if(t)t.textContent=m.ftitle; const fe=document.getElementById(side+'_fields'); if(fe)fe.innerHTML=m.fields.map(engFieldRow).join(''); } }
+  }
+  function renderEngines(){ renderOneEngine('engL',engineL()); renderOneEngine('engR',engineR()); }
+
+  function renderThread(){ const t=document.getElementById('thread'); if(!t)return; let h=''; const up=Math.min(S.beat,beats.length-1);
+    for(let i=0;i<=up;i++){ const b=beats[i]; if(b.research)h+='<div class="research">'+b.research+'</div>'; h+='<div class="msg agent"><div class="ag">&#10024; Pacific</div>'+b.ag+'</div>'; if(S.picks[i]!==undefined){ const o=b.opts.find(x=>x.v===S.picks[i]); h+='<div class="msg me">'+o.l+'</div>'; } }
+    t.innerHTML=h; const al=document.getElementById('askline'); if(al)al.textContent=S.beat<beats.length?'↓ your answer, under your phone':''; }
+  function renderWriteup(){ const fit=S.picks[0],intro=S.picks[1]==='intro',sdk=S.picks[2]==='sdk'; const sh=document.getElementById('shareList'),pr=document.getElementById('privList');
+    if(sh)sh.innerHTML='A warm recap + your selfie · your LinkedIn &amp; site · '+(sdk?'the SDK link · ':'')+(intro?'an intro to Maya · ':'')+'a 15-min ask.';
+    if(pr){ const note=fit==='both'?'Design partner <i>and</i> customer for sync — worth real time.':fit==='customer'?'Potential customer for the sync layer.':'Design-partner fit for on-device sync.';
+      let a='<div class="actrow"><span class="dot"></span>'+(sdk?'Send Sarah the SDK + propose 15 min':'Follow up with Sarah next week')+'</div>'; if(intro)a+='<div class="actrow"><span class="dot"></span>Intro Sarah &harr; Maya <span class="chip warn" style="margin-left:4px;">needs your ok</span></div>';
+      pr.innerHTML='<div class="p" style="font-style:italic;margin-bottom:8px;">“'+note+'”</div>'+a; } }
+
+  function render(){
+    document.body.dataset.act=S.act;
+    document.getElementById('ch1').classList.toggle('on',S.act===1); document.getElementById('ch2').classList.toggle('on',S.act===2);
+    scene1.classList.toggle('hide',S.act!==1); document.getElementById('scene2').classList.toggle('hide',S.act!==2);
+    document.getElementById('whoC').textContent = S.act===1?'in person · phones out':'two tempos · one relationship';
+    document.getElementById('whoL').innerHTML = S.act===1?'<b>You</b> — already on Pacific':'<b>You</b> — the reflection';
+    document.getElementById('whoR').innerHTML = (S.act===2&&S.phase==='finale')?'<b>Sarah</b> — the next inviter':'<b>Sarah</b> — the new user';
+    document.getElementById('clkL').textContent=S.act===1?'9:41':'6:41'; document.getElementById('clkR').textContent=S.act===1?'9:41':'6:48';
+    stage.dataset.sent=(S.act===2&&S.sent&&(S.phase==='recap'||S.phase==='finale'))?'1':'0';
+    stage.dataset.finale=(S.phase==='finale')?'1':'0';
+    setScreen('phoneLeft',leftScreen()); setScreen('phoneRight',rightScreen());
+    document.getElementById('sbRight').classList.toggle('dark',['camera','selfie','waiting'].includes(rightScreen()));
+    const p=S.purpose||'Customer';
+    ['inPurpose'].forEach(id=>{const e=document.getElementById(id); if(e)e.innerHTML='&#9678; '+p;});
+    ['conPurpose','rconPurpose'].forEach(id=>{const e=document.getElementById(id); if(e)e.textContent='why · '+p;});
+    const pu=document.getElementById('puChip'); if(pu)pu.innerHTML=S.purpose?('&#9678; '+S.purpose):'&#9678; pick below';
+    const cs=document.getElementById('clipSelfie'); if(cs)cs.innerHTML=S.selfie?'<div class="selfieBadge">'+selfieHTML(32)+'<span class="txt">&#128247; selfie added — on both cards</span></div>':'';
+    setPhoto('contactPhoto','R',54); setPhoto('conPhoto','S',40); setPhoto('rconPhoto','R',40);
+    if(S.phase==='reflect')renderThread(); if(S.phase==='writeup')renderWriteup();
+    if(S.phase==='recap'){ const tg=document.getElementById('tgl'); if(tg)tg.classList.toggle('off',!S.auto); const tn=document.getElementById('tglNote'); if(tn)tn.textContent=S.auto?'On by default. Tap to stop sending Sarah follow-ups.':'Off for Sarah — she won’t get future digests.'; const rt=document.getElementById('recapTitle'); if(rt)rt.textContent=S.sent?'Digest sent to Sarah':'Kept private'; }
+    setActions(actLeft,leftButtons(),leftHint()); setActions(actRight,rightButtons(),rightHint()); setCaption(caption());
+    renderEngines();
+  }
+  // demo: jump to a state via #hash (#lock #reflect #digest #finale)
+  (function(){ const h=location.hash.slice(1); if(!h)return; S.purpose='Customer'; S.selfie=true;
+    if(h==='lock'){ S.act=2; S.phase='lock'; }
+    if(h==='reflect'){ S.act=2; S.phase='reflect'; S.beat=2; S.picks=['both','intro']; }
+    if(h==='digest'){ S.act=2; S.phase='recap'; S.sent=true; S.picks=['both','intro','sdk']; }
+    if(h==='finale'){ S.act=2; S.phase='finale'; S.sent=true; S.picks=['both','intro','sdk']; }
+  })();
+  render();
+</script>
+</body>
+</html>

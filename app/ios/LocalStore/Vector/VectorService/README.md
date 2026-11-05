@@ -1,0 +1,1 @@
+This module is the vectorisation service, used by LocalStore/Vector to embed text behind a unified interface. It is implemented on device with Apple's NaturalLanguage `NLEmbedding` — no network, and no content leaves the device. It takes Object.State and Object.VectorMap to return embeddings.

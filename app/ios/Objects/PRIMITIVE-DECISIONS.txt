@@ -1,0 +1,176 @@
+PACIFIC — PRIMITIVE / OBJECT-MODEL DECISIONS (the ones that mustn't evaporate)
+Canonical in-situ record of model decisions taken during the v1 UI work, 2026-06-27.
+
+Why this is a .txt, not .md: this repo keeps Markdown human-authored (agents don't
+write repo .md). This file is the agent-written record; the matching edits to the
+human-owned specs (each object's PIE-CI.md and README.md) are
+proposed verbatim in section 6 below for a human to paste.
+
+Scope: these were derived "backwards" from a founder's real life via the v1 UI
+work. The runnable illustration is the SwiftUI MOCKUP at ui (esp.
+ui/App/Model/WorkOutlineSample.swift). NONE of these are built in the real object model yet — the
+object/delta substrate is specced-not-built (author_delta returns NotImplemented).
+The point of this file is that the DECISIONS are recorded where the model lives.
+
+LEGEND:  [DECIDED] settled, needs spec+build   [OPEN] not yet decided   [RENAME] hygiene
+
+
+================================================================================
+1. NEW / CHANGED PRIMITIVES
+================================================================================
+
+1.1 PLACE — a first-class entity.  [DECIDED]
+    A Place (venue, address, city, building) is its OWN entity kind, DISTINCT from
+    Group. It has no peer identity, no MLS group, no credential vault; it is local.
+    It can contain people and sub-places (recursive). NOT a GroupShape case.
+    In code: Objects/Group/Sources/Group/Group.swift (note at GroupShape).
+    Spec home: a new Objects/Place package + Objects/README.md object list.
+
+1.2 EVENT — a first-class entity, ALWAYS a window.  [DECIDED]
+    An Event has a start and an end. No Event object exists today (the set is
+    Field/Forum/Group/Poll/Project/Question/System/Topic).
+    Spec home: a new Objects/Event package + Objects/README.md.
+
+1.3 ACTION = an unresolved Event + a Group ASSIGNEE.  [DECIDED]
+    A to-do/task is NOT its own primitive — it is an Event that is unresolved and
+    carries an `assignee` (a Group). "~"/waiting is DERIVED: assignee ≠ you ⇒ the
+    ball is in their court; else it's your move. The Project `taskRefs` list is the
+    Project-scoped view of such Events.
+    Consequence — TASKS ARE HOST-AGNOSTIC: an action may belong to ANY Group or
+    Place, not only a Project (today taskRefs lives only on Project).
+    In code: Objects/Project/Sources/Project/Project.swift (header note).
+    Spec home: fold into the Event spec; update Project/PIE-CI.md.
+
+1.4 CONTAINMENT EDGE — one card-to-card "belongs to".  [DECIDED in principle]
+    "Systems / Forums / Polls / Fields belong to a Project OR a Group; Projects
+    contain sub-Projects (topic areas) recursively." This needs ONE generic
+    containment edge — a new structural primitive. None exists today (only the
+    bespoke Project.taskRefs / Project.subscriptions / Forum.topic_areas maps).
+    To specify: the exact representation (child-side `container` ref vs container-
+    side set) AND how it unifies with the existing bespoke edges — as ONE
+    representation, no parallel/dual edge (no partial migration).
+    In code: Objects/Project/Sources/Project/Project.swift (header note).
+    Spec home: PacificCore (the Matter shape) + each object's PIE-CI.md.
+
+1.5 MULTI-MEMBER MLS GROUPS — in v1, NOT deferred.  [DECIDED]
+    Design and build all features assuming multi-user groups. The M1 pairwise
+    transport was only a prototype to prove end-to-end delivery; it is NOT the
+    scope ceiling. (The relay's separate "M2" TODO is about store persistence, a
+    different concern — do not conflate.)
+    Spec home: the Rust core's group-membership delta path.
+
+
+================================================================================
+2. MECHANISMS (not new object kinds, but primitive-level behaviour)
+================================================================================
+
+2.1 CANONICAL ENTITY RESOLUTION + DEDUPE.  [DECIDED we need it / mechanism OPEN]
+    The deep-link model requires that a recurring entity (e.g. "Dad", "Amir
+    Nathoo", "pure.ai", "Outschool") resolves to ONE canonical card, with
+    "Referenced from" backlinks, plus mint-on-first-reference. `FieldValue.ref`
+    already exists as the link primitive; the DEDUPE + off-platform→on-platform
+    MERGE mechanism does NOT — it is explicitly undecided in
+    Objects/Group/PIE-CI.md ("De-duplicating Groups"; "off-platform →
+    on-platform reconciliation"). Editing/enriching must include a merge affordance,
+    never a silent duplicate-creator.
+
+2.2 THE HANDSHAKE — mutual-accept introduction + SAS pairing.  [DECIDED / unbuilt]
+    One connection ceremony everywhere: purpose-required, "nothing is shared until
+    both accept", end-to-end. The in-person QR pairing must gain a commit-reveal +
+    short-authentication-string (SAS) step before it ships — today
+    completePairing (archive: app/Identity/arch) trusts the decoded invite (no
+    silent TOFU). The intro consent-gate is unspecified.
+    Spec home: the live IdentityService in the Rust core.
+
+
+================================================================================
+3. RENAMES (decided, not yet applied)
+================================================================================
+
+3.1 Forum `TopicArea` → `Channel`.  [RENAME]
+    Frees "topic area" for the recursive-sub-Project meaning. Spans
+    Objects/Forum/Sources/Forum/Forum.swift (TopicArea type;
+    ForumField.topicAreaPrefix "topic_area/" → "channel/"; PostField.topicArea →
+    channel; MemberRole comments) AND the Rust ForumType reducer
+    (FORUM_ADD_TOPIC_AREA, the topic_areas state key, thread()/topic_area_names()).
+    In code: note added at the TopicArea type in Forum.swift.
+
+
+================================================================================
+4. PROFILE
+================================================================================
+
+4.1 Profile = a PROJECTION, not an object.  [DECIDED]
+    bio + network project from the person Group; buying + selling from the business
+    Group. The reserved field-key schema (and whether buying/selling later become
+    first-class matchable asks/offers) is unspecified.
+    Spec home: Group/PIE-CI.md (reserved fields) — NO new object.
+
+
+================================================================================
+5. EXPLICIT NON-PRIMITIVES (decisions to NOT add surface — record so they stick)
+================================================================================
+ - PROFILE → a projection, not an object (4.1).
+ - PERSON → stays Group.individual; no separate Person kind.
+ - ACTION/TASK → folds into Event (1.3); no separate task primitive.
+ - LISTING / MARKETPLACE → deferred (buying/selling stay Group fields for now).
+ - RICH TIMEPERIOD / EVENT-RSVP → deferred; "when" stays a field; Event stays a
+   plain window.
+
+
+================================================================================
+6. OPEN QUESTIONS (NOT yet decided)
+================================================================================
+ 6.1 TRUST ROOT for introductions: keep the in-person QR as the ONLY trust root,
+     OR allow introducer-vouching? The latter is smoother but lets a malicious
+     introducer vouch a sybil (weaker web-of-trust) and overrides the architecture's
+     stated invariant — needs the founder's explicit sign-off.
+
+
+================================================================================
+7. PROPOSED MARKDOWN ADDITIONS (for a human to paste — agents don't write repo .md)
+================================================================================
+Apply these to keep the human-owned specs consistent with the decisions above.
+
+A) Objects/README.md — extend the object set:
+   "- Place — a first-class entity (a venue / address / city). Local only: no peer
+      identity, no MLS group, no vault. Contains people and sub-places (recursive).
+    - Event — a first-class entity that is ALWAYS a window (start + end). An ACTION
+      is an unresolved Event with a Group assignee; '~/waiting' is derived
+      (assignee != you). Tasks are host-agnostic (belong to any Group/Place/Project)."
+
+B) Objects/Group/PIE-CI.md — add under decisions/closed:
+   "- Place is NOT a Group (nor a GroupShape case) — it is its own first-class
+      entity (no peer identity/vault).
+    - Person stays GroupShape.individual; no separate Person primitive.
+    - Profile is a projection over Group(s) (bio/network from the person Group;
+      buying/selling from the business Group), NOT a new object."
+   (The 'De-duplicating Groups' and 'off-platform → on-platform reconciliation'
+    items remain OPEN and are now load-bearing for canonical deep-links — keep them.)
+
+C) Objects/Project/PIE-CI.md — add:
+   "- An action/task = an unresolved Event + a Group assignee; taskRefs are the
+      Project-scoped view. Tasks are host-agnostic (any Group/Place may own them).
+    - Containment ('X belongs to a Project or a Group; Projects nest recursively')
+      is ONE card-to-card edge — a new structural primitive to add to the Matter
+      shape, unifying with (not duplicating) taskRefs/subscriptions."
+
+D) Objects/Forum/PIE-CI.md — add:
+   "- RENAME TopicArea → Channel ('topic_area/' → 'channel/'); 'topic area' now
+      means a recursive sub-Project in the Work outline, a different concept."
+
+E) The identity spec — add:
+   "- Multi-member MLS groups are v1 scope (pairwise M1 was a transport prototype).
+    - QR pairing gains a commit-reveal + SAS step before ship (no silent TOFU);
+      the Handshake (mutual-accept, purpose-gated intro) is the one connection
+      ceremony. Trust root (QR-only vs introducer-vouch) is OPEN — see
+      Objects/PRIMITIVE-DECISIONS.txt section 6."
+
+
+================================================================================
+8. CROSS-REFERENCES
+================================================================================
+ - Runnable mockup of the model: ui (Model/WorkOutlineSample.swift = the model;
+   Work/ = the editable outline + cards; the edit/enrich loop is the point).
+ - In-code notes: Group.swift (GroupShape), Forum.swift (TopicArea), Project.swift
+   (header) each point back to this file.

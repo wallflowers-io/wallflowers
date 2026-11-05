@@ -1,0 +1,334 @@
+# slug: pacific-ui-xcodegen_2026-06-25T14:42:00Z
+# XcodeGen spec for the WallFlowers iOS app shell (Phase 1). Source of truth for the
+# Xcode project — DO NOT hand-edit the generated WallFlowers.xcodeproj.
+# Regenerate (run from ui/):  xcodegen generate
+# Cross-index: ../Docs/IOS-SETUP.md (build/packaging blueprint); the on-device
+# core that backs this shell arrives in Phase 2 (rust/ + a PacificCore wrapper).
+name: WallFlowers
+options:
+  bundleIdPrefix: network
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    TARGETED_DEVICE_FAMILY: "1,2"   # one target, iPhone + iPad
+    SWIFT_VERSION: "5.0"
+    # --- Versioning (single source of truth; App/Info.plist reads these vars) ---
+    # Bump with scripts/version.sh — see Docs/VERSIONING.md.
+    MARKETING_VERSION: "0.1.0"        # CFBundleShortVersionString — public semver; bump per release + tag vX.Y.Z
+    CURRENT_PROJECT_VERSION: "220"     # CFBundleVersion — monotonic build number (= git commit count)
+packages:
+  PacificCore:
+    path: ../apple
+  LodeDBCore:
+    path: ../target/lodedb/swift/LodeDBCore   # upstream LodeDB, fetched by apple/build-lodedb.sh
+  PacificStore:
+    path: ../LocalStore/PacificStore                  # LocalStore facade (the union store over LodeDB)
+  ArcResolverKit:
+    path: ../LocalStore/graph/arc-resolver/swift/ArcResolverKit  # on-device graph (object projection + LIFE reads)
+targets:
+  WallFlowers:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: App
+        # V2 — SPATIAL CAPTURE. v1 ships no spatial processing, so the scan path is
+        # ORPHANED, not deleted: the files stay on disk, out of the target. They form a
+        # self-contained island (SpatialCaptureView -> SpatialStreamClient, plus the
+        # scan-specific Place mint that used to live in Life.swift), so nothing in the
+        # shipping build references them. Delete these two lines to re-include.
+        # A Place in v1 is minted from a coordinate + optional photos — see EntityWizard.
+        excludes:
+          - "Life/Space/SpatialCaptureView.swift"
+          - "Life/Space/SpatialStreamClient.swift"
+      # The two real launch-event posters — the DEBUG event seeder's banners
+      # (EventSeeder.swift). Bundled as plain resources; tiny, and inert in Release.
+      - path: SeedMedia
+        buildPhase: resources
+    dependencies:
+      - package: PacificCore
+        product: PacificCore
+      - package: LodeDBCore
+        product: LodeDBCore
+      - package: PacificStore
+        product: PacificStore
+      - package: ArcResolverKit
+      # Embedded so the push has something to wake. An extension is a separate PROCESS with its
+      # own bundle id and its own signing — it is not code the app calls. NOTE: this must live in
+      # the SAME `dependencies:` list as the packages above; a second `dependencies:` key is
+      # silently dropped by YAML and takes every package dependency with it.
+      - target: NotificationService
+        embed: true
+        product: ArcResolverKit
+      - sdk: libsqlite3.tbd   # Sysiphus SQL connector (import SQLite3)
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: WallFlowers
+        # Version keys resolve at build time from the build settings above
+        # (single source of truth). xcodegen owns this Info.plist — set versions
+        # in settings.base / scripts/version.sh, never by hand-editing the plist.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # Live QR pairing (ScanCodeSheet → VisionKit) reads a peer's connect-code QR, and
+        # a Place can carry photos. No 3D capture in v1 — see the V2 excludes above; the
+        # string must not promise a capability the build does not ship.
+        NSCameraUsageDescription: WallFlowers uses the camera to scan a contact's QR code and to add photos to your places.
+        # Messaging dials an Arc's relay on the LAN. (The arc/spatial capture stream was the
+        # other caller; it is orphaned in v1, so this string no longer mentions it.)
+        NSLocalNetworkUsageDescription: WallFlowers talks to an Arc on your own network to relay your encrypted messages. Nothing leaves your local network.
+        # Location: the top-down map's "you are here" + the opal compass heading. On-device unless sharing is on.
+        NSLocationWhenInUseUsageDescription: WallFlowers shows your places on the map and points the compass. Your location stays on your device unless you turn on sharing.
+        # Allow cleartext HTTP to the local test Sysiphus API (localhost) from the sim.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        # (The local-network purpose string lives above — one key covers both callers. Talking to
+        # an Arc on the LAN is a raw TCP connect to a private-range address, which iOS denies
+        # outright without it; the simulator is exempt, which is why sim-only runs never hit it.)
+        #
+        # The device-to-device mesh (MeshRadio.swift). Core Bluetooth is the only iOS radio that
+        # survives backgrounding, and background is the whole point — messages hopping between
+        # phones in pockets. Both modes are needed because every device runs BOTH roles: it scans
+        # for peers (central) and is discoverable by them (peripheral). Backgrounded, a scan MUST
+        # name an explicit service UUID and an advertiser's UUIDs move to the "overflow" area
+        # readable only by a central already scanning for them — which is exactly our pairing, and
+        # why two backgrounded phones can still find each other.
+        NSBluetoothAlwaysUsageDescription: WallFlowers uses Bluetooth to pass your encrypted messages between nearby devices, so they arrive with no internet and no server.
+        UIBackgroundModes:
+          - bluetooth-central
+          - bluetooth-peripheral
+          # A push wakes the NOTIFICATION SERVICE EXTENSION, not the app — but this mode is
+          # what lets the app itself be resumed to finish work a wake started.
+          - remote-notification
+        # The pacific:// dev/demo seam (DevLinks.swift) — drives real core calls
+        # so host scripts can pair two simulators (no camera in the simulator).
+        CFBundleURLTypes:
+          - CFBundleURLName: network.pacific
+            CFBundleURLSchemes: [pacific]
+        # EXPORT COMPLIANCE — TRUE, and that is the whole obligation. See
+        # Docs/EXPORT-COMPLIANCE.md for the research this rests on.
+        #
+        # Pacific ships real end-to-end encryption (MLS via mls-rs/rustcrypto), which is NOT
+        # one of Apple's exemptions (those cover HTTPS-only, authentication-only, copy
+        # protection, or crypto called from Apple's own frameworks). `false` would be a
+        # false declaration on a legal form, so `true` it is.
+        #
+        # THE OLD NOTE HERE WAS WRONG and it cost per-build hand-answering: it claimed `true`
+        # obliges an ITSEncryptionExportComplianceCode. It does not. That code exists only for
+        # builds carrying a CCATS (or ERN-era) number, which applies to NON-STANDARD crypto or
+        # items above the mass-market thresholds. Pacific is standard published algorithms
+        # (AES-GCM, HMAC-SHA256, HKDF, X25519/P-256, Ed25519) shipped mass-market, so it
+        # SELF-CLASSIFIES under License Exception ENC 740.17(b)(1) as ECCN 5D992.c. BIS deleted
+        # the up-front Encryption Registration/ERN in its 2021 rule; nothing replaced it.
+        #
+        # The one live obligation is retrospective and does not block shipping: the ANNUAL
+        # SELF-CLASSIFICATION REPORT (15 CFR 742.15(b)) — a CSV emailed to crypt@bis.doc.gov
+        # AND enc@nsa.gov by 1 February, covering the prior calendar year.
+        #
+        # FRANCE: excluded from availability (Ralph, 4 Aug), so the ANSSI encryption
+        # declaration does not arise. Re-adding France means filing that first.
+        #
+        # 27 Aug — APPLE REJECTED `true`. Upload of build 108 failed the export step with
+        #   90592 Invalid Export Compliance Code: "the export compliance key value [] in the
+        #   app's Info.plist doesn't match the key value of the app's export compliance
+        #   documentation."
+        # The ASC API confirms why: /v1/appEncryptionDeclarations for this app is EMPTY, so
+        # there is no code to match, and the only build ever answered (55) is on file as
+        # usesNonExemptEncryption=false. `true` in the plist with no declaration behind it is
+        # a contradiction the server refuses. So the claim above — that `true` alone ends the
+        # prompting — is FALSIFIED for this app; it holds only once a declaration exists.
+        #
+        # Until the declaration is filed (App Store Connect → App Information → App Encryption
+        # Declaration, web UI only — the API cannot create one), the key stays ABSENT and the
+        # encryption questions are answered per build in TestFlight. Absent is not a false
+        # declaration: it declares nothing and defers to the answer given on the build. That is
+        # how 0.1.0 (55) and (62) shipped. Once the declaration yields a code, restore BOTH:
+        #   ITSAppUsesNonExemptEncryption: true
+        #   ITSEncryptionExportComplianceCode: <code from the declaration>
+        # and this per-build step disappears for good.
+        # Black launch screen (the first-frame centred circle is drawn by the Metal
+        # launch view, LaunchMark.swift). The app forces dark, but the launch screen
+        # renders BEFORE SwiftUI, so it carries its own black colour.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        # Paid team (9LFA85922G, individual — since ~31 Jul 2026), so this IS the
+        # production App Store id. (The free-team era used network.pacific.dev to keep
+        # it unclaimed.) TestFlight uploads: Docs/TESTFLIGHT.md / scripts/testflight.sh.
+        PRODUCT_BUNDLE_IDENTIFIER: network.pacific
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 9LFA85922G
+        GENERATE_INFOPLIST_FILE: NO
+        # APNs. `remote-notification` in UIBackgroundModes only says the app may be
+        # RESUMED by a push; the aps-environment entitlement is what makes iOS issue
+        # a token at all. Without this file `registerForRemoteNotifications()` fails
+        # and PushRegistrar never sees a token, however correct it is.
+      configs:
+        # SIGNING DIFFERS BY CONFIGURATION, and conflating them breaks one or the other.
+        #
+        # Debug (device installs from this machine): MANUAL, against a profile minted
+        # through the App Store Connect API. Automatic signing cannot regenerate a
+        # profile from the CLI — it needs an Apple ID signed into Xcode ("No Accounts")
+        # — and a regeneration became unavoidable the moment Push Notifications was
+        # added to the App ID. Manual is set PER TARGET AND PER CONFIG: applied globally
+        # it also hits the SPM resource bundles (which support no profile at all) and
+        # the extension (its own bundle id), and it would break the TestFlight archive.
+        #
+        # Release (TestFlight / App Store): AUTOMATIC cloud signing, which is what
+        # scripts/testflight.sh relies on — xcodebuild mints the store profile and the
+        # cloud-managed Apple Distribution certificate headlessly, so no distribution
+        # identity ever sits in the local keychain.
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: WallFlowers.entitlements
+          # AUTOMATIC since 16 Sep 2026. The note above says Manual was forced
+          # because "automatic signing cannot regenerate a profile from the CLI —
+          # it needs an Apple ID signed into Xcode ('No Accounts')". That
+          # precondition no longer holds: an Apple ID IS signed in, so xcodebuild
+          # can mint and update the profile itself.
+          #
+          # It had to change, not merely could. "Pacific Dev Push" was minted when
+          # Push was added to the App ID and never carried Associated Domains, so
+          # every device build failed at GatherProvisioningInputs — meaning a
+          # PASSKEY has never been usable on a physical device from this machine.
+          # Verified it was the profile and not the domain by putting
+          # the previous webcredentials domain back and getting the identical refusal.
+          # Automatic signing adds the capability to the profile as the
+          # entitlements file asks for it, which is the whole point of it.
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: Apple Development
+        Release:
+          # PRODUCTION aps-environment — a TestFlight build's push tokens come from the
+          # production APNs service and are refused by the sandbox host.
+          CODE_SIGN_ENTITLEMENTS: WallFlowersRelease.entitlements
+          CODE_SIGN_STYLE: Automatic
+    scheme:
+      testTargets:
+        - WallFlowersTests
+        - WallFlowersUITests
+  # The Notification Service Extension — the only thing that runs when a push arrives and the
+  # app is suspended or killed. Deliberately has NO dependency on PacificCore: decrypting means
+  # opening the core in a second process, which needs a cross-process lock and an App Group
+  # state dir first (see NotificationService.swift). Stage 1 proves the delivery chain.
+  NotificationService:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: NotificationService
+    info:
+      path: NotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: WallFlowers Notifications
+        # Same single source of truth as the app target — an appex whose versions
+        # disagree with its container draws an App Store Connect warning on every
+        # upload (it shipped as 1.0/1 against the app's 0.1.0/108 on build 108).
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: network.pacific.notifications
+        DEVELOPMENT_TEAM: 9LFA85922G
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+      configs:
+        # Its own profile: an extension is a separate App ID, so the app's profile cannot
+        # sign it (the build fails naming the mismatch). Debug only — Release archives
+        # under automatic cloud signing with the rest of the app.
+        Debug:
+          CODE_SIGN_STYLE: Manual
+          PROVISIONING_PROFILE_SPECIFIER: Pacific NSE Dev
+          CODE_SIGN_IDENTITY: Apple Development
+        Release:
+          CODE_SIGN_STYLE: Automatic
+
+  WallFlowersTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Tests
+    dependencies:
+      - target: WallFlowers
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: network.pacific.tests
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 9LFA85922G
+        GENERATE_INFOPLIST_FILE: YES
+  # XCUITest — Apple's recommended way to drive the Simulator. Launches the real app,
+  # drives the real UI, and dismisses system alerts via SpringBoard (no pacific:// openurl,
+  # which iOS 18 gates behind an "Open in App?" confirmation).
+  WallFlowersUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: UITests
+    dependencies:
+      - target: WallFlowers
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: network.pacific.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: WallFlowers
+        # Same free-team signing as the app — the runner must install on the
+        # device for on-hardware UI tests (see /ios-fix loop).
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 9LFA85922G
+  # The design bench: an iPad app built from the app's own sources (less its @main) plus
+  # Playground/, so every element it shows is the real view. Simulator only; never shipped.
+  WallFlowersPlayground:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: App
+        excludes:
+          - "WallFlowersApp.swift"
+          - "Info.plist"
+          - "Life/Space/SpatialCaptureView.swift"
+          - "Life/Space/SpatialStreamClient.swift"
+      - path: Playground
+    dependencies:
+      - package: PacificCore
+        product: PacificCore
+      - package: LodeDBCore
+        product: LodeDBCore
+      - package: PacificStore
+        product: PacificStore
+      - package: ArcResolverKit
+        product: ArcResolverKit
+      - sdk: libsqlite3.tbd
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: network.pacific.playground
+        TARGETED_DEVICE_FAMILY: "2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Playground
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 9LFA85922G
+    scheme: {}

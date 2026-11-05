@@ -1,0 +1,5 @@
+# The built XCFramework is a large, regenerable artifact — produced by
+# build-ios.sh from pacific-ffi. Do not commit it; run ./apple/build-ios.sh to
+# (re)generate it before building the app. The generated UniFFI Swift bindings
+# under Sources/UniFFI/ ARE committed (small, checked-in generated code).
+Artifacts/

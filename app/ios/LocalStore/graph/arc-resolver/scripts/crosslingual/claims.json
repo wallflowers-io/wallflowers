@@ -1,0 +1,130 @@
+{
+  "_about": "A parallel corpus of Polis-style deliberation claims — the shape of a pac:Statement. Each entry is ONE claim expressed in four languages. Used by eval.py to decide whether an embedding model places a claim nearer its own translations than nearer a different claim in the same language. If it does not, OpinionGroup clusters by language and threshold='consensus' becomes structurally unreachable.",
+  "_languages": {
+    "en": "English",
+    "ko": "Korean",
+    "zh": "Mandarin (Simplified)",
+    "mi": "te reo Maori"
+  },
+  "_provenance": {
+    "en": "authored",
+    "ko": "translated, unverified by a native speaker",
+    "zh": "translated, unverified by a native speaker",
+    "mi": "translated, UNVERIFIED and the least reliable of the four — a te reo result that lags the others may be this corpus rather than the model. Have a speaker review before drawing a conclusion about mi."
+  },
+  "_topics": "Deliberately spans the vTaiwan ride-hailing case, housing, land/water guardianship, and ordinary community decisions — the domains a Pacific deliberation actually covers.",
+  "claims": [
+    {
+      "id": "ridehail-licence",
+      "en": "Ride-hailing drivers should need the same licence as taxi drivers.",
+      "ko": "차량 호출 서비스 기사도 택시 기사와 동일한 면허를 취득해야 한다.",
+      "zh": "网约车司机应当持有与出租车司机相同的执照。",
+      "mi": "Me whai raihana ōrite ngā taraiwa waka tono ki ngā taraiwa tekehī."
+    },
+    {
+      "id": "shortterm-rental-cap",
+      "en": "The council should cap the number of short-term rental properties.",
+      "ko": "의회는 단기 임대 주택의 수를 제한해야 한다.",
+      "zh": "议会应当限制短期出租房屋的数量。",
+      "mi": "Me whakatepe te kaunihera i te maha o ngā whare rēti wā poto."
+    },
+    {
+      "id": "river-legal-standing",
+      "en": "Our river should have legal standing to be represented in court.",
+      "ko": "우리 강은 법정에서 대변될 수 있는 법적 지위를 가져야 한다.",
+      "zh": "我们的河流应当拥有在法庭上被代表的法律地位。",
+      "mi": "Me whai mana ture tō mātou awa kia whai māngai i te kōti."
+    },
+    {
+      "id": "rent-increase-yearly",
+      "en": "Rent increases should be limited to once per year.",
+      "ko": "임대료 인상은 연 1회로 제한되어야 한다.",
+      "zh": "租金上涨应当限制为每年一次。",
+      "mi": "Me herea te pikinga o te utu rēti ki te kotahi wā ia tau."
+    },
+    {
+      "id": "hall-late-weekends",
+      "en": "The community hall should stay open late on weekends.",
+      "ko": "주말에는 마을 회관을 늦게까지 열어야 한다.",
+      "zh": "社区会堂在周末应当延长开放时间。",
+      "mi": "Me tuwhera roa te whare hapori i ngā mutunga wiki."
+    },
+    {
+      "id": "elders-reserved-seat",
+      "en": "Elders should have a reserved seat on the neighbourhood committee.",
+      "ko": "어르신들은 주민 위원회에 지정된 자리를 가져야 한다.",
+      "zh": "长者应当在社区委员会中拥有保留席位。",
+      "mi": "Me whai tūru rāhui ngā kaumātua i te komiti ā-takiwā."
+    },
+    {
+      "id": "no-coastal-building",
+      "en": "New buildings near the coast should be banned.",
+      "ko": "해안 인근의 신축 건물은 금지되어야 한다.",
+      "zh": "应当禁止在海岸附近新建建筑。",
+      "mi": "Me aukati ngā whare hou i te taha o te takutai."
+    },
+    {
+      "id": "free-transport-students",
+      "en": "Public transport should be free for students.",
+      "ko": "대중교통은 학생에게 무료여야 한다.",
+      "zh": "公共交通对学生应当免费。",
+      "mi": "Me kore utu te waka tūmatanui mō ngā ākonga."
+    },
+    {
+      "id": "forest-family-consent",
+      "en": "Decisions about the forest should require the agreement of local families.",
+      "ko": "산림에 관한 결정은 지역 가족들의 동의를 얻어야 한다.",
+      "zh": "关于森林的决定应当取得当地家庭的同意。",
+      "mi": "Me whai whakaaetanga ā ngā whānau o te rohe mō ngā whakataunga mō te ngahere."
+    },
+    {
+      "id": "market-main-square",
+      "en": "The market should be moved to the main square.",
+      "ko": "시장은 중앙 광장으로 이전해야 한다.",
+      "zh": "市场应当迁移到主广场。",
+      "mi": "Me nuku te mākete ki te marae matua."
+    },
+    {
+      "id": "no-foreign-farmland",
+      "en": "Foreign companies should not be allowed to buy farmland.",
+      "ko": "외국 기업이 농지를 매입하도록 허용해서는 안 된다.",
+      "zh": "不应当允许外国公司购买农地。",
+      "mi": "Kaua e whakaaetia ngā kamupene o tāwāhi ki te hoko whenua ahuwhenua."
+    },
+    {
+      "id": "household-compost",
+      "en": "Every household should be able to compost its own waste.",
+      "ko": "모든 가정이 자기 쓰레기를 퇴비화할 수 있어야 한다.",
+      "zh": "每个家庭都应当能够将自己的垃圾堆肥。",
+      "mi": "Me āhei ia whare ki te whakaparu i āna ake para."
+    },
+    {
+      "id": "dim-streetlights",
+      "en": "Street lighting should be dimmed at night to protect wildlife.",
+      "ko": "야생 동물을 보호하기 위해 밤에는 가로등을 어둡게 해야 한다.",
+      "zh": "为保护野生动物，夜间应当调暗路灯。",
+      "mi": "Me whakapōuri ngā rama tiriti i te pō hei tiaki i ngā kararehe mōhoao."
+    },
+    {
+      "id": "evening-meetings",
+      "en": "Meetings should be held in the evening so working people can attend.",
+      "ko": "일하는 사람들이 참석할 수 있도록 회의는 저녁에 열려야 한다.",
+      "zh": "会议应当在晚间举行，让上班的人能够参加。",
+      "mi": "Me tū ngā hui i te ahiahi kia āhei ai te hunga mahi ki te haere."
+    },
+    {
+      "id": "school-to-clinic",
+      "en": "The old school building should become a health clinic.",
+      "ko": "옛 학교 건물은 보건 진료소가 되어야 한다.",
+      "zh": "旧校舍应当改建为健康诊所。",
+      "mi": "Me huri te whare kura tawhito hei whare hauora."
+    },
+    {
+      "id": "five-year-vote",
+      "en": "Anyone who has lived here five years should be able to vote locally.",
+      "ko": "이곳에 5년 동안 거주한 사람은 누구나 지방 선거에서 투표할 수 있어야 한다.",
+      "zh": "在此居住五年的任何人都应当能够参加地方投票。",
+      "mi": "Ko te tangata kua noho ki konei mō ngā tau e rima, me āhei ia ki te pōti ā-rohe."
+    }
+  ]
+}

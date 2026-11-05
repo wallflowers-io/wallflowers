@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign-In DAG</title>
+<!-- The spec for app/ios-passkey: every way into a WallFlowers account, on iOS and the
+     web, and the one state they all reach. Swimlanes split client code from core: a core
+     node is ONE function, and the clients' arrows into it show who calls it. Each node
+     names its code; the code is the authority. Rendering: Vue Flow. Layout: lane gives
+     the column, the longest path from an entry point gives the row. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@vue-flow/core@1.48.2/dist/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@vue-flow/core@1.48.2/dist/theme-default.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@vue-flow/controls@1.1.3/dist/style.css">
+<script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>
+<!-- vue-flow-core.iife.js 1.48.2 was built with NODE_ENV replaced by a bare `production` identifier (line 4664). -->
+<script>var production = 'production';</script>
+<script src="https://cdn.jsdelivr.net/npm/@vue-flow/core@1.48.2/dist/vue-flow-core.iife.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@vue-flow/background@1.3.2/dist/vue-flow-background.iife.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@vue-flow/controls@1.1.3/dist/vue-flow-controls.iife.js"></script>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --line: #cfccc3; --card: #ffffff; --band: #f3f1ec;
+    --ios: #2f5fb3; --web: #8a4fb0; --core: #3d7a5c; --arc: #9a6b1f;
+    --bad: #b3261e; --badbg: #fdecea; --new: #8a6d00; --newbg: #fbf3d5; --hi: #1d1d1b; --dot: #dcd9d0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --fg: #ecebe6; --muted: #9b9a94; --line: #3d3c38; --card: #1d1d1b; --band: #1a1a18;
+      --ios: #7aa5f0; --web: #c79be6; --core: #7cc6a0; --arc: #e0b065;
+      --bad: #f28b82; --badbg: #3a1f1d; --new: #e6c766; --newbg: #33301f; --hi: #ecebe6; --dot: #2c2b28;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.45 ui-monospace, "SF Mono", Menlo, monospace; }
+  #app { height: 100%; display: flex; flex-direction: column; }
+  header { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 16px; margin: 0 0 8px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .group { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .group b { color: var(--muted); font-weight: 400; margin-right: 2px; }
+  button { font: inherit; padding: 3px 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px; cursor: pointer; }
+  button.on { border-color: var(--hi); box-shadow: inset 0 0 0 1px var(--hi); }
+  button.absent { border-style: dashed; color: var(--muted); }
+  .body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; }
+  @media (max-width: 900px) { .body { grid-template-columns: 1fr; grid-template-rows: minmax(420px, 1fr) auto; } }
+  .canvas { position: relative; min-height: 0; }
+  .vue-flow { background: var(--bg); }
+  .vue-flow__background pattern circle { fill: var(--dot); }
+  .vue-flow__controls { box-shadow: none; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .vue-flow__controls-button { background: var(--card); border-bottom-color: var(--line); fill: var(--fg); }
+  .vue-flow__edge-path { stroke: var(--muted); stroke-width: 1.4; }
+  .vue-flow__edge.bad .vue-flow__edge-path { stroke: var(--bad); stroke-dasharray: 6 4; }
+  .vue-flow__edge.on .vue-flow__edge-path { stroke: var(--hi); stroke-width: 2.4; }
+  .vue-flow__edge.dim { opacity: .12; }
+  .vue-flow__handle { opacity: 0; width: 6px; height: 6px; min-width: 0; min-height: 0; border: 0; }
+  .vue-flow__node-lane { pointer-events: none; }
+  .lane { height: 100%; border: 1px solid var(--line); border-top: 4px solid var(--lane); border-radius: 10px; background: var(--band); }
+  .lane .h { padding: 8px 12px 0; font-weight: 600; font-size: 13px; color: var(--lane); letter-spacing: .04em; }
+  .lane .s { padding: 0 12px; font-size: 11px; color: var(--muted); }
+  .step { width: 210px; min-height: 50px; padding: 7px 10px 7px 12px; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--lane); border-radius: 8px; cursor: pointer; transition: opacity .15s; }
+  .step .t { font-size: 12px; font-weight: 600; }
+  .step .r { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .step.bad { background: var(--badbg); border-color: var(--bad); border-left-color: var(--bad); }
+  .step.absent { background: transparent; border: 1.5px dashed var(--bad); }
+  .step.absent .t { color: var(--bad); }
+  .step.new { background: var(--newbg); border-color: var(--new); border-left-color: var(--new); }
+  .step.goal { border: 2px solid var(--hi); border-left-width: 2px; text-align: center; }
+  .step.sel { box-shadow: 0 0 0 2px var(--hi); }
+  .step.dim { opacity: .2; }
+  aside { border-left: 1px solid var(--line); padding: 14px 16px; overflow-y: auto; background: var(--card); }
+  @media (max-width: 900px) { aside { border-left: 0; border-top: 1px solid var(--line); } }
+  aside h2 { font-size: 14px; margin: 0 0 6px; }
+  aside h3 { font-size: 12px; margin: 18px 0 6px; color: var(--muted); font-weight: 400; text-transform: uppercase; letter-spacing: .06em; }
+  dl { margin: 0; } dt { color: var(--muted); margin-top: 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  dd { margin: 2px 0 0; white-space: pre-wrap; word-break: break-word; }
+  .pill { display: inline-block; font-size: 10.5px; padding: 0 6px; border-radius: 4px; border: 1px solid currentColor; margin-left: 6px; font-weight: 400; }
+  .p-bad { color: var(--bad); } .p-new { color: var(--new); }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 12px; }
+  td, th { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 400; }
+  .y { color: var(--core); } .n { color: var(--bad); }
+  ol { margin: 0; padding-left: 18px; } li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Sign-in: every entry point, one destination</h1>
+    <div class="bar">
+      <div class="group"><b>view</b>
+        <button v-for="v in ['today','after']" :key="v" :class="{on: view===v}" @click="view=v">{{ v==='today' ? 'Today' : 'After this PR' }}</button>
+      </div>
+      <div class="group"><b>platform</b>
+        <button v-for="p in ['both','ios','web']" :key="p" :class="{on: platform===p}" @click="platform=p">{{ {both:'Both',ios:'iOS',web:'Web'}[p] }}</button>
+      </div>
+      <div class="group"><b>entry</b>
+        <button :class="{on: !entry}" @click="entry=null">none</button>
+        <button v-for="e in entries" :key="e.id" :class="{on: entry===e.id, absent: e.absent}" @click="pick(e)">{{ e.label }}</button>
+      </div>
+    </div>
+  </header>
+  <div class="body">
+    <div class="canvas">
+      <vue-flow id="dag" :nodes="flowNodes" :edges="flowEdges" :min-zoom="0.2" :max-zoom="2"
+                :nodes-draggable="false" :nodes-connectable="false" :elements-selectable="false"
+                @node-click="({ node }) => { if (node.type === 'step') sel = node.id }" @pane-click="sel = null">
+        <background :gap="18" :size="1.2"></background>
+        <controls :show-interactive="false"></controls>
+        <template #node-lane="{ data }">
+          <div class="lane" :style="{'--lane': `var(--${data.lane})`}">
+            <div class="h">{{ data.label }}</div>
+            <div class="s">{{ data.sub }}</div>
+          </div>
+        </template>
+        <template #node-step="{ data }">
+          <handle type="target" :position="Top"></handle>
+          <div class="step" :class="data.cls" :style="{'--lane': `var(--${data.lane})`}">
+            <div class="t">{{ data.label }}</div>
+            <div class="r" v-if="data.runs">{{ data.runs }}</div>
+          </div>
+          <handle type="source" :position="Bottom"></handle>
+        </template>
+      </vue-flow>
+    </div>
+    <aside>
+      <template v-if="node">
+        <h2>{{ node.label }}<span v-if="node.st==='bad'" class="pill p-bad">wrong</span><span v-if="node.st==='absent'" class="pill p-bad">absent</span><span v-if="node.st==='new'" class="pill p-new">this PR</span></h2>
+        <dl>
+          <dt>{{ node.lane === 'core' ? 'called by' : 'runs on' }}</dt><dd>{{ node.runs }}</dd>
+          <dt>does</dt><dd>{{ node.does }}</dd>
+          <template v-if="node.ref"><dt>code</dt><dd>{{ node.ref }}</dd></template>
+          <template v-if="node.net"><dt>crosses the network</dt><dd>{{ node.net }}</dd></template>
+          <template v-if="node.writes"><dt>writes to the account</dt><dd>{{ node.writes }}</dd></template>
+          <template v-if="node.ev"><dt>evidence</dt><dd>{{ node.ev }}</dd></template>
+        </dl>
+        <table v-if="node.id==='synced'">
+          <tr><th>condition</th><th>iOS</th><th>web</th></tr>
+          <tr v-for="c in conditions" :key="c.label"><td>{{ c.label }}</td><td :class="c.ios[view]?'y':'n'">{{ c.ios[view] ? 'yes' : c.iosNo }}</td><td :class="c.web?'y':'n'">{{ c.web ? 'yes' : c.webNo }}</td></tr>
+        </table>
+      </template>
+      <template v-else>
+        <h2>Pick an entry point, then a node</h2>
+        <p style="color:var(--muted);margin:0">Scroll or pinch to zoom; drag to pan; the corner button fits the whole graph.</p>
+      </template>
+      <h3>Where core differs by platform</h3>
+      <ol>
+        <li><b>The words door</b> (iOS): today it calls <code>restore_identity</code>, which brings back the identity only. That is the bug. After this PR it calls <code>sign_in_from_words</code>, which shares the passkey door's resume tail.</li>
+        <li><b>Sealed state</b> (Door only): a browser keeps nothing, so the Door reopens the device state it sealed (<code>open_restored</code>) before resuming. A phone keeps its own state, so it never needs this. This difference is by design.</li>
+        <li><b>The head</b>: core makes it (<code>head_update</code>), but only the Door publishes it. iOS never calls it.</li>
+      </ol>
+      <h3>For review</h3>
+      <ol>
+        <li><b>iOS recovery words</b> skip the spine walk, run the new-account steps and mint a second self record. <i>This PR fixes it.</i></li>
+        <li><b>iOS never publishes the head</b> (only the Door, account.rs:2047). Spine entries written on iOS are not anchored. <i>In this PR, or an issue?</i></li>
+        <li><b>The web has no words entry</b>: shown once at sign-up, never entered. <i>Intended, or an issue?</i></li>
+        <li><b>The stray group 5a36e81c…</b> on the live spine (index 70): no ICD op lets an owner retire a solo object. <i>A new op, or leave it?</i></li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* Lanes, left to right. */
+const LANES = [
+  { id: 'ios', label: 'iOS client', sub: 'Swift · app/ios' },
+  { id: 'core', label: 'core', sub: 'Rust · pacific-core, one implementation' },
+  { id: 'web', label: 'web client', sub: 'browser JS · the Door (hosted node)' },
+  { id: 'arc', label: 'Arc', sub: 'server · ciphertext and signatures only' },
+];
+
+/* Nodes. A core node is one function; `runs` on a core node says who calls it.
+   in: the views a node exists in. st: '' | bad | absent | new. */
+const N = [
+  // ── iOS client
+  { id: 'i_name', lane: 'ios', label: 'Name', runs: 'device', does: 'One field; the keys are minted on the tap.', ref: 'app/ios/ui/App/Shell/BootFlow.swift:293 NameStep → CoreService.swift:470' },
+  { id: 'i_enrol', lane: 'ios', label: 'Passkey create + PRF', runs: 'device · Secure Enclave', does: 'A passkey for rp app.wallflowers.io, handle pk ‖ arc.wallflowers.io, PRF support; one assertion for the PRF output (salt pacific/wrap/v1).', ref: 'SignIn.swift:222 registerPasskey; BootFlow.swift:368', net: 'ASAuthorization only.' },
+  { id: 'i_words_show', lane: 'ios', label: 'Words shown once', runs: 'device', does: 'The 24 words, once.', ref: 'BootFlow.swift:517' },
+  { id: 'i_ladder', lane: 'ios', label: 'Face, bio, fingerprint', runs: 'device', does: 'The collecting steps: right for a new identity, and only for a new identity.', ref: 'BootFlow.swift steps .face → … → finishFirstBoot' },
+  { id: 'i_pk', lane: 'ios', label: 'Face ID: passkey sheet', runs: 'device · Secure Enclave', does: 'A discoverable assertion for rp app.wallflowers.io → PRF output and handle. The phone must have verified the app ↔ domain link: Release via Apple’s CDN, Debug via ?mode=developer.', ref: 'SignIn.swift:267 signInWithPasskey; :79 rpID; ui/WallFlowers.entitlements', net: 'ASAuthorization; the apple-app-site-association check (Apple’s CDN, or the Door in Debug).', ev: 'Ralph’s iPhone 17:13: 2d6367b5 → signed in. 17:30 (Release path): refused, because the CDN held a 404 cached at 16:43.' },
+  { id: 'i_adopt', lane: 'ios', label: 'Adopt identity → shell', runs: 'device', does: 'Loads the identity, profile and routes; marks first boot done. Objects that did not rejoin are named in the failure alert.', ref: 'CoreService.swift:681 adoptRestoredIdentity; :689 finishFirstBoot; BootFlow.swift:194 passkey()' },
+  { id: 'i_live', lane: 'ios', label: 'LiveSync', runs: 'device', does: 'A held relay subscription; each push triggers a core sync pass.', ref: 'app/ios/ui/App/Model/LiveSync.swift:44', net: 'relay wss (Arc)' },
+  { id: 'i_headput', lane: 'ios', label: 'Publish the head', st: 'absent', runs: 'device: absent', does: 'Nothing on iOS publishes the head, so spine entries written here are not anchored at the Arc.', ref: 'only the Door calls put_head: app/door/src/account.rs:2047', ev: 'grep: no PUT …/head in app/ios or the FFI.' },
+  { id: 'i_w_type', lane: 'ios', label: 'Type the 24 words', runs: 'device', does: 'Checksum checked at the field, then straight into the core’s identity-only restore. No [account] log lines.', ref: 'BootFlow.swift:278 RestoreStep → CoreService.swift:554', in: ['today'] },
+  { id: 'i_w_type2', lane: 'ios', label: 'Type the 24 words', st: 'new', runs: 'device', does: 'Through SignInService.restoreWithWords: logged under [account] (never the words), progress on screen, then the shell via the same helper as the passkey door.', ref: 'BootFlow.swift RestoreStep; SignIn.swift restoreWithWords', in: ['after'] },
+  // ── core
+  { id: 'c_mint', lane: 'core', label: 'init_identity', runs: 'iOS (FFI) · Door', does: 'A new seed, the identity key, the device leaf, and the account’s self record, which becomes spine index 0.', ref: 'core/pacific-core/src/node.rs:501; :512 ensure_self_object', writes: 'The self record and its spine entry, published on the first sync.' },
+  { id: 'c_export', lane: 'core', label: 'export_wrap', runs: 'iOS (FFI) · Door', does: 'Seals the seed under the PRF output, bound to the Arc host.', ref: 'node.rs export_wrap; FFI lib.rs:1677' },
+  { id: 'c_restore', lane: 'core', label: 'restore_identity', st: 'bad', runs: 'iOS (FFI)', does: 'The identity and nothing else: no head, no spine walk, no object rejoined. The caller then runs the new-account steps.', ref: 'node.rs:525; FFI lib.rs:1619', ev: 'Simulator 18:13–18:16: identity ed25519:2d6367b5… back, nothing else.', in: ['today'] },
+  { id: 'c_wkey', lane: 'core', label: 'words_key', st: 'new', runs: 'iOS (FFI)', does: 'The key the words name. Writes nothing, so the head can be fetched before anything is written.', ref: 'new: identity::seed_from_recovery_key + Identity::in_memory', in: ['after'] },
+  { id: 'c_words', lane: 'core', label: 'sign_in_from_words', st: 'new', runs: 'iOS (FFI)', does: 'restore_identity, then the same signed_in tail as sign_in_from_wrap.', ref: 'new: node.rs sign_in_from_words → signed_in(node, head)', in: ['after'] },
+  { id: 'c_wrap', lane: 'core', label: 'sign_in_from_wrap', runs: 'iOS (FFI) · Door', does: 'The wrap must open to the handle’s key, or nothing is written. Then restore the identity, then resume.', ref: 'node.rs:3552; FFI lib.rs:1718' },
+  { id: 'c_open', lane: 'core', label: 'open_restored', runs: 'Door only', does: 'Reopens the device state the Door sealed at the last sign-in. A browser keeps nothing, so the Door keeps it; a phone keeps its own state.', ref: 'account.rs:1341 open_sealed → Node::open_restored (account.rs:931)' },
+  { id: 'c_resume', lane: 'core', label: 'resume', runs: 'iOS (FFI) · Door', does: 'Walks the chain on the relay, checks it against the head, and joins every object the spine names through a pool leaf. One pacific::resume line per object.', ref: 'node.rs:3108 resume_at', net: 'relay', writes: 'Lease claims on pool leaves only.', ev: 'core test sign_in_from_wrap.rs a_sign_in_says_what_it_reached' },
+  { id: 'c_self', lane: 'core', label: 'self record = index 0', runs: 'iOS (FFI) · Door', does: 'Only if the spine was reached, or the chain is empty. Never mints a second record.', ref: 'node.rs sign_in_from_wrap (reached → ensure_self_object)' },
+  { id: 'c_head', lane: 'core', label: 'head_update + seal_state', runs: 'Door only', does: 'The head over the spine’s current position, and the sealed device state.', ref: 'node.rs:2758 head_update; seal_state; called from account.rs:739 keep_write' },
+  { id: 'c_sync', lane: 'core', label: 'sync', runs: 'iOS (FFI) · Door', does: 'A held relay connection; each pass drains, folds, and reconciles the self profile.', ref: 'node.rs go_live / catch_up; reconcile_self_profile :5098', net: 'relay wss' },
+  { id: 'c_selfmint', lane: 'core', label: 'ensure_self_object mints', st: 'bad', runs: 'iOS (sync)', does: 'A device with no self record mints one on its first sync and publishes it to the live spine.', ref: 'node.rs:5098 → :572; the comment at :505 calls this intended', writes: 'group 5a36e81c… (spine index 70) and its pool leaf (71), on Ralph’s live account.', ev: 'Simulator log 18:14:38 “object created … kind=group”; 18:14:44 “spine entry published index=70”.', in: ['today'] },
+  { id: 'synced', lane: 'core', label: 'Signed in, synchronised', runs: 'the account', does: 'One state, however it was reached. Its conditions per platform are below.' },
+  // ── web client
+  { id: 'w_signup', lane: 'web', label: '/v2/signup', runs: 'browser → Door', does: 'Proof of work; the Door calls init_identity and holds the words until the wrap is stored.', ref: 'app/door/src/main.rs:501; account.rs:1410 Ask::SignUp' },
+  { id: 'w_create', lane: 'web', label: 'credentials.create + PRF', runs: 'browser', does: 'A passkey for rp app.wallflowers.io, the Door’s own host (D-33), handle pk ‖ arc host; PRF from create where witnessed, else one get().', ref: 'app/web/door/signin.js:323 enrol()' },
+  { id: 'w_seal_up', lane: 'web', label: 'Seal PRF to the Door', runs: 'browser', does: 'The PRF output leaves the page only sealed to the session process that asked for it.', ref: 'signin.js:350; seal.js' },
+  { id: 'w_finish', lane: 'web', label: '/v2/signup/finish', runs: 'Door', does: 'Unseals the PRF, calls export_wrap, writes the first seal, stores the wrap.', ref: 'main.rs:502; account.rs:1433; auth.rs:108 put_wrap' },
+  { id: 'w_words', lane: 'web', label: 'Words shown once', runs: 'browser', does: 'Shown once, never sent back.', ref: 'signin.js:209' },
+  { id: 'w_continue', lane: 'web', label: '/v2/signup/continue', runs: 'browser → Door', does: 'Lands the session.', ref: 'signin.js:206; main.rs:503' },
+  { id: 'w_get', lane: 'web', label: 'credentials.get + PRF', runs: 'browser', does: 'For rp app.wallflowers.io, allowed by the page’s origin; no association file needed.', ref: 'signin.js:99 assert(); :123 signIn()' },
+  { id: 'w_signin', lane: 'web', label: '/v2/signin + seal', runs: 'browser → Door', does: 'Opens an attempt (proof of work), seals the PRF to its session process, posts the handle.', ref: 'main.rs:504, :506; signin.js:135' },
+  { id: 'w_sealed', lane: 'web', label: 'Sealed state held?', runs: 'Door', does: 'Held: open_restored, then resume(head). Not held: sign_in_from_wrap.', ref: 'account.rs:1341–1368' },
+  { id: 'w_keep', lane: 'web', label: 'keep_write', runs: 'Door', does: 'After each write: head_update + seal_state, then publish the head (compare-and-set on its position).', ref: 'account.rs:739; :2047 put_head; auth.rs:143' },
+  { id: 'w_live', lane: 'web', label: 'go_live', runs: 'Door', does: 'The session’s node goes live; its ticks drain the relay.', ref: 'account.rs:935' },
+  { id: 'w_w_absent', lane: 'web', label: 'Enter the words', st: 'absent', runs: 'absent', does: 'The web has no way to enter the 24 words: shown once at sign-up, never entered.', ref: 'signin.js: #words is display only' },
+  // ── Arc
+  { id: 'a_wrap_put', lane: 'arc', label: 'PUT /auth/users/<pk>', runs: 'Arc', does: 'Stores the wrap: 76 bytes it cannot read. Signed by the account. One wrap per account; a new one revokes the old passkey.', ref: 'arc/auth/app/main.py:374' },
+  { id: 'a_wrap_get', lane: 'arc', label: 'GET /auth/users/<pk>', runs: 'Arc', does: 'Serves the wrap to anyone: this read is how a fresh device gets the key it would authenticate with.', ref: 'arc/auth/app/main.py:418', ev: '404 no_wrap for the three old wallflowers.io passkeys (orphans).' },
+  { id: 'a_head_get', lane: 'arc', label: 'GET …/<pk>/head', runs: 'Arc', does: 'The sealed head and its declared position; 404 means none yet.', ref: 'arc/auth/app/main.py:588; iOS SignIn.swift:489' },
+  { id: 'a_head_put', lane: 'arc', label: 'PUT …/<pk>/head', runs: 'Arc', does: 'Compare-and-set on the chain position: behind or fork is refused, by name.', ref: 'arc/auth/app/main.py:537' },
+];
+
+/* Edges. on: ios | web | both, the platform whose path takes it. in: views. bad: a wrong path.
+   only: a shared node leads to a different step for each entry point. */
+const E = [
+  // iOS · new account
+  ['i_name','c_mint','ios'], ['c_mint','i_enrol','ios'], ['i_enrol','c_export','ios'], ['c_export','a_wrap_put','both'],
+  ['a_wrap_put','i_words_show','ios'], ['i_words_show','i_ladder','ios'], ['i_ladder','i_adopt','ios'],
+  ['i_adopt','i_live','ios'], ['i_live','c_sync','ios'], ['c_sync','synced','both'],
+  ['i_live','i_headput','ios',{bad:true}], ['i_headput','c_head','ios',{bad:true}],
+  // iOS · passkey
+  ['i_pk','a_wrap_get','ios'], ['a_wrap_get','a_head_get','both'], ['a_head_get','c_wrap','ios',{only:['i_pk']}],
+  ['c_wrap','c_resume','both'], ['c_resume','c_self','both'], ['c_self','i_adopt','ios'],
+  // iOS · words, today
+  ['i_w_type','c_restore','ios',{in:['today']}], ['c_restore','i_ladder','ios',{in:['today'], bad:true}],
+  ['c_sync','c_selfmint','ios',{in:['today'], bad:true, only:['i_w']}], ['c_selfmint','synced','ios',{in:['today'], bad:true, only:['i_w']}],
+  // iOS · words, after
+  ['i_w_type2','c_wkey','ios',{in:['after']}], ['c_wkey','a_head_get','ios',{in:['after']}],
+  ['a_head_get','c_words','ios',{in:['after'], only:['i_w']}], ['c_words','c_resume','ios',{in:['after']}],
+  // web · new account
+  ['w_signup','c_mint','web'], ['c_mint','w_create','web'], ['w_create','w_seal_up','web'], ['w_seal_up','w_finish','web'],
+  ['w_finish','c_export','web'], ['a_wrap_put','w_words','web'], ['w_words','w_continue','web'], ['w_continue','w_keep','web'],
+  // web · passkey
+  ['w_get','w_signin','web'], ['w_signin','a_wrap_get','web'], ['a_head_get','w_sealed','web',{only:['w_get']}],
+  ['w_sealed','c_open','web'], ['c_open','c_resume','web'], ['w_sealed','c_wrap','web'], ['c_self','w_keep','web'],
+  ['w_keep','c_head','web'], ['c_head','a_head_put','web'], ['a_head_put','w_live','web'], ['w_live','c_sync','web'],
+].map(([from, to, on, o = {}]) => ({ from, to, on, in: o.in || ['today','after'], bad: !!o.bad, only: o.only || null }));
+
+const entries = [
+  { id: 'i_name', label: 'iOS · New account', p: 'ios' },
+  { id: 'i_pk', label: 'iOS · Passkey', p: 'ios' },
+  { id: 'i_w', label: 'iOS · Recovery words', p: 'ios' },
+  { id: 'w_signup', label: 'Web · New account', p: 'web' },
+  { id: 'w_get', label: 'Web · Passkey', p: 'web' },
+  { id: 'w_w_absent', label: 'Web · Recovery words', p: 'web', absent: true },
+];
+
+const conditions = [
+  { label: 'identity held', ios: { today: true, after: true }, web: true, iosNo: 'no', webNo: 'no' },
+  { label: 'every spine object joined', ios: { today: false, after: true }, web: true, iosNo: 'no: words door', webNo: 'no' },
+  { label: 'self record is spine index 0', ios: { today: false, after: true }, web: true, iosNo: 'no: words door mints a 2nd', webNo: 'no' },
+  { label: 'live sync', ios: { today: true, after: true }, web: true, iosNo: 'no', webNo: 'no' },
+  { label: 'head anchored at the Arc', ios: { today: false, after: false }, web: true, iosNo: 'no: iOS never publishes it', webNo: 'no' },
+];
+
+const { VueFlow, Handle, Position, MarkerType, useVueFlow } = VueFlowCore;
+const W = 210, H = 54, GX = 18, GY = 40, PAD = 16, TOP = 64;
+
+const app = Vue.createApp({
+  setup() {
+    const view = Vue.ref('today'), platform = Vue.ref('both'), entry = Vue.ref(null), sel = Vue.ref('synced');
+    const { fitView } = useVueFlow('dag');
+
+    const shownNodes = Vue.computed(() => N.filter(n => !n.in || n.in.includes(view.value)));
+    const shownEdges = Vue.computed(() => {
+      const ids = new Set(shownNodes.value.map(n => n.id));
+      return E.filter(e => e.in.includes(view.value) && ids.has(e.from) && ids.has(e.to));
+    });
+    const startOf = e => e.id === 'i_w' ? (view.value === 'today' ? 'i_w_type' : 'i_w_type2') : e.id;
+
+    /* Rows: longest path from an entry point; the destination on the last row.
+       Columns: the lane, and within a lane's row, the order of the parents. */
+    const layout = Vue.computed(() => {
+      const nodes = shownNodes.value, edges = shownEdges.value;
+      const row = Object.fromEntries(nodes.map(n => [n.id, 0]));
+      for (let i = 0; i < nodes.length; i++) edges.forEach(e => { if (row[e.to] < row[e.from] + 1) row[e.to] = row[e.from] + 1; });
+      const last = Math.max(...Object.values(row));
+      row.synced = last;
+      const rows = [...Array(last + 1)].map(() => ({}));
+      nodes.forEach(n => (rows[row[n.id]][n.lane] ||= []).push(n.id));
+      const width = Object.fromEntries(LANES.map(l => [l.id, Math.max(1, ...rows.map(r => (r[l.id] || []).length))]));
+      let x = 0; const laneX = {};
+      LANES.forEach(l => { laneX[l.id] = x; x += PAD * 2 + width[l.id] * W + (width[l.id] - 1) * GX + 24; });
+      const pos = {};
+      rows.forEach((r, ri) => LANES.forEach(l => {
+        const ids = r[l.id] || [];
+        const mean = id => { const ps = edges.filter(e => e.to === id && pos[e.from]).map(e => pos[e.from].x); return ps.length ? ps.reduce((a, b) => a + b) / ps.length : 0; };
+        ids.sort((a, b) => mean(a) - mean(b));
+        const inner = width[l.id] * W + (width[l.id] - 1) * GX;
+        const used = ids.length * W + (ids.length - 1) * GX;
+        ids.forEach((id, i) => pos[id] = { x: laneX[l.id] + PAD + (inner - used) / 2 + i * (W + GX), y: TOP + ri * (H + GY) });
+      }));
+      const height = TOP + (last + 1) * (H + GY);
+      const lanes = LANES.map(l => ({ ...l, x: laneX[l.id], w: PAD * 2 + width[l.id] * W + (width[l.id] - 1) * GX, h: height }));
+      return { pos, lanes };
+    });
+
+    const onPath = Vue.computed(() => {
+      const nodes = new Set(), edges = new Set();
+      const e0 = entries.find(e => e.id === entry.value);
+      if (!e0) return { nodes, edges };
+      const stack = [startOf(e0)];
+      while (stack.length) {
+        const id = stack.pop(); if (nodes.has(id)) continue; nodes.add(id);
+        shownEdges.value.forEach(e => {
+          if (e.from === id && (e.on === 'both' || e.on === e0.p) && (!e.only || e.only.includes(e0.id))) { edges.add(e.from + '>' + e.to); stack.push(e.to); }
+        });
+      }
+      return { nodes, edges };
+    });
+    const side = n => n.lane === 'ios' || n.lane === 'web' ? n.lane : 'both';
+    const dimNode = n => (entry.value && !onPath.value.nodes.has(n.id)) || (platform.value !== 'both' && side(n) !== 'both' && side(n) !== platform.value);
+    const dimEdge = e => (entry.value && !onPath.value.edges.has(e.from + '>' + e.to)) || (platform.value !== 'both' && e.on !== 'both' && e.on !== platform.value);
+
+    const flowNodes = Vue.computed(() => [
+      ...layout.value.lanes.map(l => ({ id: 'lane-' + l.id, type: 'lane', position: { x: l.x, y: 0 }, zIndex: -1,
+        selectable: false, draggable: false, style: { width: l.w + 'px', height: l.h + 'px' }, data: { lane: l.id, label: l.label, sub: l.sub } })),
+      ...shownNodes.value.map(n => ({ id: n.id, type: 'step', position: layout.value.pos[n.id],
+        data: { label: n.label, runs: n.runs, lane: n.lane,
+                cls: [n.st || '', n.id === 'synced' ? 'goal' : '', sel.value === n.id ? 'sel' : '', dimNode(n) ? 'dim' : ''].join(' ') } })),
+    ]);
+    const flowEdges = Vue.computed(() => shownEdges.value.map((e, i) => {
+      const on = onPath.value.edges.has(e.from + '>' + e.to);
+      return { id: 'e' + i + view.value, source: e.from, target: e.to, type: 'smoothstep', pathOptions: { borderRadius: 10 },
+               class: [e.bad ? 'bad' : '', on ? 'on' : '', dimEdge(e) ? 'dim' : ''].join(' '),
+               animated: on, markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 } };
+    }));
+    const node = Vue.computed(() => shownNodes.value.find(n => n.id === sel.value) || null);
+    function pick(e) { entry.value = e.id; sel.value = startOf(e); if (platform.value !== 'both' && platform.value !== e.p) platform.value = 'both'; }
+    Vue.watch(view, () => { if (entry.value === 'i_w') sel.value = startOf(entries.find(e => e.id === 'i_w')); setTimeout(() => fitView({ padding: 0.04 }), 50); });
+    Vue.onMounted(() => setTimeout(() => fitView({ padding: 0.04 }), 80));
+
+    return { view, platform, entry, sel, entries, conditions, flowNodes, flowEdges, node, pick, Top: Position.Top, Bottom: Position.Bottom };
+  },
+});
+app.component('VueFlow', VueFlow);
+app.component('Handle', Handle);
+app.component('Background', VueFlowBackground.Background);
+app.component('Controls', VueFlowControls.Controls);
+app.mount('#app');
+</script>
+</body>
+</html>
