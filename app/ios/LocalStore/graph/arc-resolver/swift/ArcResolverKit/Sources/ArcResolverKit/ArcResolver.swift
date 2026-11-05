@@ -185,7 +185,7 @@ public final class ArcResolver: @unchecked Sendable {
     private let dim: Int
     // Concurrent reads; projectObjects and rehome are barriers (they mutate). Matches the C-ABI
     // contract: "writes mutate; reads are shared" — serialize writes, allow concurrent reads.
-    private let queue = DispatchQueue(label: "ai.gopacific.arc-resolver", attributes: .concurrent)
+    private let queue = DispatchQueue(label: "io.wallflowers.arc-resolver", attributes: .concurrent)
 
     public init(config: ArcResolverConfig, embedder: ArcEmbedder) throws {
         let dim = embedder.dimension

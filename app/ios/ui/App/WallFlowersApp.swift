@@ -1,5 +1,5 @@
 //  WallFlowersApp.swift
-//  Pacific for Aries Arise — the entry point and 3-tab root (Notes / Chats / Work).
+//  The entry point and 3-tab root (Notes / Chats / Work).
 //  Me (profile) and the Live core live behind the top-left account avatar. No language
 //  model runs anywhere, on the device or on an Arc. The differentiator is behind-the-scenes
 //  indexing + cross-referencing (the Notes outline + the Work projects + the Sysiphus SQL

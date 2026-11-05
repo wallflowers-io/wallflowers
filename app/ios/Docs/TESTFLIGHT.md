@@ -4,7 +4,7 @@
 
 ## Current state
 
-- **Team `9LFA85922G`** — paid Apple Developer Program, individual enrollment (~31 Jul 2026). The free-Personal-Team era (7-day profiles, `.dev` bundle id) is over; store profiles for `network.pacific` + `network.pacific.notifications` run to 2027.
+- **Team `9LFA85922G`** — paid Apple Developer Program. The free-Personal-Team era (7-day profiles, `.dev` bundle id) is over; store profiles for `network.pacific` + `network.pacific.notifications` run to 2027.
 - **App record:** `network.pacific`, Apple ID **6796835582**, store version 1.0 in "Prepare for Submission".
 - **Builds in TestFlight:** 0.1.0 (55) uploaded manually via Xcode on 31 Jul; 0.1.0 (62) via this pipeline on 3 Aug (both `VALID`); 0.1.0 (109) on 27 Aug via this pipeline, `VALID`, build id `10929c3c-4dcc-4ef9-9f03-56e4153138d6`. 55 was answered `usesNonExemptEncryption: false`; 62 was never answered, which is why it never reached a tester — **the compliance answer is what gates installability, so answer it the same day you upload.**
 - **Build numbers are the commit count on `feat/marketplace`**, which is the release line (main is 48 behind it). Cutting from a shorter branch would move the number backwards and Apple would reject the duplicate.

@@ -1,5 +1,5 @@
 //  ContactExport.swift
-//  The "useful route" made REAL: an Aries Arise card (yours, or someone you met) becomes
+//  The "useful route" made REAL: a contact card (yours, or someone you met) becomes
 //  an iOS system New-Contact sheet — name, org, LinkedIn + website, the why-note, and
 //  a photo. `CNContactViewController.forNewContact` is user-confirmed, so it needs no
 //  Contacts permission and runs on the Simulator. Plus a real CoreImage QR.

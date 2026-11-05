@@ -30,7 +30,7 @@ AUTHORITY/SYNC unit for vectors is the group-object (each owns its slice), and a
 individual's total vector store is the UNION of the slices for the groups they are in —
 exactly as the row/delta store is already the union of the groups' synced states. But
 the QUERY unit is NOT per-group: 4 of 4 real semantic-search readers cross group
-boundaries (Topic.ground, the Project CLA search-trigger, the Ralph and gopacific RAG
+boundaries (Topic.ground, the Project CLA search-trigger, the two agent RAG
 loops), so the readers must talk to ONE local union index — LocalStore.Vector — never to
 a group's slice directly. Authority unit (group-object) != query unit (device union).
 Get that split right and "total store = sum of group stores" is correct as the authority
@@ -90,7 +90,7 @@ READERS are:
   Topic.ResearchAgent.ground()      cross-space-federated  Topic.swift:238-247
   Project CLA ChangeOrigin.search   cross-corpus-own       Project.swift:108-115
   Ralph (CLA) async-RAG             cross-corpus-own       —
-  gopacific async-RAG               cross-corpus-own       —
+  agent async-RAG                   cross-corpus-own       —
   nova-resolve PULL (label/alias)   cross-corpus-own       entity-resolution.txt:70-78  [candidate-gen, distinct]
   Group.identifiers() (Resolvable)  cross-corpus-own       Group/PIE-CI.md:53           [candidate-gen, distinct]
 
@@ -108,8 +108,8 @@ slice is local, ground()'s federated read becomes a local multi-shard merge — 
 is needed on-device regardless.)
 
 TWO DISTINCT QUERY SEAMS (do not conflate them):
-  (1) SEMANTIC-DOC-SEARCH — Topic.ground, Project CLA ChangeOrigin.search, Ralph RAG,
-      gopacific RAG — query the UNION via SearchEngine.query (scoped to member groups in
+  (1) SEMANTIC-DOC-SEARCH — Topic.ground, Project CLA ChangeOrigin.search, the two
+      agent RAG loops — query the UNION via SearchEngine.query (scoped to member groups in
       PR-1; permitted peers in PR-2). This is the seam this document closes.
   (2) LABEL/ALIAS CANDIDATE-GEN — nova-resolve PULL + Group.identifiers — maintain a
       SEPARATE, corpus-wide identifier index (alias/label/handle HNSW; entity-resolution.txt
@@ -458,7 +458,7 @@ D) (Optional) a new PIE-CI.md for this module describing the GroupVectorSlice /
  - Vector facade (stateless embed + epoch): LocalStore/Vector/VectorService/Sources/
    VectorService/VectorService.swift
  - Readers: Objects/Topic/Sources/Topic/Topic.swift (ground); Objects/Project/
-   Sources/Project/Project.swift (ChangeOrigin.search); app/Chat/Agents/{Ralph,gopacific}
+   Sources/Project/Project.swift (ChangeOrigin.search)
  - Write seam: PacificCore Indexable / index_projections(); each object's PIE-CI.md
  - Membership events: nova-core/src/{coordinator.rs,directory.rs,object.rs}
  - Distinct candidate-gen track (label/alias HNSW);
