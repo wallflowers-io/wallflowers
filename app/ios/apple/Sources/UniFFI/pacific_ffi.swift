@@ -797,6 +797,12 @@ public protocol CoreProtocol : AnyObject {
     func forumHosts() throws  -> [ForumHostRow]
     
     /**
+     * Every Forum's back-edge this device can fold, in one call, so the CHAT list
+     * never does a per-row fold. Synchronous read.
+     */
+    func forumParents() throws  -> [ForumParentRow]
+    
+    /**
      * Attach an EXISTING Forum object to a Channel as a Room (the set half of
      * the room edge). Owner-only. Reaches the relay — call OFF the Swift main
      * thread.
@@ -2105,6 +2111,17 @@ open func exportWrap(prfSecret: Data, host: String)throws  -> Data {
 open func forumHosts()throws  -> [ForumHostRow] {
     return try  FfiConverterSequenceTypeForumHostRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_forum_hosts(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * Every Forum's back-edge this device can fold, in one call, so the CHAT list
+     * never does a per-row fold. Synchronous read.
+     */
+open func forumParents()throws  -> [ForumParentRow] {
+    return try  FfiConverterSequenceTypeForumParentRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_forum_parents(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -6206,6 +6223,102 @@ public func FfiConverterTypeForumHostRow_lift(_ buf: RustBuffer) throws -> Forum
 #endif
 public func FfiConverterTypeForumHostRow_lower(_ value: ForumHostRow) -> RustBuffer {
     return FfiConverterTypeForumHostRow.lower(value)
+}
+
+
+/**
+ * One Forum's back-edge, from the Forum's own fold: the object it is a part of, and
+ * in what role. A Forum in the comments role is its parent's, not a conversation.
+ */
+public struct ForumParentRow {
+    /**
+     * The Forum's object id.
+     */
+    public var forum: String
+    /**
+     * The object it is a part of.
+     */
+    public var parent: String
+    /**
+     * What it is for there: `comments`, `room`, …
+     */
+    public var role: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The Forum's object id.
+         */forum: String, 
+        /**
+         * The object it is a part of.
+         */parent: String, 
+        /**
+         * What it is for there: `comments`, `room`, …
+         */role: String) {
+        self.forum = forum
+        self.parent = parent
+        self.role = role
+    }
+}
+
+
+
+extension ForumParentRow: Equatable, Hashable {
+    public static func ==(lhs: ForumParentRow, rhs: ForumParentRow) -> Bool {
+        if lhs.forum != rhs.forum {
+            return false
+        }
+        if lhs.parent != rhs.parent {
+            return false
+        }
+        if lhs.role != rhs.role {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(forum)
+        hasher.combine(parent)
+        hasher.combine(role)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeForumParentRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ForumParentRow {
+        return
+            try ForumParentRow(
+                forum: FfiConverterString.read(from: &buf), 
+                parent: FfiConverterString.read(from: &buf), 
+                role: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ForumParentRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.forum, into: &buf)
+        FfiConverterString.write(value.parent, into: &buf)
+        FfiConverterString.write(value.role, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeForumParentRow_lift(_ buf: RustBuffer) throws -> ForumParentRow {
+    return try FfiConverterTypeForumParentRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeForumParentRow_lower(_ value: ForumParentRow) -> RustBuffer {
+    return FfiConverterTypeForumParentRow.lower(value)
 }
 
 
@@ -12220,6 +12333,31 @@ fileprivate struct FfiConverterSequenceTypeForumHostRow: FfiConverterRustBuffer 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeForumParentRow: FfiConverterRustBuffer {
+    typealias SwiftType = [ForumParentRow]
+
+    public static func write(_ value: [ForumParentRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeForumParentRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ForumParentRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ForumParentRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeForumParentRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeForumRoomRow: FfiConverterRustBuffer {
     typealias SwiftType = [ForumRoomRow]
 
@@ -13044,6 +13182,16 @@ public func clearDeviceKey() {try! rustCall() {
 }
 }
 /**
+ * The role a Forum plays as its parent's comments section (ICD `kinds.*.parts`), so
+ * the app reads the word from the core's pinned table and holds no copy of it.
+ */
+public func commentsRole() -> String {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_pacific_ffi_fn_func_comments_role($0
+    )
+})
+}
+/**
  * The default Arc URL — the server a community runs for its members (the blind
  * relay, membership, push and the box office behind one gateway), used when no Arc
  * is configured. Mirror of `pacific_core::paths::DEFAULT_ARC_URL`; override with `arc set`.
@@ -13837,6 +13985,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_func_clear_device_key() != 59033) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_func_comments_role() != 38373) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_func_default_arc_url() != 28700) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14135,6 +14286,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_forum_hosts() != 12944) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_forum_parents() != 33776) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_forum_room_attach() != 27743) {

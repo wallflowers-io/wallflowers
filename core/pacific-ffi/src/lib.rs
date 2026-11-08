@@ -126,6 +126,13 @@ pub fn wrap_domain() -> Vec<u8> {
     pacific_core::wrap::WRAP_DOMAIN.to_vec()
 }
 
+/// The role a Forum plays as its parent's comments section (ICD `kinds.*.parts`), so
+/// the app reads the word from the core's pinned table and holds no copy of it.
+#[uniffi::export]
+pub fn comments_role() -> String {
+    pacific_core::object::COMMENTS.to_string()
+}
+
 /// Every address one person's records live at, from one call.
 ///
 /// ONE CALL, NOT FIVE LABELS. A caller that derived its own would be a second
@@ -1381,6 +1388,18 @@ pub struct ForumRoomRow {
     /// When the room was attached (event unix ms) — the tab order.
     pub at: i64,
     pub held: bool,
+}
+
+/// One Forum's back-edge, from the Forum's own fold: the object it is a part of, and
+/// in what role. A Forum in the comments role is its parent's, not a conversation.
+#[derive(uniffi::Record)]
+pub struct ForumParentRow {
+    /// The Forum's object id.
+    pub forum: String,
+    /// The object it is a part of.
+    pub parent: String,
+    /// What it is for there: `comments`, `room`, …
+    pub role: String,
 }
 
 /// One room→host edge, the REVERSE of `forum_rooms`: which Channel hosts this
@@ -3578,6 +3597,17 @@ impl Core {
             .forum_rooms(&forum_id)?
             .into_iter()
             .map(|(id, name, at, held)| ForumRoomRow { id, name, at, held })
+            .collect())
+    }
+
+    /// Every Forum's back-edge this device can fold, in one call, so the CHAT list
+    /// never does a per-row fold. Synchronous read.
+    pub fn forum_parents(&self) -> Result<Vec<ForumParentRow>, FfiError> {
+        self.point();
+        Ok(Node::open()?
+            .forum_parents()?
+            .into_iter()
+            .map(|(forum, parent, role)| ForumParentRow { forum, parent, role })
             .collect())
     }
 

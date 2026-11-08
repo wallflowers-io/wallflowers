@@ -119,7 +119,6 @@ struct PlaygroundPage: View {
 
         element("Compose card") {
             Text("Compose")
-                .padding(.top, DesignTokens.Skin.band)
                 .frame(width: 240, height: 130)
                 .composeGlass(tint: Self.slots[composeTint]!.blockColor,
                               flash: ["ok": Theme.ok, "danger": Theme.danger][composeFlash],

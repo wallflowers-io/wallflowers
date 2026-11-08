@@ -809,6 +809,24 @@ final class CoreService: ObservableObject {
     /// "Channel / Room"; ThreadView reads the forward set per channel for tabs.
     @Published private(set) var roomHosts: [String: RoomHostRow] = [:]
 
+    /// forum object id → the object it is a part of, and in what role, from the
+    /// forum's OWN fold. A forum in the comments role is its parent's comments
+    /// section: reached from its object, never listed as a conversation.
+    @Published private(set) var forumParents: [String: ForumParentRow] = [:]
+
+    /// The comments role, as the core's ICD-pinned table names it.
+    private static let commentsPart = commentsRole()
+
+    func isCommentsSection(_ forumId: String) -> Bool {
+        forumParents[forumId]?.role == Self.commentsPart
+    }
+
+    /// The object's comments section, by the forum's own back-edge: nil until the
+    /// device holds it.
+    func commentsForum(of objectId: String) -> String? {
+        forumParents.values.first { $0.parent == objectId && $0.role == Self.commentsPart }?.forum
+    }
+
     func refreshForumHosts() {
         do {
             let fresh = Dictionary(try core.forumHosts().map { ($0.forum, $0) },
@@ -817,6 +835,9 @@ final class CoreService: ObservableObject {
             let rooms = Dictionary(try core.roomHosts().map { ($0.room, $0) },
                                    uniquingKeysWith: { a, _ in a })
             if rooms != roomHosts { roomHosts = rooms }
+            let parents = Dictionary(try core.forumParents().map { ($0.forum, $0) },
+                                     uniquingKeysWith: { a, _ in a })
+            if parents != forumParents { forumParents = parents }
         } catch { readFailed("re-read channel hosts", error) }
     }
 

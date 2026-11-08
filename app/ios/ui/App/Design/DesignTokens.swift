@@ -190,8 +190,6 @@ enum DesignTokens {
         static let shadow: CGFloat = 3
         /// The darker band under a button's face.
         static let lip: CGFloat = 4
-        /// The coloured band across the top of a compose card.
-        static let band: CGFloat = 8
     }
 
     /// The shell's own motion. A spring here is as much a contract as a length:

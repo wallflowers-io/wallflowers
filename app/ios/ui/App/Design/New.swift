@@ -105,20 +105,14 @@ enum NewKind: String, CaseIterable {
     /// The surface's colour — what the glass is cast in, what the ambient's fourth blob
     /// becomes, and what the edge flashes on a successful commit.
     ///
-    /// NOTE keeps its own gold: it predates the palette and is the surface every other
-    /// one is derived from. Everything else takes its slot in the ACTIVE Van Gogh
-    /// palette, so a repalette moves every mint surface at once, and the slots match
-    /// `LifeFilter.colorIndex` — a jewel and the surface its `+` opens cannot disagree.
+    /// Every kind takes its slot in the ACTIVE Van Gogh palette, the note included (Ralph,
+    /// 5 Nov: one rule, so the creator's cards are one family), so a repalette moves every
+    /// mint surface at once, and the slots match `LifeFilter.colorIndex` — a jewel and the
+    /// surface its `+` opens cannot disagree.
     var gloss: (hi: Color, lo: Color) {
-        if self == .note { return (Self.noteGold, Self.noteGold.darkened(0.32)) }
         let base = PaletteStore.base(colorIndex)
         return (base.lightened(0.16), base.darkened(0.32))
     }
-
-    /// The NOTE surface's own gold — the one hardcoded hex in the set. It predates the
-    /// palette and is the surface every other one is derived from, so it stays a literal
-    /// rather than being retrofitted into a slot it never occupied.
-    static let noteGold = Color(hex: 0xE8C06A)
 
     private var colorIndex: Int {
         switch self {
@@ -129,7 +123,7 @@ enum NewKind: String, CaseIterable {
         case .listing: return 5
         case .channel: return 3      // a Channel is part of its Space — same jewel
         case .post:    return 6
-        case .note:    return 0      // unreachable: `gloss` returns before this
+        case .note:    return 1      // the one slot no jewel holds
         }
     }
 }
@@ -490,6 +484,30 @@ final class NewSession: ObservableObject, Identifiable {
     /// open question about what GOLD means: it is privacy/sharing, everywhere.
     @Published var audience: Audience = .onlyMe
 
+    /// The draft as it opened, seeded. What `edited` measures against.
+    private var opening: NewDraft
+
+    /// Has the person changed anything — a field, a choice, a date, the audience? On the
+    /// creator the first edit chooses the kind.
+    var edited: Bool { draft != opening || audience != .onlyMe }
+
+    /// What moved from the opening, by name — for the log that says why a kind locked.
+    var edits: [String] {
+        let now = Mirror(reflecting: draft).children, then = Mirror(reflecting: opening).children
+        var moved = zip(now, then).compactMap { a, b in
+            String(describing: a.value) == String(describing: b.value) ? nil : a.label
+        }
+        if audience != .onlyMe { moved.append("audience") }
+        return moved
+    }
+
+    /// A change the DEVICE makes, not the person — the Place's fix landing. It moves the
+    /// opening with it, so it never reads as an edit.
+    func absorb(_ change: (inout NewDraft) -> Void) {
+        change(&draft)
+        change(&opening)
+    }
+
     /// BLUE. Returns the outcome so the shell can play the right departure; `nil` means
     /// the commit FAILED and the surface stays up with its content intact.
     let commit: (NewDraft) async -> NewExit?
@@ -517,6 +535,7 @@ final class NewSession: ObservableObject, Identifiable {
             }
         }
         self.draft = seeded
+        self.opening = seeded
         self.parent = parent
         self.commit = commit
     }
@@ -576,45 +595,19 @@ struct NewSurface: View {
     /// Dismiss without keeping. Only ever called from here for an EMPTY surface (tapping
     /// the ground); a surface with content leaves by RED, which warns first.
     var onCancel: () -> Void
+    /// RED's universal creator, when this surface is it: every kind's card side by side,
+    /// and the carousel that picks between them. nil is the single-kind surface every
+    /// other `+` raises. `session` is then the creator's card in view.
+    var creator: NewCreator? = nil
 
-    @FocusState private var focus: FocusTarget?
-    /// Focus is keyed by the DECLARED field, not by a hand-kept case list — so a new
-    /// declared field is focusable without touching this, and the in-field title knows
-    /// exactly which box is active.
-    private enum FocusTarget: Hashable {
-        case key(MintKey)
-        case body            // the note's editor, which has no declared field
-    }
-
-    /// PLACES mints from a COORDINATE, so the surface reads the live fix while it is up.
-    /// `PlaceLocator` rather than the shared LocationService because only it surfaces
-    /// `horizontalAccuracy`, which is what sets the geohash precision (PlaceFix.swift) —
-    /// the same reason `EntityWizard` used it. Constructed for every kind and STARTED
-    /// only for `.place`; an idle locator holds no CoreLocation session.
-    @StateObject private var locator = PlaceLocator()
-
-    /// WHICH media slot is asking for the camera, if any. Keyed by the declared field so
-    /// the capture knows where to put what it takes — a single Bool could not say.
-    ///
-    /// TODO(media): wire this to the capture surface (the camera, not a library picker)
-    /// and store the result in `draft.icon` / `draft.banner`. The slots are the design;
-    /// the core declares both fields `Carriage::Deferred` until the per-kind media ops
-    /// (`group.setCover` 9 · `event.setMedia` 4 · `thing.setPhoto` 3) are authored at mint.
-    @State private var camera: MintKey? = nil
     /// The card's own height, so "leaves upward" clears the screen on any device rather
     /// than travelling some guessed number of points.
     @State private var travel: CGFloat = 900
+    /// The card's live frame, reported every layout so the ground's bloom can stay
+    /// anchored to it while the keyboard moves it.
+    @State private var cardFrame: CGRect = .zero
 
     private var exit: NewExit? { session.exit }
-    private var kind: NewKind { session.kind }
-
-    /// The surface's colour. On the VISIBILITY face the gold glow swaps to CYAN
-    /// (Ralph, 18 Aug) — the same card, turned, wearing the audience dial's own colour so
-    /// you can see at a glance which face you are on.
-    private var tint: Color { session.face == .visibility ? Self.visibilityCyan : kind.gloss.hi }
-    private var glow: Color {
-        session.face == .visibility ? Self.visibilityCyan.darkened(0.34) : kind.gloss.lo
-    }
 
     /// VISIBILITY's cyan. Deliberately not the ambient's azure (`0x49A6F2`, which already
     /// means "handed off") — this is a state the surface is IN, not an outcome.
@@ -630,16 +623,6 @@ struct NewSurface: View {
         }
     }
 
-    /// The tint for kept, azure for handed off. Discarding gets NO colour — it goes the
-    /// way it always went, and a draft thrown away is not an event worth marking.
-    private var flash: Color? {
-        switch exit {
-        case .saved:  return tint
-        case .shared: return Color(hex: 0x49A6F2)   // the ambient's azure
-        default:      return nil
-        }
-    }
-
     var body: some View {
         ZStack {
             // The shared compose ground — the same deep-slate scrim and drifting jewel
@@ -651,14 +634,21 @@ struct NewSurface: View {
             // gated on `!needsDiscardWarning`, which meant that on a surface with
             // content it silently did nothing — the note's original rule, never
             // inherited by the newitem modals and not what is wanted anyway.
-            ComposeGround(tint: tint, opaque: opaqueGround, canvas: cardFrame,
+            ComposeGround(tint: session.tint, opaque: true, canvas: cardFrame,
                           onTapOutside: onCancel)
                 // The ground goes FIRST and fast — the screen underneath is back before
                 // the card in front of it has finished leaving.
                 .opacity(exit == nil ? 1 : 0)
                 .animation(Motion.noteGroundOut, value: exit)
 
-            card
+            Group {
+                if let creator {
+                    CreatorPages(creator: creator)
+                } else {
+                    NewCard(session: session).padding(.horizontal, 16)
+                        .onAppear { NSLog("[creator] single card %@", session.kind.rawValue) }
+                }
+            }
                 // The departure, in three flavours. SAVED opens out past the screen edges
                 // as it fades — the thing going INTO the app, not off it. SHARED goes up,
                 // after what it handed off. CANCELLED just fades. All of them run with the
@@ -667,8 +657,9 @@ struct NewSurface: View {
                 .opacity(exit == nil ? 1 : 0)
                 .offset(y: exit == .shared ? -travel : 0)
                 .animation(cardExit, value: exit)
-                .padding(.horizontal, 16)
-                .padding(.top, ShellMetrics.searchFieldTop)
+                // Up to the status bar, over the top row's buttons (Ralph, 5 Nov): while
+                // a New is up, the discs are the only controls.
+                .padding(.top, 8)
                 // Stop above the disc row — those circles ARE this surface's buttons.
                 .padding(.bottom, ShellMetrics.bottomBarHeight + 6)
                 .background(GeometryReader { geo in
@@ -678,6 +669,72 @@ struct NewSurface: View {
         .coordinateSpace(name: "newSurface")
         .onPreferenceChange(CardFrameKey.self) { cardFrame = $0 }
         .allowsHitTesting(exit == nil)   // a leaving surface takes no more taps
+    }
+}
+
+extension NewSession {
+    /// The surface's colour. On the VISIBILITY face the gold glow swaps to CYAN
+    /// (Ralph, 18 Aug) — the same card, turned, wearing the audience dial's own colour so
+    /// you can see at a glance which face you are on.
+    var tint: Color { face == .visibility ? NewSurface.visibilityCyan : kind.gloss.hi }
+    var glow: Color {
+        face == .visibility ? NewSurface.visibilityCyan.darkened(0.34) : kind.gloss.lo
+    }
+}
+
+/// ONE session's glass card — the fields, the header, the visibility face. `NewSurface`
+/// holds the ground and the departure around it.
+struct NewCard: View {
+    @ObservedObject var session: NewSession
+    /// One of the creator's cards: no header, and nothing focused on open.
+    var creator = false
+    /// The card in view. A card that leaves lets go of the keyboard; only the card in
+    /// view reports its frame to the ground.
+    var active = true
+
+    @FocusState private var focus: FocusTarget?
+    /// Focus is keyed by the DECLARED field, not by a hand-kept case list — so a new
+    /// declared field is focusable without touching this, and the in-field title knows
+    /// exactly which box is active.
+    private enum FocusTarget: Hashable {
+        case key(MintKey)
+        case body            // the note's editor, which has no declared field
+    }
+
+    /// PLACES mints from a COORDINATE, so the surface reads the live fix while it is up.
+    /// `PlaceLocator` rather than the shared LocationService because only it surfaces
+    /// `horizontalAccuracy`, which is what sets the geohash precision (PlaceFix.swift) —
+    /// the same reason `EntityWizard` used it. Constructed for every kind and STARTED
+    /// only for `.place`, once it is being edited; an idle locator holds no CoreLocation
+    /// session.
+    @StateObject private var locator = PlaceLocator()
+
+    /// WHICH media slot is asking for the camera, if any. Keyed by the declared field so
+    /// the capture knows where to put what it takes — a single Bool could not say.
+    ///
+    /// TODO(media): wire this to the capture surface (the camera, not a library picker)
+    /// and store the result in `draft.icon` / `draft.banner`. The slots are the design;
+    /// the core declares both fields `Carriage::Deferred` until the per-kind media ops
+    /// (`group.setCover` 9 · `event.setMedia` 4 · `thing.setPhoto` 3) are authored at mint.
+    @State private var camera: MintKey? = nil
+
+    private var exit: NewExit? { session.exit }
+    private var kind: NewKind { session.kind }
+    private var tint: Color { session.tint }
+    private var glow: Color { session.glow }
+
+    /// The tint for kept, azure for handed off. Discarding gets NO colour — it goes the
+    /// way it always went, and a draft thrown away is not an event worth marking.
+    private var flash: Color? {
+        switch exit {
+        case .saved:  return tint
+        case .shared: return Color(hex: 0x49A6F2)   // the ambient's azure
+        default:      return nil
+        }
+    }
+
+    var body: some View {
+        card
         .onAppear {
             // NOTHING IS SELECTED when a newitem modal opens (Ralph, 18 Aug), so the
             // keyboard stays down until you choose a field. The surface is a form — a
@@ -687,9 +744,16 @@ struct NewSurface: View {
             //
             // The NOTE is the exception and keeps its autofocus: it IS a single box to
             // type in, and it has raised the keyboard on open since it was built.
-            focus = kind == .note ? .key(.name) : nil
-            if kind == .place { locator.start() }
+            // As the universal creator nothing is focused for ANY kind: the picker is the
+            // first question, and the keyboard would cover it.
+            focus = kind == .note && !creator ? .key(.name) : nil
         }
+        // Location is asked for when the person starts on the Place (Ralph, 5 Nov) — a
+        // field chosen, anything changed, or the WHERE row tapped — never because a Place
+        // card is showing or slid past.
+        .onChange(of: focus) { _, f in if f != nil { locate() } }
+        .onChange(of: session.edited) { _, edited in if edited { locate() } }
+        .onChange(of: active) { _, now in if !now { focus = nil } }
         // The fix lands ASYNCHRONOUSLY, after the surface is already up — so the draft
         // takes it whenever it arrives rather than being read once at commit. A Place
         // saved before it lands is minted UNPLACED, which is honest: refusing to save
@@ -709,9 +773,11 @@ struct NewSurface: View {
         }
         .onChange(of: locator.state) { _, s in
             guard kind == .place, let fix = s.fix else { return }
-            session.draft.lat = fix.coordinate.latitude
-            session.draft.lng = fix.coordinate.longitude
-            session.draft.placed = true
+            session.absorb { d in
+                d.lat = fix.coordinate.latitude
+                d.lng = fix.coordinate.longitude
+                d.placed = true
+            }
         }
         // Let go of the keyboard the INSTANT the surface starts leaving, so it slides
         // down alongside the departure instead of blinking out once everything has gone.
@@ -721,9 +787,9 @@ struct NewSurface: View {
 
     // MARK: The glass card
 
-    /// The card's live frame, reported every layout so the ground's bloom can stay
-    /// anchored to it while the keyboard moves it.
-    @State private var cardFrame: CGRect = .zero
+    /// The NOTE has no header — its title field IS its header — and nor does the creator,
+    /// whose dial names the kind.
+    private var showsHeader: Bool { !creator && kind != .note }
 
     private var card: some View {
         VStack(spacing: 0) {
@@ -732,7 +798,7 @@ struct NewSurface: View {
             // component telling you what you can plainly see.
             if session.face == .visibility {
                 visibilityHeader
-            } else if kind != .note {
+            } else if showsHeader {
                 header
             }
             ScrollView {
@@ -748,8 +814,9 @@ struct NewSurface: View {
                     if session.face == .visibility { visibilityOptions } else { fields }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, kind == .note ? 4 : 20)
-                .padding(.top, kind == .note ? 0 : 4)
+                .padding(.horizontal, 20)
+                // Without a header (the note, the creator) the fields take its top margin.
+                .padding(.top, showsHeader ? 4 : 24)
                 .padding(.bottom, 12)
             }
         }
@@ -759,11 +826,13 @@ struct NewSurface: View {
         // both ignore the safe area, so `.named("newSurface")` is common ground.
         .background(GeometryReader { proxy in
             Color.clear.preference(key: CardFrameKey.self,
-                                   value: proxy.frame(in: .named("newSurface")))
+                                   value: active ? proxy.frame(in: .named("newSurface")) : .zero)
         })
         .animation(Motion.screenIn, value: session.face)
         // The shared glass. `flash` swaps the resting edge for the outcome's colour.
-        .composeGlass(tint: tint, glow: glow, flash: flash, opaque: opaqueGround)
+        // Opaque for every kind (Ralph, 5 Nov): the note's see-through ground made it the
+        // odd card out beside the others.
+        .composeGlass(tint: tint, glow: glow, flash: flash, opaque: true)
     }
 
     /// The modal's title, in the SAME type as the "NOTE" / "CHAT" word a screen shows
@@ -840,9 +909,6 @@ struct NewSurface: View {
     /// takes none; a newitem modal is a stack of labelled rows and needs the air.
     private var rowGap: CGFloat { kind == .note ? 0 : 18 }
 
-    /// The LIFE newitem modals are deep black at zero transparency; the NOTE keeps the
-    /// alive ground it was designed around.
-    private var opaqueGround: Bool { kind != .note }
 
     // MARK: Fields — RENDERED FROM THE TYPE'S DECLARATION
 
@@ -1192,15 +1258,26 @@ struct NewSurface: View {
     private var fixReadout: some View {
         let (text, live): (String, Bool) = {
             switch locator.state {
-            case .idle, .requesting: return ("Locating…", false)
+            case .idle:              return ("Tap to locate", false)
+            case .requesting:        return ("Locating…", false)
             case .searching:         return ("Searching…", false)
             case .denied:            return ("Unplaced — location off", false)
             case .located(let fix):  return ("\(fix.geohash) · ±\(Int(fix.accuracy.rounded())) m", true)
             }
         }()
-        return Text(text)
-            .font(.system(.footnote, design: .monospaced))
-            .foregroundStyle(live ? Theme.textPrimary : Theme.textTertiary)
+        return Button(action: locate) {
+            Text(text)
+                .font(.system(.footnote, design: .monospaced))
+                .foregroundStyle(live ? Theme.textPrimary : Theme.textTertiary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("new-fix")
+    }
+
+    /// Start the Place's fix, once. Every kind has a locator; only a Place uses it.
+    private func locate() {
+        guard kind == .place, locator.state == .idle else { return }
+        locator.start()
     }
 
     /// The note keeps its bare title + body editor — no labelled wells. It is the one
@@ -1240,8 +1317,6 @@ struct NewSurface: View {
             .accessibilityLabel("Remind me")
             .accessibilityIdentifier("note-reminder-bell")
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 24)
 
         TextEditor(text: $session.draft.body)
             .font(.body)
@@ -1249,7 +1324,7 @@ struct NewSurface: View {
             .scrollContentBackground(.hidden)    // let the glass show behind the editor
             .focused($focus, equals: .body)
             .frame(maxWidth: .infinity, minHeight: 260)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, -4)   // the editor's own text inset, so its words line up with the title's
             .padding(.top, 14)
             .overlay(alignment: .topLeading) {
                 // TextEditor has no native placeholder on iOS 17 — supply our own.
@@ -1257,7 +1332,7 @@ struct NewSurface: View {
                     Text("Write a note…")
                         .font(.body)
                         .foregroundStyle(Theme.textTertiary)
-                        .padding(.horizontal, 17)
+                        .padding(.horizontal, 1)
                         .padding(.top, 22)
                         .allowsHitTesting(false)
                 }
@@ -1289,6 +1364,278 @@ extension NewSession: ShellSurface {
     nonisolated var discardNoun: String { kind.noun.lowercased() }
 
     nonisolated var changes: ObservableObjectPublisher { objectWillChange }
+}
+
+// MARK: - The creator
+
+/// RED's universal creator: one session per kind, the kind in view, and the lock.
+///
+/// Every kind's session exists from the start, each with its own opening draft, so the
+/// cards between two kinds are real cards as they slide past. Nothing carries between
+/// them: the first edit to the card in view CHOOSES the kind (Ralph, 5 Nov), and from
+/// then the carousel is gone and the cards stop moving.
+@MainActor
+final class NewCreator: ObservableObject {
+    let kinds: [NewKind]
+    let sessions: [NewKind: NewSession]
+    /// The kind in view. Set when the pager comes to rest.
+    @Published var active: NewKind
+    /// Latched by the first edit to the card in view.
+    @Published private(set) var locked = false
+    private var sinks: [AnyCancellable] = []
+
+    init(kinds: [NewKind], make: (NewKind) -> NewSession) {
+        self.kinds = kinds
+        sessions = Dictionary(uniqueKeysWithValues: kinds.map { ($0, make($0)) })
+        active = kinds.first ?? .note
+        for (kind, s) in sessions {
+            // `$draft` and `$audience` publish the NEW value, before it is stored, so the
+            // edit is judged on what was sent rather than on `s.edited`.
+            sinks.append(s.$draft.combineLatest(s.$audience).sink { [weak self, weak s] _, _ in
+                DispatchQueue.main.async {
+                    guard let self, let s, !self.locked, kind == self.active, s.edited else { return }
+                    NSLog("[creator] locked on %@ by %@", kind.rawValue, s.edits.joined(separator: ","))
+                    withAnimation(Motion.screenIn) { self.locked = true }
+                }
+            })
+        }
+    }
+
+    var session: NewSession { sessions[active]! }
+}
+
+/// The creator's cards, one per kind, over the dial that picks between them — two of
+/// SwiftUI's own scroll views, coupled.
+///
+/// The cards page (`.paging`); the dial snaps item by item (`.viewAligned`). Whichever
+/// one the person is touching leads with Apple's physics, and the other follows it point
+/// for point, its own snapping off (`Unsnapped`), so a drag on either turns both. Neither
+/// wraps on its own, so both hold the kinds in LAPS and, at rest, jump unseen to the same
+/// kind in the middle lap: past Post comes Note (Ralph, 5 Nov).
+private struct CreatorPages: View {
+    @ObservedObject var creator: NewCreator
+    @ObservedObject private var inView: NewSession
+    @State private var cards: ScrollPosition
+    @State private var dial: ScrollPosition
+    /// The cards' position, in cards, as last laid out.
+    @State private var at: CGFloat
+    @State private var cardWidth: CGFloat = 1
+    /// Which scroll view the person is touching; the other follows it.
+    @State private var lead: Lead = .cards
+    private enum Lead { case cards, dial }
+
+    private static let laps = 5
+
+    init(creator: NewCreator) {
+        self.creator = creator
+        _inView = ObservedObject(wrappedValue: creator.session)
+        let start = KindRing.home(creator.kinds.count, laps: Self.laps)
+            + (creator.kinds.firstIndex(of: creator.active) ?? 0)
+        _cards = State(initialValue: ScrollPosition(id: start))
+        _dial = State(initialValue: ScrollPosition(id: start))
+        _at = State(initialValue: CGFloat(start))
+    }
+
+    private var ids: [Int] { Array(0..<(creator.kinds.count * Self.laps)) }
+
+    /// The dial and the paging go once the kind is chosen, and on VISIBILITY, which
+    /// is the object's audience rather than what the object is.
+    private var choosing: Bool { !creator.locked && inView.face == .fields }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(ids, id: \.self) { i in
+                        let k = KindRing.kind(at: i, in: creator.kinds)
+                        NewCard(session: creator.sessions[k]!, creator: true,
+                                active: k == creator.active)
+                            .padding(.horizontal, 16)
+                            .containerRelativeFrame(.horizontal)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(lead == .dial ? AnyScrollTargetBehavior(Unsnapped())
+                                                : AnyScrollTargetBehavior(.paging))
+            .scrollIndicators(.hidden)
+            .scrollPosition($cards)
+            .scrollDisabled(!choosing)
+            .onScrollGeometryChange(for: CGSize.self) { g in
+                CGSize(width: g.contentOffset.x, height: g.containerSize.width)
+            } action: { _, g in
+                cardWidth = max(g.height, 1)
+                at = g.width / cardWidth
+                if lead == .cards { dial.scrollTo(x: at * KindDial.item) }
+            }
+            .onScrollPhaseChange { _, phase in
+                if phase == .interacting { lead = .cards }
+                if phase == .idle, lead != .dial { rest() }
+            }
+
+            if choosing {
+                KindDial(kinds: creator.kinds, ids: ids, position: $dial,
+                         selected: Int(at.rounded()), following: lead == .cards,
+                         touched: { lead = .dial },
+                         moved: { f in
+                             if lead == .dial { cards.scrollTo(x: f * cardWidth) }
+                         },
+                         rested: { if lead == .dial { rest() } },
+                         pick: pick)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        // One tick as each kind takes the centre, as a picker does. The kind, not the
+        // index, so the unseen lap jump is silent.
+        .sensoryFeedback(.selection, trigger: KindRing.kind(at: Int(at.rounded()), in: creator.kinds))
+    }
+
+    /// A tap on the dial: the cards scroll to it, so the ones between cross on the way, and
+    /// the dial follows them as it does a swipe.
+    private func pick(_ i: Int) {
+        lead = .cards
+        withAnimation(Motion.screenIn) { cards.scrollTo(id: i) }
+    }
+
+    /// At rest: the kind in view is the card that is showing — not one that crossed on the
+    /// way, so Place is never asked for a location as it passes. Off the middle lap, both
+    /// jump unseen to the same kind in it.
+    private func rest() {
+        let n = creator.kinds.count
+        let i = Int(at.rounded())
+        let k = KindRing.kind(at: i, in: creator.kinds)
+        if k != creator.active {
+            NSLog("[creator] in view %@ (card %d)", k.rawValue, i)
+            creator.active = k
+        }
+        let home = KindRing.home(n, laps: Self.laps)
+        if !(home..<(home + n)).contains(i) {
+            let j = home + ((i % n) + n) % n
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) {
+                cards.scrollTo(id: j)
+                dial.scrollTo(id: j)
+            }
+        }
+        lead = .cards
+    }
+}
+
+/// The lap arithmetic the cards and the dial share.
+private enum KindRing {
+    /// Index `i` in the laps → its kind.
+    static func kind(at i: Int, in kinds: [NewKind]) -> NewKind {
+        let n = kinds.count
+        return kinds[((i % n) + n) % n]
+    }
+
+    /// The first index of the middle lap, where both scroll views rest.
+    static func home(_ n: Int, laps: Int) -> Int { n * (laps / 2) }
+}
+
+/// No snapping: a scroll view's behaviour while it follows the other. SwiftUI applies a
+/// target behaviour to programmatic scrolls too, so a paging follower was rounded back to
+/// its page on every frame and only caught up when the leader stopped.
+private struct Unsnapped: ScrollTargetBehavior {
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {}
+}
+
+/// The kind selector: every kind's glyph over its noun in one Liquid Glass capsule, the
+/// kind in view centred between its two neighbours. The ORDER is a circle — past Post
+/// comes Note — but the icons slide flat (Ralph, 5 Nov). A view-aligned scroll view, so a
+/// tap is a button and a drag is the scroll view's own.
+private struct KindDial: View {
+    let kinds: [NewKind]
+    let ids: [Int]
+    @Binding var position: ScrollPosition
+    /// The index the cards are showing.
+    let selected: Int
+    /// The cards lead; the dial tracks them unsnapped.
+    let following: Bool
+    /// The person has started touching the dial.
+    let touched: () -> Void
+    /// The dial's position in items, every layout. `scrollTo(x:)` and `contentOffset` do
+    /// not share an origin: the offset reads the leading margin short, so the position is
+    /// offset plus margin, while `scrollTo(x: i · item)` centres item `i`.
+    let moved: (CGFloat) -> Void
+    /// The dial came to rest.
+    let rested: () -> Void
+    let pick: (Int) -> Void
+
+    static let item: CGFloat = 68
+    private static let height: CGFloat = 62
+    /// The kind in view, its neighbours, and one more each side, fading — so it reads as
+    /// a set that goes on (Ralph, 5 Nov). The scroll view clips the rest.
+    private static let visible: CGFloat = 5
+
+    var body: some View {
+        ZStack {
+            // The selection: a tint INSIDE the glass. A second glass shape here is what
+            // turned the whole dial flat — glass cannot refract glass.
+            Capsule()
+                .fill(Brand.accent.opacity(0.16))
+                .frame(width: Self.item, height: Self.height - 12)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(ids, id: \.self) { i in
+                        let k = KindRing.kind(at: i, in: kinds)
+                        Button { pick(i) } label: {
+                            VStack(spacing: 3) {
+                                Image(systemName: k.glyph).font(.system(size: 19, weight: .semibold))
+                                Text(k.noun).font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundStyle(i == selected ? Brand.accent : Theme.textSecondary)
+                            .frame(width: Self.item, height: Self.height)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("new-kind-\(k.rawValue)")
+                        .accessibilityAddTraits(i == selected ? .isSelected : [])
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(following ? AnyScrollTargetBehavior(Unsnapped())
+                                            : AnyScrollTargetBehavior(.viewAligned))
+            .scrollIndicators(.hidden)
+            .contentMargins(.horizontal, Self.item * (Self.visible - 1) / 2, for: .scrollContent)
+            .scrollPosition($position, anchor: .center)
+            .mask {
+                let edge = 1 / Self.visible
+                LinearGradient(stops: [.init(color: .clear, location: 0),
+                                       .init(color: .black, location: edge),
+                                       .init(color: .black, location: 1 - edge),
+                                       .init(color: .clear, location: 1)],
+                               startPoint: .leading, endPoint: .trailing)
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { g in
+                (g.contentOffset.x + g.contentInsets.leading) / Self.item
+            } action: { _, f in moved(f) }
+            .onScrollPhaseChange { _, phase in
+                if phase == .interacting { touched() }
+                if phase == .idle { rested() }
+            }
+            .frame(width: Self.item * Self.visible)
+        }
+        .frame(height: Self.height)
+        .padding(.horizontal, 10)
+        .dialGlass()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("new-kinds")
+    }
+}
+
+private extension View {
+    /// The system's Liquid Glass where there is one (iOS 26), ONE shape and unclipped, so
+    /// its rim and highlights survive; a material below it.
+    @ViewBuilder func dialGlass() -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            background(.ultraThinMaterial, in: Capsule())
+        }
+    }
 }
 
 /// The card's frame, reported up to the surface so the ground's bloom can anchor to it.

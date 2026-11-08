@@ -588,7 +588,11 @@ struct LifeView: View {
         .onReceive(core.$syncTick) { _ in feedStore.refresh(core: core, query: lifeQuery) }
         .onChange(of: lifeQuery.locked) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
         .onChange(of: lifeQuery.bound) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
-        .task { feedStore.refresh(core: core, query: lifeQuery) }
+        .task {
+            feedStore.refresh(core: core, query: lifeQuery)
+            // RED's creator mints through these same sessions.
+            shell.makeMintSession = { session(for: $0) }
+        }
         .sheet(isPresented: $modesSheet) {
             ModesConfigSheet(modes: modeStore,
                              capture: { FeedMode.capture(lifeQuery, order: RibbonRail.storedOrder()) },

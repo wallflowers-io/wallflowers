@@ -65,7 +65,7 @@ struct ListingObjectDetailSource: DetailSource {
         DetailBind.comments(of: objectId, core: core, tint: ListingDetail.tint)
     }
 
-    func post(_ text: String) async -> Bool { await core.sendToGroup(objectId, text) }
+    func post(_ text: String) async -> Bool { await DetailBind.post(text, on: objectId, core: core) }
 }
 
 // MARK: - Posts
@@ -111,7 +111,7 @@ struct PostDetailSource: DetailSource {
         DetailBind.comments(of: objectId, core: core, tint: PostDetail.tint)
     }
 
-    func post(_ text: String) async -> Bool { await core.sendToGroup(objectId, text) }
+    func post(_ text: String) async -> Bool { await DetailBind.post(text, on: objectId, core: core) }
 }
 
 // MARK: - The shared half
@@ -121,6 +121,13 @@ struct PostDetailSource: DetailSource {
 /// live once rather than three times.
 @MainActor
 enum DetailBind {
+
+    /// A comment, written to the object's comments section. False when the device
+    /// does not hold that section, or is not on its roster.
+    static func post(_ text: String, on objectId: String, core: CoreService) async -> Bool {
+        guard let forum = core.commentsForum(of: objectId) else { return false }
+        return await core.sendToGroup(forum, text)
+    }
 
     /// Whose it is, from the `created` edge on the creator's own log. A Space when
     /// a Space published it, a person when a person did.
@@ -132,12 +139,13 @@ enum DetailBind {
                             isSpace: isSpace, color: tint)
     }
 
-    /// The object's OWN log read flat — `forum.post` deltas fold beside the
-    /// object's, so there is no second object and no link to lose.
+    /// The object's comments section: the Forum minted with it in the comments
+    /// role (ICD `kinds.*.parts`), read flat. None until the device holds it.
     static func comments(of objectId: String, core: CoreService, tint: Color) -> [DetailComment] {
+        guard let forum = core.commentsForum(of: objectId) else { return [] }
         let names = core.peerNamesByIdentity()
         let me = core.displayName.isEmpty ? "You" : core.displayName
-        return core.objectThread(objectId).map { row in
+        return core.objectThread(forum).map { row in
             let who = row.post.mine ? me : (names[row.post.author] ?? String(row.post.author.prefix(8)))
             return DetailComment(id: "\(row.post.author):\(row.post.gen)",
                                  author: who,

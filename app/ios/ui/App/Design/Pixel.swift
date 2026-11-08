@@ -12,8 +12,9 @@ extension View {
     /// drops a hard, unblurred copy of the shape under it.
     func pixelCard<S: InsettableShape>(_ fill: Color = Theme.surface,
                                        in shape: S = RoundedRectangle(cornerRadius: DesignTokens.Skin.radius, style: .continuous),
-                                       bevel: Bool = true, shadow: Bool = false) -> some View {
-        modifier(PixelCard(fill: fill, shape: shape, bevel: bevel, shadow: shadow))
+                                       bevel: Bool = true, shadow: Bool = false,
+                                       shadowColor: Color = Theme.edge) -> some View {
+        modifier(PixelCard(fill: fill, shape: shape, bevel: bevel, shadow: shadow, shadowColor: shadowColor))
     }
 }
 
@@ -22,6 +23,8 @@ struct PixelCard<S: InsettableShape>: ViewModifier {
     let shape: S
     var bevel = true
     var shadow = false
+    /// The hard shadow's colour. A compose card casts its kind's.
+    var shadowColor = Theme.edge
 
     func body(content: Content) -> some View {
         let e = DesignTokens.Skin.edge, b = DesignTokens.Skin.bevel, s = DesignTokens.Skin.shadow
@@ -38,7 +41,7 @@ struct PixelCard<S: InsettableShape>: ViewModifier {
                     }
                     .overlay(shape.strokeBorder(Theme.edge, lineWidth: e))
             }
-            .background(shape.fill(Theme.edge.opacity(shadow ? 1 : 0)).offset(x: s, y: s))
+            .background(shape.fill(shadowColor.opacity(shadow ? 1 : 0)).offset(x: s, y: s))
     }
 }
 

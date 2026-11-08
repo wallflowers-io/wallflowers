@@ -176,16 +176,16 @@ private func arcEmbedThunk(_ ctx: UnsafeMutableRawPointer?,
 
 // MARK: - ArcResolver
 
-/// Thread-safe to share across tasks: every FFI call serializes on `queue` (concurrent reads,
-/// barrier writes), the handle + bridge pointers are stable for the object's life, and the
+/// Thread-safe to share across tasks: every FFI call serializes on `queue`, the handle + bridge pointers are stable for the object's life, and the
 /// injected embedder must itself be safe to call from the resolver's thread.
 public final class ArcResolver: @unchecked Sendable {
     private let handle: OpaquePointer
     private let bridge: Unmanaged<EmbedBridge>
     private let dim: Int
-    // Concurrent reads; projectObjects and rehome are barriers (they mutate). Matches the C-ABI
-    // contract: "writes mutate; reads are shared" — serialize writes, allow concurrent reads.
-    private let queue = DispatchQueue(label: "io.wallflowers.arc-resolver", attributes: .concurrent)
+    // SERIAL, reads included: the handle's graph is one SQLite connection (lodedb's
+    // `TopologyStore`), and a connection is not safe to use from two threads at once. Concurrent
+    // reads here corrupted SQLite's heap at launch (SIGSEGV in `sqlite3DbMallocRawNN`).
+    private let queue = DispatchQueue(label: "io.wallflowers.arc-resolver")
 
     public init(config: ArcResolverConfig, embedder: ArcEmbedder) throws {
         let dim = embedder.dimension

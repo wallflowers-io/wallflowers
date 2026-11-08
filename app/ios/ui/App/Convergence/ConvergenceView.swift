@@ -296,7 +296,8 @@ struct ConvergenceCard: View {
         .padding(22)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 440)
-        .background(glass)
+        // The compose card's skin; its edge takes the live reject/accept flash.
+        .composeGlass(tint: type.tint, flash: flashOpacity > 0 ? flashColor.opacity(flashOpacity) : nil)
     }
 
     private var typeChip: some View {
@@ -366,20 +367,6 @@ struct ConvergenceCard: View {
             }
             Text(proposal.provenance.label).font(.caption2.weight(.medium)).foregroundStyle(Theme.textTertiary)
         }
-    }
-
-    // The compose card's skin (ComposeGlass): solid body, the type's band on top, the
-    // hard edge taking the live reject/accept flash.
-    private var glass: some View {
-        let s = DesignTokens.Skin.shadow
-        let shape = RoundedRectangle(cornerRadius: Sig.modalRadius, style: .continuous)
-        return Rectangle().fill(Theme.surface)
-            .overlay(Rectangle().fill(type.tint.opacity(0.05)))
-            .overlay(alignment: .top) { Rectangle().fill(type.tint).frame(height: DesignTokens.Skin.band) }
-            .clipShape(shape)
-            .overlay(shape.strokeBorder(Theme.edge, lineWidth: DesignTokens.Skin.edge))
-            .overlay(shape.strokeBorder(flashColor.opacity(flashOpacity), lineWidth: DesignTokens.Skin.edge))
-            .background(shape.fill(type.tint).offset(x: s, y: s))
     }
 
     private func highlighted(_ s: String, mark: String) -> Text {

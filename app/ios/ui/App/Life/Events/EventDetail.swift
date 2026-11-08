@@ -132,10 +132,11 @@ struct EventDetailSource: DetailSource {
                             isSpace: true, color: EventDetail.tint)
     }
 
-    /// The event's OWN log is the room — `forum.post` deltas fold beside the
-    /// event's, so there is no second object and no link to lose.
+    /// The event's comments section: the Forum minted with it in the comments role
+    /// (ICD `kinds.event.parts`), read flat. None until the device holds it.
     func comments() async -> [DetailComment] {
-        core.objectThread(objectId).map { row in
+        guard let forum = core.commentsForum(of: objectId) else { return [] }
+        return core.objectThread(forum).map { row in
             DetailComment(id: "\(row.post.author):\(row.post.gen)",
                           author: name(of: row.post),
                           initials: Avatar.initials(name(of: row.post)),
@@ -147,7 +148,7 @@ struct EventDetailSource: DetailSource {
     }
 
     func post(_ text: String) async -> Bool {
-        await core.sendToGroup(objectId, text)
+        await DetailBind.post(text, on: objectId, core: core)
     }
 
     /// The Spaces this can reach: groups whose roster I am in. A Space I merely

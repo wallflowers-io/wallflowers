@@ -286,6 +286,8 @@ struct ChatsView: View {
         let peerNames = core.peerNamesByIdentity()
 
         for o in core.groupObjects {
+            // An object's comments section is reached from the object, not listed here (#34).
+            if core.isCommentsSection(o.id) { continue }
             let convo = Conversation(id: o.id, kind: .group, title: "", tint: tintFor(o.id))
             let rows = core.messages(convo)
             convos.noteSeen(o.id, count: rows.count)

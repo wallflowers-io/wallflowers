@@ -171,12 +171,53 @@ final class ShellState: ObservableObject {
         beginNew(make())
     }
 
+    /// How every OTHER kind's session is built. Installed by LIFE, which owns each kind's
+    /// mint and what follows it, so RED mints exactly what LIFE's `+` does rather than a
+    /// second copy.
+    var makeMintSession: ((NewKind) -> NewSession)?
+
+    /// RED's creator while it is the surface up (and while it leaves). Set on every raise,
+    /// so it never outlives its surface.
+    @Published private(set) var creator: NewCreator?
+    private var creatorSink: AnyCancellable?
+
+    /// RED at rest: the creator, opening on a note. Every kind but the Channel, which is
+    /// minted INTO a Space and RED has none; only the note until LIFE has installed the
+    /// mints.
+    func beginCreator() {
+        guard let note = makeNoteSession else { return }
+        let mint = makeMintSession
+        let kinds = mint == nil ? [NewKind.note] : NewKind.allCases.filter { $0 != .channel }
+        let c = NewCreator(kinds: kinds) { k in k == .note ? note() : mint!(k) }
+        beginNew(c.session, creator: c)
+        guard creator === c else { return }
+        // `$active` publishes the NEW kind before it is stored.
+        creatorSink = c.$active.dropFirst().sink { [weak self, weak c] k in
+            guard let s = c?.sessions[k] else { return }
+            self?.swapNew(s)
+        }
+    }
+
+    /// The creator's card in view changed: that session takes the old one's place under
+    /// the same discs, which stay where they are.
+    private func swapNew(_ session: NewSession) {
+        guard compose is NewSession, compose?.exit == nil else { return }
+        composeSink = session.changes.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        compose = session
+    }
+
     /// Raise ANY shell-hosted surface — a mint, or the detail modal. Named for the
     /// mint because that is what every existing caller raises; what it takes is the
     /// seam (`Design/ShellSurface.swift`), which is what lets the detail modal
     /// inherit the circle choreography instead of drawing a replica of the row.
-    func beginNew(_ session: any ShellSurface) {
+    func beginNew(_ session: any ShellSurface, creator: NewCreator? = nil) {
         guard compose == nil, leavingCompose == nil else { return }
+        // Before `compose`, so the surface's first appearance already knows it is the
+        // creator — that is when it decides whether to focus.
+        self.creator = creator
+        creatorSink = nil
 
         // FORWARD THE SESSION'S CHANGES TO OURSELVES.
         //
@@ -1456,7 +1497,8 @@ struct RootShell: View {
             // and two entries read better than the erasure that would avoid them.
             Group {
                 if let session = surface as? NewSession {
-                    NewSurface(session: session, onCancel: cancelNew)
+                    NewSurface(session: session, onCancel: cancelNew,
+                               creator: shell.creator?.sessions[session.kind] === session ? shell.creator : nil)
                 } else if let detail = surface as? DetailSession {
                     DetailSurface(session: detail, onClose: cancelNew)
                 }
@@ -1466,12 +1508,11 @@ struct RootShell: View {
         }
     }
 
-    /// RED at rest — raise a surface of this kind. The shell only ever raises `.note`
-    /// itself; every other kind arrives through `shell.beginNew` from the screen that
-    /// owns that mint (LIFE's `+`, a Space's lane `+`).
+    /// RED at rest — the universal creator, opening on a note. Other screens' `+` still
+    /// raise their own one kind through `shell.beginNew`.
     private func beginNew(_ kind: NewKind) {
         guard kind == .note else { return }
-        shell.beginNote()
+        shell.beginCreator()
     }
 
     /// The NOTE's session — the origin surface, rebuilt as one `NewSession` so it goes

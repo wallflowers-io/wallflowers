@@ -147,6 +147,7 @@
 		49565B01E2E0A289FA48F1CD /* ProjectChatRoomTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38E8678A5DA5818CB6561E66 /* ProjectChatRoomTab.swift */; };
 		4B1C7830D5B1BC2EACAFCBF3 /* MeshRadio.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC6A8BBD75CC15F61194FC87 /* MeshRadio.swift */; };
 		4B9A5A0BD05091876788CDEB /* MeshRadio.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC6A8BBD75CC15F61194FC87 /* MeshRadio.swift */; };
+		4C0E2E1BC4DD13CE2D468E01 /* CommentsSectionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6814ED50F848AFCB8ACAE310 /* CommentsSectionUITests.swift */; };
 		4C87E473058D5FF38CC018A9 /* DegradedUnionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3A65B662FF5C491EED5EB /* DegradedUnionStore.swift */; };
 		4CA9F12D1DF33BC3EE1311B5 /* TicketWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DA10656F400D62EB025A762 /* TicketWallet.swift */; };
 		4E7FB2F93F06867BD896F9DD /* ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB8BE99E547001EF44CB21D /* ProjectDetailView.swift */; };
@@ -204,6 +205,7 @@
 		6FB7620B5D7F9B98FAB6315E /* GoogleAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA452D54009DBFDEBA83FE35 /* GoogleAuth.swift */; };
 		701DAE452AB163BD4E1AE0A2 /* ResolutionContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000A743166A2DA691FF0637B /* ResolutionContracts.swift */; };
 		71195BEF28C31595857095A8 /* PlacePublishSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9DCC338EDE8F0939FDE8A13 /* PlacePublishSheet.swift */; };
+		722A0CC4B91F1667D04EBD64 /* RedCreatorUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6C8319461A6860F6B991EED /* RedCreatorUITests.swift */; };
 		724107ECA7EAB715415827CA /* Hashtags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 057A4A6F404524F0EB3480AD /* Hashtags.swift */; };
 		725BC77BA8CC81D7A42B364F /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB30113F3F14C88E488D7006 /* Settings.swift */; };
 		725C8E0496A0CBEC0CA11875 /* ScanStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CCAAAB95CB7509A3CFA7E68 /* ScanStore.swift */; };
@@ -576,6 +578,7 @@
 		656216AEFBE09CC86E0EDB63 /* ProfileStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStack.swift; sourceTree = "<group>"; };
 		66262556B64749A44AF33134 /* RelayProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayProbe.swift; sourceTree = "<group>"; };
 		6634BC69C0914B0E69E1F993 /* ProposalPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProposalPipelineTests.swift; sourceTree = "<group>"; };
+		6814ED50F848AFCB8ACAE310 /* CommentsSectionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentsSectionUITests.swift; sourceTree = "<group>"; };
 		6832FF60A25B85AF7960F9E5 /* ArcCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArcCatalog.swift; sourceTree = "<group>"; };
 		687B7B84FD9404D7A2ACCF7D /* ProfileBindingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileBindingTests.swift; sourceTree = "<group>"; };
 		68A733190B6386EA43DF24BA /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
@@ -685,6 +688,7 @@
 		D15A524A7A296E1093C17ADE /* DeviceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceKey.swift; sourceTree = "<group>"; };
 		D29468EE6A1B38334C2C4B03 /* PlaceProfileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceProfileUITests.swift; sourceTree = "<group>"; };
 		D459D90A7CD5C6EF6CDDEF19 /* GroupsRoutes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupsRoutes.swift; sourceTree = "<group>"; };
+		D6C8319461A6860F6B991EED /* RedCreatorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedCreatorUITests.swift; sourceTree = "<group>"; };
 		DB38BFD19598A02B353482C4 /* ContactExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactExport.swift; sourceTree = "<group>"; };
 		DBB4547F47376C4F5C90AE28 /* ChatChunkerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatChunkerTests.swift; sourceTree = "<group>"; };
 		DBF8E9FFB23567CA607DAA93 /* GraphEventsSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphEventsSource.swift; sourceTree = "<group>"; };
@@ -891,6 +895,7 @@
 				A364353AE2B6E5C66BF81933 /* AriesDemoUITests.swift */,
 				9291D687A678694122ABF4F3 /* ArtSystemUITests.swift */,
 				150BCCABCC0262D4DBB562B3 /* ChatGesturesUITests.swift */,
+				6814ED50F848AFCB8ACAE310 /* CommentsSectionUITests.swift */,
 				DD7CFE534E707737137A448E /* EventMintUITests.swift */,
 				C44898BF431C474E7C6E1F37 /* EventProfilePageUITests.swift */,
 				E9B23E8C2B3881D81FAF6528 /* EventsPageUITests.swift */,
@@ -908,6 +913,7 @@
 				096ACAEB6D6189F75B13DEDF /* PersonProfileUITests.swift */,
 				D29468EE6A1B38334C2C4B03 /* PlaceProfileUITests.swift */,
 				2C540A904E91AFF13C7134E4 /* ProfileEditorUITests.swift */,
+				D6C8319461A6860F6B991EED /* RedCreatorUITests.swift */,
 				5E57B840611739FBF1053F95 /* ShellChromeUITests.swift */,
 				5DECBCCD1C4568A5074BFE4B /* SignOutUITests.swift */,
 				E53BBA16ABAA04D4F0820CB9 /* VenueProposalUITests.swift */,
@@ -1683,6 +1689,7 @@
 				850752B5CBC0F10B50D43268 /* AriesDemoUITests.swift in Sources */,
 				D9FB60C95D1FBE4476668D63 /* ArtSystemUITests.swift in Sources */,
 				6E4A0191EC7328937FC4BD1B /* ChatGesturesUITests.swift in Sources */,
+				4C0E2E1BC4DD13CE2D468E01 /* CommentsSectionUITests.swift in Sources */,
 				23DFE4B48E64FDE014823B78 /* EventMintUITests.swift in Sources */,
 				925A85F725A0432DD5B7BB16 /* EventProfilePageUITests.swift in Sources */,
 				27F1BF2C0E0E14A6800AF516 /* EventTicketingUITests.swift in Sources */,
@@ -1700,6 +1707,7 @@
 				C83959A2B90888B16E047C24 /* PersonProfileUITests.swift in Sources */,
 				E51317A375280200DF68A257 /* PlaceProfileUITests.swift in Sources */,
 				96E3E30ECE8F41F5A12C680A /* ProfileEditorUITests.swift in Sources */,
+				722A0CC4B91F1667D04EBD64 /* RedCreatorUITests.swift in Sources */,
 				066BCB160EB05FEF36B62A8A /* ShellChromeUITests.swift in Sources */,
 				7C6891E789CA28CEFFCFFBD6 /* SignOutUITests.swift in Sources */,
 				F00040564B962BBB33909BE1 /* VenueProposalUITests.swift in Sources */,

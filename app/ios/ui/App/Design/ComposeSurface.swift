@@ -91,19 +91,21 @@ struct ComposeGlass: ViewModifier {
     var flash: Color? = nil
     var opaque: Bool = false
 
+    /// THE card skin — `PixelCard`'s, lit from the top-left like every other card, its
+    /// hard shadow cast in the kind's colour. The coloured band across the top is gone
+    /// (Ralph, 5 Nov): a lit top edge on a card whose shadow says the light is top-left
+    /// read as a glitch.
     func body(content: Content) -> some View {
-        let s = DesignTokens.Skin.shadow
         let shape = RoundedRectangle(cornerRadius: Sig.modalRadius, style: .continuous)
-        return content.background(
+        return content
+            .background(shape.fill(tint.opacity(0.05)))
             // Opaque: the ground at 0.94 (Ralph, 18 Aug), so the bloom behind is felt, not seen.
-            Rectangle().fill(opaque ? Theme.bg.opacity(0.94) : Theme.surface)
-                .overlay(Rectangle().fill(tint.opacity(0.05)))
-                .overlay(alignment: .top) { Rectangle().fill(tint).frame(height: DesignTokens.Skin.band) }
-                .clipShape(shape)
-                .overlay(shape.strokeBorder(flash ?? Theme.edge, lineWidth: DesignTokens.Skin.edge))
-                .background(shape.fill(glow).offset(x: s, y: s))
-                .animation(Motion.noteFlash, value: flash)
-        )
+            .pixelCard(opaque ? Theme.bg.opacity(0.94) : Theme.surface, in: shape,
+                       shadow: true, shadowColor: glow)
+            .overlay {
+                shape.strokeBorder(flash ?? .clear, lineWidth: DesignTokens.Skin.edge)
+                    .animation(Motion.noteFlash, value: flash)
+            }
     }
 }
 
