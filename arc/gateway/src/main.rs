@@ -209,8 +209,9 @@ async fn health(State(gw): State<Arc<Gateway>>) -> Response {
 //
 // The Arc serves what a Host published, at the group's slug: `wallflowers.io/<slug>`
 // proxies here (core/docs/the-face-on-the-wire.md). Everything on the page came off the
-// Host's own log, put there by the group's owner on purpose — the Arc is a member of the
-// Host and never of the group — and it is drawn by `face-render`, which emits no script.
+// Host's own log, put there by the group's owner on purpose — the Arc serves nothing from a
+// group's log, though it sits in the Site and its admitter rooms (A-3, O-75) — and it is
+// drawn by `face-render`, which emits no script.
 //
 // ONE 404 FOR EVERY MISS: no such slug, not published, not ours, the Host will not fold.
 // A distinct answer would let anyone enumerate what this Arc holds.
