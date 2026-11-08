@@ -108,6 +108,7 @@
   function model(g) {
     var m = { me: { pk: strip(g.me && g.me.pk), name: (g.me && g.me.display_name) || '' },
               byId: {}, host: {}, origin: {}, names: {}, sites: [], feed: [], conns: [], chats: {}, problems: [],
+              link: {}, invites: [],
               self: null };
     var spine = (g.spine || []).slice().sort(function (a, b) { return a.index - b.index; });
     m.self = spine.length ? spine[0].object : null;
@@ -121,9 +122,14 @@
     m.names[m.me.pk] = m.me.name;
     (g.objects || []).forEach(function (o) {
       if (!o.folds) { m.problems.push(o); return; }
+      /* A connection by its link (contact.setLink, #12): linked, or stated by neither side (a
+         pairing older than the link), is a connection; asked of me, an invitation in the tray. */
       if (o.role === 'channel') {
+        var link = (o.view && o.view.link) || {}, c = { pk: o.peer, name: o.name, id: o.id };
         m.names[o.peer] = o.name;
-        m.conns.push({ pk: o.peer, name: o.name, id: o.id });
+        m.link[o.peer] = { state: link.state || 'none', mine: link.mine };
+        if (link.state === 'invited_me') m.invites.push(c);
+        else if (!link.state || link.state === 'linked' || link.state === 'none') m.conns.push(c);
         return;
       }
       if (o.role === 'chat') { m.chats[o.peer] = o.id; return; }
@@ -733,7 +739,7 @@
     var big = avatar(pk); big.classList.add('big');
     box.appendChild(el('div', { class: 'pc-head' }, [big, el('div', { class: 'grow' }, [
       el('h3', { text: who(pk) }),
-      el('p', { text: pk === M.me.pk ? 'You' : M.chats[pk] ? 'Connected' : 'Not connected' })])]));
+      el('p', { text: linkWords(pk) })])]));
     var kv = el('dl', { class: 'kv' });
     function row(k, v) { kv.appendChild(el('dt', { text: k })); kv.appendChild(v); }
     if (site) {
@@ -751,7 +757,7 @@
       } })]));
     box.appendChild(kv);
     if (!named(pk) && !p) box.appendChild(el('p', { class: 'mnote', text: 'No card yet. Every member publishes one on entry: their name, their picture and this key.' }));
-    if (M.chats[pk] && pk !== M.me.pk) box.appendChild(el('button', { class: 'pc-go', type: 'button', text: 'Message', onclick: function () { closeCard(); open('dm', pk); } }));
+    linkActions(box, pk);
     /* The owner gives and takes the admin role here (REQUIREMENTS.md § 4). */
     if (site && site.owner === M.me.pk && pk !== M.me.pk && (site.members || []).indexOf(pk) >= 0) {
       var admin = roleOfMember(site, pk) === 'admin';
@@ -759,11 +765,84 @@
         onclick: function (e) { (admin ? unmakeAdmin : makeAdmin)(site, pk, e.currentTarget); } }));
       /* The Door adds someone to the page (the Host) only if they are your contact (BW-B). */
       box.appendChild(el('p', { class: 'why', id: 'pcWhy',
-        text: !admin && !M.chats[pk] ? 'To change the pictures too, they need to be connected with you first.' : '' }));
+        text: !admin && !connected(pk) ? 'To change the pictures too, they need to be connected with you first.' : '' }));
     }
     $('person').hidden = false;
   }
   function closeCard() { $('person').hidden = true; }
+
+  /* THE LINK, from a member's card (#12). Each side states its own (contact.setLink): Connect
+     pairs with one of the member's own offers on a community you share (the bundles facet), so
+     the community's log never says who asked whom; the other side accepts in the tray. */
+  function linkOf(pk) { return (M.link[pk] || {}).state || null; }
+  function connected(pk) { var s = linkOf(pk); return s === 'linked' || s === 'none'; }
+  function linkWords(pk) {
+    if (pk === M.me.pk) return 'You';
+    if (connected(pk)) return 'Connected';
+    return { invited: 'Requested', invited_me: 'Wants to connect' }[linkOf(pk)] || 'Not connected';
+  }
+  /* A community you share where they offer a way to be reached: the open one first. */
+  function offeredIn(pk) {
+    var sites = S.site && M.byId[S.site] ? [M.byId[S.site]].concat(M.sites) : M.sites;
+    return sites.filter(function (s) { var b = s.view && s.view.bundles && s.view.bundles[pk]; return b && b.length; })[0] || null;
+  }
+  function linkWrite(btn, path, body, then) {
+    var why = $('pcLink');
+    busy(btn, true);
+    why.textContent = '';
+    return door(path, { method: 'POST', body: body })
+      .then(function (r) { return load().then(function () { return then ? then(r) : personCard(btn.dataset.pk); }); },
+        function (e) { why.textContent = String(e && e.message || e); })
+      .then(function () { busy(btn, false); });
+  }
+  function linkActions(box, pk) {
+    if (pk === M.me.pk) return;
+    var s = linkOf(pk), at = offeredIn(pk);
+    function btn(text, cls, go) { box.appendChild(el('button', { class: cls, type: 'button', text: text, 'data-pk': pk, onclick: function (e) { go(e.currentTarget); } })); }
+    if (connected(pk)) {
+      btn('Message', 'pc-go', function (b) {
+        if (M.chats[pk]) { closeCard(); open('dm', pk); return; }
+        linkWrite(b, '/v2/conversation', { peer: pk }, function () { closeCard(); open('dm', pk); });
+      });
+    } else if (s === 'invited_me') {
+      btn('Accept', 'pc-go', function (b) { linkWrite(b, '/v2/link', { peer: pk, active: true }); });
+      btn('Decline', 'pc-alt', function (b) { linkWrite(b, '/v2/link', { peer: pk, active: false }); });
+    } else if (s === 'invited') {
+      btn('Withdraw', 'pc-alt', function (b) { linkWrite(b, '/v2/link', { peer: pk, active: false }); });
+    } else if (at && (s !== 'ended' || (M.link[pk] || {}).mine === 0)) {
+      /* Ended by their 0, it is theirs to open again; ended by mine, Connect states 1 again. */
+      btn('Connect', 'pc-go', function (b) { linkWrite(b, '/v2/connect', { site: at.id, member: pk }); });
+    }
+    box.appendChild(el('p', { class: 'why', id: 'pcLink' }));
+  }
+
+  /* THE TRAY (iOS's NotificationTray and BellButton, ported): what waits on you. The bell is an
+     accent disc that turns red, whole, while anything waits; the tray lists each, and empty it
+     says so and nothing else. */
+  function bell() {
+    var n = M.invites.length, b = $('bell');
+    b.classList.toggle('waiting', n > 0);
+    b.setAttribute('aria-label', n ? 'Notifications, ' + n + ' to review' : 'Notifications');
+  }
+  function fillTray(box) {
+    if (!M.invites.length) { box.appendChild(el('div', { class: 'none', text: 'No notifications' })); return; }
+    M.invites.forEach(function (c) {
+      var why = el('p', { class: 'why' });
+      function answer(active) {
+        return function (e) {
+          var b = e.currentTarget;
+          busy(b, true);
+          door('/v2/link', { method: 'POST', body: { peer: c.pk, active: active } })
+            .then(function () { return load().then(function () { closeMenus(); }); }, function (err) { why.textContent = String(err && err.message || err); busy(b, false); });
+        };
+      }
+      box.appendChild(el('div', { class: 'tr' }, [avatar(c.pk), el('div', { class: 'grow' }, [
+        el('b', { text: who(c.pk) + ' wants to connect' }),
+        el('div', { class: 'tact' }, [
+          el('button', { class: 'pc-go', type: 'button', text: 'Accept', onclick: answer(true) }),
+          el('button', { class: 'pc-alt', type: 'button', text: 'Decline', onclick: answer(false) })]), why])]));
+    });
+  }
   function roleOfMember(site, pk) {
     if (pk === site.owner) return 'owner';
     var r = ((site.view && site.view.roles) || []).filter(function (x) { return x[0] === pk; })[0];
@@ -783,6 +862,9 @@
       siteDone = true;
       if (!host) return 'no Host';
       var onHost = hostObj && (hostObj.members || []).indexOf(pk) >= 0;
+      /* The Door adds someone to the page only by a connection's prekey: not connected, it
+         would refuse, so the page waits for the connection. */
+      if (!onHost && !connected(pk)) throw new Error('connect with them first, from their card');
       say('Adding them to the page (the Host)…');
       /* A role overlays a member of that object (roles.rs), so the Host's role waits on the add. */
       return (onHost ? Promise.resolve() : door('/v2/add', { method: 'POST', body: { object: host.part, member: pk } }))
@@ -801,12 +883,13 @@
       .then(function () { busy(btn, false); });
   }
   function unmakeAdmin(site, pk, btn) {
-    var host = partsIn(site, 'host')[0];
+    var host = partsIn(site, 'host')[0], hostObj = host && M.byId[host.part];
+    function holds(o) { return ((o && o.view && o.view.roles) || []).some(function (x) { return x[0] === pk; }); }
     function clear(obj) { return door('/v2/apply', { method: 'POST', body: { object: obj, op: 'base.clearRole', args: { member: pk } } }); }
     busy(btn, true);
-    clear(site.id).then(function () { return host ? clear(host.part).catch(function () {}) : null; })
+    clear(site.id).then(function () { return holds(hostObj) ? clear(host.part).catch(function () {}) : null; })
       .then(function () {
-        return Promise.all(roomsOf(site).filter(function (r) { return ((r.view && r.view.roles) || []).some(function (x) { return x[0] === pk; }); })
+        return Promise.all(roomsOf(site).filter(holds)
           .map(function (r) { return clear(r.id).catch(function () {}); }));
       })
       .then(function () { return load().then(function () { personCard(pk); }); },
@@ -1123,6 +1206,14 @@
     });
     body.appendChild(opt('members', 'Members', (site.members || []).length + ' in it' + (owner ? '. Roles are yours to give.' : ''),
       function () { closeSettings(); if (narrowNow()) $('app').classList.add('roster'); else if (R.rf) fold('r'); }));
+    /* THE PAGE, taken down (base.unpublish on the Host): its address and publisher cleared, so
+       the Arc stops serving it. Only while it is published; what the web read stays read. */
+    var host = partsIn(site, 'host')[0], pub = host && M.byId[host.part] && (M.byId[host.part].view || {}).publication;
+    if (owner && pub) body.appendChild(opt('out', 'Take the page down', ADDRESS + pub.slug + ' stops being served', function () {
+      closeSettings();
+      door('/v2/apply', { method: 'POST', body: { object: host.part, op: 'base.unpublish', args: {} } })
+        .then(function () { toast('Taken down'); return load(); }, function (e) { toast(String(e && e.message || e)); });
+    }));
     if (owner) body.appendChild(opt('person', 'Add by contact code', null,
       function () { closeSettings(); addByCode(site); }));
     if (!owner) body.appendChild(el('p', { class: 'mnote', text: 'The owner changes this community: its face, its rooms, and who holds which role.' }));
@@ -1332,10 +1423,11 @@
     me.textContent = own ? '' : (M.me.name || '').slice(0, 1).toUpperCase();
     if (own) me.appendChild(el('img', { src: own, alt: '' }));
     me.title = M.me.name || 'You';
+    bell();
   }
 
   /* THE MENUS: one open at a time; a click outside or Escape closes it. */
-  var MENUS = [['siteBtn', 'siteMenu', fillSites], ['meBtn', 'meMenu', fillMe]];
+  var MENUS = [['siteBtn', 'siteMenu', fillSites], ['bell', 'tray', fillTray], ['meBtn', 'meMenu', fillMe]];
   function closeMenus() {
     MENUS.forEach(function (m) { $(m[1]).hidden = true; $(m[0]).setAttribute('aria-expanded', 'false'); });
   }
@@ -2338,8 +2430,46 @@
       el('h1', { text: peer ? name : name }),
       el('p', { text: peer ? 'The start of your conversation.' : 'The start of #' + name + '.' })]));
     if (!peer && window.WallFlowers && window.WallFlowers.Rooms) window.WallFlowers.Rooms.header(col, o, { door: door, load: load, el: el, op: opDecl, me: M.me.pk, note: note });
-    messageList(col, msgs(id), id);
+    if (!peer && site && site.owner === M.me.pk && o.owner === M.me.pk) col.appendChild(removeRoom(site, o));
+    var ms = msgs(id), last = ms[ms.length - 1];
+    messageList(col, ms, id);
+    if (peer && last && last.author === M.me.pk && last.read > 0) col.appendChild(el('p', { class: 'readmark', text: 'Read' }));
     composeFor(id, peer ? name : '#' + name);
+    receipt(id, ms);
+  }
+
+  /* REMOVE A ROOM from its Site (the owner of both): the Site's half of the edge (base.clearPart)
+     and the room's (base.clearParent), in one request. The room, its log and its roster stay;
+     it is no longer the Site's. A first tap asks, a second does it. */
+  function removeRoom(site, room) {
+    var why = el('span', { class: 'why' });
+    var b = el('button', { class: 'tb rmroom', type: 'button', text: 'Remove room' });
+    b.onclick = function () {
+      if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Remove from ' + titleOf(site) + '?'; return; }
+      busy(b, true);
+      batch([{ do: 'apply', object: site.id, op: 'base.clearPart', args: { part: room.id } },
+             { do: 'apply', object: room.id, op: 'base.clearParent', args: { parent: site.id } }])
+        .then(function (r) { if (r.refused) throw new Error(r.refused.why); return load().then(function () { open('feed', null, site.id); }); })
+        .then(null, function (e) { why.textContent = String(e && e.message || e); busy(b, false); });
+    };
+    return el('div', { class: 'rmrow' }, [b, why]);
+  }
+
+  /* READ (forum.receipt): what is on screen is read, said once for each message of another's,
+     in one receipt. A DM says "Read" under your last message once the other side's receipt
+     reaches it (the view's `read`, a count on your own messages). */
+  var RECEIPTED = {};
+  function receipt(id, ms) {
+    var said = RECEIPTED[id] = RECEIPTED[id] || {};
+    var fresh = ms.filter(function (m) { return m.author !== M.me.pk && !said[mref(m)]; });
+    var op = ICD && ICD.kinds && ICD.kinds.forum && ICD.kinds.forum.ops['forum.receipt'];
+    var words = op && op.args.status.vocabulary;
+    var read = words && Object.keys(words).filter(function (k) { return words[k] === 'read'; })[0];
+    if (!fresh.length || !read) return;
+    fresh.forEach(function (m) { said[mref(m)] = true; });
+    door('/v2/apply', { method: 'POST', body: { object: id, op: 'forum.receipt',
+      args: { upto: fresh[fresh.length - 1].ts || 0, status: Number(read), refs: fresh.map(mref).join(',') } } })
+      .then(null, function () { fresh.forEach(function (m) { delete said[mref(m)]; }); });
   }
 
   /* An object's own view: what its lens folded, labelled by the view's own keys.
@@ -2636,7 +2766,7 @@
     if (!e.target.closest) return;
     if (!$('emo').hidden && !e.target.closest('#emo,.act.react')) closePicker();
     if (!e.target.closest('.msg.on,#emo')) closeActs();
-    if (!e.target.closest('.menu,#siteBtn,#meBtn')) closeMenus();
+    if (!e.target.closest('.menu,#siteBtn,#bell,#meBtn')) closeMenus();
     if (MEETING && e.target.closest && !e.target.closest('#meet')) meet(false);
   });
   window.addEventListener('resize', function () { rails(); closePicker(); });

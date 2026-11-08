@@ -158,10 +158,13 @@ async fn a_card_waits_for_its_own_side() {
     assert!(h.node(bo).peer_profile(&h.id(ada)).unwrap().is_some(), "accepted: Ada's card reaches Bo");
     assert_eq!(link_on(&h, bo, ada), json!({ "mine": 1, "theirs": 1, "state": "linked" }));
 
-    // Accepting again writes no second wish.
-    h.node(bo).pair_accept(&h.id(ada)).await.unwrap();
+    // Accepting again writes no second wish. Counted across the accept alone: each side also
+    // restates its own wish when the connection's leaves change (Node::restate_standing).
     let n = h.node(bo);
     let (object, _) = n.connection_object(&h.id(ada)).unwrap().unwrap();
-    let wishes = n.object_log(&object).unwrap().iter().filter(|(op_id, ..)| *op_id == op()).count();
-    assert_eq!(wishes, 2, "one wish each");
+    let wishes = |n: &pacific_core::Node| n.object_log(&object).unwrap().iter().filter(|(op_id, ..)| *op_id == op()).count();
+    let before = wishes(&n);
+    drop(n);
+    h.node(bo).pair_accept(&h.id(ada)).await.unwrap();
+    assert_eq!(wishes(&h.node(bo)), before, "accepting again writes no second wish");
 }

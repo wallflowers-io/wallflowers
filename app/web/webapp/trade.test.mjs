@@ -92,6 +92,15 @@ test('a photo is a 16-hex id, a still within the ICD\'s inline ceiling, and its 
   assert.equal(Trade.roomForPhotos(thing({}).view, ICD), true);
 });
 
+test('a posture and its reach are the ICD\'s words; none chosen is a clearPosture, with no args', () => {
+  assert.deepEqual(Trade.postures(ICD), Object.keys(ICD.kinds.thing.ops['thing.setPosture'].args.posture.vocabulary));
+  assert.deepEqual(Trade.reaches(ICD), Object.keys(ICD.kinds.thing.ops['thing.setPosture'].args.reach.vocabulary));
+  assert.deepEqual(Trade.postureArgs('selling', 'network', ICD), { posture: 'selling', reach: 'network' });
+  assert.equal(Trade.postureArgs('', 'network', ICD), null);
+  assert.throws(() => Trade.postureArgs('swapping', 'network', ICD), /posture/);
+  assert.throws(() => Trade.postureArgs('selling', 'everywhere', ICD), /reach/);
+});
+
 test('a disposition is the ICD\'s word; reserved names the member and when the hold ends', () => {
   const a = Trade.dispositionArgs('available', NOW, null, null, ICD);
   declared('thing', 'thing.setDisposition', a);

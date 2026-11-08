@@ -362,6 +362,18 @@ where
     kp.to_bytes().map_err(err)
 }
 
+/// Whether `store` still holds the private half of the key package `kp` (its bytes, as a
+/// bundle carries them). mls-rs deletes it when a Welcome joins with it, so a package this
+/// device made and no longer holds has been used.
+pub fn key_package_held<K: KeyPackageStorage>(store: &K, kp: &[u8]) -> Result<bool, CoreError> {
+    let kp = MlsMessage::from_bytes(kp).map_err(err)?.into_key_package().ok_or_else(|| err("not a key package"))?;
+    let csp = RustCryptoProvider::default()
+        .cipher_suite_provider(CIPHERSUITE)
+        .ok_or_else(|| err("ciphersuite unsupported by provider"))?;
+    let r = kp.to_reference(&csp).map_err(err)?;
+    Ok(store.get(&r).map_err(|e| err(e.into_any_error()))?.is_some())
+}
+
 /// An unnamed group (Contacts / DMs), owned by its creator.
 pub fn create_group<G, K>(client: &ClientWith<G, K>) -> Result<GroupWith<G, K>, CoreError>
 where

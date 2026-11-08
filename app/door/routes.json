@@ -1319,6 +1319,438 @@
     "writes": true
   },
   {
+    "audience": "webapp",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a site's token connects no one"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the request went, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "POST",
+    "path": "/v2/connect",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "webapp",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a site's token states no one's link"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the link was stated, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "POST",
+    "path": "/v2/link",
+    "router": "door",
+    "writes": true
+  },
+  {
+    "audience": "webapp",
+    "auth": "session",
+    "errors": [
+      {
+        "source": "door",
+        "status": "BAD_GATEWAY",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "FORBIDDEN",
+        "words": "a write from an origin this Door does not list"
+      },
+      {
+        "source": "door",
+        "status": "PAYLOAD_TOO_LARGE",
+        "words": "the body is over 1 MiB"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": null
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "no such session"
+      },
+      {
+        "source": "door",
+        "status": "UNAUTHORIZED",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a site's token opens no conversation"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the conversation was opened, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "fwd",
+    "limits": {
+      "body_bytes": 1048576
+    },
+    "method": "POST",
+    "path": "/v2/conversation",
+    "router": "door",
+    "writes": true
+  },
+  {
     "audience": "site",
     "auth": "session",
     "errors": [
@@ -2991,6 +3423,342 @@
     "limits": {},
     "method": "POST",
     "path": "/v2/history",
+    "router": "session",
+    "writes": true
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a site's token connects no one"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the request went, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "connect",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/connect",
+    "router": "session",
+    "writes": true
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a site's token states no one's link"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the link was stated, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "link",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/link",
+    "router": "session",
+    "writes": true
+  },
+  {
+    "audience": "internal",
+    "auth": "internal",
+    "errors": [
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": null
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "a site's token opens no conversation"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "not signed in"
+      },
+      {
+        "source": "session",
+        "status": "BAD_REQUEST",
+        "words": "the conversation was opened, but this Door could not keep it ({e}); sign in again"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "no answer"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread is gone"
+      },
+      {
+        "source": "session",
+        "status": "INTERNAL_SERVER_ERROR",
+        "words": "the session's thread panicked"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{kind}' has no lens in this build, so nothing can tell whether a delta on it does anything"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is commutative and this device has no generation floor for the object — its next gen could collide with one its person already used"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is owner-only, and the author is not the owner"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the owner's or an {role}'s, and the author is neither"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}' is the {roles}'s, and the author is not"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: '{op}': {why}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: a '{kind}' object declares no op {op_id}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is a membership record, written beside the MLS commit that makes it true — leave, remove, hand over or add"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} is not a contact leg — a '{kind}' carries the ticket, invite and link legs, and its prekeys and cards are written by the pairing and sync paths, not authored"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} was refused by the reducer: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: op {op_id} would not fold: {why:?}"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this device joined after this object began, and can't see its current state; sign in on a device that holds it"
+      },
+      {
+        "source": "model",
+        "status": "BAD_REQUEST",
+        "words": "coordinator: this op {op_id} is already in the log"
+      }
+    ],
+    "handler": "conversation",
+    "limits": {},
+    "method": "POST",
+    "path": "/v2/conversation",
     "router": "session",
     "writes": true
   },

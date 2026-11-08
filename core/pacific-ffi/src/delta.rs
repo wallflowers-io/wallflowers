@@ -115,6 +115,8 @@ pub mod op {
     pub const BASE_DEFINE_QUESTION: u32 = pacific_core::questions::OP_DEFINE_QUESTION;
     pub const BASE_RETIRE_QUESTION: u32 = pacific_core::questions::OP_RETIRE_QUESTION;
     pub const BASE_ANSWER_QUESTION: u32 = pacific_core::questions::OP_ANSWER_QUESTION;
+    pub const BASE_OFFER_BUNDLE: u32 = pacific_core::bundles::OP_OFFER_BUNDLE;
+    pub const BASE_WITHDRAW_BUNDLE: u32 = pacific_core::bundles::OP_WITHDRAW_BUNDLE;
 
     // ---- Forum(19) / Conversation(26) — the chat band ------------------------
     //
@@ -481,6 +483,10 @@ pub fn delta_catalog() -> Vec<OpSpec> {
              &["target_author", "target_gen", "gen"], "close a question to new answers; it and its answers stay, marked retired"),
         spec(Group, op::BASE_ANSWER_QUESTION, "base.answerQuestion", AnyMember, Commutative, true,
              &["target_author", "target_gen", "text", "choices", "gen"], "the author's answer to one question: free text where it takes it, option indexes where it has options; per (author, question) LWW; empty clears; refused on a retired question"),
+        spec(Group, op::BASE_OFFER_BUNDLE, "base.offerBundle", AnyMember, Commutative, true,
+             &["kp_id", "bundle", "not_after", "gen"], "the author's own contact bundle, offered to the Site's members so one can pair with them from their card (#12); refused unless the bundle is the author's and its key package is kp_id; live until withdrawn"),
+        spec(Group, op::BASE_WITHDRAW_BUNDLE, "base.withdrawBundle", AnyMember, Commutative, true,
+             &["kp_id", "gen"], "withdraw one of the author's own offers, final for its kp_id: once a Welcome has used it, or past its life"),
         // ---- base parent op-group (BUILT — pacific_core::parent) ----
         //
         // The other half of `part_of`, written in the PART. Every kind can be a part

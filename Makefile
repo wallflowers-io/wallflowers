@@ -13,7 +13,8 @@ SHELL      := /usr/bin/env bash
 # compare against it; nothing here needs one.
 PRODUCT    := $(shell cd $(dir $(lastword $(MAKEFILE_LIST))) && pwd)
 CORE       := $(PRODUCT)/core
-WS         := $(abspath $(PRODUCT)/..)
+# A worktree is <ws>/wt/<name> (CLAUDE.md, Changes), a step further from the workspace.
+WS         := $(abspath $(PRODUCT)/..$(if $(filter wt,$(notdir $(abspath $(PRODUCT)/..))),/..))
 REPOS      := $(notdir $(PRODUCT))
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 # The workspace's .venv where there is one; otherwise python3 (CI).
@@ -25,7 +26,7 @@ PKGS = $(shell cd $(PRODUCT) && PATH='$(PATH)' cargo metadata --no-deps --format
 ARC_HOST   := https://arc.wallflowers.io
 
 .DEFAULT_GOAL := help
-.PHONY: help status check check-icd check-play check-core check-arc check-auth check-harness check-door check-ios e2e e2e-browser ci ci-hooks \
+.PHONY: help status check check-icd check-play check-core check-arc check-auth check-harness check-door check-ios e2e e2e-browser ci ci-hooks coverage ui-coverage \
         wasm serve stop deploy-app deploy-door deploy-arc deploy-docs live site-setup
 
 help:  ## this list
@@ -77,6 +78,13 @@ check-icd:  ## the ICD's bytes at their pin, icd.rs conformance, the web's op bi
 check-play:  ## /play: its engine, land, town and sea, and the map code it vendors (node)
 	@printf '  play    '
 	@cd $(PRODUCT)/play && for t in tests/test_*.js; do node $$t > /dev/null || { echo "$$t failed"; exit 1; }; done; echo ok
+
+coverage:  ## which ICD ops the WebApp's source names, and which it names that the ICD does not
+	@$(PY) $(CORE)/coordination/icd-coverage.py
+
+ui-coverage:  ## which ICD ops and Door routes the WebApp sends, driven headless in its UI on loopback
+	@printf '  ui-coverage '
+	@$(PINNED) ui-coverage sh -c 'cd $(PRODUCT) && $(PY) app/e2e/ui_coverage.py'
 
 check-auth:  ## the Arc account store (pytest; a check needing the website says when it skips)
 	@printf '  auth    '

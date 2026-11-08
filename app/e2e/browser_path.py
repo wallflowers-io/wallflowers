@@ -105,11 +105,14 @@ class Page:
     def __init__(self, ws) -> None:
         self.ws, self.n, self.waiting = ws, 0, {}
         self.said: list[str] = []  # what the page reported, for a failure to carry
+        self.tap = None            # a callable given every event, for a driver that records them
         self.reader = asyncio.create_task(self._read())
 
     async def _read(self) -> None:
         async for raw in self.ws:
             d = json.loads(raw)
+            if self.tap and "method" in d:
+                self.tap(d)
             if "id" in d and d["id"] in self.waiting:
                 self.waiting.pop(d["id"]).set_result(d)
             elif d.get("method") in HEARD:

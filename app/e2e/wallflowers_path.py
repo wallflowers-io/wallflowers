@@ -34,7 +34,8 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 
 PRODUCT = Path(__file__).resolve().parents[2]
-WS = PRODUCT.parent
+# A worktree sits at <ws>/wt/<name> (CLAUDE.md, Changes), a step further from the workspace.
+WS = PRODUCT.parents[1] if PRODUCT.parent.name == "wt" else PRODUCT.parent
 ARC = PRODUCT / "arc"
 DOOR = PRODUCT / "app" / "door"
 # THE AUTH SERVICE AT A COMMIT, NEVER THE WORKING TREE. website's WIP tree lacked the seal counter

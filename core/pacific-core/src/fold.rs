@@ -236,7 +236,9 @@ fn contact_view(st: &crate::contact::ContactState, reader: Option<&MemberId>) ->
 /// The forum/conversation view: `detailed()`, the same projection the app binds to,
 /// with reactions grouped by emoji and votes already resolved. A reaction is `[emoji,
 /// count, mine]`, `mine` whether `reader` is among its reactors (NC-111): no reactor's key
-/// is served. A message's picture is served by the keys `forum.post` carries it under.
+/// is served. A message's picture is served by the keys `forum.post` carries it under. On
+/// the reader's own messages, `read`: how many others' `forum.receipt` says they read it,
+/// a count, no reader's key.
 fn messages_view(st: &ForumState, reader: Option<&MemberId>) -> String {
     let msgs: Vec<String> = st
         .detailed()
@@ -264,8 +266,16 @@ fn messages_view(st: &ForumState, reader: Option<&MemberId>) -> String {
                     pacific_media::ArgVal::Text(t) => format!(",{}:{}", jstr(k), jstr(t)),
                 })
                 .collect();
+            let read = if reader == Some(&m.author) {
+                let n = st.receipts.get(&(m.author, m.gen)).map_or(0, |by| {
+                    by.iter().filter(|(who, s)| **who != m.author && **s >= crate::coordinator::RECEIPT_READ).count()
+                });
+                format!(r#","read":{n}"#)
+            } else {
+                String::new()
+            };
             format!(
-                r#"{{"author":"{}","gen":{},"text":{},"ts":{},"reply_to":{},"up":{},"down":{},"reactions":[{}]{}}}"#,
+                r#"{{"author":"{}","gen":{},"text":{},"ts":{},"reply_to":{},"up":{},"down":{},"reactions":[{}]{}{}}}"#,
                 hex::encode(m.author),
                 m.gen,
                 jstr(&m.text),
@@ -274,7 +284,8 @@ fn messages_view(st: &ForumState, reader: Option<&MemberId>) -> String {
                 m.up.len(),
                 m.down.len(),
                 reactions.join(","),
-                media
+                media,
+                read
             )
         })
         .collect();
@@ -585,6 +596,7 @@ pub fn view_of(
             v["registration"] = registration;
             v["about"] = crate::about::view(&st.about, &roster);
             v["questions"] = crate::questions::view(&st.questions, &roster);
+            v["bundles"] = crate::bundles::view(&st.bundles, &roster);
             // The group's own card (group.setProfile): on the self record, the person's own
             // name and picture, as they see them (webapp REQUIREMENTS § 3). A card never written
             // is null, not an object of empty fields claiming one.

@@ -118,9 +118,10 @@ async def save_first_card(b: J.Browser, name: str) -> None:
     await b.p.until("document.getElementById('you').hidden", "the first card saved", 60)
 
 
-async def register(a: J.Browser, s: w.Stack) -> tuple[str, int]:
-    """A new owner Registers a Site through the window and saves their first card: (the Site's id, words)."""
-    draft = {"kind": "Community", "name": NAME, "purpose": "contact_code.py", "slug": f"cc-{TAG}", "pname": "Ada " + TAG, "face": None}
+async def register(a: J.Browser, s: w.Stack, face: str | None = None) -> tuple[str, int]:
+    """A new owner Registers a Site through the window and saves their first card: (the Site's id, words).
+    `face`, www's JSON string, rides the draft as the sign-up page hands it over."""
+    draft = {"kind": "Community", "name": NAME, "purpose": "contact_code.py", "slug": f"cc-{TAG}", "pname": "Ada " + TAG, "face": face}
     await a.p.go(s.door_url + "/signin?new&return=" + urllib.parse.quote("/#register=" + J.b64u(json.dumps(draft)), safe=""))
     words = await a.sign_up()
     await a.p.until("!document.getElementById('sheet').hidden && document.getElementById('sheetGo').textContent === 'Register'", "the Register sheet", 90)
