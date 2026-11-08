@@ -57,6 +57,8 @@ pub struct Limits {
     /// thousand connections each within their own pace still meet this.
     pub ingest_bytes_per_sec: f64,
     pub ingest_bytes_burst: f64,
+    /// Below this percent free on the store's disk, `/health` answers 503.
+    pub min_disk_free_pct: u64,
 }
 
 impl Default for Limits {
@@ -72,6 +74,7 @@ impl Default for Limits {
             conn_new_tag_burst: 300.0,
             ingest_bytes_per_sec: 32.0 * 1024.0 * 1024.0,
             ingest_bytes_burst: 128.0 * 1024.0 * 1024.0,
+            min_disk_free_pct: 15,
         }
     }
 }
@@ -81,7 +84,7 @@ impl Limits {
     /// `RELAY_MAX_STORE_BYTES`, `RELAY_CONN_PUBS_PER_SEC`, `RELAY_CONN_PUB_BURST`,
     /// `RELAY_CONN_BYTES_PER_SEC`, `RELAY_CONN_BYTES_BURST`,
     /// `RELAY_CONN_NEW_TAGS_PER_MIN`, `RELAY_CONN_NEW_TAG_BURST`,
-    /// `RELAY_INGEST_BYTES_PER_SEC` and `RELAY_INGEST_BYTES_BURST`.
+    /// `RELAY_INGEST_BYTES_PER_SEC`, `RELAY_INGEST_BYTES_BURST` and `RELAY_MIN_DISK_FREE_PCT`.
     ///
     /// A byte burst smaller than one maximal blob could never admit that blob, so
     /// both byte bursts are raised to at least `max_blob_bytes`.
@@ -100,6 +103,7 @@ impl Limits {
             conn_new_tag_burst: f("RELAY_CONN_NEW_TAG_BURST", d.conn_new_tag_burst),
             ingest_bytes_per_sec: f("RELAY_INGEST_BYTES_PER_SEC", d.ingest_bytes_per_sec),
             ingest_bytes_burst: f("RELAY_INGEST_BYTES_BURST", d.ingest_bytes_burst),
+            min_disk_free_pct: u("RELAY_MIN_DISK_FREE_PCT").unwrap_or(d.min_disk_free_pct),
         };
         l.conn_bytes_burst = l.conn_bytes_burst.max(l.max_blob_bytes as f64);
         l.ingest_bytes_burst = l.ingest_bytes_burst.max(l.max_blob_bytes as f64);

@@ -44,6 +44,8 @@ pub mod wire;
 pub mod mailbox;
 // What the relay accepts and how fast: the v1 admission posture (see its header).
 pub mod limits;
+
+pub mod health;
 pub use limits::Limits;
 /// The DURABLE mailbox behind the blind interface — persistence, retention, floors.
 pub mod store;
@@ -756,6 +758,8 @@ pub async fn serve_with_policy(
     );
     let hub: Arc<Mutex<Hub>> = Arc::new(Mutex::new(Hub::new(store, retention, limits).await));
     let metrics = hub.lock().await.metrics.clone();
+    let health = Arc::new(health::Health::new(limits.min_disk_free_pct));
+    tokio::spawn(health_loop(hub.clone(), metrics.clone(), health.clone()));
     // Object storage is read from the environment here rather than taken as a
     // parameter, so the existing `serve_with_store` signature (and every test that
     // drives it) is unchanged. Unset means media offload is simply off, and every
@@ -796,10 +800,18 @@ pub async fn serve_with_policy(
         let metrics = metrics.clone();
         let obs = obs.clone();
         let media = media.clone();
+        let health = health.clone();
         // One span per connection, carrying ONLY the opaque connection id.
         let span = info_span!("conn", id);
         tokio::spawn(
             async move {
+                let mut stream = stream;
+                // `GET /health` is answered here and is not a connection.
+                match health::answer(&mut stream, &health).await {
+                    Ok(false) => {}
+                    Ok(true) => return,
+                    Err(e) => return debug!(error = %e, "health request failed"),
+                }
                 metrics.active_conns.fetch_add(1, Ordering::Relaxed);
                 debug!("connection opened");
                 emit(&obs, RelayEvent::ConnOpened { conn: id });
@@ -845,6 +857,36 @@ async fn emit_snapshot(obs: &Option<Observer>, hub: &Arc<Mutex<Hub>>, metrics: &
 /// Emit an INFO `stats` event roughly every 30s with the operational counters and
 /// store cardinalities. This is the heartbeat of the ops plane; it contains no
 /// routing or content data. Also nudges the traffic snapshot when observed.
+/// Every minute: can the store take a write, has a publish failed in it, how much disk
+/// is free. Said at ERROR (Sentry) once an hour while bad, and once when it recovers.
+async fn health_loop(hub: Arc<Mutex<Hub>>, metrics: Arc<Metrics>, health: Arc<health::Health>) {
+    let dir = hub.lock().await.store.dir();
+    let mut errors = metrics.store_errors.load(Ordering::Relaxed);
+    let mut said: Option<Instant> = None;
+    let mut ticker = tokio::time::interval(Duration::from_secs(60));
+    loop {
+        ticker.tick().await;
+        let probe = hub.lock().await.store.probe().await;
+        let now = metrics.store_errors.load(Ordering::Relaxed);
+        let free = dir.as_deref().and_then(health::free_pct);
+        health.set(probe.is_ok() && now == errors, free);
+        errors = now;
+        if health.ok() {
+            if said.take().is_some() {
+                info!(disk_free_pct = free, "relay healthy again");
+            }
+        } else if said.map_or(true, |t| t.elapsed() >= Duration::from_secs(3600)) {
+            said = Some(Instant::now());
+            error!(
+                store = health.store(),
+                probe_error = probe.err().map(|e| e.to_string()),
+                disk_free_pct = free,
+                "RELAY UNHEALTHY — publishes may be refused until an operator acts"
+            );
+        }
+    }
+}
+
 async fn stats_loop(hub: Arc<Mutex<Hub>>, metrics: Arc<Metrics>, obs: Option<Observer>) {
     let mut ticker = tokio::time::interval(Duration::from_secs(30));
     // The first tick fires immediately; skip it so we don't log an all-zero line.
