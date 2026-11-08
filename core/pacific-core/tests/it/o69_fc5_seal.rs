@@ -1,7 +1,11 @@
-//! O-69, FC-5 (A) (mdr/icd-pin.md § Acceptance tests): no folded state is written to
-//! `pacific.db`. The seal and a backup, with `fold_gen` set aside, are byte-identical with
-//! the cache on and off, and a restore folds the same. A restore that brings back an older
-//! `fold_gen` gets no stale hit: the open nonce.
+//! O-69, FC-5 (A) (mdr/icd-pin.md § Acceptance tests): where folds are not kept on disk
+//! (the Door's), no folded state is written to `pacific.db`. The seal and a backup, with
+//! `fold_gen` set aside, are byte-identical with the cache on and off, and a restore folds
+//! the same. A restore that brings back an older `fold_gen` gets no stale hit: the open
+//! nonce.
+//!
+//! FC-5 (B): where folds ARE kept (option B, `set_persist`), the seal carries `fold_store`,
+//! and a restore folds the same with it and with it dropped.
 //!
 //! The seal's database is `Node::seal_state`'s own copy, opened from the seal. The backup
 //! is a copy through a second connection, as K-48's is (`VACUUM INTO` here: this crate's
@@ -79,6 +83,8 @@ async fn fixture(h: &Harness) -> Vec<String> {
 async fn fc5_the_seal_and_a_backup_hold_no_folded_state_and_a_restore_folds_the_same() {
     at_rest();
     cache_on();
+    // The Door's directory: folds in memory only, whatever the suite keeps.
+    pacific_core::fold_cache::set_persist(false);
     let h = Harness::new(&["ada", "bo"]).await;
     let objs = fixture(&h).await;
     let scratch = tempfile::tempdir().unwrap();
@@ -139,6 +145,8 @@ async fn fc5_the_seal_and_a_backup_hold_no_folded_state_and_a_restore_folds_the_
 async fn fc5_a_restore_that_brings_back_an_older_fold_gen_gets_no_stale_hit() {
     at_rest();
     cache_on();
+    // The memory layer's nonce is what this proves: no disk beneath it.
+    pacific_core::fold_cache::set_persist(false);
     let h = Harness::new(&["ada", "bo"]).await;
     let objs = fixture(&h).await;
     let room = objs[0].clone();
@@ -189,5 +197,44 @@ async fn fc5_a_restore_that_brings_back_an_older_fold_gen_gets_no_stale_hit() {
     };
     assert_eq!(view, cold, "what a fresh fold of the restored rows gives");
     drop(r);
+    drop(n);
+}
+
+/// FC-5 (B): with folds kept on disk, the seal carries them, and the restore folds the same
+/// with `fold_store` as sealed and with it dropped: what is kept is never read as truth.
+#[tokio::test]
+async fn fc5_b_a_restore_folds_the_same_with_the_kept_folds_and_without_them() {
+    at_rest();
+    cache_on();
+    std::env::set_var("PACIFIC_FOLD_CACHE_PERSIST", "1");
+    let h = Harness::new(&["ada", "bo"]).await;
+    let objs = fixture(&h).await;
+    let n = h.node(0);
+    let before = read_all(&n, &objs);
+    let kept: i64 = n.dir.conn.query_row("SELECT count(*) FROM fold_store", [], |r| r.get(0)).unwrap();
+    assert!(kept > 0, "the folds are kept");
+    let blob = n.seal_state(NODE, 1).unwrap();
+    let seed = n.id.seed_bytes().unwrap();
+
+    let restore = |drop_kept: bool| {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("PACIFIC_STATE_DIR", dir.path());
+        pacific_core::router::Routes::parse(&h.relay).save().unwrap();
+        pacific_core::node::set_default_arc(&h.relay).unwrap();
+        let (r, _) = Node::open_restored(&blob, &seed, NODE).unwrap();
+        if drop_kept {
+            r.dir.conn.execute("DELETE FROM fold_store", []).unwrap();
+        }
+        *r.dir.folds.lock().unwrap() = FoldCache::default();
+        let read = read_all(&r, &objs);
+        let from_disk = r.dir.folds.lock().unwrap().kept;
+        (read, from_disk, dir)
+    };
+    let (with, from_disk, _a) = restore(false);
+    assert!(from_disk > 0, "the restore reads the sealed kept folds");
+    assert_eq!(with, before, "and folds what the sealed device folds");
+    let (without, from_disk, _b) = restore(true);
+    assert_eq!(from_disk, 0, "with fold_store dropped nothing comes from disk");
+    assert_eq!(without, before, "and it folds the same from the log");
     drop(n);
 }

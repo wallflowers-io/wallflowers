@@ -2695,7 +2695,7 @@ impl Node {
         // THE VIEW IS A FOLD'S PRODUCT, cached with it (O-69): unscoped, the same for every
         // session of this process, and filtered by each caller after, as a fresh one is.
         // Its inputs are read inside, after the key.
-        let view = self.dir.cached(&id, &kind, "view", |a: &String, b| a == b, || {
+        let view = self.dir.cached_kept(&id, &kind, "view", |a: &String, b| a == b, || {
             let members = self.dir.group_members(&id)?;
             let owners = self.dir.owner_history(&id)?;
             let owner = self
@@ -5271,7 +5271,7 @@ impl Node {
     /// The chat lens's state, folded and reduced, through the fold cache (O-69): what a
     /// sync reads on every pass and a view on every read, so a quiet room costs neither.
     fn forum_state(&self, group_id: &[u8]) -> Result<coordinator::ForumState, CoreError> {
-        self.dir.cached(group_id, "chat", "state", |a: &coordinator::ForumState, b| format!("{a:?}") == format!("{b:?}"), || {
+        self.dir.cached_kept(group_id, "chat", "state", |a: &coordinator::ForumState, b| format!("{a:?}") == format!("{b:?}"), || {
             self.folded_forum_fresh(group_id).map(|f| f.state())
         })
     }
@@ -5318,7 +5318,7 @@ impl Node {
     /// A Contact channel's state, through the fold cache (O-69): its own fold, which skips
     /// a bad offer rather than failing, so its own product.
     fn folded_contact(&self, group_id: &[u8]) -> Result<crate::contact::ContactState, CoreError> {
-        self.dir.cached(group_id, ObjectKind::Contact.name(), "contact-state", |a: &crate::contact::ContactState, b| format!("{a:?}") == format!("{b:?}"), || {
+        self.dir.cached_kept(group_id, ObjectKind::Contact.name(), "contact-state", |a: &crate::contact::ContactState, b| format!("{a:?}") == format!("{b:?}"), || {
             self.folded_contact_fresh(group_id)
         })
     }
@@ -5395,7 +5395,7 @@ impl Node {
         // name is an unwritten one, not an empty one — fall through rather than
         // report a blank card over a stored one.
         if let Some(gid) = self.dir.my_object()? {
-            if let Ok(st) = self.folded_group(&gid).map(|c| c.state().clone()) {
+            if let Ok(st) = self.group_state_of(&gid) {
                 if !st.display_name.is_empty() {
                     return Ok((st.display_name, st.shape, st.card));
                 }
@@ -5459,7 +5459,7 @@ impl Node {
             let self_id = self.ensure_self_object()?;
             let gid = hex::decode(&self_id)
                 .map_err(|e| CoreError::Directory(format!("self object id hex: {e}")))?;
-            let folded = self.folded_group(&gid).map(|c| c.state().clone()).ok();
+            let folded = self.group_state_of(&gid).ok();
             let (name, shape, card) = self.cached_profile()?;
             match folded {
                 Some(st) if !st.display_name.is_empty() => {
@@ -5543,9 +5543,8 @@ impl Node {
             .map_err(|e| CoreError::Directory(format!("self object id hex: {e}")))?;
         let seed = self.seed_or_refuse()?;
         let root = crate::locator::storage_root(&seed);
-        let named: std::collections::BTreeSet<String> = self
-            .folded_group(&self_gid)
-            .map(|c| c.state().joined.keys().cloned().collect())
+        let named: std::collections::BTreeSet<String> = self.group_state_of(&self_gid)
+            .map(|st| st.joined.keys().cloned().collect())
             .unwrap_or_default();
 
         let mut wrote = 0usize;
@@ -5658,7 +5657,7 @@ impl Node {
             }
             let held = match crate::authoring::channel_of(&kind) {
                 Some(crate::object::ObjectKind::Forum) => self.forum_state(&gid).map(|s| s.profiles.get(&me).cloned()),
-                _ => self.folded_group(&gid).map(|c| c.state().profiles.get(&me).cloned()),
+                _ => self.group_state_of(&gid).map(|st| st.profiles.get(&me).cloned()),
             };
             if matches!(&held, Ok(Some(p)) if p.card == card) {
                 continue;
@@ -5683,9 +5682,8 @@ impl Node {
         let Some(self_gid) = self.dir.my_object()? else {
             return Ok(Vec::new());
         };
-        let named: Vec<String> = self
-            .folded_group(&self_gid)
-            .map(|c| c.state().joined.keys().cloned().collect())
+        let named: Vec<String> = self.group_state_of(&self_gid)
+            .map(|st| st.joined.keys().cloned().collect())
             .unwrap_or_default();
         let mut out = Vec::new();
         for object in named {
@@ -7267,9 +7265,40 @@ impl Node {
 
     /// Fold a group object's persisted log into a `Coordinator<GroupType>` —
     /// sequenced spine in `(epoch, seq)` order first, mirroring `folded_project`.
+    /// KEEP WHAT ARRIVED (O-69 option B): fold, and so keep on disk, every object whose
+    /// generation moved past what `fold_store` holds. Run after a sync, on the Node that
+    /// synced, so a delta that arrived is folded before the app is next opened rather than
+    /// at the first read after it. The folds are the read paths' own (`cached_kept`): there
+    /// is no second fold. Returns how many objects were folded.
+    pub fn refold_moved(&self) -> Result<usize, CoreError> {
+        let Some(model) = crate::fold_cache::model() else { return Ok(0) };
+        if !crate::fold_cache::persist() {
+            return Ok(0);
+        }
+        let mut n = 0;
+        for (gid, kind) in self.dir.moved_objects(&model)? {
+            // A fold that fails is kept as that failure, and named where it is read.
+            let _ = match kind.as_str() {
+                "group" => self.group_state_of(&gid).map(drop),
+                "thing" => self.thing_state_of(&gid).map(drop),
+                "post" => self.post_state_of(&gid).map(drop),
+                "event" => self.event_state_of(&gid).map(drop),
+                "place" => self.place_state_of(&gid).map(drop),
+                "project" => self.project_state_of(&gid).map(drop),
+                "host" => self.host_state_of(&gid).map(drop),
+                "system" => self.system_state_of(&gid).map(drop),
+                "forum" | "conversation" => self.forum_state(&gid).map(drop),
+                "connection" => self.folded_contact(&gid).map(drop),
+                _ => continue,
+            };
+            n += 1;
+        }
+        Ok(n)
+    }
+
     /// A kind's folded STATE through the fold cache (O-69), a product beside its fold: a
     /// hit is a clone, where reading `state()` off a cached fold reduced the whole spine
-    /// on every read.
+    /// on every read. Kept on disk where the embedding keeps folds (`cached_kept`).
     fn state_of<T: ObjectType>(
         &self,
         group_id: &[u8],
@@ -7277,9 +7306,9 @@ impl Node {
         fold: impl Fn() -> Result<coordinator::Coordinator<T>, CoreError>,
     ) -> Result<T::State, CoreError>
     where
-        T::State: std::fmt::Debug + Send + Sync,
+        T::State: std::fmt::Debug + Send + Sync + serde::Serialize + serde::de::DeserializeOwned,
     {
-        self.dir.cached(group_id, T::KIND.name(), what, |a: &T::State, b| format!("{a:?}") == format!("{b:?}"), || fold().map(|c| c.state()))
+        self.dir.cached_kept(group_id, T::KIND.name(), what, |a: &T::State, b| format!("{a:?}") == format!("{b:?}"), || fold().map(|c| c.state()))
     }
 
     fn group_state_of(&self, group_id: &[u8]) -> Result<<crate::group::GroupType as ObjectType>::State, CoreError> {
@@ -7561,7 +7590,7 @@ impl Node {
         for (slot, mime, data) in media {
             crate::host::check_media(slot, data, mime).map_err(CoreError::Coordinator)?;
         }
-        let held = self.folded_host(&self.object_group_id(host_id_hex)?)?.state().publication;
+        let held = self.host_state_of(&self.object_group_id(host_id_hex)?)?.publication;
 
         for (slot, mime, data) in media {
             self.apply(host_id_hex, crate::host::OP_SET_MEDIA, crate::host::set_media_args(slot, data, mime))
@@ -7637,7 +7666,7 @@ impl Node {
             .find(|(_, p)| p.role == HOST_ROLE)
             .map(|(id, _)| id.clone())
             .ok_or_else(|| CoreError::Coordinator("this Site has no Host".into()))?;
-        let held = self.folded_host(&self.object_group_id(&host)?)?.state();
+        let held = self.host_state_of(&self.object_group_id(&host)?)?;
         if !held.parent.as_ref().is_some_and(|p| p.parent == site_hex && p.role == HOST_ROLE) {
             return Err(CoreError::Coordinator(format!(
                 "the Site names {host} as its Host, and the Host does not name the Site"
@@ -7650,7 +7679,7 @@ impl Node {
         let (mut events, mut posts) = (Vec::new(), Vec::new());
         for (id, a) in site.affiliations.iter().filter(|(_, a)| a.rel == crate::group::AffiliationRel::Created) {
             let folded = match self.object_kind(id).as_deref() {
-                Ok("event") => self.object_group_id(id).and_then(|g| self.folded_event(&g)).map(|c| events.push((id, a.at, c.state()))),
+                Ok("event") => self.object_group_id(id).and_then(|g| self.event_state_of(&g)).map(|st| events.push((id, a.at, st))),
                 Ok("post") => self.object_group_id(id).and_then(|g| self.folded_post(&g)).map(|c| posts.push((id, a.at, c.state()))),
                 Ok(_) => Ok(()),
                 Err(_) => {
@@ -8003,7 +8032,7 @@ impl Node {
             if kind != "place" {
                 continue;
             }
-            if let Ok(st) = self.folded_place(&gid).map(|c| c.state()) {
+            if let Ok(st) = self.place_state_of(&gid).map(|st| st) {
                 if let Some(bell) = st.doorbell {
                     tags.insert(Address::from_seed(&bell).tag_hex());
                 }
@@ -9275,10 +9304,9 @@ impl Node {
             if kind != "forum" {
                 continue;
             }
-            let Ok(coord) = self.folded_forum(&gid) else {
+            let Ok(state) = self.forum_state(&gid) else {
                 continue;
             };
-            let state = coord.state();
             if !state.parts.values().any(|p| p.role == ROOM) {
                 continue;
             }
@@ -9300,10 +9328,10 @@ impl Node {
             if kind != "forum" {
                 continue;
             }
-            let Ok(coord) = self.folded_forum(&gid) else {
+            let Ok(state) = self.forum_state(&gid) else {
                 continue;
             };
-            if let Some(p) = &coord.state().parent {
+            if let Some(p) = &state.parent {
                 out.push((hex::encode(&gid), p.parent.clone(), p.role.clone()));
             }
         }

@@ -17,6 +17,9 @@
 //!   fold        a pure function of that history (plus the MLS roster + owner).
 //!               Deterministic: two devices holding the same log fold the same
 //!               state.
+//!   fold_store  where the embedding keeps folds (O-69 option B): folded states
+//!               and views, keyed by the rows' generation and the model. A cache
+//!               of the fold, never a second truth — deletable and rebuildable.
 //!   topology    ONE node per GroupObject, keyed by its object id, carrying the
 //!               CURRENT folded state. A cache of the fold, never a second truth
 //!               — deletable and rebuildable from the log at any time.
@@ -589,7 +592,7 @@ mod icd_dump {
 /// A fold's failure as the cache keeps it: the rows' own refusal (an authorship
 /// signature that does not prove its author, a Delta the reducer rejects), never this
 /// device's (storage, IO), which a later fold may not meet.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Refusal {
     identity: bool,
     words: String,

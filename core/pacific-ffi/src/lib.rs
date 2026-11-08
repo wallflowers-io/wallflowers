@@ -1752,6 +1752,9 @@ impl Core {
             pacific_core::fold_cache::set_model((!arc_build::DIRTY).then_some(arc_build::CORE));
         }
         pacific_core::fold_cache::set_measure(pacific_counting::allocated);
+        // The app's directory outlives the process and is never sealed: its folds are kept
+        // on disk, so a launch reads where the last one left off (O-69 option B).
+        pacific_core::fold_cache::set_persist(true);
         Arc::new(Self { state_dir, held: Default::default(), opens: Default::default() })
     }
 
@@ -4118,7 +4121,13 @@ impl Core {
     /// transcript lines across all synced objects.
     pub fn sync(&self) -> Result<Vec<String>, FfiError> {
         let node = self.write()?;
-        Ok(block_on(node.sync_once())?)
+        let out = block_on(node.sync_once())?;
+        // What arrived is folded and kept now, off the main thread, so the next launch
+        // reads it from disk (O-69 option B).
+        if let Err(e) = node.refold_moved() {
+            tracing::warn!(target: "fold", "keeping what arrived: {e}");
+        }
+        Ok(out)
     }
 }
 

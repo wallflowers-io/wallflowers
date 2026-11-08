@@ -59,6 +59,21 @@ impl PeerStatus {
 /// `delta_log`'s `delivered` flag is left out: the relay's acknowledgement changes nothing
 /// a fold reads. The triggers are dropped and made again at every open, so a changed body
 /// reaches a database made before it.
+/// THE FOLDS KEPT ON DISK (O-69 option B): one row per object, lens and product, keyed as
+/// the memory cache is less its nonce. Named by no trigger, so keeping a fold moves no
+/// generation.
+const FOLD_STORE: &str = r#"
+CREATE TABLE IF NOT EXISTS fold_store (
+  group_id BLOB NOT NULL,
+  lens     TEXT NOT NULL,
+  what     TEXT NOT NULL,
+  gen      INTEGER NOT NULL,
+  model    BLOB NOT NULL,
+  value    BLOB NOT NULL,
+  PRIMARY KEY (group_id, lens, what)
+);
+"#;
+
 const FOLD_GEN: &str = r#"
 CREATE TABLE IF NOT EXISTS fold_gen (
   group_id BLOB PRIMARY KEY,
@@ -594,9 +609,52 @@ impl Directory {
         same: impl Fn(&V, &V) -> bool,
         fresh: impl Fn() -> Result<V, CoreError>,
     ) -> Result<V, CoreError> {
+        self.layered(id, lens, what, same, fresh, |_| None, |_, _| {})
+    }
+
+    /// [`cached`] with the disk beneath memory, where the embedding keeps folds
+    /// (`fold_cache::persist`; O-69 option B): a miss in memory reads `fold_store` under
+    /// the same key, and a fresh fold is kept there as well. A disk hit is checked by
+    /// FC-2 against a refold exactly as a memory hit is.
+    pub fn cached_kept<V: Clone + Send + Sync + 'static + serde::Serialize + serde::de::DeserializeOwned>(
+        &self,
+        id: &[u8],
+        lens: &str,
+        what: &'static str,
+        same: impl Fn(&V, &V) -> bool,
+        fresh: impl Fn() -> Result<V, CoreError>,
+    ) -> Result<V, CoreError> {
+        if !crate::fold_cache::persist() {
+            return self.cached(id, lens, what, same, fresh);
+        }
+        self.layered(id, lens, what, same, fresh, |key| self.kept(key), |key, v| self.keep(key, v))
+    }
+
+    /// The fold cache's one path: memory, then `load`, then the fold, kept in memory and
+    /// handed to `store`.
+    #[allow(clippy::too_many_arguments)]
+    fn layered<V: Clone + Send + Sync + 'static>(
+        &self,
+        id: &[u8],
+        lens: &str,
+        what: &'static str,
+        same: impl Fn(&V, &V) -> bool,
+        fresh: impl Fn() -> Result<V, CoreError>,
+        load: impl Fn(&crate::fold_cache::Key) -> Option<Result<V, crate::object_store::Refusal>>,
+        store: impl Fn(&crate::fold_cache::Key, &Result<V, crate::object_store::Refusal>),
+    ) -> Result<V, CoreError> {
         use crate::object_store::Refusal;
         let Some(key) = self.fold_key(id, lens, what)? else { return fresh() };
-        let hit = self.folds.lock().ok().and_then(|mut c| c.get::<Result<V, Refusal>>(&key));
+        let mut hit = self.folds.lock().ok().and_then(|mut c| c.get::<Result<V, Refusal>>(&key));
+        if hit.is_none() {
+            if let Some(kept) = load(&key) {
+                if let Ok(mut c) = self.folds.lock() {
+                    c.kept += 1;
+                    c.put::<Result<V, Refusal>>(key.clone(), &kept);
+                }
+                hit = Some(kept);
+            }
+        }
         if let Some(hit) = hit {
             if crate::fold_cache::verify() {
                 let again = fresh();
@@ -614,10 +672,54 @@ impl Directory {
             Ok(v) => Some(Ok(v.clone())),
             Err(e) => Refusal::of(e).map(Err),
         };
-        if let (Some(kept), Ok(mut c)) = (kept, self.folds.lock()) {
-            c.put::<Result<V, Refusal>>(key, &kept);
+        if let Some(kept) = kept {
+            store(&key, &kept);
+            if let Ok(mut c) = self.folds.lock() {
+                c.put::<Result<V, Refusal>>(key, &kept);
+            }
         }
         out
+    }
+
+    /// A fold kept on disk under `key`, if there is one and it decodes. A device fault
+    /// reading it is only a miss.
+    fn kept<V: serde::de::DeserializeOwned>(&self, key: &crate::fold_cache::Key) -> Option<Result<V, crate::object_store::Refusal>> {
+        let blob: Vec<u8> = self
+            .conn
+            .query_row(
+                "SELECT value FROM fold_store WHERE group_id = ?1 AND lens = ?2 AND what = ?3 AND gen = ?4 AND model = ?5",
+                params![key.object, key.lens, key.what, key.gen as i64, &key.model[..]],
+                |r| r.get(0),
+            )
+            .optional()
+            .ok()??;
+        ciborium::from_reader(&blob[..]).ok()
+    }
+
+    /// Keep a fold on disk under `key`, replacing the object's older one. Best effort: a
+    /// fold not kept is folded again next time.
+    fn keep<V: serde::Serialize>(&self, key: &crate::fold_cache::Key, v: &Result<V, crate::object_store::Refusal>) {
+        let mut blob = Vec::new();
+        if ciborium::into_writer(v, &mut blob).is_err() {
+            return;
+        }
+        let _ = self.conn.execute(
+            "INSERT OR REPLACE INTO fold_store (group_id, lens, what, gen, model, value) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![key.object, key.lens, key.what, key.gen as i64, &key.model[..], blob],
+        );
+    }
+
+    /// Every object whose generation has moved past what `fold_store` keeps for it under
+    /// `model`: what a write pass left to fold (`Node::refold_moved`).
+    pub fn moved_objects(&self, model: &[u8; 32]) -> Result<Vec<(Vec<u8>, String)>, CoreError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT o.group_id, o.kind FROM groups o JOIN fold_gen g ON g.group_id = o.group_id
+             WHERE NOT EXISTS (SELECT 1 FROM fold_store s
+                               WHERE s.group_id = o.group_id AND s.gen = g.gen AND s.model = ?1)
+             ORDER BY o.group_id",
+        )?;
+        let rows = stmt.query_map(params![&model[..]], |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, String>(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     /// The object's fold generation: 0 when nothing the fold reads was ever written.
@@ -737,7 +839,18 @@ impl Directory {
         );
         let _ = conn.execute("DROP TABLE IF EXISTS inbox_cursor", []);
         // After the migrations: the triggers name columns some of them add.
+        let gens: i64 = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'fold_gen'",
+            [],
+            |r| r.get(0),
+        )?;
+        conn.execute_batch(FOLD_STORE)?;
         conn.execute_batch(FOLD_GEN)?;
+        // Generations that start again from nothing could meet a kept fold of an earlier
+        // count: the kept folds go with them.
+        if gens == 0 {
+            conn.execute("DELETE FROM fold_store", [])?;
+        }
         Ok(())
     }
 
