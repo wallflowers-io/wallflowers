@@ -3338,9 +3338,11 @@ version = "0.1.0"
 name = "pacific-ffi"
 version = "0.1.0"
 dependencies = [
+ "arc-build",
  "base64",
  "hex",
  "pacific-core",
+ "pacific-counting",
  "pacific-media",
  "serde_json",
  "thiserror 2.0.20",

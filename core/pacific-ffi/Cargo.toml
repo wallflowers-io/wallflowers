@@ -15,6 +15,10 @@ crate-type = ["staticlib", "lib"]
 [dependencies]
 pacific-media = { path = "../pacific-media" }
 pacific-core = { workspace = true }
+# The fold cache (O-69): its measure, installed as the global allocator, and the build stamp
+# that names its model; build-ios.sh fills ARC_BUILD_*.
+pacific-counting = { workspace = true }
+arc-build = { workspace = true }
 uniffi = { workspace = true }
 thiserror = { workspace = true }
 hex = { workspace = true }

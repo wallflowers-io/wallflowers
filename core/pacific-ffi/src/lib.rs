@@ -22,6 +22,10 @@ use std::sync::Arc;
 
 use pacific_core::Node;
 
+/// What the fold cache measures its entries by (O-69, FC-10).
+#[global_allocator]
+static ALLOC: pacific_counting::Counting = pacific_counting::Counting;
+
 /// One loud FFI error. pacific-core's typed `CoreError` is flattened to a message
 /// at the boundary and surfaces in Swift as a native `throws`. No silent path.
 #[derive(uniffi::Error, Debug, thiserror::Error)]
@@ -1643,6 +1647,12 @@ impl Core {
     #[uniffi::constructor]
     pub fn new(state_dir: String) -> Arc<Self> {
         std::env::set_var("PACIFIC_STATE_DIR", &state_dir);
+        // THE FOLD CACHE (O-69), as the Door turns it on: its model the core commit a stamped,
+        // clean build was built from; a dirty one names none and folds uncached (FC-8).
+        if arc_build::STAMPED {
+            pacific_core::fold_cache::set_model((!arc_build::DIRTY).then_some(arc_build::CORE));
+        }
+        pacific_core::fold_cache::set_measure(pacific_counting::allocated);
         Arc::new(Self { state_dir })
     }
 
