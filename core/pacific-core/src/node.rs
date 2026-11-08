@@ -2094,9 +2094,11 @@ impl Node {
         Ok((delta_id, envelope))
     }
 
-    /// Encrypt + seal + PUB one queued Delta to the shared group tag, marking it
-    /// delivered on the relay Ack. Shared by the post path and the outbox resend. A
-    /// sequenced one goes with every other queued on its object, each through its slot.
+    /// Encrypt + seal + PUB one Delta to the shared group tag, marking it delivered on
+    /// the relay Ack. Shared by the post path, the outbox resend and re-emission. A
+    /// sequenced one still in the outbox goes with every other queued on its object, each
+    /// through its slot; one already sent (a re-emission to a joiner) took its place when
+    /// it first went, and goes again as it is.
     async fn flush_one(
         &self,
         sess: &mut Router,
@@ -2105,7 +2107,9 @@ impl Node {
         delta_id: &[u8; 32],
         envelope: &[u8],
     ) -> Result<(), CoreError> {
-        if coordinator::decode_delta(envelope)?.seq.is_some() {
+        if coordinator::decode_delta(envelope)?.seq.is_some()
+            && self.dir.pending_outbox(group_id, &self.id.identity_pk())?.iter().any(|(d, _)| d == delta_id)
+        {
             return self.flush_sequenced(sess, group, group_id).await;
         }
         self.publish_one(sess, group, group_id, delta_id, envelope).await
@@ -2114,16 +2118,19 @@ impl Node {
     /// EVERY UNSENT SEQUENCED DELTA OF ONE OBJECT, IN ORDER, EACH THROUGH ITS SLOT (ICD
     /// `mls.sequencing.slot`; RFC 9750 §5.2.1). The owner's devices all write as the
     /// owner, so no one device's fold can order them: the relay does, first writer wins,
-    /// as it does for the spine's links. Each pass authors the queue again from the head
-    /// this device folds (the same bytes when nothing moved; a new position when a write
-    /// was made offline, or a slot was lost), and a lost slot climbs, takes the winner
-    /// into the log, and passes again. A queued op the new head refuses is said, not sent.
+    /// as it does for the spine's links. A delta claims the place after its predecessor
+    /// and goes AS WRITTEN — a re-emission, a write from before the object had a second
+    /// leaf, a row a history bundle already named, keep their ids. Only a lost slot moves
+    /// anything: it climbs, takes the winner into the log, and authors that delta and
+    /// every one queued after it again from the new head. An op the new head refuses is
+    /// said, not sent.
     async fn flush_sequenced(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8]) -> Result<(), CoreError> {
         let root = crate::locator::storage_root(&*self.seed_or_refuse()?);
-        for _ in 0..crate::icd_consts::SEQ_SLOT_ROUNDS {
+        for round in 0..crate::icd_consts::SEQ_SLOT_ROUNDS {
             let mut lost = false;
-            for (did, envelope, epoch, seq) in self.requeue_sequenced(group, group_id)? {
-                let slot = seq_slot(&root, group_id, epoch, seq);
+            let queue = if round == 0 { self.queued_sequenced(group_id)? } else { self.requeue_sequenced(group, group_id)? };
+            for (did, envelope, prev) in queue {
+                let slot = seq_slot(&root, group_id, &prev);
                 let won = match sess.publish_commit(&slot, &pacific_wire::blob_b64(&self.slot_claim(&root, &slot, group_id, &did, &envelope)?)).await? {
                     Some(_) => true,
                     // Taken: by this delta (a resend after its claim was acked), or by another.
@@ -2138,7 +2145,7 @@ impl Node {
                 };
                 if !won {
                     tracing::info!(target: "pacific::sync", group = %hex::encode(&group_id[..group_id.len().min(6)]),
-                                   epoch, seq, "lost the slot; authoring the queue again from the winner");
+                                   after = %hex::encode(&prev[..6]), "lost the slot; authoring the queue again from the winner");
                     self.climb(sess, group, group_id).await?;
                     lost = true;
                     break;
@@ -2155,12 +2162,25 @@ impl Node {
         )))
     }
 
-    /// This device's unsent sequenced deltas on one object, authored again from the head
-    /// the log folds to without them, in their order: `(id, envelope, epoch, seq)`. A
-    /// delta whose position has not moved comes back byte-identical and is left alone;
-    /// one that has is replaced in the outbox; one the new head refuses is dropped, and
-    /// said ("your change was superseded").
-    fn requeue_sequenced(&self, group: &mls::Group, group_id: &[u8]) -> Result<Vec<([u8; 32], Vec<u8>, u64, u64)>, CoreError> {
+    /// This device's unsent sequenced deltas on one object, as written, in their order:
+    /// `(id, envelope, prev)`.
+    fn queued_sequenced(&self, group_id: &[u8]) -> Result<Vec<([u8; 32], Vec<u8>, [u8; 32])>, CoreError> {
+        let mut queued = Vec::new();
+        for (did, env) in self.dir.pending_outbox(group_id, &self.id.identity_pk())? {
+            let d = coordinator::decode_delta(&env)?;
+            if d.seq.is_some() {
+                queued.push((crate::fold::spine_order(&d), did, env, d.prev));
+            }
+        }
+        queued.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(queued.into_iter().map(|(_, did, env, prev)| (did, env, prev)).collect())
+    }
+
+    /// The same queue, authored again from the head the log folds to without it, after a
+    /// lost slot: `(id, envelope, prev)`. A delta whose place has not moved comes back
+    /// byte-identical and is left alone; one that has is replaced in the outbox; one the
+    /// new head refuses is dropped, and said ("your change was superseded").
+    fn requeue_sequenced(&self, group: &mls::Group, group_id: &[u8]) -> Result<Vec<([u8; 32], Vec<u8>, [u8; 32])>, CoreError> {
         let me = self.id.identity_pk();
         let mut queued: Vec<coordinator::Delta> = Vec::new();
         for (_, env) in self.dir.pending_outbox(group_id, &me)? {
@@ -2205,13 +2225,13 @@ impl Node {
             });
             match built {
                 Ok(new) if new.id() == old_id => {
-                    out.push((old_id, new.canonical_bytes(), new.epoch, new.seq.unwrap_or(0)));
+                    out.push((old_id, new.canonical_bytes(), new.prev));
                     log.push((new, me));
                 }
                 Ok(new) => {
                     self.dir.drop_undelivered(group_id, &old_id)?;
                     let (id, envelope) = self.append_local(group_id, new.clone())?;
-                    out.push((id, envelope, new.epoch, new.seq.unwrap_or(0)));
+                    out.push((id, envelope, new.prev));
                     log.push((new, me));
                 }
                 Err(why) => {
@@ -11798,17 +11818,18 @@ fn pool_keys_in(group: &mls::Group) -> std::collections::HashSet<[u8; 32]> {
         .collect()
 }
 
-/// THE SLOT a sequenced delta at `(epoch, seq)` on one object claims (ICD
-/// `mls.sequencing.slot`). From the owner's storage root, so only the owner's own
-/// devices, the sequenced spine's only writers, can claim or read it; the relay sees a tag.
-fn seq_slot(root: &[u8; 32], group_id: &[u8], epoch: u64, seq: u64) -> Address {
+/// THE SLOT a sequenced delta claims on one object: the place after its predecessor
+/// (ICD `mls.sequencing.slot`). Two deltas after one `prev` are a fork wherever their
+/// `(epoch, seq)` fall, so `prev` is the key. From the owner's storage root, so only the
+/// owner's own devices, the sequenced spine's only writers, can claim or read it; the
+/// relay sees a tag.
+fn seq_slot(root: &[u8; 32], group_id: &[u8], prev: &[u8; 32]) -> Address {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
     h.update(crate::icd_consts::SEQ_SLOT_LABEL.as_bytes());
     h.update(root);
     h.update(group_id);
-    h.update(epoch.to_be_bytes());
-    h.update(seq.to_be_bytes());
+    h.update(prev);
     Address::from_seed(&h.finalize().into())
 }
 

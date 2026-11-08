@@ -1630,10 +1630,11 @@ impl<T: ObjectType> Coordinator<T> {
     }
 
     /// [`Self::deliver`], with the one order among the owner's devices (ICD
-    /// `mls.sequencing.tiebreak`; RFC 9750 §5.2.2). A sequenced delta that finds its slot
-    /// taken, or that chains from one that did, is SUPERSEDED: set aside and named, not a
-    /// reason to stop the fold. Delivered in [`crate::fold::spine_order`], the lowest
-    /// DeltaId at a slot is the one that stands. Every other rejection is returned as is.
+    /// `mls.sequencing.tiebreak`; RFC 9750 §5.2.2). Two deltas after one predecessor are a
+    /// fork, at one `(epoch, seq)` or across an epoch. Delivered in
+    /// [`crate::fold::spine_order`], the first stands (the lowest DeltaId, at one seat); a
+    /// later one, and every delta chained from it, is SUPERSEDED: set aside and named, not
+    /// a reason to stop the fold. Every other rejection is returned as is.
     pub fn deliver_resolving(&mut self, delta: Delta, author: MemberId) -> Result<bool, DeltaRejection> {
         let Some(_) = delta.seq else {
             return self.deliver(delta, author);
@@ -1644,7 +1645,8 @@ impl<T: ObjectType> Coordinator<T> {
                 self.superseded.insert(id);
                 Ok(false)
             }
-            Err(DeltaRejection::ChainBroken) if self.superseded.contains(&prev) => {
+            // Its predecessor is set aside, or is held and already followed: a sibling.
+            Err(DeltaRejection::ChainBroken) if self.superseded.contains(&prev) || self.spine.holds(&prev) => {
                 self.superseded.insert(id);
                 Ok(false)
             }
@@ -2308,6 +2310,11 @@ impl SequencedCoordinator {
     /// The owner NOW — the last one to take over.
     pub fn current_owner(&self) -> Option<[u8; 32]> {
         self.owners.last().map(|(_, o)| *o)
+    }
+
+    /// Whether `id` is on the accepted spine.
+    pub fn holds(&self, id: &[u8; 32]) -> bool {
+        self.spine.iter().any(|(_, held, _)| held == id)
     }
 
     /// The head (last accepted) position + id, or None on an empty spine.

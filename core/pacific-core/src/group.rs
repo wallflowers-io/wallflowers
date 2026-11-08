@@ -1528,6 +1528,24 @@ mod tests {
         assert_eq!(two.superseded(), gone);
     }
 
+    /// A fork ACROSS AN EPOCH: one device writes at (0, 1), another, not having seen it, opens
+    /// epoch 1 after the same predecessor. Two deltas after one `prev` at different seats;
+    /// the first in spine order stands, the same in any arrival order.
+    #[test]
+    fn a_fork_across_an_epoch_resolves_to_the_first_in_spine_order() {
+        let g = named(0, 0, GENESIS_PREV, "base");
+        let same_epoch = named(0, 1, g.id(), "phone");
+        let next_epoch = named(1, 0, g.id(), "laptop");
+        let after = named(1, 1, next_epoch.id(), "laptop again");
+        let one = fold_of(&[&g, &same_epoch, &next_epoch, &after]).expect("a fork across an epoch resolves");
+        let two = fold_of(&[&after, &next_epoch, &same_epoch, &g]).expect("in any order");
+        assert_eq!(one.state().display_name, "phone", "(0, 1) comes first in spine order");
+        assert_eq!(one.accepted_digest(), two.accepted_digest());
+        let mut gone = vec![next_epoch.id(), after.id()];
+        gone.sort();
+        assert_eq!(one.superseded(), gone);
+    }
+
     /// The tie-break settles TWO claimants; it does not paper over a gap. A delta whose
     /// predecessor this replica never held still breaks the chain (`mls`: "a partial
     /// spine breaks the chain").

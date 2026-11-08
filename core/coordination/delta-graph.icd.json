@@ -102,11 +102,11 @@
     "sequencing": {
       "summary": "How an owner's devices keep one order of the owner-sequenced spine (fold: sequenced). The owner is a person, and every one of their leaves writes as the owner, so the order cannot come from any one device's fold. It comes from the Delivery Service, as MLS orders commits (RFC 9750 §5.2.1), and where it did not, from a rule every client applies alike (RFC 9750 §5.2.2, §5.3).",
       "slot": {
-        "summary": "Before it is sent, a sequenced delta at (epoch, seq) claims the commit-flagged slot at Address::from_seed(SHA-256(label ‖ the owner's storage root ‖ group id ‖ epoch ‖ seq, both big-endian u64)), carrying its signed payload (mls.applicationPayload) sealed under that root: first writer wins, as for the spine's links and the lease cells. The root is the seed's, so only the owner's own devices, the spine's only writers, can claim or read a slot; no member can squat one, and the relay sees a tag. The loser climbs to head, reads the winner from the slot, takes it into its log, and authors its queued ops again from the new head, up to `rounds` times; an op the new head refuses is superseded, and said.",
+        "summary": "Before it is sent, a sequenced delta claims the commit-flagged slot for the place after its predecessor: Address::from_seed(SHA-256(label ‖ the owner's storage root ‖ group id ‖ prev)), carrying its signed payload (mls.applicationPayload) sealed under that root. First writer wins, as for the spine's links and the lease cells. Two deltas after one prev are a fork wherever their (epoch, seq) fall, so prev is the key. The root is the seed's, so only the owner's own devices, the spine's only writers, can claim or read a slot; no member can squat one, and the relay sees a tag. A delta goes as written; only a loser moves: it climbs to head, reads the winner from the slot, takes it into its log, and authors itself and every delta queued after it again from the new head, up to `rounds` times. An op the new head refuses is superseded, and said.",
         "label": "pacific/seq-slot/v1",
         "rounds": 8
       },
-      "tiebreak": "Where more than one delta holds one (epoch, seq) — written before the slot, or by a client without it — the lowest DeltaId stands. The others, and every delta chained from them, are superseded: kept in the log, left out of the fold, and named in the object's compliance."
+      "tiebreak": "Where more than one delta follows one predecessor (written before the slot, or by a client without it), the first in spine order (epoch, seq, then the lowest DeltaId) stands. The others, and every delta chained from them, are superseded: kept in the log, left out of the fold, and named."
     }
   },
   "conformance": {
