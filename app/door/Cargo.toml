@@ -16,6 +16,8 @@ face-render = { path = "../../arc/lib/face-render" }
 # Without `lode`: the Door never projects into LodeDB, so lodedb-core, lodedb-gpu and
 # cudarc stay out of its build (O-36).
 pacific-core = { path = "../../core/pacific-core", default-features = false, features = ["mls", "storage", "transport"] }
+# The fold cache's measure, installed as the global allocator (main.rs).
+pacific-counting = { path = "../../core/pacific-counting" }
 # ArgVal/Args live here; the door reads what a mint would carry
 pacific-media = { path = "../../core/pacific-media" }
 axum = "0.7.9"

@@ -21,7 +21,6 @@
 mod account;
 mod auth;
 mod icd;
-mod counting;
 mod face;
 mod members;
 mod pow;
@@ -33,7 +32,7 @@ mod routes;
 
 /// What the fold cache measures its entries by (O-69, FC-10).
 #[global_allocator]
-static ALLOC: counting::Counting = counting::Counting;
+static ALLOC: pacific_counting::Counting = pacific_counting::Counting;
 
 use axum::{
     extract::{Request, State},

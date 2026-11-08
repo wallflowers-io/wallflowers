@@ -7,6 +7,7 @@ members = [
   # core: the protocol
   "core/pacific-wire",
   "core/pacific-core",
+  "core/pacific-counting",
   "core/pacific-ffi",
   "core/uniffi-bindgen",
   "core/pacific-geometry",
@@ -49,6 +50,8 @@ license = "AGPL-3.0-or-later"
 [workspace.dependencies]
 pacific-wire = { path = "core/pacific-wire" }
 pacific-core = { path = "core/pacific-core" }
+# The fold cache's measure: the counting allocator every embedding installs (O-69, FC-10).
+pacific-counting = { path = "core/pacific-counting" }
 # The deploy stamp every shipped plane compiles in; arc/hosting/deploy-arc.sh fills its env.
 arc-build = { path = "arc/lib/arc-build" }
 # MLS (sync — do NOT set --cfg mls_build_async). rustcrypto = no system OpenSSL dep.

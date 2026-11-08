@@ -99,6 +99,8 @@ serde_json.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+# The tests' global allocator: the fold cache's measure (tests/it/common).
+pacific-counting = { workspace = true }
 # The resume lines a sign-in emits, captured by its test.
 tracing-subscriber = "0.3"
 # Integration/transport tests spin up a real in-process Semaphore relay: the Arc's, in

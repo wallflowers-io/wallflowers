@@ -1253,6 +1253,7 @@ dependencies = [
  "libc",
  "p256",
  "pacific-core",
+ "pacific-counting",
  "pacific-media",
  "postgres",
  "rand_core 0.6.4",
@@ -3309,6 +3310,7 @@ dependencies = [
  "mls-rs",
  "mls-rs-core",
  "mls-rs-crypto-rustcrypto",
+ "pacific-counting",
  "pacific-media",
  "pacific-wire",
  "rand_core 0.6.4",
@@ -3327,6 +3329,10 @@ dependencies = [
  "tracing-subscriber",
  "zeroize",
 ]
+
+[[package]]
+name = "pacific-counting"
+version = "0.1.0"
 
 [[package]]
 name = "pacific-ffi"

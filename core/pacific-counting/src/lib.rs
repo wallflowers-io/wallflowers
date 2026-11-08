@@ -1,7 +1,8 @@
 //! THE FOLD CACHE'S MEASURE (O-69, FC-10): the system allocator, counting each thread's
 //! bytes allocated net of those freed, so what a cache entry retains is counted on the
 //! thread that builds it, not estimated. pacific-core forbids unsafe code, so the
-//! embedding holds the allocator and names its count (`fold_cache::set_measure`).
+//! embedding installs this as its `#[global_allocator]` and names its count
+//! (`fold_cache::set_measure(pacific_counting::allocated)`).
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
