@@ -342,11 +342,117 @@ pub struct MembershipDivergence {
     pub phantom: Vec<String>,
 }
 
+/// One object from the core's one sweep (`Node::object_rows`). Identities are 64-char
+/// hex; "" where there is none.
 #[derive(uniffi::Record)]
 pub struct ObjectRow {
     pub id: String,
     pub kind: String,
     pub name: String,
+    pub owner: String,
+    /// Who made it: the group's first owner. A handover never changes it.
+    pub creator: String,
+    pub members: Vec<String>,
+    /// The object it is a part of (`base.setParent`), and in what role (`comments`, `room`, …).
+    pub parent: String,
+    pub parent_role: String,
+    /// For a connection's objects: the peer, and `channel` or `chat`.
+    pub peer: String,
+    pub link: String,
+}
+
+/// One person: this device's identity (`is_me`), or a connection.
+#[derive(uniffi::Record)]
+pub struct PersonRow {
+    /// 64-char identity hex: the key every roster and author field uses.
+    pub identity: String,
+    /// The `space1…` address `connections()` and pairing use.
+    pub space_id: String,
+    pub name: String,
+    pub connected: bool,
+    pub is_me: bool,
+    /// The avatar's block colour, "RRGGBB", or "".
+    pub color: String,
+    /// When the avatar photo was captured (unix secs; 0 = none): moves exactly when the
+    /// photo does, so a decoded copy is keyed on it.
+    pub photo_at: u64,
+}
+
+/// A person's avatar photo, base64, and its mime type.
+#[derive(uniffi::Record)]
+pub struct PersonPhoto {
+    pub photo: String,
+    pub mime: String,
+}
+
+/// The core's object kinds (`pacific_core::object::ObjectKind`, pinned to the ICD), as
+/// Swift sees them. Both conversions are exhaustive matches, so a kind added to the core
+/// fails this build until it is added here: the list cannot drift.
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ObjectKind {
+    Group,
+    Forum,
+    Field,
+    System,
+    Project,
+    Topic,
+    Contact,
+    Conversation,
+    Thing,
+    Place,
+    Event,
+    Post,
+    Treasury,
+    Note,
+    Host,
+    Transaction,
+}
+
+impl From<pacific_core::object::ObjectKind> for ObjectKind {
+    fn from(k: pacific_core::object::ObjectKind) -> Self {
+        use pacific_core::object::ObjectKind as K;
+        match k {
+            K::Group => Self::Group,
+            K::Forum => Self::Forum,
+            K::Field => Self::Field,
+            K::System => Self::System,
+            K::Project => Self::Project,
+            K::Topic => Self::Topic,
+            K::Contact => Self::Contact,
+            K::Conversation => Self::Conversation,
+            K::Thing => Self::Thing,
+            K::Place => Self::Place,
+            K::Event => Self::Event,
+            K::Post => Self::Post,
+            K::Treasury => Self::Treasury,
+            K::Note => Self::Note,
+            K::Host => Self::Host,
+            K::Transaction => Self::Transaction,
+        }
+    }
+}
+
+impl From<ObjectKind> for pacific_core::object::ObjectKind {
+    fn from(k: ObjectKind) -> Self {
+        match k {
+            ObjectKind::Group => Self::Group,
+            ObjectKind::Forum => Self::Forum,
+            ObjectKind::Field => Self::Field,
+            ObjectKind::System => Self::System,
+            ObjectKind::Project => Self::Project,
+            ObjectKind::Topic => Self::Topic,
+            ObjectKind::Contact => Self::Contact,
+            ObjectKind::Conversation => Self::Conversation,
+            ObjectKind::Thing => Self::Thing,
+            ObjectKind::Place => Self::Place,
+            ObjectKind::Event => Self::Event,
+            ObjectKind::Post => Self::Post,
+            ObjectKind::Treasury => Self::Treasury,
+            ObjectKind::Note => Self::Note,
+            ObjectKind::Host => Self::Host,
+            ObjectKind::Transaction => Self::Transaction,
+        }
+    }
 }
 
 /// Where the core's `tracing` events go on a device: the app's own log, which keeps
@@ -1396,18 +1502,6 @@ pub struct ForumRoomRow {
     pub held: bool,
 }
 
-/// One Forum's back-edge, from the Forum's own fold: the object it is a part of, and
-/// in what role. A Forum in the comments role is its parent's, not a conversation.
-#[derive(uniffi::Record)]
-pub struct ForumParentRow {
-    /// The Forum's object id.
-    pub forum: String,
-    /// The object it is a part of.
-    pub parent: String,
-    /// What it is for there: `comments`, `room`, …
-    pub role: String,
-}
-
 /// One room→host edge, the REVERSE of `forum_rooms`: which Channel hosts this
 /// room. The CHAT list joins on `room` so a channel's room renders as
 /// "Channel / Room" instead of posing as a free-standing chat.
@@ -1955,12 +2049,50 @@ impl Core {
     /// List our standalone objects: (id, kind, name). `name` is the MLS GroupContext
     /// display name — read live, and resolved for the whole list on one MLS client,
     /// so the chat list needs no per-row `object_title` round trip.
-    pub fn objects(&self) -> Result<Vec<ObjectRow>, FfiError> {
+    #[uniffi::method(default(kind = None))]
+    pub fn objects(&self, kind: Option<ObjectKind>) -> Result<Vec<ObjectRow>, FfiError> {
+        let hex_or_empty = |k: Option<[u8; 32]>| k.map(hex::encode).unwrap_or_default();
         Ok(self.read()?
-            .objects_named()?
+            .object_rows(kind.map(Into::into))?
             .into_iter()
-            .map(|(id, kind, name)| ObjectRow { id, kind, name })
+            .map(|o| ObjectRow {
+                owner: hex_or_empty(o.owner),
+                creator: hex_or_empty(o.creator),
+                members: o.members.iter().map(hex::encode).collect(),
+                parent: o.parent.as_ref().map(|p| p.parent.clone()).unwrap_or_default(),
+                parent_role: o.parent.map(|p| p.role).unwrap_or_default(),
+                peer: hex_or_empty(o.peer),
+                link: o.link.unwrap_or_default().to_string(),
+                id: o.id,
+                kind: o.kind,
+                name: o.name,
+            })
             .collect())
+    }
+
+    /// Every person: this device's identity first, then each connection, with the
+    /// profile they published. Photos are fetched apart: [`Core::person_photo`].
+    pub fn people(&self) -> Result<Vec<PersonRow>, FfiError> {
+        Ok(self.read()?
+            .people()?
+            .into_iter()
+            .map(|p| PersonRow {
+                identity: hex::encode(p.identity),
+                space_id: space_id_of(&p.identity),
+                name: p.name,
+                connected: p.connected,
+                is_me: p.is_me,
+                color: p.color,
+                photo_at: p.photo_at,
+            })
+            .collect())
+    }
+
+    /// One person's avatar photo, by identity (hex or `space1…`), or None. The one
+    /// read of photo bytes.
+    pub fn person_photo(&self, identity: String) -> Result<Option<PersonPhoto>, FfiError> {
+        let pk = pacific_core::identity::parse_identity_key(&identity)?;
+        Ok(self.read()?.person_photo(&pk)?.map(|(photo, mime)| PersonPhoto { photo, mime }))
     }
 
     /// Mint a new object (e.g. kind `"forum"`) as a group of one. `name` (may be
@@ -3617,16 +3749,6 @@ impl Core {
             .forum_rooms(&forum_id)?
             .into_iter()
             .map(|(id, name, at, held)| ForumRoomRow { id, name, at, held })
-            .collect())
-    }
-
-    /// Every Forum's back-edge this device can fold, in one call, so the CHAT list
-    /// never does a per-row fold. Synchronous read.
-    pub fn forum_parents(&self) -> Result<Vec<ForumParentRow>, FfiError> {
-        Ok(self.read()?
-            .forum_parents()?
-            .into_iter()
-            .map(|(forum, parent, role)| ForumParentRow { forum, parent, role })
             .collect())
     }
 
