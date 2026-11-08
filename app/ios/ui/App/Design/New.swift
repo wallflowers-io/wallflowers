@@ -677,9 +677,6 @@ extension NewSession {
     /// (Ralph, 18 Aug) — the same card, turned, wearing the audience dial's own colour so
     /// you can see at a glance which face you are on.
     var tint: Color { face == .visibility ? NewSurface.visibilityCyan : kind.gloss.hi }
-    var glow: Color {
-        face == .visibility ? NewSurface.visibilityCyan.darkened(0.34) : kind.gloss.lo
-    }
 }
 
 /// ONE session's glass card — the fields, the header, the visibility face. `NewSurface`
@@ -721,7 +718,6 @@ struct NewCard: View {
     private var exit: NewExit? { session.exit }
     private var kind: NewKind { session.kind }
     private var tint: Color { session.tint }
-    private var glow: Color { session.glow }
 
     /// The tint for kept, azure for handed off. Discarding gets NO colour — it goes the
     /// way it always went, and a draft thrown away is not an event worth marking.
@@ -832,7 +828,7 @@ struct NewCard: View {
         // The shared glass. `flash` swaps the resting edge for the outcome's colour.
         // Opaque for every kind (Ralph, 5 Nov): the note's see-through ground made it the
         // odd card out beside the others.
-        .composeGlass(tint: tint, glow: glow, flash: flash, opaque: true)
+        .composeGlass(tint: tint, flash: flash, opaque: true)
     }
 
     /// The modal's title, in the SAME type as the "NOTE" / "CHAT" word a screen shows
