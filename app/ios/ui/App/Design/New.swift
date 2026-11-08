@@ -1423,6 +1423,11 @@ private struct CreatorPages: View {
     /// Which scroll view the person is touching; the other follows it.
     @State private var lead: Lead = .cards
     private enum Lead { case cards, dial }
+    /// The dial has once stood where the cards are. Until then it neither leads nor moves
+    /// them: its first report, before its position applies, reads the leading margin (two
+    /// items), and the touch that opened the creator can still be on it — on a cold first
+    /// launch that pair carried the cards two kinds along, Event to Place.
+    @State private var dialAligned = false
 
     private static let laps = 5
 
@@ -1448,13 +1453,19 @@ private struct CreatorPages: View {
             if choosing {
                 KindDial(kinds: creator.kinds, ids: ids, position: $dial,
                          selected: Int(at.rounded()), following: lead == .cards,
-                         touched: { lead = .dial },
+                         touched: { if dialAligned { lead = .dial } },
                          moved: { f in
-                             if lead == .dial { cards.scrollTo(x: f * cardWidth) }
+                             if !dialAligned {
+                                 dialAligned = abs(f - at) < 0.5
+                             } else if lead == .dial {
+                                 cards.scrollTo(x: f * cardWidth)
+                             }
                          },
                          rested: { if lead == .dial { rest() } },
                          pick: pick)
                     .transition(.move(edge: .top).combined(with: .opacity))
+                    // A dial that comes back (after VISIBILITY) aligns again before it leads.
+                    .onDisappear { dialAligned = false }
             }
 
             ScrollView(.horizontal) {
