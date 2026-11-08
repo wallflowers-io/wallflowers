@@ -2259,7 +2259,7 @@ impl Node {
                     )));
                 }
                 self.dir
-                    .append_delta_signed(group_id, &did, &author, &envelope, Some(&sig), unix_now())?;
+                    .append_delta_received(group_id, &did, &author, &envelope, &sig, unix_now())?;
                 Ok(false)
             }
             mls::Incoming::Commit { .. } => {
