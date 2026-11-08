@@ -155,21 +155,41 @@ impl Gateway {
             .map(|r| r.status().is_success())
             .unwrap_or(false)
     }
+
+    /// The relay's own `GET /health` (relay/src/health.rs), served on its websocket's port:
+    /// whether its store takes a write and how much disk is free. `None` with no relay.
+    async fn relay_health(&self) -> Option<serde_json::Value> {
+        let ws = self.relay.as_deref()?;
+        let url = format!("{}/health", ws.trim_end_matches('/').replacen("ws", "http", 1));
+        let got = self.http.get(url).timeout(std::time::Duration::from_secs(2)).send().await;
+        Some(match got {
+            Ok(r) => {
+                let ok = r.status().is_success();
+                let b: serde_json::Value = r.json().await.unwrap_or_default();
+                serde_json::json!({ "live": true, "ok": ok, "store": b["store"], "disk_free_pct": b["disk_free_pct"] })
+            }
+            Err(_) => serde_json::json!({ "live": false, "ok": false }),
+        })
+    }
 }
 
 /// GET /v1/health — aggregate liveness of the Arc and each plane.
 async fn health(State(gw): State<Arc<Gateway>>) -> Response {
-    let (systems, membership, land, boxoffice, waker) = tokio::join!(
+    let (relay, systems, membership, land, boxoffice, waker) = tokio::join!(
+        gw.relay_health(),
         gw.probe(&gw.systems),
         gw.probe(&gw.membership),
         gw.probe(&gw.land),
         gw.probe(&gw.boxoffice),
         gw.probe(&gw.waker)
     );
+    // A relay that cannot keep what it is sent refuses every publish (8 Nov 2026): the Arc
+    // is not ok, and says so in the status a monitor reads.
+    let degraded = relay.as_ref().is_some_and(|r| r["ok"] != true);
     let body = serde_json::json!({
-        "status": "ok",
+        "status": if degraded { "degraded" } else { "ok" },
         "planes": {
-            "relay":     { "live": gw.relay.is_some() },
+            "relay":     relay.unwrap_or_else(|| serde_json::json!({ "live": false })),
             "systems":   { "live": systems },
             "land":      { "live": land },
             "box":       { "live": boxoffice },
@@ -179,7 +199,8 @@ async fn health(State(gw): State<Arc<Gateway>>) -> Response {
             "membership":{ "live": membership },
         }
     });
-    (StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], body.to_string()).into_response()
+    let status = if degraded { StatusCode::SERVICE_UNAVAILABLE } else { StatusCode::OK };
+    (status, [(axum::http::header::CONTENT_TYPE, "application/json")], body.to_string()).into_response()
 }
 
 /// GET /v1/arc — the Arc's identity (proxied from membership) augmented with a live
@@ -1458,6 +1479,53 @@ mod tests {
             console_basic: None,
             app_origin: None,
         })
+    }
+
+    /// /v1/health over a real relay: 200 only while its store takes a write on a disk with
+    /// room; 503 `degraded` when it cannot, or does not answer (8 Nov 2026).
+    #[tokio::test]
+    async fn health_is_degraded_when_the_relay_cannot_keep_what_it_is_sent() {
+        async fn relay_at(min_disk_free_pct: u64) -> String {
+            let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+            let db = std::env::temp_dir().join(format!("gw-health-{}-{nanos}.db", std::process::id()));
+            let store = relay::store::Store::open(db.to_str().unwrap()).unwrap();
+            let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("ws://{}", l.local_addr().unwrap());
+            let limits = relay::Limits { min_disk_free_pct, ..relay::Limits::default() };
+            tokio::spawn(relay::serve_with_policy(l, Box::new(store), relay::Retention::default(), limits, None));
+            url
+        }
+        async fn ask(relay: Option<String>) -> (StatusCode, serde_json::Value) {
+            let mut gw = (*bare_gateway(None)).clone();
+            gw.relay = relay;
+            // The relay's first check runs as it starts.
+            for _ in 0..50 {
+                let r = health(State(Arc::new(gw.clone()))).await;
+                let status = r.status();
+                let body: serde_json::Value = serde_json::from_slice(&body_of(r).await).unwrap();
+                if body["planes"]["relay"]["disk_free_pct"].is_u64() || body["planes"]["relay"]["live"] != true {
+                    return (status, body);
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+            panic!("the relay never reported its disk");
+        }
+
+        let (status, body) = ask(Some(relay_at(0).await)).await;
+        assert_eq!((status, &body["status"]), (StatusCode::OK, &serde_json::json!("ok")), "{body}");
+        assert_eq!(body["planes"]["relay"]["store"], true);
+
+        let (status, body) = ask(Some(relay_at(101).await)).await;
+        assert_eq!((status, &body["status"]), (StatusCode::SERVICE_UNAVAILABLE, &serde_json::json!("degraded")), "{body}");
+
+        let gone = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://{}", gone.local_addr().unwrap());
+        drop(gone);
+        let (status, body) = ask(Some(url)).await;
+        assert_eq!((status, &body["planes"]["relay"]["live"]), (StatusCode::SERVICE_UNAVAILABLE, &serde_json::json!(false)), "{body}");
+
+        let (status, body) = ask(None).await;
+        assert_eq!((status, &body["status"]), (StatusCode::OK, &serde_json::json!("ok")), "an Arc with no relay is not degraded by it: {body}");
     }
 
     async fn version_body(manifest: Option<String>) -> serde_json::Value {

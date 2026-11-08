@@ -309,6 +309,7 @@ dependencies = [
  "base64",
  "face-render",
  "futures-util",
+ "relay",
  "reqwest 0.13.4",
  "serde_json",
  "tokio",
