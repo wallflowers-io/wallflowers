@@ -19,8 +19,8 @@
 //  WHY IT DOES NOT DECRYPT YET, and this is deliberate rather than unfinished:
 //  decrypting means opening pacific-core in a SECOND process while the app may hold it. Two
 //  hazards, neither hypothetical:
-//    1. `directory.rs` sets `journal_mode = WAL` but no `busy_timeout` and takes no advisory
-//       lock, so a concurrent writer fails immediately rather than waiting.
+//    1. `directory.rs` sets `journal_mode = WAL` and takes no advisory lock; a connection
+//       waits rusqlite's default 5 s on a concurrent writer, then fails.
 //    2. Worse than a DB race: MLS ratchet state. If this extension decrypts and advances the
 //       ratchet while the app does too, the two diverge and messages become PERMANENTLY
 //       undecryptable. That is not a crash, it is silent data loss.
