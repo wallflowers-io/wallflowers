@@ -60,6 +60,22 @@ pub fn sticker_ids() -> &'static BTreeSet<String> {
     &spec().stickers
 }
 
+/// The kinds with a public page: those the ICD makes of a `host` part. A Site, today; the
+/// rest is the ICD's to say (#62), and a client offers a page wherever this says.
+pub fn kinds_with_a_page() -> &'static [String] {
+    static KINDS: OnceLock<Vec<String>> = OnceLock::new();
+    KINDS.get_or_init(|| {
+        let icd: Value = serde_json::from_str(include_str!("../../coordination/delta-graph.icd.json")).expect("the ICD");
+        icd["kinds"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter(|(_, k)| k["parts"].as_array().into_iter().flatten().any(|p| p["role"] == crate::parts::HOST_ROLE))
+            .map(|(name, _)| name.clone())
+            .collect()
+    })
+}
+
 /// Why `face` is not a face this specification allows, or `None`. Size first: the cap is
 /// `group.setFace`'s.
 pub fn refusal(face: &str) -> Option<String> {

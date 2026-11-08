@@ -107,6 +107,7 @@ mod pool_resume;
 mod router_drain;
 mod row10_admins_edit_the_face;
 mod sign_in_from_wrap;
+mod site_one_sequence;
 mod stoma_feast_at_xalapa;
 mod stoma_group_is_the_directory;
 mod stoma_the_cookbook_thread;
