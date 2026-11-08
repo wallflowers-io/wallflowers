@@ -1,0 +1,114 @@
+{
+ "look": {
+  "wallpaper": {
+   "style": "gradient",
+   "colour2": "#CFE3F0",
+   "colour3": "#CFE3F0",
+   "angle": "down",
+   "pattern": "dots",
+   "image": "",
+   "soften": 30
+  },
+  "blocks": {
+   "style": "glass",
+   "corners": 2,
+   "shadow": "soft"
+  },
+  "text": {
+   "font": "manrope",
+   "title": "unbounded"
+  },
+  "colours": {
+   "background": "#8BA1C8",
+   "cards": "#FFFFFF",
+   "buttons": "#FFFFFF",
+   "buttonText": "#14181E",
+   "text": "#FFFFFF",
+   "title": "#FFFFFF"
+  }
+ },
+ "header": {
+  "layout": "classic",
+  "title": "name",
+  "logo": "",
+  "banner": ""
+ },
+ "show": {
+  "members": true,
+  "address": true,
+  "purpose": true,
+  "share": true
+ },
+ "door": {
+  "access": "request",
+  "label": "",
+  "questions": []
+ },
+ "notice": {
+  "on": false,
+  "kind": "sensitive",
+  "text": ""
+ },
+ "sharing": {
+  "listed": true
+ },
+ "mark": "",
+ "stickers": [],
+ "blocks": {
+  "root": {
+   "type": "root",
+   "version": 1,
+   "direction": "ltr",
+   "format": "",
+   "indent": 0,
+   "children": [
+    {
+     "version": 1,
+     "type": "wf-feed",
+     "source": "events",
+     "mode": "next",
+     "heading": "Next event",
+     "fields": [
+      "venue"
+     ],
+     "empty": "hide",
+     "emptyNote": "",
+     "size": "m"
+    },
+    {
+     "version": 1,
+     "type": "wf-location",
+     "heading": "Where we are",
+     "precision": 5,
+     "label": "",
+     "size": "s"
+    },
+    {
+     "version": 1,
+     "type": "wf-text",
+     "text": "",
+     "size": "s"
+    },
+    {
+     "version": 1,
+     "type": "wf-feed",
+     "source": "publications",
+     "mode": "list",
+     "heading": "Latest",
+     "fields": [
+      "link"
+     ],
+     "empty": "hide",
+     "emptyNote": "",
+     "size": "m"
+    },
+    {
+     "version": 1,
+     "type": "wf-social",
+     "links": [],
+     "size": "m"
+    }
+   ]
+  }
+ }
+}

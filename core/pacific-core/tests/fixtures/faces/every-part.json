@@ -1,0 +1,254 @@
+{
+ "look": {
+  "wallpaper": {
+   "style": "pattern",
+   "colour2": "#E3EFD3",
+   "colour3": "#E3EFD3",
+   "angle": "down",
+   "pattern": "grid",
+   "image": "",
+   "soften": 30
+  },
+  "blocks": {
+   "style": "solid",
+   "corners": 3,
+   "shadow": "hard"
+  },
+  "text": {
+   "font": "inter",
+   "title": ""
+  },
+  "colours": {
+   "background": "#E3EFD3",
+   "cards": "#FFFFFF",
+   "buttons": "#FFFFFF",
+   "buttonText": "#14181E",
+   "text": "#14181E",
+   "title": "#14181E"
+  }
+ },
+ "header": {
+  "layout": "hero",
+  "title": "logo",
+  "logo": "",
+  "banner": ""
+ },
+ "show": {
+  "members": false,
+  "address": true,
+  "purpose": true,
+  "share": false
+ },
+ "door": {
+  "access": "open",
+  "label": "Come in",
+  "questions": [
+   {
+    "kind": "short",
+    "prompt": "Your name?",
+    "required": true,
+    "options": []
+   },
+   {
+    "kind": "long",
+    "prompt": "Why?",
+    "required": false,
+    "options": []
+   },
+   {
+    "kind": "choice",
+    "prompt": "Which night?",
+    "required": true,
+    "options": [
+     "Fri",
+     "Sat"
+    ]
+   },
+   {
+    "kind": "agree",
+    "prompt": "I agree to the rules",
+    "required": true,
+    "options": []
+   }
+  ]
+ },
+ "notice": {
+  "on": true,
+  "kind": "custom",
+  "text": "Mind the step."
+ },
+ "sharing": {
+  "listed": false
+ },
+ "mark": "",
+ "stickers": [
+  {
+   "id": "doodle-heart",
+   "x": 0.2,
+   "y": 0.4,
+   "size": 0.3,
+   "rot": -8,
+   "flip": false,
+   "colour": "title"
+  },
+  {
+   "id": "down-arrow",
+   "x": 0.8,
+   "y": 1.6,
+   "size": 0.24,
+   "rot": 12,
+   "flip": true
+  }
+ ],
+ "blocks": {
+  "root": {
+   "type": "root",
+   "version": 1,
+   "direction": "ltr",
+   "format": "",
+   "indent": 0,
+   "children": [
+    {
+     "version": 1,
+     "type": "wf-feed",
+     "source": "rooms",
+     "mode": "list",
+     "heading": "Rooms",
+     "fields": [],
+     "empty": "hide",
+     "emptyNote": "",
+     "size": "l"
+    },
+    {
+     "version": 1,
+     "type": "wf-feed",
+     "source": "publications",
+     "mode": "list",
+     "heading": "Latest",
+     "fields": [
+      "link"
+     ],
+     "empty": "hide",
+     "emptyNote": "",
+     "size": "l"
+    },
+    {
+     "version": 1,
+     "type": "wf-feed",
+     "source": "listings",
+     "mode": "list",
+     "heading": "For sale",
+     "fields": [
+      "price"
+     ],
+     "empty": "hide",
+     "emptyNote": "",
+     "size": "l"
+    },
+    {
+     "version": 1,
+     "type": "wf-feed",
+     "source": "events",
+     "mode": "list",
+     "heading": "Coming up",
+     "fields": [
+      "venue"
+     ],
+     "empty": "hide",
+     "emptyNote": "",
+     "size": "l"
+    },
+    {
+     "version": 1,
+     "type": "wf-feed",
+     "source": "funding",
+     "mode": "list",
+     "heading": "The fund",
+     "fields": [
+      "source"
+     ],
+     "empty": "hide",
+     "emptyNote": "",
+     "size": "l"
+    },
+    {
+     "version": 1,
+     "type": "wf-feed",
+     "source": "events",
+     "mode": "next",
+     "heading": "Next event",
+     "fields": [
+      "venue"
+     ],
+     "empty": "hide",
+     "emptyNote": "",
+     "size": "s"
+    },
+    {
+     "version": 1,
+     "type": "wf-link",
+     "title": "",
+     "url": "",
+     "size": "s"
+    },
+    {
+     "version": 1,
+     "type": "wf-social",
+     "links": [],
+     "size": "m"
+    },
+    {
+     "version": 1,
+     "type": "wf-location",
+     "heading": "Where we are",
+     "precision": 5,
+     "label": "",
+     "size": "m"
+    },
+    {
+     "version": 1,
+     "type": "wf-text",
+     "text": "",
+     "size": "l"
+    },
+    {
+     "version": 1,
+     "type": "wf-link",
+     "title": "Tickets",
+     "url": "https://example.org",
+     "size": "s",
+     "colours": {
+      "bg": "#CD5B7A",
+      "fg": "#FFFFFF"
+     }
+    },
+    {
+     "version": 1,
+     "type": "wf-social",
+     "links": [
+      {
+       "platform": "instagram",
+       "handle": "riverside"
+      },
+      {
+       "platform": "email",
+       "handle": "hi@example.org"
+      }
+     ],
+     "size": "m"
+    },
+    {
+     "version": 1,
+     "type": "wf-feed",
+     "source": "rooms",
+     "mode": "list",
+     "heading": "Rooms",
+     "fields": [],
+     "empty": "note",
+     "emptyNote": "Nothing yet",
+     "size": "l"
+    }
+   ]
+  }
+ }
+}

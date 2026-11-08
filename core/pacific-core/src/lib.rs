@@ -35,6 +35,8 @@ pub mod directory;
 pub mod event;
 /// A Site's own events and posts, as its Host's live items for the public Face (O-48).
 pub mod face_items;
+/// The face document's one specification (`face.schema.json`), checked before a Site write.
+pub mod face_spec;
 pub mod geo;
 /// The constituent-object facet: an object that hosts a Forum (its comments,
 /// its discussion, its room) points at a real GroupObject rather than growing a

@@ -1,0 +1,1789 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://wallflowers.io/schema/face.schema.json",
+ "title": "A Site's face",
+ "$comment": "The face document group.editFace carries (ICD group.setFace: a JSON object, at most 16384 bytes). Every writer builds to this and every reader draws from it: the webapp's editor (face.js), the iOS editor, core's check before a site_* write (pacific-core face_spec.rs), and the Arc's renderer (arc/lib/face-render). Pictures are not here: they are the Host's media slots (host.editMedia: mark, cover, logo, wallpaper), so every picture field is empty. The keywords used are a subset core checks: type, properties, required, additionalProperties false, enum, const, minimum, maximum, maxLength, maxItems, items, oneOf by `type` const, $ref to $defs. x-wf-format names a check by value: hex-colour (#RRGGBB), font and sticker (the ids x-wf-builtins lists, and those in the editor's generated face-assets.js). x-wf-labels and the x-wf-* tables are what an editor shows.",
+ "x-wf-maxBytes": 16384,
+ "type": "object",
+ "properties": {
+  "look": {
+   "$ref": "#/$defs/look"
+  },
+  "header": {
+   "type": "object",
+   "properties": {
+    "layout": {
+     "type": "string",
+     "enum": [
+      "classic",
+      "hero",
+      "banner"
+     ],
+     "x-wf-labels": {
+      "classic": "Classic",
+      "hero": "Hero",
+      "banner": "Banner"
+     }
+    },
+    "title": {
+     "type": "string",
+     "enum": [
+      "name",
+      "logo"
+     ],
+     "x-wf-labels": {
+      "name": "Name",
+      "logo": "Logo"
+     }
+    },
+    "logo": {
+     "type": "string",
+     "maxLength": 0
+    },
+    "banner": {
+     "type": "string",
+     "maxLength": 0
+    }
+   },
+   "required": [
+    "layout",
+    "title",
+    "logo",
+    "banner"
+   ],
+   "additionalProperties": false
+  },
+  "show": {
+   "type": "object",
+   "properties": {
+    "members": {
+     "type": "boolean"
+    },
+    "address": {
+     "type": "boolean"
+    },
+    "purpose": {
+     "type": "boolean"
+    },
+    "share": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "members",
+    "address",
+    "purpose",
+    "share"
+   ],
+   "additionalProperties": false,
+   "x-wf-labels": {
+    "members": "Member count",
+    "address": "Address",
+    "purpose": "What it’s for",
+    "share": "Share button"
+   }
+  },
+  "door": {
+   "type": "object",
+   "properties": {
+    "access": {
+     "type": "string",
+     "enum": [
+      "invite",
+      "request",
+      "open"
+     ],
+     "x-wf-labels": {
+      "invite": "By invitation",
+      "request": "Ask to join",
+      "open": "Open to anyone"
+     },
+     "x-wf-door": {
+      "invite": "I have an invitation",
+      "request": "Knock",
+      "open": "Join"
+     }
+    },
+    "label": {
+     "type": "string"
+    },
+    "questions": {
+     "type": "array",
+     "maxItems": 5,
+     "items": {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "enum": [
+         "short",
+         "long",
+         "choice",
+         "agree"
+        ],
+        "x-wf-labels": {
+         "short": "Short answer",
+         "long": "Paragraph",
+         "choice": "Multiple choice",
+         "agree": "Agreement"
+        }
+       },
+       "prompt": {
+        "type": "string",
+        "maxLength": 200
+       },
+       "required": {
+        "type": "boolean"
+       },
+       "options": {
+        "type": "array",
+        "maxItems": 6,
+        "items": {
+         "type": "string"
+        }
+       }
+      },
+      "required": [
+       "kind",
+       "prompt",
+       "required",
+       "options"
+      ],
+      "additionalProperties": false
+     }
+    }
+   },
+   "required": [
+    "access",
+    "label",
+    "questions"
+   ],
+   "additionalProperties": false
+  },
+  "notice": {
+   "type": "object",
+   "properties": {
+    "on": {
+     "type": "boolean"
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "adult",
+      "sensitive",
+      "custom"
+     ],
+     "x-wf-labels": {
+      "adult": "Over 18s only",
+      "sensitive": "Sensitive content",
+      "custom": "In your own words"
+     },
+     "x-wf-notice": {
+      "adult": [
+       "Over 18s only",
+       "You need to be 18 or over to see this."
+      ],
+      "sensitive": [
+       "Sensitive content",
+       "This may include things some people find upsetting."
+      ],
+      "custom": [
+       "Before you go in",
+       ""
+      ]
+     }
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 140
+    }
+   },
+   "required": [
+    "on",
+    "kind",
+    "text"
+   ],
+   "additionalProperties": false
+  },
+  "sharing": {
+   "type": "object",
+   "properties": {
+    "listed": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "listed"
+   ],
+   "additionalProperties": false
+  },
+  "mark": {
+   "type": "string",
+   "maxLength": 0
+  },
+  "stickers": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string",
+      "x-wf-format": "sticker"
+     },
+     "x": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "y": {
+      "type": "number",
+      "minimum": 0
+     },
+     "size": {
+      "type": "number",
+      "minimum": 0.06,
+      "maximum": 0.95
+     },
+     "rot": {
+      "type": "integer",
+      "minimum": -180,
+      "maximum": 180
+     },
+     "flip": {
+      "type": "boolean"
+     },
+     "colour": {
+      "type": "string",
+      "enum": [
+       "buttons",
+       "text",
+       "title"
+      ],
+      "x-wf-labels": {
+       "buttons": "Buttons",
+       "text": "Text",
+       "title": "Title"
+      }
+     }
+    },
+    "required": [
+     "id",
+     "x",
+     "y",
+     "size",
+     "rot",
+     "flip"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "blocks": {
+   "type": "object",
+   "properties": {
+    "root": {
+     "type": "object",
+     "properties": {
+      "type": {
+       "const": "root"
+      },
+      "version": {
+       "const": 1
+      },
+      "direction": {
+       "const": "ltr"
+      },
+      "format": {
+       "const": ""
+      },
+      "indent": {
+       "const": 0
+      },
+      "children": {
+       "type": "array",
+       "items": {
+        "$ref": "#/$defs/widget"
+       }
+      }
+     },
+     "required": [
+      "type",
+      "version",
+      "direction",
+      "format",
+      "indent",
+      "children"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "required": [
+    "root"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "required": [
+  "look",
+  "header",
+  "show",
+  "door",
+  "notice",
+  "sharing",
+  "mark",
+  "stickers",
+  "blocks"
+ ],
+ "additionalProperties": false,
+ "$defs": {
+  "look": {
+   "type": "object",
+   "properties": {
+    "wallpaper": {
+     "type": "object",
+     "properties": {
+      "style": {
+       "type": "string",
+       "enum": [
+        "fill",
+        "gradient",
+        "blur",
+        "pattern",
+        "image"
+       ],
+       "x-wf-labels": {
+        "fill": "Fill",
+        "gradient": "Gradient",
+        "blur": "Blur",
+        "pattern": "Pattern",
+        "image": "Image"
+       }
+      },
+      "colour2": {
+       "type": "string",
+       "x-wf-format": "hex-colour"
+      },
+      "colour3": {
+       "type": "string",
+       "x-wf-format": "hex-colour"
+      },
+      "angle": {
+       "type": "string",
+       "enum": [
+        "down",
+        "diagonal",
+        "radial"
+       ],
+       "x-wf-labels": {
+        "down": "Down",
+        "diagonal": "Diagonal",
+        "radial": "Radial"
+       }
+      },
+      "pattern": {
+       "type": "string",
+       "enum": [
+        "dots",
+        "grid",
+        "lines",
+        "waves",
+        "checks",
+        "plus"
+       ],
+       "x-wf-labels": {
+        "dots": "Dots",
+        "grid": "Grid",
+        "lines": "Lines",
+        "waves": "Waves",
+        "checks": "Checks",
+        "plus": "Plus"
+       }
+      },
+      "image": {
+       "type": "string",
+       "maxLength": 0
+      },
+      "soften": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 100
+      }
+     },
+     "required": [
+      "style",
+      "colour2",
+      "colour3",
+      "angle",
+      "pattern",
+      "image",
+      "soften"
+     ],
+     "additionalProperties": false
+    },
+    "blocks": {
+     "type": "object",
+     "properties": {
+      "style": {
+       "type": "string",
+       "enum": [
+        "solid",
+        "glass",
+        "outline"
+       ],
+       "x-wf-labels": {
+        "solid": "Solid",
+        "glass": "Glass",
+        "outline": "Outline"
+       }
+      },
+      "corners": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 3,
+       "x-wf-labels": {
+        "0": "Square",
+        "1": "Soft",
+        "2": "Round",
+        "3": "Pill"
+       },
+       "x-wf-px": [
+        4,
+        12,
+        20,
+        999
+       ]
+      },
+      "shadow": {
+       "type": "string",
+       "enum": [
+        "none",
+        "soft",
+        "strong",
+        "hard"
+       ],
+       "x-wf-labels": {
+        "none": "None",
+        "soft": "Soft",
+        "strong": "Strong",
+        "hard": "Hard"
+       }
+      }
+     },
+     "required": [
+      "style",
+      "corners",
+      "shadow"
+     ],
+     "additionalProperties": false
+    },
+    "text": {
+     "type": "object",
+     "properties": {
+      "font": {
+       "type": "string",
+       "x-wf-format": "font"
+      },
+      "title": {
+       "type": "string",
+       "x-wf-format": "font",
+       "x-wf-empty": "the body font"
+      }
+     },
+     "required": [
+      "font",
+      "title"
+     ],
+     "additionalProperties": false
+    },
+    "colours": {
+     "type": "object",
+     "properties": {
+      "background": {
+       "type": "string",
+       "x-wf-format": "hex-colour"
+      },
+      "cards": {
+       "type": "string",
+       "x-wf-format": "hex-colour"
+      },
+      "buttons": {
+       "type": "string",
+       "x-wf-format": "hex-colour"
+      },
+      "buttonText": {
+       "type": "string",
+       "x-wf-format": "hex-colour"
+      },
+      "text": {
+       "type": "string",
+       "x-wf-format": "hex-colour"
+      },
+      "title": {
+       "type": "string",
+       "x-wf-format": "hex-colour"
+      }
+     },
+     "required": [
+      "background",
+      "cards",
+      "buttons",
+      "buttonText",
+      "text",
+      "title"
+     ],
+     "additionalProperties": false,
+     "x-wf-labels": {
+      "background": "Background",
+      "cards": "Cards",
+      "buttons": "Buttons",
+      "buttonText": "Button text",
+      "text": "Text",
+      "title": "Title"
+     }
+    }
+   },
+   "required": [
+    "wallpaper",
+    "blocks",
+    "text",
+    "colours"
+   ],
+   "additionalProperties": false
+  },
+  "widget": {
+   "oneOf": [
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "const": "wf-link"
+      },
+      "version": {
+       "const": 1
+      },
+      "size": {
+       "type": "string",
+       "enum": [
+        "s",
+        "m",
+        "l"
+       ],
+       "x-wf-labels": {
+        "s": "Small",
+        "m": "Medium",
+        "l": "Large"
+       }
+      },
+      "colours": {
+       "type": "object",
+       "properties": {
+        "bg": {
+         "type": "string",
+         "x-wf-format": "hex-colour"
+        },
+        "fg": {
+         "type": "string",
+         "x-wf-format": "hex-colour"
+        }
+       },
+       "required": [],
+       "additionalProperties": false
+      },
+      "title": {
+       "type": "string"
+      },
+      "url": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "type",
+      "size",
+      "title",
+      "url"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "const": "wf-social"
+      },
+      "version": {
+       "const": 1
+      },
+      "size": {
+       "type": "string",
+       "enum": [
+        "s",
+        "m",
+        "l"
+       ],
+       "x-wf-labels": {
+        "s": "Small",
+        "m": "Medium",
+        "l": "Large"
+       }
+      },
+      "colours": {
+       "type": "object",
+       "properties": {
+        "bg": {
+         "type": "string",
+         "x-wf-format": "hex-colour"
+        },
+        "fg": {
+         "type": "string",
+         "x-wf-format": "hex-colour"
+        }
+       },
+       "required": [],
+       "additionalProperties": false
+      },
+      "links": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "platform": {
+          "type": "string",
+          "enum": [
+           "instagram",
+           "tiktok",
+           "youtube",
+           "x",
+           "threads",
+           "bluesky",
+           "mastodon",
+           "facebook",
+           "linkedin",
+           "whatsapp",
+           "telegram",
+           "signal",
+           "discord",
+           "twitch",
+           "spotify",
+           "soundcloud",
+           "bandcamp",
+           "substack",
+           "patreon",
+           "meetup",
+           "github",
+           "pinterest",
+           "snapchat",
+           "website",
+           "email"
+          ],
+          "x-wf-labels": {
+           "instagram": "Instagram",
+           "tiktok": "TikTok",
+           "youtube": "YouTube",
+           "x": "X",
+           "threads": "Threads",
+           "bluesky": "Bluesky",
+           "mastodon": "Mastodon",
+           "facebook": "Facebook",
+           "linkedin": "LinkedIn",
+           "whatsapp": "WhatsApp",
+           "telegram": "Telegram",
+           "signal": "Signal",
+           "discord": "Discord",
+           "twitch": "Twitch",
+           "spotify": "Spotify",
+           "soundcloud": "SoundCloud",
+           "bandcamp": "Bandcamp",
+           "substack": "Substack",
+           "patreon": "Patreon",
+           "meetup": "Meetup",
+           "github": "GitHub",
+           "pinterest": "Pinterest",
+           "snapchat": "Snapchat",
+           "website": "Website",
+           "email": "Email"
+          },
+          "x-wf-prefix": {
+           "instagram": "instagram.com/",
+           "tiktok": "tiktok.com/@",
+           "youtube": "youtube.com/@",
+           "x": "x.com/",
+           "threads": "threads.net/@",
+           "bluesky": "bsky.app/profile/",
+           "mastodon": "",
+           "facebook": "facebook.com/",
+           "linkedin": "linkedin.com/in/",
+           "whatsapp": "wa.me/",
+           "telegram": "t.me/",
+           "signal": "",
+           "discord": "discord.gg/",
+           "twitch": "twitch.tv/",
+           "spotify": "",
+           "soundcloud": "soundcloud.com/",
+           "bandcamp": "",
+           "substack": "",
+           "patreon": "patreon.com/",
+           "meetup": "meetup.com/",
+           "github": "github.com/",
+           "pinterest": "pinterest.com/",
+           "snapchat": "snapchat.com/add/",
+           "website": "",
+           "email": ""
+          }
+         },
+         "handle": {
+          "type": "string",
+          "maxLength": 200
+         }
+        },
+        "required": [
+         "platform",
+         "handle"
+        ],
+        "additionalProperties": false
+       }
+      }
+     },
+     "required": [
+      "type",
+      "size",
+      "links"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "const": "wf-feed"
+      },
+      "version": {
+       "const": 1
+      },
+      "size": {
+       "type": "string",
+       "enum": [
+        "s",
+        "m",
+        "l"
+       ],
+       "x-wf-labels": {
+        "s": "Small",
+        "m": "Medium",
+        "l": "Large"
+       }
+      },
+      "colours": {
+       "type": "object",
+       "properties": {
+        "bg": {
+         "type": "string",
+         "x-wf-format": "hex-colour"
+        },
+        "fg": {
+         "type": "string",
+         "x-wf-format": "hex-colour"
+        }
+       },
+       "required": [],
+       "additionalProperties": false
+      },
+      "source": {
+       "type": "string",
+       "enum": [
+        "events",
+        "rooms",
+        "publications",
+        "listings",
+        "funding"
+       ],
+       "x-wf-labels": {
+        "events": "Events",
+        "rooms": "Rooms",
+        "publications": "Publications",
+        "listings": "Listings",
+        "funding": "The fund"
+       }
+      },
+      "mode": {
+       "type": "string",
+       "enum": [
+        "next",
+        "list"
+       ],
+       "x-wf-labels": {
+        "next": "Next",
+        "list": "List"
+       }
+      },
+      "heading": {
+       "type": "string"
+      },
+      "fields": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "x-wf-from": "the ICD args of the source's ops (x-wf-feeds)"
+      },
+      "empty": {
+       "type": "string",
+       "enum": [
+        "hide",
+        "note"
+       ],
+       "x-wf-labels": {
+        "hide": "Hide the widget",
+        "note": "Say so"
+       }
+      },
+      "emptyNote": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "type",
+      "size",
+      "source",
+      "mode",
+      "heading",
+      "fields",
+      "empty",
+      "emptyNote"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "const": "wf-location"
+      },
+      "version": {
+       "const": 1
+      },
+      "size": {
+       "type": "string",
+       "enum": [
+        "s",
+        "m",
+        "l"
+       ],
+       "x-wf-labels": {
+        "s": "Small",
+        "m": "Medium",
+        "l": "Large"
+       }
+      },
+      "colours": {
+       "type": "object",
+       "properties": {
+        "bg": {
+         "type": "string",
+         "x-wf-format": "hex-colour"
+        },
+        "fg": {
+         "type": "string",
+         "x-wf-format": "hex-colour"
+        }
+       },
+       "required": [],
+       "additionalProperties": false
+      },
+      "heading": {
+       "type": "string"
+      },
+      "precision": {
+       "type": "integer",
+       "minimum": 3,
+       "maximum": 9,
+       "x-wf-labels": {
+        "3": "Region",
+        "4": "City",
+        "5": "District",
+        "6": "Neighbourhood",
+        "7": "Street",
+        "8": "Building",
+        "9": "Exact"
+       }
+      },
+      "label": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "type",
+      "size",
+      "heading",
+      "precision",
+      "label"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "const": "wf-text"
+      },
+      "version": {
+       "const": 1
+      },
+      "size": {
+       "type": "string",
+       "enum": [
+        "s",
+        "m",
+        "l"
+       ],
+       "x-wf-labels": {
+        "s": "Small",
+        "m": "Medium",
+        "l": "Large"
+       }
+      },
+      "colours": {
+       "type": "object",
+       "properties": {
+        "bg": {
+         "type": "string",
+         "x-wf-format": "hex-colour"
+        },
+        "fg": {
+         "type": "string",
+         "x-wf-format": "hex-colour"
+        }
+       },
+       "required": [],
+       "additionalProperties": false
+      },
+      "text": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "type",
+      "size",
+      "text"
+     ],
+     "additionalProperties": false
+    }
+   ]
+  }
+ },
+ "x-wf-builtins": {
+  "fonts": [
+   [
+    "marker",
+    "Marker"
+   ],
+   [
+    "system-sans",
+    "System sans"
+   ],
+   [
+    "system-serif",
+    "System serif"
+   ]
+  ],
+  "stickers": [
+   [
+    "doodle-loop",
+    "Loop arrow"
+   ],
+   [
+    "doodle-down",
+    "Arrow down"
+   ],
+   [
+    "doodle-swoop",
+    "Swoop arrow"
+   ],
+   [
+    "doodle-circle",
+    "Circle"
+   ],
+   [
+    "doodle-underline",
+    "Underline"
+   ],
+   [
+    "doodle-sparkle",
+    "Sparkle"
+   ],
+   [
+    "doodle-burst",
+    "Burst"
+   ],
+   [
+    "doodle-heart",
+    "Heart"
+   ],
+   [
+    "doodle-zigzag",
+    "Zigzag"
+   ],
+   [
+    "doodle-smile",
+    "Smile"
+   ]
+  ]
+ },
+ "x-wf-feeds": {
+  "rooms": {
+   "ops": [
+    "base.setPart"
+   ],
+   "hide": [
+    "part",
+    "at"
+   ]
+  },
+  "publications": {
+   "ops": [
+    "post.setProfile"
+   ]
+  },
+  "listings": {
+   "ops": [
+    "thing.setProfile",
+    "thing.setPosture"
+   ],
+   "hide": [
+    "posture"
+   ]
+  },
+  "events": {
+   "ops": [
+    "event.setProfile"
+   ]
+  },
+  "funding": {
+   "ops": [
+    "treasury.recordDeposit",
+    "ratify.propose"
+   ],
+   "hide": [
+    "rule",
+    "gen"
+   ]
+  }
+ },
+ "x-wf-widgets": [
+  {
+   "key": "rooms",
+   "name": "Rooms",
+   "blurb": "Your rooms, and who is talking in them",
+   "sizes": [
+    "m",
+    "s",
+    "l"
+   ],
+   "make": {
+    "type": "wf-feed",
+    "source": "rooms",
+    "mode": "list",
+    "heading": "Rooms",
+    "fields": [],
+    "empty": "hide",
+    "emptyNote": ""
+   }
+  },
+  {
+   "key": "posts",
+   "name": "Latest publications",
+   "blurb": "Your newest posts",
+   "sizes": [
+    "m",
+    "s",
+    "l"
+   ],
+   "make": {
+    "type": "wf-feed",
+    "source": "publications",
+    "mode": "list",
+    "heading": "Latest",
+    "fields": [
+     "link"
+    ],
+    "empty": "hide",
+    "emptyNote": ""
+   }
+  },
+  {
+   "key": "listings",
+   "name": "For sale",
+   "blurb": "What you have to sell, and what it costs",
+   "sizes": [
+    "m",
+    "s",
+    "l"
+   ],
+   "make": {
+    "type": "wf-feed",
+    "source": "listings",
+    "mode": "list",
+    "heading": "For sale",
+    "fields": [
+     "price"
+    ],
+    "empty": "hide",
+    "emptyNote": ""
+   }
+  },
+  {
+   "key": "events",
+   "name": "Upcoming events",
+   "blurb": "Your next few events",
+   "sizes": [
+    "m",
+    "s",
+    "l"
+   ],
+   "make": {
+    "type": "wf-feed",
+    "source": "events",
+    "mode": "list",
+    "heading": "Coming up",
+    "fields": [
+     "venue"
+    ],
+    "empty": "hide",
+    "emptyNote": ""
+   }
+  },
+  {
+   "key": "fund",
+   "name": "The fund",
+   "blurb": "What has been given, and what is proposed",
+   "sizes": [
+    "m",
+    "s",
+    "l"
+   ],
+   "make": {
+    "type": "wf-feed",
+    "source": "funding",
+    "mode": "list",
+    "heading": "The fund",
+    "fields": [
+     "source"
+    ],
+    "empty": "hide",
+    "emptyNote": ""
+   }
+  },
+  {
+   "key": "next",
+   "name": "Next event",
+   "blurb": "The soonest of your events",
+   "sizes": [
+    "m",
+    "s"
+   ],
+   "make": {
+    "type": "wf-feed",
+    "source": "events",
+    "mode": "next",
+    "heading": "Next event",
+    "fields": [
+     "venue"
+    ],
+    "empty": "hide",
+    "emptyNote": ""
+   }
+  },
+  {
+   "key": "link",
+   "name": "Link",
+   "blurb": "A button to anywhere",
+   "sizes": [
+    "m",
+    "s"
+   ],
+   "make": {
+    "type": "wf-link",
+    "title": "",
+    "url": ""
+   }
+  },
+  {
+   "key": "social",
+   "name": "Social links",
+   "blurb": "Your other platforms, as icons",
+   "sizes": [
+    "m"
+   ],
+   "make": {
+    "type": "wf-social",
+    "links": []
+   }
+  },
+  {
+   "key": "location",
+   "name": "Location",
+   "blurb": "Where you are, as precisely as you choose",
+   "sizes": [
+    "s",
+    "m"
+   ],
+   "make": {
+    "type": "wf-location",
+    "heading": "Where we are",
+    "precision": 5,
+    "label": ""
+   }
+  },
+  {
+   "key": "text",
+   "name": "Text",
+   "blurb": "Words of your own",
+   "sizes": [
+    "m",
+    "s",
+    "l"
+   ],
+   "make": {
+    "type": "wf-text",
+    "text": ""
+   }
+  }
+ ],
+ "x-wf-start": [
+  "next:m",
+  "location:s",
+  "text:s",
+  "posts:m",
+  "social:m"
+ ],
+ "x-wf-presets": [
+  {
+   "id": "paper",
+   "name": "Paper",
+   "look": {
+    "wallpaper": {
+     "style": "fill",
+     "colour2": "#FAF8F3",
+     "colour3": "#FAF8F3",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "solid",
+     "corners": 3,
+     "shadow": "soft"
+    },
+    "text": {
+     "font": "system-sans",
+     "title": "marker"
+    },
+    "colours": {
+     "background": "#FAF8F3",
+     "cards": "#FFFFFF",
+     "buttons": "#546CAC",
+     "buttonText": "#FFFFFF",
+     "text": "#14181E",
+     "title": "#14181E"
+    }
+   }
+  },
+  {
+   "id": "ink",
+   "name": "Ink",
+   "look": {
+    "wallpaper": {
+     "style": "fill",
+     "colour2": "#000000",
+     "colour3": "#000000",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "solid",
+     "corners": 3,
+     "shadow": "none"
+    },
+    "text": {
+     "font": "system-sans",
+     "title": "marker"
+    },
+    "colours": {
+     "background": "#000000",
+     "cards": "#14181E",
+     "buttons": "#FAF8F3",
+     "buttonText": "#14181E",
+     "text": "#E6EDE9",
+     "title": "#FAF8F3"
+    }
+   }
+  },
+  {
+   "id": "marker",
+   "name": "Marker",
+   "look": {
+    "wallpaper": {
+     "style": "fill",
+     "colour2": "#F4EFB4",
+     "colour3": "#F4EFB4",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "solid",
+     "corners": 1,
+     "shadow": "hard"
+    },
+    "text": {
+     "font": "space-grotesk",
+     "title": "marker"
+    },
+    "colours": {
+     "background": "#F4EFB4",
+     "cards": "#FFFCE8",
+     "buttons": "#14181E",
+     "buttonText": "#FFFFFF",
+     "text": "#14181E",
+     "title": "#14181E"
+    }
+   }
+  },
+  {
+   "id": "allotment",
+   "name": "Allotment",
+   "look": {
+    "wallpaper": {
+     "style": "pattern",
+     "colour2": "#E3EFD3",
+     "colour3": "#E3EFD3",
+     "angle": "down",
+     "pattern": "grid",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "solid",
+     "corners": 3,
+     "shadow": "hard"
+    },
+    "text": {
+     "font": "dm-sans",
+     "title": "bagel-fat-one"
+    },
+    "colours": {
+     "background": "#E3EFD3",
+     "cards": "#FFFFFF",
+     "buttons": "#FFFFFF",
+     "buttonText": "#14181E",
+     "text": "#14181E",
+     "title": "#14181E"
+    }
+   }
+  },
+  {
+   "id": "tulip",
+   "name": "Tulip",
+   "look": {
+    "wallpaper": {
+     "style": "gradient",
+     "colour2": "#DC7629",
+     "colour3": "#DC7629",
+     "angle": "diagonal",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "glass",
+     "corners": 2,
+     "shadow": "none"
+    },
+    "text": {
+     "font": "figtree",
+     "title": "fraunces"
+    },
+    "colours": {
+     "background": "#CD5B7A",
+     "cards": "#FFFFFF",
+     "buttons": "#FFFFFF",
+     "buttonText": "#FFFFFF",
+     "text": "#FFFFFF",
+     "title": "#FFFFFF"
+    }
+   }
+  },
+  {
+   "id": "dusk",
+   "name": "Dusk",
+   "look": {
+    "wallpaper": {
+     "style": "blur",
+     "colour2": "#D793B5",
+     "colour3": "#546CAC",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "glass",
+     "corners": 3,
+     "shadow": "none"
+    },
+    "text": {
+     "font": "outfit",
+     "title": "syne"
+    },
+    "colours": {
+     "background": "#1C1A3A",
+     "cards": "#FFFFFF",
+     "buttons": "#FFFFFF",
+     "buttonText": "#FFFFFF",
+     "text": "#FFFFFF",
+     "title": "#FFFFFF"
+    }
+   }
+  },
+  {
+   "id": "broadsheet",
+   "name": "Broadsheet",
+   "look": {
+    "wallpaper": {
+     "style": "fill",
+     "colour2": "#FFFFFF",
+     "colour3": "#FFFFFF",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "outline",
+     "corners": 0,
+     "shadow": "none"
+    },
+    "text": {
+     "font": "newsreader",
+     "title": "instrument-serif"
+    },
+    "colours": {
+     "background": "#FFFFFF",
+     "cards": "#FFFFFF",
+     "buttons": "#14181E",
+     "buttonText": "#FFFFFF",
+     "text": "#14181E",
+     "title": "#14181E"
+    }
+   }
+  },
+  {
+   "id": "terminal",
+   "name": "Terminal",
+   "look": {
+    "wallpaper": {
+     "style": "fill",
+     "colour2": "#0B0F0C",
+     "colour3": "#0B0F0C",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "outline",
+     "corners": 0,
+     "shadow": "none"
+    },
+    "text": {
+     "font": "jetbrains-mono",
+     "title": "jetbrains-mono"
+    },
+    "colours": {
+     "background": "#0B0F0C",
+     "cards": "#0B0F0C",
+     "buttons": "#7CFFB2",
+     "buttonText": "#14181E",
+     "text": "#B8F5CF",
+     "title": "#7CFFB2"
+    }
+   }
+  },
+  {
+   "id": "sunflower",
+   "name": "Sunflower",
+   "look": {
+    "wallpaper": {
+     "style": "pattern",
+     "colour2": "#EADD3E",
+     "colour3": "#EADD3E",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "solid",
+     "corners": 3,
+     "shadow": "soft"
+    },
+    "text": {
+     "font": "rubik",
+     "title": "shrikhand"
+    },
+    "colours": {
+     "background": "#EADD3E",
+     "cards": "#FFF9D6",
+     "buttons": "#14181E",
+     "buttonText": "#FFFFFF",
+     "text": "#14181E",
+     "title": "#14181E"
+    }
+   }
+  },
+  {
+   "id": "periwinkle",
+   "name": "Periwinkle",
+   "look": {
+    "wallpaper": {
+     "style": "gradient",
+     "colour2": "#CFE3F0",
+     "colour3": "#CFE3F0",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "glass",
+     "corners": 2,
+     "shadow": "soft"
+    },
+    "text": {
+     "font": "manrope",
+     "title": "unbounded"
+    },
+    "colours": {
+     "background": "#8BA1C8",
+     "cards": "#FFFFFF",
+     "buttons": "#FFFFFF",
+     "buttonText": "#14181E",
+     "text": "#FFFFFF",
+     "title": "#FFFFFF"
+    }
+   }
+  },
+  {
+   "id": "blossom",
+   "name": "Blossom",
+   "look": {
+    "wallpaper": {
+     "style": "fill",
+     "colour2": "#F8E6EE",
+     "colour3": "#F8E6EE",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "solid",
+     "corners": 2,
+     "shadow": "soft"
+    },
+    "text": {
+     "font": "lora",
+     "title": "young-serif"
+    },
+    "colours": {
+     "background": "#F8E6EE",
+     "cards": "#FFFFFF",
+     "buttons": "#CD5B7A",
+     "buttonText": "#14181E",
+     "text": "#3A1F2B",
+     "title": "#B3405F"
+    }
+   }
+  },
+  {
+   "id": "club",
+   "name": "Club night",
+   "look": {
+    "wallpaper": {
+     "style": "pattern",
+     "colour2": "#14181E",
+     "colour3": "#14181E",
+     "angle": "down",
+     "pattern": "lines",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "solid",
+     "corners": 0,
+     "shadow": "strong"
+    },
+    "text": {
+     "font": "space-grotesk",
+     "title": "rubik-mono-one"
+    },
+    "colours": {
+     "background": "#14181E",
+     "cards": "#1F242C",
+     "buttons": "#DC7629",
+     "buttonText": "#14181E",
+     "text": "#F2F2F2",
+     "title": "#DC7629"
+    }
+   }
+  },
+  {
+   "id": "riso",
+   "name": "Riso",
+   "look": {
+    "wallpaper": {
+     "style": "fill",
+     "colour2": "#F3EDE0",
+     "colour3": "#F3EDE0",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "solid",
+     "corners": 1,
+     "shadow": "hard"
+    },
+    "text": {
+     "font": "space-mono",
+     "title": "bricolage-grotesque"
+    },
+    "colours": {
+     "background": "#F3EDE0",
+     "cards": "#F3EDE0",
+     "buttons": "#546CAC",
+     "buttonText": "#FFFFFF",
+     "text": "#A83A5A",
+     "title": "#A83A5A"
+    }
+   }
+  },
+  {
+   "id": "zine",
+   "name": "Zine",
+   "look": {
+    "wallpaper": {
+     "style": "pattern",
+     "colour2": "#FFFFFF",
+     "colour3": "#FFFFFF",
+     "angle": "down",
+     "pattern": "waves",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "solid",
+     "corners": 1,
+     "shadow": "hard"
+    },
+    "text": {
+     "font": "space-mono",
+     "title": "caveat"
+    },
+    "colours": {
+     "background": "#FFFFFF",
+     "cards": "#FFFFFF",
+     "buttons": "#14181E",
+     "buttonText": "#FFFFFF",
+     "text": "#14181E",
+     "title": "#14181E"
+    }
+   }
+  },
+  {
+   "id": "sky",
+   "name": "Sky",
+   "look": {
+    "wallpaper": {
+     "style": "blur",
+     "colour2": "#A6C8E0",
+     "colour3": "#EADD3E",
+     "angle": "down",
+     "pattern": "dots",
+     "image": "",
+     "soften": 30
+    },
+    "blocks": {
+     "style": "glass",
+     "corners": 3,
+     "shadow": "soft"
+    },
+    "text": {
+     "font": "figtree",
+     "title": "pacifico"
+    },
+    "colours": {
+     "background": "#DDEBF5",
+     "cards": "#FFFFFF",
+     "buttons": "#FFFFFF",
+     "buttonText": "#14181E",
+     "text": "#14181E",
+     "title": "#14181E"
+    }
+   }
+  }
+ ],
+ "x-wf-swatches": [
+  [
+   "Blue",
+   "#546CAC"
+  ],
+  [
+   "Raspberry",
+   "#CD5B7A"
+  ],
+  [
+   "Orange",
+   "#DC7629"
+  ],
+  [
+   "Gold",
+   "#CBB25A"
+  ],
+  [
+   "Periwinkle",
+   "#8BA1C8"
+  ],
+  [
+   "Pink",
+   "#D793B5"
+  ],
+  [
+   "Sky",
+   "#A6C8E0"
+  ],
+  [
+   "Yellow",
+   "#EADD3E"
+  ],
+  [
+   "Ink",
+   "#14181E"
+  ],
+  [
+   "Paper",
+   "#FAF8F3"
+  ],
+  [
+   "White",
+   "#FFFFFF"
+  ],
+  [
+   "Black",
+   "#000000"
+  ]
+ ]
+}

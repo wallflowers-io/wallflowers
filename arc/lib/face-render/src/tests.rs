@@ -641,3 +641,26 @@ fn a_posts_page_wears_the_faces_mark_and_footer() {
     let foot = |h: &str| h[h.find("<p class=\"wf-foot\">").expect("a footer")..].split("</p>").next().unwrap().to_string();
     assert_eq!(foot(&page), foot(&face));
 }
+
+/// THE EDITOR'S FACES DRAW (face.schema.json): every face core publishes from face.js's working
+/// copy (core/pacific-core/tests/fixtures/faces/published, face.js's own faceDoc()) parses and
+/// draws, and every-part's link and door reach the page. The working copy itself, hydrated as it
+/// stands, draws none of its widgets: `blocks` is the editor's, `widgets` the page's.
+#[test]
+fn the_editors_faces_draw() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../core/pacific-core/tests/fixtures/faces");
+    let read = |p: std::path::PathBuf| -> Value { serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap() };
+    let mut n = 0;
+    for e in std::fs::read_dir(dir.join("published")).unwrap() {
+        let p = e.unwrap().path();
+        let page = render_face(&parse(&bundle(read(p.clone())["face"].clone()), "Host").unwrap(), &ctx("riverside", &[], &[], false));
+        assert!(page.contains("wf-door"), "{}: a door", p.display());
+        n += 1;
+    }
+    assert!(n >= 17, "every fixture: {n}");
+    let published = read(dir.join("published/every-part.json"))["face"].clone();
+    let page = render_face(&parse(&bundle(published), "Host").unwrap(), &ctx("riverside", &[], &[], false));
+    assert!(page.contains(">Tickets<") && page.contains("Come in"), "the link and the door's words");
+    let working = render_face(&parse(&bundle(read(dir.join("every-part.json"))), "Host").unwrap(), &ctx("riverside", &[], &[], false));
+    assert!(!working.contains(">Tickets<"), "a working copy is not a page");
+}
