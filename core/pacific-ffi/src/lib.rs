@@ -139,6 +139,12 @@ pub fn comments_role() -> String {
     pacific_core::object::COMMENTS.to_string()
 }
 
+/// A kind's name as the directory and `ObjectRow.kind` spell it, from the core's table.
+#[uniffi::export]
+pub fn object_kind_name(kind: ObjectKind) -> String {
+    pacific_core::object::ObjectKind::from(kind).name().to_string()
+}
+
 /// Every address one person's records live at, from one call.
 ///
 /// ONE CALL, NOT FIVE LABELS. A caller that derived its own would be a second
