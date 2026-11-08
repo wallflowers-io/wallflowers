@@ -1404,7 +1404,7 @@ final class NewCreator: ObservableObject {
     var session: NewSession { sessions[active]! }
 }
 
-/// The creator's cards, one per kind, over the dial that picks between them — two of
+/// The creator's cards, one per kind, under the dial that picks between them — two of
 /// SwiftUI's own scroll views, coupled.
 ///
 /// The cards page (`.paging`); the dial snaps item by item (`.viewAligned`). Whichever
@@ -1444,6 +1444,19 @@ private struct CreatorPages: View {
 
     var body: some View {
         VStack(spacing: 10) {
+            // Above the card it picks (Ralph, 8 Nov).
+            if choosing {
+                KindDial(kinds: creator.kinds, ids: ids, position: $dial,
+                         selected: Int(at.rounded()), following: lead == .cards,
+                         touched: { lead = .dial },
+                         moved: { f in
+                             if lead == .dial { cards.scrollTo(x: f * cardWidth) }
+                         },
+                         rested: { if lead == .dial { rest() } },
+                         pick: pick)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(ids, id: \.self) { i in
@@ -1471,18 +1484,6 @@ private struct CreatorPages: View {
             .onScrollPhaseChange { _, phase in
                 if phase == .interacting { lead = .cards }
                 if phase == .idle, lead != .dial { rest() }
-            }
-
-            if choosing {
-                KindDial(kinds: creator.kinds, ids: ids, position: $dial,
-                         selected: Int(at.rounded()), following: lead == .cards,
-                         touched: { lead = .dial },
-                         moved: { f in
-                             if lead == .dial { cards.scrollTo(x: f * cardWidth) }
-                         },
-                         rested: { if lead == .dial { rest() } },
-                         pick: pick)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         // One tick as each kind takes the centre, as a picker does. The kind, not the
