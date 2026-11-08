@@ -41,6 +41,13 @@ struct ObjectIndex: Equatable {
         rows.first { $0.parent == objectId && $0.parentRole == Self.commentsPart }?.id
     }
 
+    /// Who made an object, for a card: the group's first owner and their name. Nil
+    /// while the object or its creator is unknown here.
+    func maker(of objectId: String) -> FeedAssembler.Maker? {
+        guard let c = object(objectId)?.creator, !c.isEmpty else { return nil }
+        return FeedAssembler.Maker(name: name(c) ?? String(c.prefix(8)), id: c)
+    }
+
     // MARK: people
 
     func person(_ identity: String) -> PacificCore.PersonRow? { people[IdentityKey.hex(identity)] }

@@ -10,6 +10,7 @@
 
 import Foundation
 import SwiftUI
+import Combine      // the Feed's merged inputs (feedInputsChanged)
 import UIKit        // event media: downscale/compress stills under the fold's b64 caps
 import PacificCore
 
@@ -1595,6 +1596,16 @@ final class CoreService: ObservableObject {
     }
 
     @Published private(set) var events: [EventRow] = []
+
+    /// Fires when anything the Feed assembles from changes: a mint lands with no sync,
+    /// and a device that cannot reach the relay never ticks. A @Published publisher
+    /// emits before its property is set, so this delivers on the next main-queue turn,
+    /// when the new values are readable.
+    lazy var feedInputsChanged: AnyPublisher<Void, Never> =
+        Publishers.Merge4($events.map { _ in () }, $posts.map { _ in () },
+                          $listings.map { _ in () }, $index.map { _ in () })
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
 
     /// The events as the core holds them NOW, read on the caller's thread: only for a
     /// lookup that missed the published list (a deep link ahead of the first refresh).

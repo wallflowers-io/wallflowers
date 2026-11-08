@@ -58,8 +58,7 @@ struct TypedListPage: View {
             }
         case .events:
             return FeedAssembler.rows(events: core.events, listings: [], nowMs: now,
-                                      selfName: core.displayName.isEmpty ? "me" : core.displayName,
-                                      selfID: core.myIdentityHex)
+                                      makerOf: core.index.maker(of:))
         case .places:
             return core.places.map {
                 FeedItem(id: "place:\($0.id)", category: .places, title: $0.name,
