@@ -513,18 +513,28 @@ CREATE TABLE IF NOT EXISTS pending_departure (
 /// peer must not be able to grow local disk unboundedly.
 pub const QUARANTINE_CAP: i64 = 256;
 
+/// One open of a directory, as a second connection to it shares it (`Directory::open_beside`).
+#[derive(Clone)]
+pub struct Shared {
+    path: String,
+    nonce: u64,
+    verified: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<[u8; 32]>>>,
+    folds: std::sync::Arc<std::sync::Mutex<crate::fold_cache::FoldCache>>,
+}
+
 /// The on-device directory. Owns a SQLite connection.
 pub struct Directory {
     pub conn: Connection,
     /// Rows whose authorship signature this Directory has already checked, keyed by
     /// a hash of group, author, signature and envelope: a row that changes in any of
-    /// them is checked again (A-10; RX.8).
-    verified: std::sync::Mutex<std::collections::HashSet<[u8; 32]>>,
+    /// them is checked again (A-10; RX.8). Shared with a Directory opened beside it.
+    verified: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<[u8; 32]>>>,
     /// Random at every open (O-69): a restore that brings back an older `fold_gen` never
-    /// meets a cache entry made before it.
+    /// meets a cache entry made before it. A Directory opened beside another is the same
+    /// open, and takes its nonce.
     pub nonce: u64,
     /// The folds of this open (O-69): keyed as `crate::fold_cache::Key` says.
-    pub folds: std::sync::Mutex<crate::fold_cache::FoldCache>,
+    pub folds: std::sync::Arc<std::sync::Mutex<crate::fold_cache::FoldCache>>,
 }
 
 impl Directory {
@@ -542,6 +552,20 @@ impl Directory {
         let conn = Connection::open(path)?;
         Self::init(&conn)?;
         Ok(Self::with(conn))
+    }
+
+    /// What a second connection to this open shares with it (`open_beside`).
+    pub fn shared(&self) -> Result<Shared, CoreError> {
+        let path = self.conn.path().filter(|p| !p.is_empty()).ok_or_else(|| CoreError::Directory("an in-memory directory has no second connection".into()))?;
+        Ok(Shared { path: path.into(), nonce: self.nonce, verified: self.verified.clone(), folds: self.folds.clone() })
+    }
+
+    /// A second connection to an open: its checked signatures, its folds and its nonce, so a
+    /// long write on one never holds up a read on the other. The schema is the open's,
+    /// already migrated. Safe because nothing shared is keyed by the connection: a checked
+    /// row by its content, a fold by `fold_gen`, which the writing transaction's triggers raise.
+    pub fn open_beside(open: &Shared) -> Result<Self, CoreError> {
+        Ok(Self { conn: Connection::open(&open.path)?, verified: open.verified.clone(), nonce: open.nonce, folds: open.folds.clone() })
     }
 
     fn with(conn: Connection) -> Self {

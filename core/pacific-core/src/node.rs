@@ -530,6 +530,26 @@ impl Node {
         })
     }
 
+    /// A Node on an open another Node holds (`Directory::shared`), sharing its checked
+    /// signatures and folds (`Directory::open_beside`): a long-lived embedding reads on one
+    /// while another writes. Everything else is opened as `open` opens it.
+    pub fn open_beside(open: &crate::directory::Shared) -> Result<Self, CoreError> {
+        Ok(Self {
+            id: identity::load()?,
+            dir: Directory::open_beside(open)?,
+            projection: None,
+            routes: crate::router::Routes::load(),
+            held: Default::default(),
+            skipped_own: Default::default(),
+            own_unsent: Default::default(),
+            card_everywhere: Default::default(),
+            joined_tried: Default::default(),
+            restated: Default::default(),
+            live: Default::default(),
+            live_state: Default::default(),
+        })
+    }
+
     /// Installs the OPT-IN union-store projection sink (WS-G). Once installed, a
     /// locally-authored `forum.post` into a GroupObject also projects its reduced
     /// text into LodeDB via the rust-direct route (fail-loud; a projection error
