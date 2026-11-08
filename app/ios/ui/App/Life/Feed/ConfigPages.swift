@@ -117,14 +117,14 @@ private struct DirectoryBar: View {
 
     private var photo: Data? {
         guard let oid = item.objectID else { return nil }
-        if kind == "PERSON" { return core.peerPhoto(oid) }
+        if kind == "PERSON" { return core.index.photo(oid) }
         guard let row = core.orgs.first(where: { $0.id == oid }), !row.photo.isEmpty else { return nil }
         return Data(base64Encoded: row.photo)
     }
 
     private var color: Color? {
         guard let oid = item.objectID else { return nil }
-        if kind == "PERSON" { return core.peerColor(oid) }
+        if kind == "PERSON" { return core.index.color(oid) }
         guard let row = core.orgs.first(where: { $0.id == oid }), !row.avatarColor.isEmpty else { return nil }
         return Color(hex: row.avatarColor)
     }

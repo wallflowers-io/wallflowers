@@ -808,8 +808,8 @@ struct GroupDetailView: View {
         return NavigationLink(value: PersonLink(id: space)) {
             spaceBar(title: core.displayName(forSpace: space),
                      label: "",
-                     photo: isMe ? core.avatarPhoto : core.peerPhoto(space),
-                     color: isMe ? core.avatarColor : core.peerColor(space),
+                     photo: isMe ? core.avatarPhoto : core.index.photo(space),
+                     color: isMe ? core.avatarColor : core.index.color(space),
                      mark: isMe ? "(me)" : nil,
                      width: width)
                 .accessibilityIdentifier("group-member-\(hex(of: space).prefix(12))")

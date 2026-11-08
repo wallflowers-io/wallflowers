@@ -135,7 +135,7 @@ struct EventDetailSource: DetailSource {
     /// The event's comments section: the Forum minted with it in the comments role
     /// (ICD `kinds.event.parts`), read flat. None until the device holds it.
     func comments() async -> [DetailComment] {
-        guard let forum = core.commentsForum(of: objectId) else { return [] }
+        guard let forum = core.index.commentsForum(of: objectId) else { return [] }
         return core.objectThread(forum).map { row in
             DetailComment(id: "\(row.post.author):\(row.post.gen)",
                           author: name(of: row.post),
@@ -184,7 +184,7 @@ struct EventDetailSource: DetailSource {
 
     private func name(of post: ChatMsg) -> String {
         if post.mine { return core.displayName.isEmpty ? "You" : core.displayName }
-        let names = core.peerNamesByIdentity()
+        let names = core.index.names
         return names[post.author] ?? String(post.author.prefix(8))
     }
 }

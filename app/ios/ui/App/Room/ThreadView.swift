@@ -325,7 +325,7 @@ struct ThreadView: View {
 
     private func reload() {
         rows = core.objectThread(boundId)
-        names = core.peerNamesByIdentity()
+        names = core.index.names
         invites = invitePeer.map { core.invites(peer: $0) } ?? []
         loaded = true
     }

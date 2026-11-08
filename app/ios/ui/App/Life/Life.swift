@@ -485,8 +485,8 @@ struct LifeView: View {
         let real = connections.map { c -> ContactJewel in
             let name = c.displayName.isEmpty ? String(c.peerId.prefix(12)) + "…" : c.displayName
             return ContactJewel(id: c.peerId, name: name,
-                                photo: core.peerPhoto(c.peerId),
-                                color: core.peerColor(c.peerId) ?? LifeFilter.people.color)
+                                photo: core.index.photo(c.peerId),
+                                color: core.index.color(c.peerId) ?? LifeFilter.people.color)
         }
         return real.isEmpty ? ContactJewel.demo : real
     }
@@ -499,7 +499,7 @@ struct LifeView: View {
 
 
     /// Connection display names keyed by identity hex — built once per render, not per row.
-    private var peerNames: [String: String] { core.peerNamesByIdentity() }
+    private var peerNames: [String: String] { core.index.names }
 
     /// DEBUG-only headless drives of the pages simctl cannot reach by tapping
     /// (`-pacificOpenEvent` / `-pacificOpenListing`). Lifted OUT of `body`'s

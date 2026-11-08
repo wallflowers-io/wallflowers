@@ -125,7 +125,7 @@ enum DetailBind {
     /// A comment, written to the object's comments section. False when the device
     /// does not hold that section, or is not on its roster.
     static func post(_ text: String, on objectId: String, core: CoreService) async -> Bool {
-        guard let forum = core.commentsForum(of: objectId) else { return false }
+        guard let forum = core.index.commentsForum(of: objectId) else { return false }
         return await core.sendToGroup(forum, text)
     }
 
@@ -142,8 +142,8 @@ enum DetailBind {
     /// The object's comments section: the Forum minted with it in the comments
     /// role (ICD `kinds.*.parts`), read flat. None until the device holds it.
     static func comments(of objectId: String, core: CoreService, tint: Color) -> [DetailComment] {
-        guard let forum = core.commentsForum(of: objectId) else { return [] }
-        let names = core.peerNamesByIdentity()
+        guard let forum = core.index.commentsForum(of: objectId) else { return [] }
+        let names = core.index.names
         let me = core.displayName.isEmpty ? "You" : core.displayName
         return core.objectThread(forum).map { row in
             let who = row.post.mine ? me : (names[row.post.author] ?? String(row.post.author.prefix(8)))
