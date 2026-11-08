@@ -645,8 +645,10 @@ struct NewSurface: View {
                 if let creator {
                     CreatorPages(creator: creator)
                 } else {
-                    NewCard(session: session).padding(.horizontal, 16)
-                        .onAppear { NSLog("[creator] single card %@", session.kind.rawValue) }
+                    CardTablet(id: "new-tablet-\(session.kind.rawValue)") { height in
+                        NewCard(session: session, minHeight: height).padding(.horizontal, 16)
+                    }
+                    .onAppear { NSLog("[creator] single card %@", session.kind.rawValue) }
                 }
             }
                 // The departure, in three flavours. SAVED opens out past the screen edges
@@ -688,6 +690,8 @@ struct NewCard: View {
     /// The card in view. A card that leaves lets go of the keyboard; only the card in
     /// view reports its frame to the ground.
     var active = true
+    /// At least this tall: the page its tablet shows, so a short card still fills it.
+    var minHeight: CGFloat = 0
 
     @FocusState private var focus: FocusTarget?
     /// Focus is keyed by the DECLARED field, not by a hand-kept case list — so a new
@@ -778,6 +782,9 @@ struct NewCard: View {
         // Let go of the keyboard the INSTANT the surface starts leaving, so it slides
         // down alongside the departure instead of blinking out once everything has gone.
         .onChange(of: exit) { _, leaving in if leaving != nil { focus = nil } }
+        // A container of its own: without one (the scroll view inside the card was it) the
+        // identifier lands on every field and overwrites theirs.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("new-surface-\(kind.rawValue)")
     }
 
@@ -797,26 +804,26 @@ struct NewCard: View {
             } else if showsHeader {
                 header
             }
-            ScrollView {
-                // THE EXPLICIT STACK. `fields` is a ViewBuilder that yields SEVERAL views,
-                // and a ScrollView's content is ONE view — so a bare `fields` became a
-                // TupleView that SwiftUI laid out on top of itself. That is a single bug
-                // with two faces: the note's title rendered UNDER its body, and every
-                // newitem modal's rows sat on each other instead of stacking.
-                //
-                // `.leading` because a label-over-well field row is left-aligned and a
-                // centred stack would make the labels wander with their content's width.
-                VStack(alignment: .leading, spacing: session.face == .visibility ? 0 : rowGap) {
-                    if session.face == .visibility { visibilityOptions } else { fields }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                // Without a header (the note, the creator) the fields take its top margin.
-                .padding(.top, showsHeader ? 4 : 24)
-                .padding(.bottom, 12)
+            // NOTHING SCROLLS INSIDE THE CARD (Ralph, 8 Nov, #60): the card is a tablet, at
+            // its full height, and its `CardTablet` scrolls it whole.
+            //
+            // THE EXPLICIT STACK. `fields` is a ViewBuilder that yields SEVERAL views, so a
+            // bare `fields` became a TupleView that SwiftUI laid out on top of itself: the
+            // note's title rendered UNDER its body, and every newitem modal's rows sat on
+            // each other instead of stacking.
+            //
+            // `.leading` because a label-over-well field row is left-aligned and a
+            // centred stack would make the labels wander with their content's width.
+            VStack(alignment: .leading, spacing: session.face == .visibility ? 0 : rowGap) {
+                if session.face == .visibility { visibilityOptions } else { fields }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            // Without a header (the note, the creator) the fields take its top margin.
+            .padding(.top, showsHeader ? 4 : 24)
+            .padding(.bottom, 12)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .top)
         // Report where the card actually IS. In the ground's own space, so the bloom can
         // use it directly — the ground and the card are siblings in the same ZStack, and
         // both ignore the safe area, so `.named("newSurface")` is common ground.
@@ -1424,6 +1431,12 @@ private struct CreatorPages: View {
     /// items), and the touch that opened the creator can still be on it — on a cold first
     /// launch that pair carried the cards two kinds along, Event to Place.
     @State private var dialAligned = false
+    /// The tablet in view has scrolled up: the dial makes way (Ralph, 8 Nov, #60).
+    @State private var dialHidden = false
+    /// Where the tablet turned last: the furthest it went in the direction it is going.
+    @State private var turned: CGFloat = 0
+    /// Travel past the turn that hides or brings back the dial.
+    private static let dialSlack: CGFloat = 8
 
     private static let laps = 5
 
@@ -1446,7 +1459,7 @@ private struct CreatorPages: View {
     var body: some View {
         VStack(spacing: 10) {
             // Above the card it picks (Ralph, 8 Nov).
-            if choosing {
+            if choosing && !dialHidden {
                 KindDial(kinds: creator.kinds, ids: ids, position: $dial,
                          selected: Int(at.rounded()), following: lead == .cards,
                          touched: { if dialAligned { lead = .dial } },
@@ -1468,10 +1481,15 @@ private struct CreatorPages: View {
                 LazyHStack(spacing: 0) {
                     ForEach(ids, id: \.self) { i in
                         let k = KindRing.kind(at: i, in: creator.kinds)
-                        NewCard(session: creator.sessions[k]!, creator: true,
-                                active: k == creator.active)
-                            .padding(.horizontal, 16)
-                            .containerRelativeFrame(.horizontal)
+                        CardTablet(id: "new-tablet-\(k.rawValue)",
+                                   scrolled: { y, touching in
+                                       if k == creator.active { tabletAt(y, touching: touching) }
+                                   }) { height in
+                            NewCard(session: creator.sessions[k]!, creator: true,
+                                    active: k == creator.active, minHeight: height)
+                                .padding(.horizontal, 16)
+                        }
+                        .containerRelativeFrame(.horizontal)
                     }
                 }
                 .scrollTargetLayout()
@@ -1496,6 +1514,28 @@ private struct CreatorPages: View {
         // One tick as each kind takes the centre, as a picker does. The kind, not the
         // index, so the unseen lap jump is silent.
         .sensoryFeedback(.selection, trigger: KindRing.kind(at: Int(at.rounded()), in: creator.kinds))
+        // Another kind in view: its tablet is at its own top, and the dial is back.
+        .onChange(of: creator.active) { _, _ in setDial(hidden: false, at: 0) }
+    }
+
+    /// The tablet in view is at `y` from its top. Up past the slack hides the dial, down
+    /// past it (or the top) brings it back, as Safari's bar does. Only a finger on the
+    /// tablet turns it: once let go, the page's own change of height as the dial goes
+    /// moves the offset too, and that is layout, not the person scrolling back.
+    private func tabletAt(_ y: CGFloat, touching: Bool) {
+        if y <= 0 { return setDial(hidden: false, at: 0) }
+        guard touching else { return }
+        if dialHidden {
+            if y > turned { turned = y } else if turned - y > Self.dialSlack { setDial(hidden: false, at: y) }
+        } else {
+            if y < turned { turned = y } else if y - turned > Self.dialSlack { setDial(hidden: true, at: y) }
+        }
+    }
+
+    private func setDial(hidden: Bool, at y: CGFloat) {
+        turned = y
+        guard hidden != dialHidden else { return }
+        withAnimation(Motion.screenIn) { dialHidden = hidden }
     }
 
     /// A tap on the dial: the cards scroll to it, so the ones between cross on the way, and
@@ -1527,6 +1567,46 @@ private struct CreatorPages: View {
             }
         }
         lead = .cards
+    }
+}
+
+/// A card as a TABLET (Ralph, 8 Nov, #60): nothing scrolls inside it; the card itself
+/// scrolls, whole and at its full height, and fades on and off at the top and bottom of
+/// the screen. The fade lies in the margins, so a card at rest shows its whole border.
+/// `card` is given the height a short card fills: the page, less the margins.
+private struct CardTablet<Card: View>: View {
+    let id: String
+    /// The tablet scrolled: its offset from the top, held to the card's travel so a
+    /// bounce at either end reads as no movement, and whether a finger is on it.
+    var scrolled: (CGFloat, Bool) -> Void = { _, _ in }
+    @ViewBuilder let card: (CGFloat) -> Card
+
+    @State private var touching = false
+
+    private static var fade: CGFloat { 24 }
+
+    var body: some View {
+        GeometryReader { geo in
+            let h = max(geo.size.height, 1), edge = Self.fade / h
+            ScrollView(.vertical) {
+                card(max(h - 2 * Self.fade, 0))
+            }
+            .scrollIndicators(.hidden)
+            .contentMargins(.vertical, Self.fade, for: .scrollContent)
+            .onScrollGeometryChange(for: CGFloat.self) { g in
+                let travel = max(g.contentSize.height + g.contentInsets.top + g.contentInsets.bottom - g.containerSize.height, 0)
+                return min(max(g.contentOffset.y + g.contentInsets.top, 0), travel)
+            } action: { _, y in scrolled(y, touching) }
+            .onScrollPhaseChange { _, phase in touching = phase == .interacting }
+            .mask {
+                LinearGradient(stops: [.init(color: .clear, location: 0),
+                                       .init(color: .black, location: edge),
+                                       .init(color: .black, location: 1 - edge),
+                                       .init(color: .clear, location: 1)],
+                               startPoint: .top, endPoint: .bottom)
+            }
+            .accessibilityIdentifier(id)
+        }
     }
 }
 
