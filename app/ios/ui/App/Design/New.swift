@@ -1457,38 +1457,16 @@ private struct CreatorPages: View {
     private var choosing: Bool { !creator.locked && inView.face == .fields }
 
     var body: some View {
-        // The dial sits on the tablet's top margin (`CardTablet.gap`), no space of its own.
-        VStack(spacing: 0) {
-            // Above the card it picks (Ralph, 8 Nov).
-            if choosing && !dialHidden {
-                KindDial(kinds: creator.kinds, ids: ids, position: $dial,
-                         selected: Int(at.rounded()), following: lead == .cards,
-                         touched: { if dialAligned { lead = .dial } },
-                         moved: { f in
-                             if !dialAligned {
-                                 // Not yet where the cards are: put it there. A new dial
-                                 // starts at its content's origin, two items in, and the
-                                 // cards at rest send it nowhere.
-                                 dialAligned = abs(f - at) < 0.5
-                                 if !dialAligned { dial.scrollTo(x: at * KindDial.item) }
-                             } else if lead == .dial {
-                                 cards.scrollTo(x: f * cardWidth)
-                             }
-                         },
-                         rested: { if lead == .dial { rest() } },
-                         pick: pick)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    // A dial that comes back (after VISIBILITY, or scrolled away) aligns
-                    // again before it leads.
-                    .onAppear { dial.scrollTo(x: at * KindDial.item) }
-                    .onDisappear { dialAligned = false }
-            }
-
+        // THE DIAL FLOATS OVER THE TABLETS, it takes no space from them: going and coming
+        // it moves, and the tablet under it keeps its frame (Ralph, 8 Nov — a dial that gave
+        // its space to the page as it went made the tablet's height jitter under a slow drag).
+        // The cards rest below it, on the tablet's top margin.
+        ZStack(alignment: .top) {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(ids, id: \.self) { i in
                         let k = KindRing.kind(at: i, in: creator.kinds)
-                        CardTablet(id: "new-tablet-\(k.rawValue)",
+                        CardTablet(id: "new-tablet-\(k.rawValue)", top: KindDial.slot,
                                    scrolled: { y, touching in
                                        if k == creator.active { tabletAt(y, touching: touching) }
                                    }) { height in
@@ -1516,6 +1494,31 @@ private struct CreatorPages: View {
             .onScrollPhaseChange { _, phase in
                 if phase == .interacting { lead = .cards }
                 if phase == .idle, lead != .dial { rest() }
+            }
+
+            // Above the card it picks (Ralph, 8 Nov).
+            if choosing && !dialHidden {
+                KindDial(kinds: creator.kinds, ids: ids, position: $dial,
+                         selected: Int(at.rounded()), following: lead == .cards,
+                         touched: { if dialAligned { lead = .dial } },
+                         moved: { f in
+                             if !dialAligned {
+                                 // Not yet where the cards are: put it there. A new dial
+                                 // starts at its content's origin, two items in, and the
+                                 // cards at rest send it nowhere.
+                                 dialAligned = abs(f - at) < 0.5
+                                 if !dialAligned { dial.scrollTo(x: at * KindDial.item) }
+                             } else if lead == .dial {
+                                 cards.scrollTo(x: f * cardWidth)
+                             }
+                         },
+                         rested: { if lead == .dial { rest() } },
+                         pick: pick)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    // A dial that comes back (after VISIBILITY, or scrolled away) aligns
+                    // again before it leads.
+                    .onAppear { dial.scrollTo(x: at * KindDial.item) }
+                    .onDisappear { dialAligned = false }
             }
         }
         // One tick as each kind takes the centre, as a picker does. The kind, not the
@@ -1580,8 +1583,10 @@ private struct CreatorPages: View {
 /// A card as a TABLET (Ralph, 8 Nov, #60): nothing scrolls inside it; the card itself
 /// scrolls, whole and at its full height. It runs on under the disc row and the keyboard,
 /// blurred behind them (the keyboard is glass; the row gets a blur of its own), and its
-/// end scrolls clear of both. Its top fades into the gap the dial sits in. `card` is given
-/// the height a short card fills: the page between that gap and the row.
+/// end scrolls clear of both. Its top fades out over `gap`. `card` is given the height a
+/// short card fills, the page between its top margin and the row, measured with the
+/// keyboard down: LOCKED, so neither the keyboard nor the dial resizes a card under the
+/// finger (Ralph, 8 Nov).
 ///
 /// THE KEYBOARD IS TRACKED THROUGH THE SAFE AREA, not its notifications. Two readers: the
 /// page as it shows, which stops above the keyboard (or the home indicator), and the page
@@ -1590,6 +1595,8 @@ private struct CreatorPages: View {
 /// ride with it exactly. (A reader that ignores the safe area reads an inset of nothing.)
 private struct CardTablet<Card: View>: View {
     let id: String
+    /// Where the card rests from the tablet's top: below the dial, in the creator.
+    var top: CGFloat = gap
     /// The tablet scrolled: its offset from the top, held to the card's travel so a
     /// bounce at either end reads as no movement, and whether a finger is on it.
     var scrolled: (CGFloat, Bool) -> Void = { _, _ in }
@@ -1604,21 +1611,25 @@ private struct CardTablet<Card: View>: View {
 
     var body: some View {
         GeometryReader { shown in
-            GeometryReader { whole in
-                tablet(shown: shown.size.height, floor: max(whole.size.height - shown.size.height, 0))
+            GeometryReader { page in
+                GeometryReader { whole in
+                    tablet(page: page.size.height, floor: max(whole.size.height - shown.size.height, 0))
+                }
+                .ignoresSafeArea(.container, edges: .bottom)
             }
-            .ignoresSafeArea(.container, edges: .bottom)
             .ignoresSafeArea(.keyboard, edges: .bottom)
         }
     }
 
-    /// `floor`: what the row stands on, the keyboard when it is up, else the home indicator.
-    private func tablet(shown: CGFloat, floor: CGFloat) -> some View {
+    /// `page`: the tablet's height with the keyboard down, which the card's height is held
+    /// to. `floor`: what the row stands on, the keyboard when it is up, else the home
+    /// indicator.
+    private func tablet(page: CGFloat, floor: CGFloat) -> some View {
         ScrollView(.vertical) {
-            card(max(shown - Self.gap - Self.row, 0))
+            card(max(page - top - Self.row, 0))
         }
         .scrollIndicators(.hidden)
-        .contentMargins(.top, Self.gap, for: .scrollContent)
+        .contentMargins(.top, top, for: .scrollContent)
         .contentMargins(.bottom, Self.row + floor, for: .scrollContent)
         .onScrollGeometryChange(for: CGFloat.self) { g in
             let travel = max(g.contentSize.height + g.contentInsets.top + g.contentInsets.bottom - g.containerSize.height, 0)
@@ -1689,6 +1700,9 @@ private struct KindDial: View {
 
     static let item: CGFloat = 68
     private static let height: CGFloat = 62
+    /// What the cards rest below: the dial, and the gap it keeps from them, the same gap it
+    /// keeps from the notch.
+    static var slot: CGFloat { height + CardTablet<EmptyView>.gap }
     /// The kind in view, its neighbours, and one more each side, fading — so it reads as
     /// a set that goes on (Ralph, 5 Nov). The scroll view clips the rest.
     private static let visible: CGFloat = 5
