@@ -32,6 +32,8 @@ struct TypedListPage: View {
                     // One addressable element per card (see FeedView's row) —
                     // XCUITest cannot query the identifier on a bare composite.
                     .accessibilityElement(children: .combine)
+                    // Tapping it opens the object: it is a button to VoiceOver and to a test.
+                    .accessibilityAddTraits(.isButton)
                     .accessibilityIdentifier("list-row-\(item.id)")
                 }
                 if items.isEmpty {

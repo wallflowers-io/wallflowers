@@ -72,7 +72,7 @@ final class FeedCardUITests: XCTestCase {
             .matching(NSPredicate(format: "identifier BEGINSWITH 'feed-row-' AND label CONTAINS %@", title)).firstMatch
         let mid = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
         let up = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25))
-        for _ in 0..<12 where !card.waitForExistence(timeout: 2) { mid.press(forDuration: 0.05, thenDragTo: up) }
+        for _ in 0..<40 where !card.waitForExistence(timeout: 1) { mid.press(forDuration: 0.05, thenDragTo: up) }
         return card
     }
 

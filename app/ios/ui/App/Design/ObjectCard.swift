@@ -54,6 +54,8 @@ struct ObjectCard: View {
                 }
             }
             .padding(.horizontal, DesignTokens.Card.lineInset)
+            // The title says all of this aloud (`spoken`).
+            .accessibilityHidden(true)
 
             // The title's ink depends on its ground: white over media (the scrim
             // guarantees it in both keys), themed ink over the bare card.
@@ -72,6 +74,7 @@ struct ObjectCard: View {
                     .font(.system(size: DesignTokens.Card.titleSize, weight: .semibold))
                     .foregroundStyle(banner == nil ? Theme.textPrimary : Color.white)
                     .lineLimit(2)
+                    .accessibilityLabel(spoken)
                     .padding(DesignTokens.Card.titleInset)
             }
             .aspectRatio(1, contentMode: .fit)
@@ -87,6 +90,20 @@ struct ObjectCard: View {
             }
         }
         .padding(.horizontal, DesignTokens.Life.gutter)
+        // The author's door is an action on the card, not a button lost inside it.
+        .accessibilityActions {
+            if let route = row.authorRoute, let onAuthor {
+                Button(row.author) { onAuthor(route) }
+            }
+        }
+    }
+
+    /// What the title says aloud: the card's title first, then what it is, who made it
+    /// and where. The header above is hidden from VoiceOver, as this already says it.
+    private var spoken: String {
+        [row.title, kind?.noun ?? "", row.author.isEmpty ? "" : "by \(row.author)", row.location]
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 
     private var square: RoundedRectangle {
