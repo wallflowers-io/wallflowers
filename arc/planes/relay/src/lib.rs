@@ -37,7 +37,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::Message;
-use tracing::{error, info, info_span, warn, Instrument};
+use tracing::{debug, error, info, info_span, warn, Instrument};
 
 pub mod wire;
 /// THE storage interface. One trait; the relay talks to nothing else.
@@ -801,7 +801,7 @@ pub async fn serve_with_policy(
         tokio::spawn(
             async move {
                 metrics.active_conns.fetch_add(1, Ordering::Relaxed);
-                info!("connection opened");
+                debug!("connection opened");
                 emit(&obs, RelayEvent::ConnOpened { conn: id });
                 emit_snapshot(&obs, &hub, &metrics).await;
                 if let Err(e) =
@@ -809,9 +809,13 @@ pub async fn serve_with_policy(
                 {
                     // No client IP in logs — keep the relay blind even in telemetry.
                     // `e` is a ws/io error kind/message; it never embeds tag/blob data.
-                    warn!(error = %e, "connection closed with error");
+                    if hung_up(&*e) {
+                        debug!(error = %e, "connection closed with error");
+                    } else {
+                        warn!(error = %e, "connection closed with error");
+                    }
                 } else {
-                    info!("connection closed");
+                    debug!("connection closed");
                 }
                 hub.lock().await.conns.remove(&id);
                 metrics.active_conns.fetch_sub(1, Ordering::Relaxed);
@@ -894,6 +898,16 @@ async fn evict_loop(hub: Arc<Mutex<Hub>>, retention: Retention) {
             );
         }
     }
+}
+
+/// A client that went away without a close frame: ordinary, not a fault. Per-connection
+/// lines at INFO and these at WARN filled wallflowers-01's disk (8 Nov 2026).
+fn hung_up(e: &(dyn std::error::Error + Send + Sync + 'static)) -> bool {
+    use tokio_tungstenite::tungstenite::{error::ProtocolError, Error};
+    matches!(
+        e.downcast_ref::<Error>(),
+        Some(Error::Protocol(ProtocolError::ResetWithoutClosingHandshake)) | Some(Error::ConnectionClosed)
+    )
 }
 
 async fn handle(
@@ -1028,9 +1042,9 @@ async fn handle(
                 };
                 drop(h);
                 // fanout + latency + verdict are pure ops metrics; `tag`/`blob`
-                // never reach this INFO event (they go ONLY to the traffic
+                // never reach this event (they go ONLY to the traffic
                 // observer, if any).
-                info!(
+                debug!(
                     fanout,
                     ok,
                     reason = reason.unwrap_or(""),
@@ -1067,7 +1081,7 @@ async fn handle(
                     None
                 };
                 drop(h);
-                info!(
+                debug!(
                     tag_count,
                     replayed,
                     gaps,
