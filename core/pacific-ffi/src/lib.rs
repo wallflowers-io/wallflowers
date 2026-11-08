@@ -4097,8 +4097,13 @@ impl Core {
                 "a transport set needs at least one route (e.g. \"wss://…,mesh:\")".into(),
             ));
         }
+        // The app hands its routes over at every launch and Arc change: the same set again
+        // writes nothing and keeps the held open.
+        if *self.read()?.routes() == routes {
+            return Ok(());
+        }
         self.write()?.set_routes(routes)?;
-        // The held Node read the routes when it opened.
+        // Every Node read the routes when it opened.
         self.reopen();
         Ok(())
     }
