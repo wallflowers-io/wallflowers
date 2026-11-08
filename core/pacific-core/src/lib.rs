@@ -110,6 +110,7 @@ pub mod mls_mem;
 /// The spine: the per-account chain of entries that lets a seed NAME its objects.
 /// Pure format — every platform imports THIS rather than writing its own encoder.
 pub mod spine;
+pub mod summary;
 pub mod lease;
 pub mod resumption;
 /// SQLite impls of the two `mls-rs` storage traits. `storage`, not `mls`: they
