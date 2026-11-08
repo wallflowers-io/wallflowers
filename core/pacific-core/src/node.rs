@@ -1670,23 +1670,24 @@ impl Node {
                 return Ok(());
             }
         };
-        // Advance by draining the CURRENT tag until no commit advances the epoch,
-        // recording each epoch's tag+secret we pass through (mirrors sync_group).
+        self.climb(&mut sess, &mut group, group_id).await?;
+        self.done_with(sess, home).await;
+        Ok(())
+    }
+
+    /// Advance by draining the CURRENT tag until no commit advances the epoch,
+    /// recording each epoch's tag+secret we pass through (mirrors sync_group).
+    async fn climb(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8]) -> Result<(), CoreError> {
         loop {
             let e = group.current_epoch();
             let eb = mls::epoch_be(e);
-            let tag = mls::group_tag(&group, &eb)?;
-            let secret = mls::seal_conn_secret(&group, &eb)?;
+            let tag = mls::group_tag(group, &eb)?;
+            let secret = mls::seal_conn_secret(group, &eb)?;
             self.dir.record_epoch_tag(group_id, e, &tag, &secret)?;
-            if !self
-                .drain_tag(&mut sess, &mut group, group_id, &tag, &secret)
-                .await?
-            {
-                break;
+            if !self.drain_tag(sess, group, group_id, &tag, &secret).await? {
+                return Ok(());
             }
         }
-        self.done_with(sess, home).await;
-        Ok(())
     }
 
     /// BEFORE A WRITE (O-69): what the held connection delivered, ingested with no round
@@ -2094,8 +2095,172 @@ impl Node {
     }
 
     /// Encrypt + seal + PUB one queued Delta to the shared group tag, marking it
-    /// delivered on the relay Ack. Shared by the post path and the outbox resend.
+    /// delivered on the relay Ack. Shared by the post path and the outbox resend. A
+    /// sequenced one goes with every other queued on its object, each through its slot.
     async fn flush_one(
+        &self,
+        sess: &mut Router,
+        group: &mut mls::Group,
+        group_id: &[u8],
+        delta_id: &[u8; 32],
+        envelope: &[u8],
+    ) -> Result<(), CoreError> {
+        if coordinator::decode_delta(envelope)?.seq.is_some() {
+            return self.flush_sequenced(sess, group, group_id).await;
+        }
+        self.publish_one(sess, group, group_id, delta_id, envelope).await
+    }
+
+    /// EVERY UNSENT SEQUENCED DELTA OF ONE OBJECT, IN ORDER, EACH THROUGH ITS SLOT (ICD
+    /// `mls.sequencing.slot`; RFC 9750 §5.2.1). The owner's devices all write as the
+    /// owner, so no one device's fold can order them: the relay does, first writer wins,
+    /// as it does for the spine's links. Each pass authors the queue again from the head
+    /// this device folds (the same bytes when nothing moved; a new position when a write
+    /// was made offline, or a slot was lost), and a lost slot climbs, takes the winner
+    /// into the log, and passes again. A queued op the new head refuses is said, not sent.
+    async fn flush_sequenced(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8]) -> Result<(), CoreError> {
+        let root = crate::locator::storage_root(&*self.seed_or_refuse()?);
+        for _ in 0..crate::icd_consts::SEQ_SLOT_ROUNDS {
+            let mut lost = false;
+            for (did, envelope, epoch, seq) in self.requeue_sequenced(group, group_id)? {
+                let slot = seq_slot(&root, group_id, epoch, seq);
+                let won = match sess.publish_commit(&slot, &pacific_wire::blob_b64(&self.slot_claim(&root, &slot, group_id, &did, &envelope)?)).await? {
+                    Some(_) => true,
+                    // Taken: by this delta (a resend after its claim was acked), or by another.
+                    None => match self.read_slot(sess, &slot, &root, group_id).await? {
+                        Some((held, _, _, _)) if held == did => true,
+                        Some((held, env, author, sig)) => {
+                            self.dir.append_delta_received(group_id, &held, &author, &env, &sig, unix_now())?;
+                            false
+                        }
+                        None => false,
+                    },
+                };
+                if !won {
+                    tracing::info!(target: "pacific::sync", group = %hex::encode(&group_id[..group_id.len().min(6)]),
+                                   epoch, seq, "lost the slot; authoring the queue again from the winner");
+                    self.climb(sess, group, group_id).await?;
+                    lost = true;
+                    break;
+                }
+                self.publish_one(sess, group, group_id, &did, &envelope).await?;
+            }
+            if !lost {
+                return Ok(());
+            }
+        }
+        Err(CoreError::CommitRace(format!(
+            "a sequenced write lost its slot {} times; it stays queued for the next sync",
+            crate::icd_consts::SEQ_SLOT_ROUNDS
+        )))
+    }
+
+    /// This device's unsent sequenced deltas on one object, authored again from the head
+    /// the log folds to without them, in their order: `(id, envelope, epoch, seq)`. A
+    /// delta whose position has not moved comes back byte-identical and is left alone;
+    /// one that has is replaced in the outbox; one the new head refuses is dropped, and
+    /// said ("your change was superseded").
+    fn requeue_sequenced(&self, group: &mls::Group, group_id: &[u8]) -> Result<Vec<([u8; 32], Vec<u8>, u64, u64)>, CoreError> {
+        let me = self.id.identity_pk();
+        let mut queued: Vec<coordinator::Delta> = Vec::new();
+        for (_, env) in self.dir.pending_outbox(group_id, &me)? {
+            let d = coordinator::decode_delta(&env)?;
+            if d.seq.is_some() {
+                queued.push(d);
+            }
+        }
+        if queued.is_empty() {
+            return Ok(Vec::new());
+        }
+        queued.sort_by_cached_key(crate::fold::spine_order);
+        let ids: std::collections::HashSet<[u8; 32]> = queued.iter().map(|d| d.id()).collect();
+        let kind = self
+            .dir
+            .group_kind(group_id)?
+            .ok_or_else(|| CoreError::Directory(format!("no object {}", hex::encode(group_id))))?;
+        let members = self.dir.group_members(group_id)?;
+        let owners = self.dir.owner_history(group_id)?;
+        let mut log: Vec<(coordinator::Delta, crate::object::MemberId)> = self
+            .dir
+            .load_log(group_id)?
+            .into_iter()
+            .filter_map(|(author, envelope)| coordinator::decode_delta(&envelope).ok().map(|d| (d, author)))
+            .filter(|(d, _)| !ids.contains(&d.id()))
+            .collect();
+        let watermark = Some(self.dir.gen_floor(group_id)?);
+        let mut out = Vec::new();
+        for old in queued {
+            let old_id = old.id();
+            let ctx = crate::authoring::Ctx {
+                me,
+                epoch: group.current_epoch(),
+                members: &members,
+                owners: &owners,
+                log: &log,
+                watermark,
+            };
+            let built = crate::authoring::build(&kind, old.op_id, old.args.clone(), &ctx).map(|mut d| {
+                d.visibility = old.visibility.clone();
+                d
+            });
+            match built {
+                Ok(new) if new.id() == old_id => {
+                    out.push((old_id, new.canonical_bytes(), new.epoch, new.seq.unwrap_or(0)));
+                    log.push((new, me));
+                }
+                Ok(new) => {
+                    self.dir.drop_undelivered(group_id, &old_id)?;
+                    let (id, envelope) = self.append_local(group_id, new.clone())?;
+                    out.push((id, envelope, new.epoch, new.seq.unwrap_or(0)));
+                    log.push((new, me));
+                }
+                Err(why) => {
+                    self.dir.drop_undelivered(group_id, &old_id)?;
+                    tracing::warn!(target: "pacific::sync", group = %hex::encode(&group_id[..group_id.len().min(6)]),
+                                   op = old.op_id, why = %why, "your change was superseded: the head it would follow refuses it");
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// A claim on a slot: the delta's signed payload (`mls.applicationPayload`), sealed
+    /// under the owner's storage root, so the owner's other devices can read who won.
+    fn slot_claim(&self, root: &[u8; 32], slot: &Address, group_id: &[u8], did: &[u8; 32], envelope: &[u8]) -> Result<Vec<u8>, CoreError> {
+        let payload = crate::delta_sig::seal_payload(
+            envelope,
+            &self.id.identity_pk(),
+            &crate::delta_sig::sign_delta(&self.id, group_id, did),
+        );
+        seal::seal(&payload, &slot.tag(), root)
+    }
+
+    /// Who holds a slot: the first claim on it that opens under the root and is this
+    /// person's, signed: `(id, envelope, author, sig)`.
+    async fn read_slot(
+        &self,
+        sess: &mut Router,
+        slot: &Address,
+        root: &[u8; 32],
+        group_id: &[u8],
+    ) -> Result<Option<([u8; 32], Vec<u8>, crate::object::MemberId, [u8; 64])>, CoreError> {
+        let me = self.id.identity_pk();
+        for m in sess.drain(&[slot.tag_hex()], |_| Ok(0)).await? {
+            let Ok(blob) = pacific_wire::blob_unb64(&m.blob) else { continue };
+            let Ok(payload) = seal::open(&blob, &slot.tag(), root) else { continue };
+            let Ok((envelope, author, sig)) = crate::delta_sig::open_payload(&payload) else { continue };
+            let Ok(d) = coordinator::decode_delta(&envelope) else { continue };
+            let did = d.id();
+            if author == me && crate::delta_sig::verify_delta(group_id, &author, &did, &sig).is_ok() {
+                return Ok(Some((did, envelope, author, sig)));
+            }
+        }
+        Ok(None)
+    }
+
+    /// The MLS half of a flush: the signed payload, encrypted, sealed and published on
+    /// the group's tag, and marked delivered on the Ack.
+    async fn publish_one(
         &self,
         sess: &mut Router,
         group: &mut mls::Group,
@@ -5440,21 +5605,19 @@ impl Node {
             let self_id = self.ensure_self_object()?;
             let gid = hex::decode(&self_id)
                 .map_err(|e| CoreError::Directory(format!("self object id hex: {e}")))?;
-            let folded = self.folded_group(&gid).map(|c| c.state().clone()).ok();
+            // A record that will not fold holds no profile to compare, and is not seeded:
+            // read as "none yet", a failed fold wrote the cache onto it on every pass.
+            let st = self.folded_group(&gid)?.state().clone();
             let (name, shape, card) = self.cached_profile()?;
-            match folded {
-                Some(st) if !st.display_name.is_empty() => {
-                    if st.display_name != name || st.shape != shape || st.card != card {
-                        let card_json = serde_json::to_string(&st.card)
-                            .map_err(|e| CoreError::Coordinator(format!("card encode: {e}")))?;
-                        self.dir.set_my_display_name(&st.display_name)?;
-                        self.dir.set_my_profile(&card_json, st.shape.as_str())?;
-                    }
+            if !st.display_name.is_empty() {
+                if st.display_name != name || st.shape != shape || st.card != card {
+                    let card_json = serde_json::to_string(&st.card)
+                        .map_err(|e| CoreError::Coordinator(format!("card encode: {e}")))?;
+                    self.dir.set_my_display_name(&st.display_name)?;
+                    self.dir.set_my_profile(&card_json, st.shape.as_str())?;
                 }
-                _ if !name.is_empty() => {
-                    self.author_self_profile(&self_id, &name, shape, &card).await?;
-                }
-                _ => {}
+            } else if !name.is_empty() {
+                self.author_self_profile(&self_id, &name, shape, &card).await?;
             }
             Ok::<(), CoreError>(())
         }
@@ -11623,6 +11786,20 @@ fn pool_keys_in(group: &mls::Group) -> std::collections::HashSet<[u8; 32]> {
         .members_iter()
         .filter_map(|m| <[u8; 32]>::try_from(m.signing_identity.signature_key.as_bytes()).ok())
         .collect()
+}
+
+/// THE SLOT a sequenced delta at `(epoch, seq)` on one object claims (ICD
+/// `mls.sequencing.slot`). From the owner's storage root, so only the owner's own
+/// devices, the sequenced spine's only writers, can claim or read it; the relay sees a tag.
+fn seq_slot(root: &[u8; 32], group_id: &[u8], epoch: u64, seq: u64) -> Address {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(crate::icd_consts::SEQ_SLOT_LABEL.as_bytes());
+    h.update(root);
+    h.update(group_id);
+    h.update(epoch.to_be_bytes());
+    h.update(seq.to_be_bytes());
+    Address::from_seed(&h.finalize().into())
 }
 
 fn unix_now_ms() -> u64 {

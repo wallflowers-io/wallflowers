@@ -2362,6 +2362,16 @@ impl Directory {
         Ok(())
     }
 
+    /// Take one of our deltas back out of the outbox, unsent: nobody has seen it, so it is
+    /// not history. Only an undelivered row goes; a sent one is never removed.
+    pub fn drop_undelivered(&self, group_id: &[u8], delta_id: &[u8; 32]) -> Result<bool, CoreError> {
+        let n = self.conn.execute(
+            "DELETE FROM delta_log WHERE group_id=?1 AND delta_id=?2 AND delivered=0",
+            params![group_id, &delta_id[..]],
+        )?;
+        Ok(n == 1)
+    }
+
     /// Mark one of our deltas relay-ack'd (no longer in the outbox).
     pub fn mark_delivered(&self, group_id: &[u8], delta_id: &[u8; 32]) -> Result<(), CoreError> {
         self.conn.execute(
