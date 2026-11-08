@@ -662,8 +662,8 @@ struct NewSurface: View {
                 // Up to the status bar, over the top row's buttons (Ralph, 5 Nov): while
                 // a New is up, the discs are the only controls.
                 .padding(.top, 8)
-                // Stop above the disc row — those circles ARE this surface's buttons.
-                .padding(.bottom, ShellMetrics.bottomBarHeight + 6)
+                // No stop above the disc row: the tablet runs on under it and the keyboard,
+                // blurred behind them, and keeps its own clearance (`CardTablet`).
                 .background(GeometryReader { geo in
                     Color.clear.onAppear { travel = geo.size.height * 1.4 }
                 })
@@ -1457,7 +1457,8 @@ private struct CreatorPages: View {
     private var choosing: Bool { !creator.locked && inView.face == .fields }
 
     var body: some View {
-        VStack(spacing: 10) {
+        // The dial sits on the tablet's top margin (`CardTablet.gap`), no space of its own.
+        VStack(spacing: 0) {
             // Above the card it picks (Ralph, 8 Nov).
             if choosing && !dialHidden {
                 KindDial(kinds: creator.kinds, ids: ids, position: $dial,
@@ -1465,7 +1466,11 @@ private struct CreatorPages: View {
                          touched: { if dialAligned { lead = .dial } },
                          moved: { f in
                              if !dialAligned {
+                                 // Not yet where the cards are: put it there. A new dial
+                                 // starts at its content's origin, two items in, and the
+                                 // cards at rest send it nowhere.
                                  dialAligned = abs(f - at) < 0.5
+                                 if !dialAligned { dial.scrollTo(x: at * KindDial.item) }
                              } else if lead == .dial {
                                  cards.scrollTo(x: f * cardWidth)
                              }
@@ -1473,7 +1478,9 @@ private struct CreatorPages: View {
                          rested: { if lead == .dial { rest() } },
                          pick: pick)
                     .transition(.move(edge: .top).combined(with: .opacity))
-                    // A dial that comes back (after VISIBILITY) aligns again before it leads.
+                    // A dial that comes back (after VISIBILITY, or scrolled away) aligns
+                    // again before it leads.
+                    .onAppear { dial.scrollTo(x: at * KindDial.item) }
                     .onDisappear { dialAligned = false }
             }
 
@@ -1571,9 +1578,16 @@ private struct CreatorPages: View {
 }
 
 /// A card as a TABLET (Ralph, 8 Nov, #60): nothing scrolls inside it; the card itself
-/// scrolls, whole and at its full height, and fades on and off at the top and bottom of
-/// the screen. The fade lies in the margins, so a card at rest shows its whole border.
-/// `card` is given the height a short card fills: the page, less the margins.
+/// scrolls, whole and at its full height. It runs on under the disc row and the keyboard,
+/// blurred behind them (the keyboard is glass; the row gets a blur of its own), and its
+/// end scrolls clear of both. Its top fades into the gap the dial sits in. `card` is given
+/// the height a short card fills: the page between that gap and the row.
+///
+/// THE KEYBOARD IS TRACKED THROUGH THE SAFE AREA, not its notifications. Two readers: the
+/// page as it shows, which stops above the keyboard (or the home indicator), and the page
+/// the tablet runs under, which does not. Their difference is how far the keyboard reaches,
+/// and SwiftUI moves both in the keyboard's own transaction, so the margin and the blur
+/// ride with it exactly. (A reader that ignores the safe area reads an inset of nothing.)
 private struct CardTablet<Card: View>: View {
     let id: String
     /// The tablet scrolled: its offset from the top, held to the card's travel so a
@@ -1583,30 +1597,52 @@ private struct CardTablet<Card: View>: View {
 
     @State private var touching = false
 
-    private static var fade: CGFloat { 24 }
+    /// Above the card: the same gap as the dial keeps from the notch (Ralph, 8 Nov).
+    static var gap: CGFloat { 20 }
+    /// Under the card: the disc row, the surface's buttons.
+    private static var row: CGFloat { ShellMetrics.bottomBarHeight + 6 }
 
     var body: some View {
-        GeometryReader { geo in
-            let h = max(geo.size.height, 1), edge = Self.fade / h
-            ScrollView(.vertical) {
-                card(max(h - 2 * Self.fade, 0))
+        GeometryReader { shown in
+            GeometryReader { whole in
+                tablet(shown: shown.size.height, floor: max(whole.size.height - shown.size.height, 0))
             }
-            .scrollIndicators(.hidden)
-            .contentMargins(.vertical, Self.fade, for: .scrollContent)
-            .onScrollGeometryChange(for: CGFloat.self) { g in
-                let travel = max(g.contentSize.height + g.contentInsets.top + g.contentInsets.bottom - g.containerSize.height, 0)
-                return min(max(g.contentOffset.y + g.contentInsets.top, 0), travel)
-            } action: { _, y in scrolled(y, touching) }
-            .onScrollPhaseChange { _, phase in touching = phase == .interacting }
-            .mask {
-                LinearGradient(stops: [.init(color: .clear, location: 0),
-                                       .init(color: .black, location: edge),
-                                       .init(color: .black, location: 1 - edge),
-                                       .init(color: .clear, location: 1)],
-                               startPoint: .top, endPoint: .bottom)
-            }
-            .accessibilityIdentifier(id)
+            .ignoresSafeArea(.container, edges: .bottom)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
         }
+    }
+
+    /// `floor`: what the row stands on, the keyboard when it is up, else the home indicator.
+    private func tablet(shown: CGFloat, floor: CGFloat) -> some View {
+        ScrollView(.vertical) {
+            card(max(shown - Self.gap - Self.row, 0))
+        }
+        .scrollIndicators(.hidden)
+        .contentMargins(.top, Self.gap, for: .scrollContent)
+        .contentMargins(.bottom, Self.row + floor, for: .scrollContent)
+        .onScrollGeometryChange(for: CGFloat.self) { g in
+            let travel = max(g.contentSize.height + g.contentInsets.top + g.contentInsets.bottom - g.containerSize.height, 0)
+            return min(max(g.contentOffset.y + g.contentInsets.top, 0), travel)
+        } action: { _, y in scrolled(y, touching) }
+        .onScrollPhaseChange { _, phase in touching = phase == .interacting }
+        .mask {
+            VStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Self.gap)
+                Color.black
+            }
+        }
+        .overlay(alignment: .bottom) {
+            // The blur behind the row, soft at its top edge: the card passes under the
+            // circles seen through frosted glass, not through a hole.
+            Rectangle().fill(.ultraThinMaterial)
+                .mask(LinearGradient(stops: [.init(color: .clear, location: 0),
+                                             .init(color: .black, location: 0.35)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(height: Self.row + floor)
+                .allowsHitTesting(false)
+        }
+        .accessibilityIdentifier(id)
     }
 }
 

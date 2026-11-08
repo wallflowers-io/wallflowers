@@ -155,7 +155,9 @@ final class RedCreatorUITests: XCTestCase {
         name.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard")
         XCTAssertTrue(element("new-kinds").exists, "a focused field is not an edit")
-        XCTAssertGreaterThan(page("event").frame.height, tablet("event").frame.height, "the card is taller than its page")
+        // The tablet runs on under the keyboard; what shows of it is what lies above.
+        let shown = app.keyboards.firstMatch.frame.minY - tablet("event").frame.minY
+        XCTAssertGreaterThan(page("event").frame.height, shown, "the card is taller than what shows of its page")
 
         tablet("event").swipeUp()
         XCTAssertTrue(element("new-kinds").waitForNonExistence(timeout: 3), "scrolling the tablet up hides the dial")
@@ -175,8 +177,8 @@ final class RedCreatorUITests: XCTestCase {
     }
 
     /// Nothing of the card's colour lies past its border: just outside its right edge (and
-    /// its bottom, where that is on screen) the screen reads as it does a few points further
-    /// out. A hard shadow 3 pt right and down was the spill.
+    /// its bottom, where that is clear of the disc row) the screen reads as it does a few
+    /// points further out. A hard shadow 3 pt right and down was the spill.
     private func assertNoColourPast(_ card: CGRect, _ kind: String) {
         let shot = XCUIScreen.main.screenshot().image
         let screen = shot.size
@@ -184,7 +186,10 @@ final class RedCreatorUITests: XCTestCase {
             let y = card.minY + card.height * f
             return (CGPoint(x: card.maxX + 1.5, y: y), CGPoint(x: card.maxX + 7, y: y))
         }.filter { $0.0.y > 0 && $0.0.y < screen.height }
-        if card.maxY + 8 < screen.height {
+        // Below the card only where that is clear of the disc row: the tablet runs on under
+        // the row, blurred, and the row is not the card's colour.
+        let row = ["shell-note", "shell-chat", "shell-life"].map { app.buttons[$0].frame.minY }.min() ?? screen.height
+        if card.maxY + 8 < min(screen.height, row - 12) {
             probes += [0.25, 0.5, 0.75].map { f in
                 let x = card.minX + card.width * f
                 return (CGPoint(x: x, y: card.maxY + 1.5), CGPoint(x: x, y: card.maxY + 7))
