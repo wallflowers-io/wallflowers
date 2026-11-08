@@ -3,9 +3,7 @@
 //! request is the private pairing, and the Site's log carries only offers and withdrawals
 //! (ruled 30 Sep: pending invitations stay pairwise, off the Site).
 
-mod common;
-
-use common::Harness;
+use crate::common::Harness;
 use pacific_core::contact::LinkState;
 use serde_json::Value;
 

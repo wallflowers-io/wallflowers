@@ -108,6 +108,7 @@ mod stoma_group_is_the_directory;
 mod stoma_the_cookbook_thread;
 mod stoma_the_risograph;
 mod stoma_the_zine_is_a_post;
+mod w12_connect_from_a_members_card;
 mod w98_acts_wiring;
 mod w98_contact_link;
 mod w98_events_core;
