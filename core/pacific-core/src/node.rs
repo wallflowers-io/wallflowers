@@ -1645,18 +1645,27 @@ impl Node {
         // LEAVES, not members. One person signed in on two devices is one member
         // and two leaves; counting members reads "solo" and their own objects
         // never reach the relay. See `Directory::group_leaf_count`.
+        // EACH EXIT THAT SKIPS THE CLIMB SAYS SO: the caller authors at the local
+        // epoch, and a write that never saw head is how a recovering device forked
+        // its record (28 Oct). Solo is the ordinary case and stays quiet.
+        let gid = hex::encode(&group_id[..group_id.len().min(6)]);
         if self.dir.group_leaf_count(group_id)? <= 1 {
+            tracing::debug!(group = %gid, "drain to head skipped: solo");
             return Ok(()); // solo: no peers, no commits, never touches the relay
         }
         let (mut sess, home) = match self.write_session(group_id).await {
             Ok(s) => s,
-            Err(_) => return Ok(()), // offline: author at the local epoch
+            Err(e) => {
+                tracing::warn!(group = %gid, error = %e, "drain to head skipped: no relay; authoring at the local epoch");
+                return Ok(());
+            }
         };
         let (sid, sk, _name) = self.signer()?;
         let client = mls::build_client_sqlite(&paths::db_path(), sid, sk)?;
         let mut group = match mls::load_group(&client, group_id) {
             Ok(g) => g,
-            Err(_) => {
+            Err(e) => {
+                tracing::warn!(group = %gid, error = %e, "drain to head skipped: the group would not load");
                 self.done_with(sess, home).await;
                 return Ok(());
             }
@@ -5515,10 +5524,16 @@ impl Node {
             .map_err(|e| CoreError::Directory(format!("self object id hex: {e}")))?;
         let seed = self.seed_or_refuse()?;
         let root = crate::locator::storage_root(&seed);
+        // A RECORD THAT WILL NOT FOLD NAMES NOTHING, AND IS NOT TOLD AGAIN. Read as an
+        // empty list, a failed fold had every sync re-name every object, and each write
+        // landed on the log that would not fold (8 Nov: 61k deltas on one record).
         let named: std::collections::BTreeSet<String> = self
-            .folded_group(&self_gid)
-            .map(|c| c.state().joined.keys().cloned().collect())
-            .unwrap_or_default();
+            .folded_group(&self_gid)?
+            .state()
+            .joined
+            .keys()
+            .cloned()
+            .collect();
 
         let mut wrote = 0usize;
         for (index, entry) in self.spine_entries()? {
