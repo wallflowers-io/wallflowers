@@ -90,6 +90,9 @@ final class RedCreatorUITests: XCTestCase {
                 XCTAssertEqual(page("place").descendants(matching: .any)["new-fix"].label, "Tap to locate")
                 XCTAssertFalse(springboard.alerts.firstMatch.exists, "no location prompt for a Place in view")
             }
+            if kind == "listing" {
+                XCTAssertEqual(element("new-kind-listing").label, "Listing", "the dial names a Listing")
+            }
         }
 
         // The first edit chooses the kind: the dial goes and the cards stop turning.

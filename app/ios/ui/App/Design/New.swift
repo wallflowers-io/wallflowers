@@ -69,7 +69,7 @@ enum NewKind: String, CaseIterable {
         case .note:    return "Note"
         case .space:   return "Space"
         case .event:   return "Event"
-        case .listing: return "List"
+        case .listing: return "Listing"
         case .place:   return "Place"
         case .project: return "Project"
         case .channel: return "Channel"
