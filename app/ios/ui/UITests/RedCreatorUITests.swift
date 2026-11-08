@@ -155,16 +155,15 @@ final class RedCreatorUITests: XCTestCase {
         name.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard")
         XCTAssertTrue(element("new-kinds").exists, "a focused field is not an edit")
-        // The tablet runs on under the keyboard; what shows of it is what lies above.
-        let shown = app.keyboards.firstMatch.frame.minY - tablet("event").frame.minY
-        XCTAssertGreaterThan(page("event").frame.height, shown, "the card is taller than what shows of its page")
-
+        let rest = page("event").frame.minY
         tablet("event").swipeUp()
         XCTAssertTrue(element("new-kinds").waitForNonExistence(timeout: 3), "scrolling the tablet up hides the dial")
+        XCTAssertLessThan(page("event").frame.minY, rest - 20, "the card moved, whole")
         shoot("tablet scrolled")
-        tablet("event").swipeDown()
-        tablet("event").swipeDown()
+        // One flick back down brings it, before the top is reached.
+        tablet("event").swipeDown(velocity: .slow)
         XCTAssertTrue(element("new-kinds").waitForExistence(timeout: 3), "back down brings the dial back")
+        tablet("event").swipeDown()
         XCTAssertGreaterThanOrEqual(page("event").frame.minY, tablet("event").frame.minY, "the card's top on its tablet again")
     }
 
