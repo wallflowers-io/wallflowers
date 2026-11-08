@@ -5810,7 +5810,17 @@ impl Node {
                 Some(crate::object::ObjectKind::Forum) => self.forum_state(&gid).map(|s| s.profiles.get(&me).cloned()),
                 _ => self.folded_group(&gid).map(|c| c.state().profiles.get(&me).cloned()),
             };
-            if matches!(&held, Ok(Some(p)) if p.card == card) {
+            // AN OBJECT THAT WILL NOT FOLD DOES NOT SAY MY CARD IS MISSING: read that way,
+            // the Arc published its card into one Site on every 3 s tick (8 Nov, 3,905 times).
+            let held = match held {
+                Ok(held) => held,
+                Err(e) => {
+                    whole = false;
+                    tracing::warn!(object = %object, error = %e, "this object will not fold; my card is not published into it");
+                    continue;
+                }
+            };
+            if held.is_some_and(|p| p.card == card) {
                 continue;
             }
             match self.apply(&object, crate::profiles::OP_PUBLISH_PROFILE, crate::profiles::publish_args(&card)).await {
