@@ -126,6 +126,13 @@ pub fn wrap_domain() -> Vec<u8> {
     pacific_core::wrap::WRAP_DOMAIN.to_vec()
 }
 
+/// The role a Forum plays as its parent's comments section (ICD `kinds.*.parts`), so
+/// the app reads the word from the core's pinned table and holds no copy of it.
+#[uniffi::export]
+pub fn comments_role() -> String {
+    pacific_core::object::COMMENTS.to_string()
+}
+
 /// Every address one person's records live at, from one call.
 ///
 /// ONE CALL, NOT FIVE LABELS. A caller that derived its own would be a second
@@ -271,6 +278,38 @@ fn as32(b: &[u8], what: &str) -> Result<[u8; 32], FfiError> {
 /// A passkey PRF output as the 32 bytes every derivation takes — loud on any
 /// other length, which means the authenticator returned no PRF result and the
 /// caller did not check.
+/// The key 24 words name, `ed25519:…`. Writes nothing: a fresh device needs it to
+/// fetch the head before `sign_in_from_words` writes anything. A bad checksum fails
+/// here, at the field.
+#[uniffi::export]
+pub fn words_key(recovery_key: String) -> Result<String, FfiError> {
+    let seed = zeroize::Zeroizing::new(pacific_core::identity::seed_from_recovery_key(&recovery_key)?);
+    Ok(pacific_core::identity::Identity::in_memory(*seed).identity_key())
+}
+
+/// What both sign-ins do first: save `routes` (`resume` walks the chain on the relay,
+/// and `set_routes` needs an identity), and frame the head the auth service holds.
+fn before_sign_in(
+    routes: &str,
+    head: Option<Vec<u8>>,
+    head_position: u64,
+) -> Result<Option<pacific_core::resumption::HeadInput>, FfiError> {
+    let routes = pacific_core::router::Routes::parse(routes);
+    if routes.is_empty() {
+        return Err(FfiError::Core("a sign-in needs a route to the relay".into()));
+    }
+    routes.save()?;
+    Ok(head.map(|blob| pacific_core::resumption::HeadInput { blob, declared_position: head_position }))
+}
+
+/// A sign-in's result, as the app reads it.
+fn signed_in((node, r): (Node, pacific_core::resumption::Resumed)) -> Result<SignedIn, FfiError> {
+    Ok(SignedIn {
+        identity_key: node.identity_key(),
+        objects: r.objects.into_iter().map(Resumption::from).collect(),
+    })
+}
+
 fn prf32(prf_secret: &[u8]) -> Result<[u8; 32], FfiError> {
     prf_secret.try_into().map_err(|_| {
         FfiError::Core(format!(
@@ -302,6 +341,88 @@ pub struct ObjectRow {
     pub id: String,
     pub kind: String,
     pub name: String,
+}
+
+/// Where the core's `tracing` events go on a device: the app's own log, which keeps
+/// them where the device's console does not.
+#[uniffi::export(with_foreign)]
+pub trait LogSink: Send + Sync {
+    fn line(&self, target: String, level: String, message: String);
+}
+
+static SINK: std::sync::RwLock<Option<Arc<dyn LogSink>>> = std::sync::RwLock::new(None);
+static SUBSCRIBED: std::sync::Once = std::sync::Once::new();
+
+/// Send the core's INFO and above to `sink`. The subscriber is installed once; a later
+/// call replaces the sink.
+#[uniffi::export]
+pub fn set_log_sink(sink: Arc<dyn LogSink>) {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::Layer;
+    *SINK.write().unwrap_or_else(|e| e.into_inner()) = Some(sink);
+    SUBSCRIBED.call_once(|| {
+        let layer = ToSink.with_filter(tracing_subscriber::filter::LevelFilter::INFO);
+        let _ = tracing::subscriber::set_global_default(tracing_subscriber::registry().with(layer));
+    });
+}
+
+struct ToSink;
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for ToSink {
+    fn on_event(&self, e: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        let Some(sink) = SINK.read().ok().and_then(|s| s.clone()) else { return };
+        let mut line = Line(String::new());
+        e.record(&mut line);
+        let m = e.metadata();
+        sink.line(m.target().into(), m.level().to_string(), line.0);
+    }
+}
+
+/// An event as one line: its message, then each other field as ` name=value`.
+struct Line(String);
+
+impl tracing::field::Visit for Line {
+    fn record_debug(&mut self, f: &tracing::field::Field, v: &dyn std::fmt::Debug) {
+        if f.name() == "message" {
+            self.0.insert_str(0, &format!("{v:?}"));
+        } else {
+            self.0.push_str(&format!(" {}={v:?}", f.name()));
+        }
+    }
+}
+
+/// A device that held nothing, signed in: the identity, and every object the spine
+/// names with what became of it (`Node::sign_in_from_wrap`, `resumption::Resumed`).
+#[derive(uniffi::Record, Debug, Clone)]
+pub struct SignedIn {
+    pub identity_key: String,
+    pub objects: Vec<Resumption>,
+}
+
+/// One object's `resumption::Outcome`, in the core's names: `Joined`, `AlreadyHeld`,
+/// `PoolExhausted`, `WayInMissing`, `WayInUnreadable`, `JoinFailed`. `detail` is the
+/// reason the last two carry, else empty.
+#[derive(uniffi::Record, Debug, Clone)]
+pub struct Resumption {
+    pub object: String,
+    pub kind: String,
+    pub outcome: String,
+    pub detail: String,
+}
+
+impl From<pacific_core::resumption::ObjectOutcome> for Resumption {
+    fn from(o: pacific_core::resumption::ObjectOutcome) -> Self {
+        use pacific_core::resumption::Outcome as O;
+        let (outcome, detail) = match o.outcome {
+            O::Joined { .. } => ("Joined", String::new()),
+            O::AlreadyHeld => ("AlreadyHeld", String::new()),
+            O::PoolExhausted => ("PoolExhausted", String::new()),
+            O::WayInMissing => ("WayInMissing", String::new()),
+            O::WayInUnreadable(why) => ("WayInUnreadable", why),
+            O::JoinFailed(why) => ("JoinFailed", why),
+        };
+        Resumption { object: o.object, kind: o.kind, outcome: outcome.into(), detail }
+    }
 }
 
 /// One Post, folded. Counts rather than contents for the responses: a feed row needs to
@@ -1269,6 +1390,18 @@ pub struct ForumRoomRow {
     pub held: bool,
 }
 
+/// One Forum's back-edge, from the Forum's own fold: the object it is a part of, and
+/// in what role. A Forum in the comments role is its parent's, not a conversation.
+#[derive(uniffi::Record)]
+pub struct ForumParentRow {
+    /// The Forum's object id.
+    pub forum: String,
+    /// The object it is a part of.
+    pub parent: String,
+    /// What it is for there: `comments`, `room`, …
+    pub role: String,
+}
+
 /// One room→host edge, the REVERSE of `forum_rooms`: which Channel hosts this
 /// room. The CHAT list joins on `room` so a channel's room renders as
 /// "Channel / Room" instead of posing as a free-standing chat.
@@ -1526,23 +1659,6 @@ impl Core {
         Ok(Node::init_identity(&display_name)?.identity_key())
     }
 
-    /// The RESTORE door: bring an identity back from its recovery key (24 BIP-39
-    /// words) on a device that has none. Returns the same IdentityKey the words
-    /// were minted under — a wrong or mistyped phrase fails loudly here rather
-    /// than quietly producing a different identity.
-    ///
-    /// Restores the IDENTITY only. Group state and history are not derivable from
-    /// a key, so a restored device comes back as itself with no groups until it is
-    /// re-admitted.
-    pub fn restore_identity(
-        &self,
-        display_name: String,
-        recovery_key: String,
-    ) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::restore_identity(&display_name, &recovery_key)?.identity_key())
-    }
-
     /// This identity's recovery key — the 24 words that bring it back. Empty when
     /// there is none to show (an identity minted before seeds existed); the UI
     /// omits the step rather than showing a placeholder. Device-local: nothing
@@ -1598,30 +1714,47 @@ impl Core {
         Ok(Node::open()?.export_wrap(&prf, &host)?)
     }
 
-    /// THE RESTORE DOOR, first half: on an install that holds no identity, open
-    /// `wrap` under the passkey's PRF output and come back as that identity —
-    /// same key, so every peer's pin still matches. Returns the IdentityKey.
+    /// SIGN IN ON A DEVICE THAT HOLDS NOTHING: `Node::sign_in_from_wrap`. The wrap
+    /// must open to `expect_key` (the key the passkey's handle names) or nothing is
+    /// written; then every object the spine names is joined. Once per device: its
+    /// state persists after.
     ///
-    /// A wrong passkey fails before anything is written, and so does the right
-    /// passkey against a wrap lifted from another Arc — `host` is bound into the
-    /// seal. An install that already holds an identity refuses, loudly.
-    ///
-    /// THE GROUPS DO NOT ARRIVE WITH IT. This door restores the identity and
-    /// nothing else; the history blob that used to carry the groups was an escrow
-    /// and has been taken off this surface (see the note below `arc_credential`).
-    /// A restored device is a member of no group until the archive chain is wired,
-    /// and `m15_identity_restore` asserts exactly that rather than letting a test
-    /// pin a promise the design does not make.
-    pub fn restore_from_wrap(
+    /// `routes` is saved first: `resume` walks the chain on the relay, and
+    /// `set_routes` needs an identity. `head` is the auth service's, at
+    /// `head_position`; `None` when it holds none.
+    #[allow(clippy::too_many_arguments)]
+    pub fn sign_in_from_wrap(
         &self,
         display_name: String,
         prf_secret: Vec<u8>,
         wrap: Vec<u8>,
         host: String,
-    ) -> Result<String, FfiError> {
+        expect_key: String,
+        routes: String,
+        head: Option<Vec<u8>>,
+        head_position: u64,
+    ) -> Result<SignedIn, FfiError> {
         self.point();
         let prf = prf32(&prf_secret)?;
-        Ok(Node::restore_from_wrap(&prf, &wrap, &host, &display_name)?.identity_key())
+        let head = before_sign_in(&routes, head, head_position)?;
+        signed_in(block_on(Node::sign_in_from_wrap(&prf, &wrap, &host, &display_name, &expect_key, head))?)
+    }
+
+    /// SIGN IN FROM THE 24 WORDS on a device that holds nothing:
+    /// `Node::sign_in_from_words`. The identity, then every object the spine names,
+    /// then the self record only if the spine was reached. As `sign_in_from_wrap`
+    /// for `routes` and `head`; [`words_key`] gives the key to fetch the head with.
+    pub fn sign_in_from_words(
+        &self,
+        display_name: String,
+        recovery_key: String,
+        routes: String,
+        head: Option<Vec<u8>>,
+        head_position: u64,
+    ) -> Result<SignedIn, FfiError> {
+        self.point();
+        let head = before_sign_in(&routes, head, head_position)?;
+        signed_in(block_on(Node::sign_in_from_words(&recovery_key, &display_name, head))?)
     }
 
     // THE HISTORY BLOB IS NOT ON THIS SURFACE, and its absence is the point.
@@ -1634,7 +1767,7 @@ impl Core {
     // "the whole snapshot is gone; the narrow material stays."
     //
     // It was retired in the documents and left reachable in the code. No app ever
-    // called it — iOS wires the identity half (`export_wrap` / `restore_from_wrap`)
+    // called it — iOS wires the identity half (`export_wrap`, then the sign-ins)
     // and has never called this one — so removing it from the FFI takes the escrow
     // out of reach of every client without changing a line of Swift. The core
     // internals go next, with their tests, once the replacement lands.
@@ -3467,6 +3600,17 @@ impl Core {
             .collect())
     }
 
+    /// Every Forum's back-edge this device can fold, in one call, so the CHAT list
+    /// never does a per-row fold. Synchronous read.
+    pub fn forum_parents(&self) -> Result<Vec<ForumParentRow>, FfiError> {
+        self.point();
+        Ok(Node::open()?
+            .forum_parents()?
+            .into_iter()
+            .map(|(forum, parent, role)| ForumParentRow { forum, parent, role })
+            .collect())
+    }
+
     /// Every room→host edge this device can fold — the whole map in one call,
     /// so the CHAT list never does a per-row fold. Synchronous read.
     pub fn room_hosts(&self) -> Result<Vec<RoomHostRow>, FfiError> {
@@ -4122,6 +4266,10 @@ pub fn default_arc_url() -> String {
     pacific_core::paths::DEFAULT_ARC_URL.to_string()
 }
 
+/// `PACIFIC_STATE_DIR` is one per process: a test that sets it holds this.
+#[cfg(test)]
+static STATE_DIR: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 mod arc_credential_tests {
     use super::*;
@@ -4137,6 +4285,7 @@ mod arc_credential_tests {
     /// If it fails after an edit to `verify_member`, this transcription is stale — update both.
     #[test]
     fn minted_credential_satisfies_verify_member() {
+        let _held = STATE_DIR.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!("pacific-cred-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("temp state dir");
@@ -4206,5 +4355,87 @@ mod arc_credential_tests {
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod sign_in_tests {
+    use super::*;
+
+    /// The words name the key they were minted under, and asking writes nothing.
+    #[test]
+    fn words_key_names_the_minted_key_and_writes_nothing() {
+        let _held = STATE_DIR.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join(format!("pacific-wordskey-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temp state dir");
+        let phone = Core::new(dir.to_string_lossy().to_string());
+        pacific_core::node::set_default_arc("ws://127.0.0.1:1").expect("the device's Arc");
+        let key = phone.init_identity("Ada".into()).expect("mint identity");
+        let words = phone.recovery_key().expect("words");
+
+        let empty = std::env::temp_dir().join(format!("pacific-wordskey-empty-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&empty);
+        std::fs::create_dir_all(&empty).expect("temp state dir");
+        let fresh = Core::new(empty.to_string_lossy().to_string());
+        assert_eq!(words_key(words).expect("the key"), key);
+        assert!(!fresh.has_identity(), "asking the words for their key writes nothing");
+        assert!(words_key(["abandon"; 24].join(" ")).is_err(), "a bad checksum fails at the field");
+    }
+
+    /// A wrap that opens to another key writes nothing: the device stays empty.
+    #[test]
+    fn a_wrap_for_another_key_writes_nothing() {
+        let _held = STATE_DIR.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = |n: &str| {
+            let d = std::env::temp_dir().join(format!("pacific-signin-{n}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&d);
+            std::fs::create_dir_all(&d).expect("temp state dir");
+            d.to_string_lossy().to_string()
+        };
+        let prf = vec![0x11; 32];
+
+        let phone = Core::new(dir("phone"));
+        std::env::set_var("PACIFIC_STATE_DIR", &phone.state_dir);
+        pacific_core::node::set_default_arc("ws://127.0.0.1:1").expect("the device's Arc");
+        phone.init_identity("Ada".into()).expect("mint identity");
+        let wrap = phone.export_wrap(prf.clone(), "arc.example".into()).expect("wrap");
+
+        let other = "ed25519:1ef175203b1b0c160f4f0daf31fe42a3ffb14e737e80089adb542f26e07677dc";
+        let fresh = Core::new(dir("fresh"));
+        let e = fresh
+            .sign_in_from_wrap(String::new(), prf, wrap, "arc.example".into(), other.into(),
+                               "ws://127.0.0.1:1".into(), None, 0)
+            .expect_err("a wrap for another key must be refused");
+        assert!(e.to_string().contains("nothing was written"), "{e}");
+        assert!(!fresh.has_identity(), "refused, and still empty");
+    }
+}
+
+#[cfg(test)]
+mod log_sink_tests {
+    use super::*;
+
+    #[derive(Default)]
+    struct Kept(std::sync::Mutex<Vec<(String, String, String)>>);
+
+    impl LogSink for Kept {
+        fn line(&self, target: String, level: String, message: String) {
+            self.0.lock().unwrap().push((target, level, message));
+        }
+    }
+
+    /// The core's INFO reaches the sink with its target and fields; DEBUG does not.
+    #[test]
+    fn the_core_speaks_to_the_sink() {
+        let kept = Arc::new(Kept::default());
+        set_log_sink(kept.clone());
+        tracing::info!(target: "pacific::resume", group = "ab12cd34", "1/1 group ab12cd34: AlreadyHeld");
+        tracing::debug!(target: "pacific::resume", "not kept");
+        let got = kept.0.lock().unwrap().clone();
+        let mine: Vec<_> = got.iter().filter(|(t, _, _)| t == "pacific::resume").collect();
+        assert_eq!(mine.len(), 1, "{got:?}");
+        assert_eq!(mine[0].1, "INFO");
+        assert_eq!(mine[0].2, "1/1 group ab12cd34: AlreadyHeld group=\"ab12cd34\"");
     }
 }

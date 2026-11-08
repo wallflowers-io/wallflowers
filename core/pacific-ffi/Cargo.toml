@@ -21,6 +21,11 @@ hex = { workspace = true }
 base64 = { workspace = true }
 # async FFI: the N-member object_post publishes to the relay (uniffi tokio runtime).
 tokio = { workspace = true }
+# The core's events, handed to the app's log (`set_log_sink`).
+tracing = "0.1"
+tracing-subscriber = "0.3"
+# The seed words_key derives is wiped when it drops, as the core's are.
+zeroize = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- app-store-connect + destination=upload: -exportArchive re-signs the archive for the
+	     App Store (cloud-managed Apple Distribution cert — no local cert to expire) and pushes
+	     it straight to TestFlight. Driven by scripts/testflight.sh; auth comes from the
+	     -authenticationKey* flags there, not from this file. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>upload</string>
+	<key>teamID</key>
+	<string>9LFA85922G</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<!-- scripts/version.sh owns MARKETING_VERSION / CURRENT_PROJECT_VERSION (build = git
+	     commit count); Apple must not rewrite them at upload time. -->
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+	<key>uploadSymbols</key>
+	<true/>
+</dict>
+</plist>

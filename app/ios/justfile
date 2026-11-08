@@ -1,0 +1,114 @@
+# WallFlowers — iOS app.
+# Run `just` here for this project's menu. Every recipe delegates to the native tool.
+
+sim   := "iPhone 17 Pro"
+ipad  := "WallFlowers iPad"
+proj  := "ui/WallFlowers.xcodeproj"
+cargo := env_var_or_default("CARGO", "~/.cargo/bin/cargo")
+
+# THE ONE CORE: the repo's core/. `apple/build-ios.sh` holds the same pin.
+core  := env_var_or_default("PACIFIC_CORE", justfile_directory() / "../../core")
+
+# show this project's recipes
+default:
+    @just --list
+
+# ── The two things that used to have to be REMEMBERED ────────────────────────
+#
+# Both are now dependencies of `build`/`test`/`run`, so nobody has to know they
+# exist. They are here as named recipes only because a forced run is occasionally
+# useful. Neither is a step you take.
+#
+#   generate  0.08s  — Swift sources are GLOBBED by xcodegen, so a new file is
+#                      invisible to the target until the project is rewritten.
+#                      Symptom if skipped: "Build input file cannot be found",
+#                      or a test that silently does not run.
+#   ffi       1.5s   — UniFFI reads metadata out of the COMPILED .a and writes
+#                      apple/Sources/UniFFI/pacific_ffi.swift, which is committed.
+#                      Xcode has no idea that file is derived and will happily
+#                      compile against a stale one. Symptom if skipped: "cannot
+#                      find type X in scope" for a type you are looking at.
+#
+# Both are cheap ENOUGH TO ALWAYS RUN because their real work is fingerprinted by
+# the tool underneath (cargo, xcodegen); with nothing changed they are no-ops. No
+# stamp files, no hashing, no staleness heuristic to get wrong.
+
+[group('ios')]
+generate:                       # rewrite WallFlowers.xcodeproj from project.yml (auto: build/test/run)
+    cd ui && xcodegen generate
+
+[group('ios')]
+ffi:                            # rebuild the xcframeworks + Swift bindings (auto: build/test/run)
+    apple/build-ios.sh
+    apple/build-lodedb.sh
+    # The on-device resolver's xcframework is gitignored, so a clean checkout has none:
+    # build it when it is missing or older than its crate (NC-22).
+    r=LocalStore/graph/arc-resolver; x=$r/swift/ArcResolverKit/Artifacts/ArcResolverFFI.xcframework; \
+    if [ ! -d "$x" ] || [ -n "$(find $r/src $r/Cargo.toml $r/include -newer "$x" -print -quit)" ]; then \
+        $r/swift/ArcResolverKit/scripts/package_xcframework.sh; fi
+
+[group('ios')]
+tokens page:                    # regenerate the UI diagram's CSS from DesignTokens.swift
+    scripts/design-tokens.py {{page}}
+
+[group('ios')]
+tokens-check page:              # fail if the diagram has drifted from DesignTokens.swift
+    scripts/design-tokens.py --check {{page}}
+
+[group('ios')]
+build: ffi generate               # build the app for the simulator
+    xcodebuild -project {{proj}} -scheme WallFlowers -sdk iphonesimulator -destination 'platform=iOS Simulator,name={{sim}}' -derivedDataPath ui/build build
+
+[group('ios')]
+test: ffi generate              # unit + UI tests on the simulator
+    xcodebuild -project {{proj}} -scheme WallFlowers -sdk iphonesimulator -destination 'platform=iOS Simulator,name={{sim}}' test
+
+[group('ios')]
+run: build                      # build, install & launch on the booted simulator
+    xcrun simctl install booted ui/build/Build/Products/Debug-iphonesimulator/WallFlowers.app
+    xcrun simctl launch booted network.pacific
+
+[group('ios')]
+playground: ffi generate        # the design bench: build, install & launch Playground on the iPad simulator
+    xcodebuild -project {{proj}} -scheme WallFlowersPlayground -sdk iphonesimulator -destination 'platform=iOS Simulator,name={{ipad}}' -derivedDataPath ui/build build
+    xcrun simctl boot "{{ipad}}" 2>/dev/null || true
+    open -a Simulator
+    xcrun simctl install "{{ipad}}" ui/build/Build/Products/Debug-iphonesimulator/WallFlowersPlayground.app
+    xcrun simctl launch "{{ipad}}" network.pacific.playground
+
+[group('ios')]
+device-log device:              # copy the app's log from a paired device (name or id) to target/device.log
+    mkdir -p target
+    xcrun devicectl device copy from --device "{{device}}" --domain-type appDataContainer --domain-identifier network.pacific --source Library/Logs/wallflowers.log --destination target/device.log
+
+[group('ios')]
+version *args:                  # show | set-build | bump [major|minor|patch]  (scripts/version.sh)
+    scripts/version.sh {{args}}
+
+[group('ios')]
+testflight:                     # archive Release for device + upload to TestFlight (scripts/testflight.sh)
+    scripts/testflight.sh
+
+[group('core')]
+core-build:                     # build core's crates in the root workspace (wire/core/ffi/uniffi…)
+    cd {{core}}/.. && {{cargo}} build $(just _core-pkgs)
+
+[group('core')]
+core-test:
+    cd {{core}}/.. && {{cargo}} test $(just _core-pkgs)
+
+[group('core')]
+core-fmt:                       # format + lint core's crates
+    cd {{core}}/.. && {{cargo}} fmt $(just _core-pkgs)
+    cd {{core}}/.. && {{cargo}} clippy $(just _core-pkgs)
+
+# core's members of the root workspace, as -p flags: read from Cargo.toml, as the Makefile's PKGS
+_core-pkgs:
+    @cd {{core}}/.. && {{cargo}} metadata --no-deps --format-version 1 | python3 -c 'import json,sys; r=sys.argv[1]; print(" ".join("-p "+p["name"] for p in json.load(sys.stdin)["packages"] if p["manifest_path"].startswith(r)))' "$(cd {{core}} && pwd)/"
+
+[group('core')]
+core-where:                     # which core does this tree build against?
+    @echo "{{core}}"
+    @test -f "{{core}}/pacific-core/src/wallet.rs" \
+      && echo "  canonical (wallet.rs present)" \
+      || echo "  WARNING: no wallet.rs — this looks like a stale pacific-* fork"

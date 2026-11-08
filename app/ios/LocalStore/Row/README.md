@@ -1,0 +1,1 @@
+This module owns the encrypted relational database which stores all non-vectorised app data. It also owns its interface. Migrations are defined per object in ./Objects/*. Migrations for additional tables are defined in LocalStore/Row/Migrations.

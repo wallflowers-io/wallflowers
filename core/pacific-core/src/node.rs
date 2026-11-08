@@ -545,11 +545,10 @@ impl Node {
         // account creates, so it takes the first vertebra on the spine.
         //
         // A RESTORE DOES NOT DO THIS. The account already has a record, named at
-        // index 0 of the spine it is recovering; minting a second one here would
-        // give one account two records and lose the first quietly. Until the
-        // archive key records and seed-reachable MLS state land, a restored device
-        // cannot open the original — so it has none, and says so, rather than
-        // fabricating a replacement. It acquires one on its first profile write.
+        // index 0 of the spine it is recovering; minting a second one would give
+        // one account two records. A restore reaches the original through the
+        // spine (`sign_in_from_words`, `sign_in_from_wrap`): never call a bare
+        // restore and then sync, or the first sync mints the second record.
         node.ensure_self_object()?;
         Ok(node)
     }
@@ -558,11 +557,10 @@ impl Node {
     /// from its recovery key on a device that has none.
     ///
     /// The identity comes back whole — same key, same id, so every peer's pin
-    /// still matches. Nothing else does: MLS group state and history live in
-    /// `pacific.db` and cannot be re-derived from a key, so this device rebuilds
-    /// its directory from scratch (a fresh MLS leaf key, a fresh intro tag) and
-    /// re-enters its groups by being re-admitted. Same loud refusal as the mint
-    /// when an identity already exists here.
+    /// still matches — with a fresh device half (MLS leaf key, intro tag). Nothing
+    /// else: the objects come back through the spine, which is
+    /// [`Node::sign_in_from_words`]'s job. Same loud refusal as the mint when an
+    /// identity already exists here.
     pub fn restore_identity(display_name: &str, recovery_key: &str) -> Result<Self, CoreError> {
         Self::open_new_identity(identity::init_from_recovery_key(recovery_key)?, display_name)
     }
@@ -3319,11 +3317,15 @@ impl Node {
             // The spine is the self record at index 0 (A2); then the live objects in
             // first-joined order, and the latest way-in of each.
             let Some(SpinePlan { spine, targets, ways }) = spine_plan(&walk.entries) else {
+                tracing::info!(target: "pacific::resume", "spine walked: {} entries, no self record", walk.entries.len());
                 return Ok(Resumed { verdict, spine: None, objects: Vec::new() });
             };
+            // What a sign-in reached, said as it goes: ids and outcomes, never key material.
+            let n = targets.len();
+            tracing::info!(target: "pacific::resume", "spine walked: {} entries, {n} objects", walk.entries.len());
 
             let mut objects = Vec::new();
-            for gid in targets {
+            for (i, gid) in targets.into_iter().enumerate() {
                 let way = ways.get(&gid);
                 let kind = way
                     .map(|w| w.kind.clone())
@@ -3340,7 +3342,9 @@ impl Node {
                 if gid == spine && matches!(outcome, Outcome::Joined { .. } | Outcome::AlreadyHeld) {
                     self.dir.set_my_object(&gid)?;
                 }
-                objects.push(ObjectOutcome { object: hex::encode(&gid), kind, outcome });
+                let object = hex::encode(&gid);
+                tracing::info!(target: "pacific::resume", "{}/{n} {kind} {}: {outcome:?}", i + 1, &object[..8]);
+                objects.push(ObjectOutcome { object, kind, outcome });
             }
             Ok(Resumed { verdict, spine: Some(hex::encode(&spine)), objects })
         }
@@ -3742,14 +3746,34 @@ impl Node {
         expect_key: &str,
         head: Option<crate::resumption::HeadInput>,
     ) -> Result<(Self, crate::resumption::Resumed), CoreError> {
-        use crate::resumption::Outcome;
         let found = identity::Identity::in_memory(*crate::wrap::open(prf, wrap, host)?).identity_key();
         if found != expect_key {
             return Err(CoreError::Identity(format!(
                 "the wrap for {expect_key} opens to {found}; nothing was written"
             )));
         }
-        let node = Self::restore_from_wrap(prf, wrap, host, display_name)?;
+        Self::signed_in(Self::restore_from_wrap(prf, wrap, host, display_name)?, head).await
+    }
+
+    /// SIGN IN FROM THE 24 WORDS on a device that holds nothing: `restore_identity`,
+    /// then the same steps 3 and 4 as [`Node::sign_in_from_wrap`]. The words name
+    /// their own key, so there is nothing to check it against.
+    pub async fn sign_in_from_words(
+        recovery_key: &str,
+        display_name: &str,
+        head: Option<crate::resumption::HeadInput>,
+    ) -> Result<(Self, crate::resumption::Resumed), CoreError> {
+        Self::signed_in(Self::restore_identity(display_name, recovery_key)?, head).await
+    }
+
+    /// Steps 3 and 4 of a sign-in, for a node whose identity was just restored:
+    /// `resume` with the head, then the self record only if the spine was reached
+    /// or the chain is empty.
+    async fn signed_in(
+        node: Self,
+        head: Option<crate::resumption::HeadInput>,
+    ) -> Result<(Self, crate::resumption::Resumed), CoreError> {
+        use crate::resumption::Outcome;
         let resumed = node.resume(head).await?;
         // The spine is first (A6.5); no objects at all means no chain.
         let reached = match resumed.objects.first() {
@@ -9157,6 +9181,25 @@ impl Node {
             let host_name = self.object_name(&gid_hex).unwrap_or_default();
             for room_id in state.parts.iter().filter(|(_, p)| p.role == ROOM).map(|(id, _)| id) {
                 out.push((room_id.clone(), gid_hex.clone(), host_name.clone()));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Every Forum's back-edge, `(forum, parent, role)`, from the Forum's OWN fold
+    /// (`base.setParent`): a member who holds the Forum and not its parent can still
+    /// say what it is for. One sweep, so the chat list does no per-row fold.
+    pub fn forum_parents(&self) -> Result<Vec<(String, String, String)>, CoreError> {
+        let mut out = Vec::new();
+        for (gid, kind) in self.dir.list_objects()? {
+            if kind != "forum" {
+                continue;
+            }
+            let Ok(coord) = self.folded_forum(&gid) else {
+                continue;
+            };
+            if let Some(p) = &coord.state().parent {
+                out.push((hex::encode(&gid), p.parent.clone(), p.role.clone()));
             }
         }
         Ok(out)

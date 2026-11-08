@@ -1,0 +1,466 @@
+PACIFIC — VECTOR STORE ARCHITECTURE & THE LocalStore.Vector UNION
+A design record + PR specification.
+
+Status: agent-authored .txt (this repo keeps human-authored Markdown; promote to .md
+after a human eyeball if you want it rendered). Written 2026-06-28; revised same day after
+a two-lens adversarial review (partial-migration auditor + catalogue-completeness auditor).
+
+UPDATE 2026-09-26 (the Anthropic-route cut): the remote Voyage backend has been DELETED
+from VectorService — the only embedder is Apple NLEmbedding, on device. Wherever this
+record weighs "Voyage dev vs NLEmbedding prod" (4.1, 4.3), read it as history: there is
+one epoch family now, and no embedding path sends text off the device.
+Why a .txt, not .md: agents don't write repo Markdown here. The human-owned edits this
+implies (LocalStore/Vector/README.md, the Topic/Project PIE-CI Indexable sections) are
+proposed VERBATIM in section 8 for a human to paste.
+
+Scope: this records the decision for how on-device vector search is stored, synced, and
+queried in Pacific, and specifies the first PR — making LocalStore.Vector the UNION of
+every group-object's vector slice for a user. The substrate is specced-not-built: the
+real Search A index seam is mostly absent (no rebuild hook; the iOS engine choice is
+open), and VectorService today is a stateless text->vector facade. This document defines
+the seam that closes that gap.
+
+
+================================================================================
+0. THE ONE-PARAGRAPH VERSION
+================================================================================
+A vector is just another projection of a Matter, so it should live and travel along the
+SAME boundary as the Matter it derives from: the MLS group-object. Therefore the
+AUTHORITY/SYNC unit for vectors is the group-object (each owns its slice), and an
+individual's total vector store is the UNION of the slices for the groups they are in —
+exactly as the row/delta store is already the union of the groups' synced states. But
+the QUERY unit is NOT per-group: 4 of 4 real semantic-search readers cross group
+boundaries (Topic.ground, the Project CLA search-trigger, the two agent RAG
+loops), so the readers must talk to ONE local union index — LocalStore.Vector — never to
+a group's slice directly. Authority unit (group-object) != query unit (device union).
+Get that split right and "total store = sum of group stores" is correct as the authority
+model and the union is the query model; get it wrong (readers query per-group stores)
+and you have a third store beside Search A and the row store — the partial-migration
+anti-pattern.
+
+
+================================================================================
+1. THE DECISION  [DECIDED — shape; sub-items tagged below]
+================================================================================
+
+1.1 AUTHORITY UNIT vs QUERY UNIT.  [DECIDED]
+    - AUTHORITY / SYNC unit = the group-object (an MLS group; "object = group of 1").
+      It owns the vector slice for its own Matters. Membership = access applies to the
+      slice the same way it applies to the group's Matters: you hold a group's vectors
+      iff you are a member.
+    - QUERY unit = the per-device UNION (LocalStore.Vector) over every slice the device
+      currently holds. It is LOCAL-ONLY, never synced, a derived cache keyed by the
+      group slices. It is the ONLY thing any reader queries.
+    - This is the row-store pattern applied to vectors: each group syncs its state; the
+      device materialises the union; reads go to the union.
+
+1.2 WHAT SYNCS vs WHAT IS LOCAL-ONLY.
+    - Local-only, never synced (TODAY and in PR-1): the union index structure, any ANN
+      graph, and — in PR-1 — the slice VECTORS themselves (locally derived from the
+      group's already-synced Matter text). The slice CACHES its derived vectors for the
+      membership duration; this cache is a derived projection of Matters, NOT a second
+      source of truth — rebuild(from: group.matters) is idempotent and always reproduces
+      identical search behaviour. [DECIDED for PR-1]
+    - Synced as MLS group-state (PR-2, gated): the per-Matter {matter-id, vector,
+      EmbeddingEpoch} triples, so a vector is computed ONCE by the authoring member and
+      delivered to all members. This is what turns membership=access SHARED-physical (no
+      member ever re-derives) and makes ranking deterministic across devices. [OPEN — §4]
+
+1.3 THE ONE WRITE PATH.  [DECIDED]
+    Indexable.index_projections() stays the single write path. Its only new behaviour is
+    routing a Matter's projection embedding into the slice for THAT Matter's group
+    (matter.space), under that group's epoch. It does not fork. In PR-2 the same call
+    additionally persists the {id,vector,epoch} into the group's synced state — still the
+    same call, still no fork.
+
+1.4 RETRIEVAL BELONGS TO THE TOPIC, NOT THE PROJECT.  [DECIDED — carried from prior]
+    No orchestration object (Project) owns a queryable store. A Project gets knowledge by
+    SUBSCRIBING to a Topic; the Topic's ResearchAgent does the vector work. Task Matters
+    stay indexed under their own ids (Project/PIE-CI.md:62 — "to avoid ... a second
+    source of truth"), never as a Project-level digest. Sync changes WHERE vectors live,
+    not WHICH object owns retrieval semantics.
+
+
+================================================================================
+2. WHY — THE CATALOGUE CRUX THAT FORCES THE SPLIT
+================================================================================
+The logical consumers of vector search were catalogued from the repo. Deduped, the real
+READERS are:
+
+  Topic.ResearchAgent.ground()      cross-space-federated  Topic.swift:238-247
+  Project CLA ChangeOrigin.search   cross-corpus-own       Project.swift:108-115
+  Ralph (CLA) async-RAG             cross-corpus-own       —
+  agent async-RAG                   cross-corpus-own       —
+  nova-resolve PULL (label/alias)   cross-corpus-own       entity-resolution.txt:70-78  [candidate-gen, distinct]
+  Group.identifiers() (Resolvable)  cross-corpus-own       Group/PIE-CI.md:53           [candidate-gen, distinct]
+
+  WRITERS (index_projections): Topic / Project / Forum / Field / System / Group —
+  (the 6 GroupObjects; the former Poll/Message/Question writers are now Forum op-groups)
+  each WRITE is single-group (an object embeds its own content) and exists only to be
+  read cross-corpus.
+
+THE RATIO: of the 4 real semantic-search readers, 4/4 span multiple group-objects; 0 are
+single-group. Counting the 2 candidate-gen readers, 6/6 cross-group, 0 single-group.
+Every single-group tag in the catalogue belongs to a WRITER. On the read path nothing is
+single-group. Conclusion: a per-group store CANNOT be the thing readers query — a
+unifying union layer is mandatory. (And syncing INTENSIFIES this: once a permitted peer's
+slice is local, ground()'s federated read becomes a local multi-shard merge — the union
+is needed on-device regardless.)
+
+TWO DISTINCT QUERY SEAMS (do not conflate them):
+  (1) SEMANTIC-DOC-SEARCH — Topic.ground, Project CLA ChangeOrigin.search, the two
+      agent RAG loops — query the UNION via SearchEngine.query (scoped to member groups in
+      PR-1; permitted peers in PR-2). This is the seam this document closes.
+  (2) LABEL/ALIAS CANDIDATE-GEN — nova-resolve PULL + Group.identifiers — maintain a
+      SEPARATE, corpus-wide identifier index (alias/label/handle HNSW; entity-resolution.txt
+      §0). It does NOT read the semantic union and is NOT per-group; its recall ceiling
+      depends on seeing ALL of the user's aliases across ALL groups (entity-resolution.txt
+      LESSON #1). It is a PARALLEL TRACK, out of scope for the PRs below.
+
+
+================================================================================
+3. RECONCILIATION WITH PRIOR DECISIONS
+================================================================================
+Achieved already in PR-1 (the union + per-group slices):
+  - membership=access for vectors becomes PHYSICAL — a non-member group has no slice
+    attached on your device, so its vectors are unreachable, not merely filtered. The
+    query-time scope set is then defense-in-depth ON TOP of that physical boundary. (This
+    was the "lone surviving variant" of the prior turn — now the natural authority layer,
+    not a flagged tradeoff.)
+Added only by making vectors synced group-state (the PR-2 win):
+  - SHARED-physicality + determinism: a vector is computed once by the author and
+    delivered to every member, who therefore never re-derives and ranks identically. The
+    never-synced model could not guarantee cross-device agreement (on-device NLEmbedding
+    drift). PR-2 closes that.
+Survives unchanged (neither PR relaxes these):
+  - Cross-group recall still mandates the union query layer (section 2).
+  - Per-Project (or any orchestration object) owning a queryable store is still wrong
+    (1.4).
+  - Candidate-gen stays a separate, corpus-wide index (section 2, seam 2).
+New cost the synced half (PR-2) introduces that the never-synced model did not have:
+  embedding-EPOCH consensus, sync payload (~20x per embedded Matter), and a second
+  invertible at-rest copy of the semantic payload. These are why the synced half is PR-2,
+  gated (section 4).
+
+
+================================================================================
+4. OPEN SIGN-OFF ITEMS (gate PR-2; PR-1 does NOT depend on them)
+================================================================================
+No unilateral never/always rules — these are founder decisions, presented as tradeoffs.
+
+4.1 EMBEDDING-EPOCH CONSENSUS.  [OPEN]
+    VectorService.EmbeddingEpoch (provider/model/dimension/metric/normalization/revision)
+    is a hard equality gate: comparable iff equal; mismatch surfaced loudly, never
+    silently mixed. Synced vectors are only usable by a member on the SAME epoch. But the
+    backends are heterogeneous by design (Voyage voyage-3 d=1024 dev vs Apple NLEmbedding
+    prod). DECIDE: pin one epoch per group (off-epoch members re-embed locally on
+    receipt), OR refuse-to-co-rank foreign-epoch slices as a typed "epoch-skew"
+    degradation (never silent-drop). A revision bump => re-embed-and-resync the whole
+    group corpus. The compute-once/determinism wins hold ONLY within a single-epoch group.
+
+4.2 FEDERATION / COPY BOUNDARY (this is also the PR-1/PR-2 SCOPE boundary).  [OPEN — load-bearing]
+    PR-1's union handles MEMBER-LOCAL federation only: the slices of groups you are an MLS
+    member of (including shared multi-member Topics/Projects/Forums). A permitted but
+    NON-member peer (a space you can read via Permissions C without being in its MLS room)
+    is NOT in your union in PR-1; reaching it stays a network query. PR-2 decides whether a
+    permitted peer's slice SYNCS onto your device — and that collides with a stated rule:
+    Topic/PIE-CI says peer records are NEVER copied (a .peer Finding cites space+locator;
+    the raw record is not duplicated). If a peer's embedding syncs to you, you now hold a
+    copy of their vector. Either that relaxes the no-copy rule, OR cross-trust-boundary
+    federation cannot share one physical embedding (peer reads stay a network query) —
+    which limits the compute-once win to your OWN groups. This is a security call, not a
+    default.
+
+4.3 SYNC PAYLOAD.  [OPEN]
+    A voyage-3 vector is 1024 floats ~ 4KB vs ~200 bytes for a short Forum post (~20x
+    Delta inflation); Field.index_projections re-embeds live values on each resolve
+    (churn). Topic-scoped selective ingestion bounds WHAT is embedded, not the per-vector
+    multiplier. DECIDE: embed-only-on-pin / cache-and-regenerate, vs full sync.
+
+4.4 ENTITY-RESOLUTION IS A HARD PREREQUISITE FOR PR-2 (and good hygiene for PR-1).  [OPEN]
+    To stop the same entity being embedded in every group that mentions it, it must be
+    embedded ONCE in its HOME group (the group-of-1 owning its canonical node) and
+    referenced by matter-id elsewhere; the union dedups by matter-id at materialisation.
+    That depends on nova-resolve, currently aspirational. Stated, not assumed. PR-1 must
+    therefore dedup the union BY MATTER-ID (§6.8.A) so an accidental duplicate degrades
+    ranking quality at worst, never double-counts a hit.
+
+
+================================================================================
+5. PR DECOMPOSITION (complete units; no partial migrations)
+================================================================================
+  PR-1  [THIS DOC, section 6]  LocalStore.Vector = the UNION of GroupObject.Vector slices.
+        Establishes authority-unit != query-unit structurally; per-group PHYSICAL
+        partitioning (defense-in-depth) of the local index; the membership-event patch
+        hook (also the long-missing rebuild hook); one write path routing; a single
+        union read path. Slices are LOCALLY DERIVED (never-synced) in this PR — so it
+        needs NONE of the section-4 sign-offs and is complete on its own. It does NOT
+        deliver the synced wins (compute-once / cross-device determinism / peer
+        federation); it builds the exact seam where synced slices later drop in.
+
+  PR-2  [section 7, GATED on section 4]  Slice vectors become SYNCED MLS group-state.
+        index_projections persists {id,vector,epoch} into the group's synced Matter
+        state; the device receives slices instead of (or in addition to) deriving them;
+        epoch-skew handling (4.1); the federation/copy decision (4.2); payload mitigation
+        (4.3). This is where determinism + shared-physical + peer federation land.
+
+  PR-3  [perf, behind the same seam]  Swap the slice backend from exact brute-force NN to
+        HNSW/TurboVec. Resolves the open iOS-engine choice. No interface change.
+
+  (Separate track, not these PRs) the corpus-wide label/alias candidate-gen index for
+  nova-resolve PULL + Group.identifiers() (section 2, seam 2).
+
+
+================================================================================
+6. PR-1 SPECIFICATION — "LocalStore.Vector = union of GroupObject.Vector"
+================================================================================
+
+6.1 GOAL.
+    Make LocalStore.Vector the materialised UNION of per-group-object vector slices for
+    the current user, queried through one SearchEngine seam, with each slice physically
+    partitioned by MLS group and patched on membership events. Deliver a correct,
+    end-to-end-testable vector search where a query ranks across exactly the groups the
+    viewer belongs to.
+
+    NON-GOALS (explicitly deferred — restated so they are not smuggled in):
+      - Synced slice embeddings / vectors as MLS group-state (-> PR-2).
+      - Federated reads from permitted NON-member peers (a space you can read via
+        Permissions C but are not an MLS member of). In PR-1 every semantic reader queries
+        the LOCAL union of MEMBER-group slices only; non-member-peer federation is a PR-2
+        concern (4.2) and until then remains a network query. (Multi-member groups you ARE
+        in are covered — they are member groups.)
+      - Receiving a peer's slice / cross-epoch handling / the federation-copy decision
+        (-> PR-2, section 4).
+      - Entity-level dedup across groups via aliases (requires nova-resolve; 4.4). PR-1
+        accepts that the same real-world entity may be indexed under different ids in
+        different groups, producing duplicate vectors in the union, until entity-resolution
+        lands. PR-1 still dedups the union BY MATTER-ID (6.8.A).
+      - HNSW/TurboVec backend (-> PR-3). PR-1 ships exact brute-force NN — correct, not a
+        stub, just unoptimised. (Exact NN is MORE accurate than HNSW; this is honest, not
+        a fallback.)
+      - The label/alias candidate-gen index (separate track; section 2, seam 2).
+
+6.2 THE SEAMS (Swift; built on existing PacificCore + VectorService types).
+
+    // One MLS group's vector slice — the AUTHORITY unit. In PR-1 it is a LOCAL
+    // projection rebuilt from the group's Matters and cached for the membership
+    // duration; in PR-2 its entries become synced group-state. Keyed by the owning
+    // SpaceID. Holds at most one vector per Matter id.
+    public protocol GroupVectorSlice: Sendable {
+        var space: SpaceID { get }                 // the owning MLS group
+        var epoch: EmbeddingEpoch { get }          // the epoch its vectors were produced under
+        func upsert(_ id: MatterID, _ vector: [Float])
+        func remove(_ id: MatterID)
+        // exact-NN over THIS group only; never crosses the slice boundary.
+        func search(_ query: [Float], k: Int) -> [SearchHit]
+        // the rebuild hook: re-derive the whole slice from the group's Matters. Idempotent.
+        func rebuild(from matters: [Matter], using service: VectorService) async throws
+    }
+
+    public struct SearchHit: Sendable, Hashable {
+        public let id: MatterID
+        // The group whose slice RETURNED this hit. In PR-1 this is the embedding-source
+        // group (a Matter lives in exactly one slice). In PR-2 federation it may differ
+        // from the hit Matter's canonical home group — provenance, not identity.
+        public let space: SpaceID
+        public let score: Float
+    }
+
+    // LocalStore.Vector — the per-device UNION over the slices the device holds. The
+    // ONLY thing readers touch. Local-only, never synced; a derived cache keyed by the
+    // group slices (NOT a second source of truth). PR-1: all attached slices share the
+    // device's single local epoch; attach asserts equality and fails loudly on mismatch
+    // (the seam where PR-2's cross-epoch handling lands — no faking here).
+    public protocol LocalStoreVector: Sendable {
+        var epoch: EmbeddingEpoch { get }
+        // membership-event patch hook (driven by the MLS coordinator) — also the rebuild hook.
+        func attach(_ slice: GroupVectorSlice) throws   // on MLS room add; throws on epoch mismatch
+        func detach(_ space: SpaceID)                    // on MLS room remove — IMMEDIATE physical drop
+        // the union query: fan out across (attached slices ∩ scopes), merge a GLOBAL
+        // top-k, DEDUP by MatterID (a Matter appears at most once).
+        func query(_ vector: [Float], scopes: Set<SpaceID>, k: Int) -> [SearchHit]
+    }
+
+    // SearchEngine — the brief-level read seam EVERY semantic reader uses. Signature
+    // unchanged from what the PIE-CIs already assume (Topic/PIE-CI.md:99-106). It is the
+    // only public reader entry point; it never exposes a slice.
+    public protocol SearchEngine: Sendable {
+        // embed the brief (VectorService, .query), resolve the viewer's in-scope MEMBER
+        // groups (membership = access), query the union, return one ranked list.
+        func query(_ brief: String, as viewer: SpaceID, limit: Int) async throws -> [SearchHit]
+        // write path: embed the Matter's projections (.document) and upsert into the
+        // slice for matter.space. Routes; does not fork.
+        func index(_ matter: Matter) async throws
+    }
+
+6.3 FILES TOUCHED.
+    - LocalStore/Vector/Sources/...                NEW: GroupVectorSlice (+ exact-NN
+                                                       backend), LocalStoreVector (union),
+                                                       SearchEngine impl. (New target under
+                                                       the existing VectorService package or
+                                                       a sibling LocalStore/Vector module.)
+    - LocalStore/Vector/VectorService/...          USE as-is (stateless embed + epoch);
+                                                       no change.
+    - PacificCore (Indexable / index_projections)      WIRE index() to route into the
+                                                       matter.space slice; keep the single
+                                                       write path. (Interface stub today.)
+    - nova-core (coordinator / object membership)       EMIT MLS room add/remove for a group
+                                                       so the Swift side can attach/detach
+                                                       the slice. (Membership transitions are
+                                                       MLS events the core already processes
+                                                       — directory.rs / coordinator.rs.)
+    - Objects/* PIE-CI.md                          Human-owned doc edits proposed in §8.
+
+6.4 THE MEMBERSHIP-EVENT PATCH HOOK (= the missing rebuild hook).
+    Driven by the MLS ROOM membership list, not a per-user join — so it fires the same way
+    for a solo group-of-1 and for a shared multi-member group, and every member ends up
+    with the same slice (matching the row-store pattern where every member sees the same
+    synced Matters).
+    - On MLS room ADD for group G (you join G, OR a co-member is added to a G you are in):
+      build/refresh G's slice (rebuild(from: G.matters)) and LocalStoreVector.attach(slice).
+      Subsequent queries include G. Source of the event: nova-core coordinator.rs.
+    - On MLS room REMOVE for group G (you leave/are removed): LocalStoreVector.detach(G.space)
+      IMMEDIATELY drops G's slice from memory AND from query results — no deferred delete.
+      This is the physical privacy guarantee (no orphaned vectors for a group you left).
+    - This replaces the absent global "rebuild Search A" hook: rebuild is per-group and
+      driven by membership, which is cheap and incremental.
+
+6.5 WRITE PATH.
+    index_projections() / SearchEngine.index(matter): VectorService.embed(projections,
+    as: .document) -> upsert(matter.id, vector) into the slice for matter.space. Exactly
+    one vector per Matter id, in its home group's slice (honours "embed under own id").
+    Honest-by-default on backend starvation: SearchEngine.index records the Matter id in a
+    pending_embeddings queue (with a timestamp); it does NOT write a vector to the slice,
+    does NOT fabricate one, and does NOT block the content write path. A separate async
+    retry loop drains the queue on backend recovery and completes the pending embeddings.
+    The content Matter is never re-indexed to recover — only the deferred vector is filled.
+
+6.6 READ PATH.
+    SearchEngine.query(brief, as: viewer, limit): embed brief (.query) -> resolve the
+    SCOPES = the SpaceIDs the viewer is a current MLS MEMBER of (from MLS coordinator
+    state, or a membership list kept current by attach/detach) -> LocalStoreVector.query(
+    qVec, scopes, k=limit) -> one ranked, MatterID-deduped list. Two enforcement layers:
+    (1) PHYSICAL — a non-member group has no slice attached, so it is unreachable; (2)
+    SCOPE — the scopes set is the query-time gate (defense-in-depth). MLS leave triggers
+    detach, so a departed group is gone from both layers at once. NOTE (4.2): non-member
+    permitted peers are NOT in scopes in PR-1; reaching them stays a network query.
+
+6.7 BACKEND.
+    GroupVectorSlice default impl = exact brute-force cosine NN over the slice's vectors.
+    Correct and simple; small slices make it cheap. PR-3 swaps in HNSW/TurboVec behind the
+    same protocol, unchanged callers.
+
+6.8 ACCEPTANCE CRITERIA / TESTS.
+    A. UNION CORRECTNESS + DEDUP. For a user in groups {G1..Gn}, SearchEngine.query results
+       equal a reference brute-force query over the single concatenation of all in-scope
+       vectors (same ranking, same top-k), and contain each MatterID AT MOST ONCE. If the
+       same Matter is accidentally in two slices (an entity-resolution gap, 4.4), the union
+       deduplicates by id before ranking — never double-counts a hit.
+    B. MEMBERSHIP = ACCESS (physical + scope). A query as viewer V never returns a Matter
+       from a group V is not an MLS member of. At least one of: (1) a slice for a non-member
+       group is never attached for V (primary, physical gate), OR (2) if a slice is present,
+       LocalStoreVector.query honours the scopes set and excludes it (defense-in-depth).
+    C. PATCH SEMANTICS (across cycles). attach(G) makes G's Matters appear in subsequent
+       results; detach(G) removes them IMMEDIATELY with no orphan; re-attach(G) after a
+       detach rebuilds and reproduces results identical to the original attach, stable
+       across multiple membership cycles.
+    D. ONE SOURCE OF TRUTH. rebuild(from: G.matters) is idempotent — rebuilding a slice
+       yields identical search behaviour; the slice is a pure projection of Matters.
+    E. WRITE ROUTING. index(matter) lands the vector in matter.space's slice and nowhere
+       else; a Matter has exactly one vector in exactly one slice.
+    F. EPOCH GUARD. attach() of a slice whose epoch != the union's epoch fails LOUDLY (no
+       silent mix). In PR-1 all local slices share one device epoch, so this fires only on
+       a bug; PR-1 tests need not cover cross-epoch ranking — it is the seam PR-2 (4.1)
+       extends.
+    G. NO SILENT FALLBACK. With the embed backend unavailable, index() enqueues the Matter
+       id and surfaces the gap; it never writes a zero/garbage vector and never blocks
+       content durability. After backend recovery the retry loop completes the deferred
+       embedding and it becomes queryable WITHOUT re-indexing the content Matter.
+
+6.9 OUT OF SCOPE -> later PRs (restate): synced slice embeddings + peer-slice receipt +
+    cross-epoch + the federation/copy decision (PR-2 / §4), HNSW/TurboVec (PR-3), the
+    label/alias candidate-gen index (separate track).
+
+
+================================================================================
+7. PR-2 (SEQUENCED, GATED ON SECTION 4) — synced slice embeddings as MLS group-state
+================================================================================
+index_projections() REMAINS the single write path: a Matter's vector still routes to
+matter.space's slice; PR-2 only ADDS a "persist {id,vector,epoch} into the group's synced
+state" step to that same call. Routing does not fork.
+
+Change the slice's POPULATION from "locally derived" to "synced group-state":
+  - index_projections() additionally persists {matter-id, vector, epoch} into the group's
+    synced Matter state (a synced facet of the Matter), so the authoring member computes
+    the vector once and every member receives it.
+  - The device attaches a group's slice from received state rather than re-deriving it.
+  - Epoch-skew handling per 4.1 (pin-per-group OR re-embed-on-receipt OR loud refuse).
+  - The federation/copy decision per 4.2 (do permitted peer embeddings sync onto your
+    device, unlocking PR-2 peer federation, or do peer reads stay a network query?).
+  - Payload mitigation per 4.3 (selective/topic-scoped embedding; embed-on-pin).
+Result: membership=access becomes SHARED-physical (no member re-derives; non-members never
+receive the slice) and ranking becomes deterministic across members.
+
+CUTOVER PROTOCOL (must be chosen, to avoid a permanent dual mode).  [DECIDE]
+  (a) INCREMENTAL — in the PR-2 era, on a group's membership event its slice attaches from
+      synced state; LocalStoreVector.query sees a union of {still-local PR-1 slices,
+      synced PR-2 slices}; the union/query logic is UNCHANGED (a slice is a slice). The
+      migration COMPLETES when every group has a synced slice; a derived-only slice is
+      simply rebuilt-then-synced on its next write. OR
+  (b) ONE-TIME — rebuild every slice from synced state in a single cutover, no mixed-mode
+      window.
+  ASSERT either way: no change in QUERY behaviour across the cutover; the union remains the
+  single query source; the end state is single-mode (no group permanently both-derived-and-
+  synced). A migration that leaves two coexisting representations as the steady state is the
+  partial-migration anti-pattern and is not begun until (a) or (b) is signed off.
+
+
+================================================================================
+8. PROPOSED MARKDOWN ADDITIONS (for a human to paste — agents don't write repo .md)
+================================================================================
+
+A) LocalStore/Vector/README.md — add an "Architecture" paragraph:
+   "Vectors follow the same boundary as the Matters they derive from: the MLS group.
+    Each group-object owns its vector SLICE (authority/sync unit). A device's
+    LocalStore.Vector is the UNION of the slices for the groups the user is in (query
+    unit) — the only thing readers query, via SearchEngine.query(brief, as: viewer,
+    limit). The union is local-only and never synced: a derived cache keyed by the group
+    slices, patched on MLS room membership events (add = attach slice, remove = detach +
+    drop immediately). 'An individual's total vector store is the sum of their group-
+    objects' slices' is the authority model; the union is the query model. Slices are
+    exact-NN today (HNSW/TurboVec is a later swap behind the same seam). Whether slice
+    vectors are locally derived or synced MLS group-state is the PR-1 vs PR-2 axis — see
+    VECTOR-UNION-ARCHITECTURE.txt. A separate corpus-wide label/alias index serves
+    entity-resolution; it is not this union."
+
+B) Objects/Topic/PIE-CI.md — under the Indexable / Search A section:
+   "ground(...as viewer:) reads the per-device UNION (LocalStore.Vector) via
+    SearchEngine.query, scoped to the viewer's MLS group memberships; it never queries a
+    group slice directly. In PR-1 the union covers member groups only; federation to
+    permitted non-member peers stays a network query until PR-2. Findings written back via
+    index_projections() land in the Topic's own group slice. The union is the read seam;
+    the slice is the write target."
+
+C) Objects/Project/PIE-CI.md — under the Indexable section (reinforce existing 1.4):
+   "A Project owns NO vector store. Its title/description and task Matters index into the
+    Project group's slice under their own ids; the CLA's ChangeOrigin.search trigger and
+    any read go through SearchEngine.query over the union. Knowledge comes by SUBSCRIBING
+    to a Topic, not by owning a queryable shard."
+
+D) (Optional) a new PIE-CI.md for this module describing the GroupVectorSlice /
+   LocalStoreVector / SearchEngine seam per section 6.2, if you want the module to carry a
+   PIE-CI like the objects do.
+
+
+================================================================================
+9. CROSS-REFERENCES
+================================================================================
+ - Vector facade (stateless embed + epoch): LocalStore/Vector/VectorService/Sources/
+   VectorService/VectorService.swift
+ - Readers: Objects/Topic/Sources/Topic/Topic.swift (ground); Objects/Project/
+   Sources/Project/Project.swift (ChangeOrigin.search)
+ - Write seam: PacificCore Indexable / index_projections(); each object's PIE-CI.md
+ - Membership events: nova-core/src/{coordinator.rs,directory.rs,object.rs}
+ - Distinct candidate-gen track (label/alias HNSW);
+   Objects/Group/PIE-CI.md (Group.identifiers / Resolvable)
+ - Prior decision (retrieval = Topic; no per-Project store): Objects/Project/PIE-CI.md

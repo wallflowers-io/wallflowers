@@ -1,0 +1,8 @@
+# Build output: regenerable (apple/build-ios.sh, apple/build-lodedb.sh, xcodegen, cargo, SwiftPM).
+/target/
+.build/
+build/
+**/Artifacts/*.xcframework
+LocalStore/graph/arc-resolver/target/
+# App Store Connect key and issuer (scripts/testflight.sh). Never committed.
+/env/

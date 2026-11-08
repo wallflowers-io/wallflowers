@@ -1,0 +1,1 @@
+Vector Database (byo embeddings) implemented using Egoist-Machines' Rust based LodeDB. Its readers today are note search, the chat search bar and LIFE.

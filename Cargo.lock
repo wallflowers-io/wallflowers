@@ -3324,6 +3324,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tracing",
+ "tracing-subscriber",
  "zeroize",
 ]
 
@@ -3338,7 +3339,10 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "uniffi",
+ "zeroize",
 ]
 
 [[package]]

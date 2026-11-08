@@ -73,6 +73,99 @@ async fn a_wrap_signs_in_resumes_every_object_and_speaks() {
     assert!(matches!(outcome_of(&next, &obj), Outcome::Joined { .. }), "{next:?}");
 }
 
+/// The iOS words door: a device holding nothing signs in from the 24 words alone,
+/// rejoins every object the spine names, and keeps the spine's own self record:
+/// after a sync pass too, which is where an identity-only restore minted a second.
+#[tokio::test]
+async fn the_words_sign_in_resume_and_mint_no_second_self_record() {
+    let mut h = Harness::new(&["ada", "bo"]).await;
+    let (phone, bo) = (0, 1);
+    let obj = h.form_forum(phone, &[bo]).await;
+    h.settle().await;
+    h.obj_post(bo, &obj, "before the words").await;
+    h.settle().await;
+
+    let key = h.with_sync(phone, |n| n.identity_key());
+    let spine = h.with_sync(phone, |n| n.spine().unwrap()).expect("A2: every identity has a spine");
+    let words = h.with_sync(phone, |n| n.recovery_key()).expect("a minted identity has words");
+    let head = head_of(&h, phone);
+    h.partition(phone);
+
+    let (sim, r) = h.sign_in_from_words("ada", "sim", &words, Some(head)).await.unwrap();
+
+    assert_eq!(r.verdict, Some(ChainVerdict::Whole));
+    assert_eq!(r.objects[0].object, spine, "the spine is first (A6.5)");
+    assert!(matches!(outcome_of(&r, &obj), Outcome::Joined { .. }), "{r:?}");
+    assert_eq!(h.with_sync(sim, |n| n.identity_key()), key);
+    assert_eq!(h.with_sync(sim, |n| n.self_object().unwrap()), Some(spine.clone()));
+
+    // A sync pass reconciles the self profile: the step that minted a second
+    // record after an identity-only restore (simulator, 28 Oct, group 5a36e81c…).
+    h.settle_among(&[sim, bo]).await;
+    assert_eq!(
+        h.with_sync(sim, |n| n.self_object().unwrap()),
+        Some(spine.clone()),
+        "still the spine's own record after a sync"
+    );
+
+    h.obj_post(sim, &obj, "from the words").await;
+    h.settle_among(&[sim, bo]).await;
+    let bo_sees: Vec<String> = h.obj_view(bo, &obj).into_iter().map(|m| m.text).collect();
+    assert!(bo_sees.contains(&"from the words".to_string()), "{bo_sees:?}");
+}
+
+/// The `pacific::resume` lines, as a subscriber on this thread sees them.
+#[derive(Clone, Default)]
+struct Said(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Said {
+    fn on_event(&self, e: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Message(String);
+        impl tracing::field::Visit for Message {
+            fn record_debug(&mut self, f: &tracing::field::Field, v: &dyn std::fmt::Debug) {
+                if f.name() == "message" {
+                    self.0 = format!("{v:?}");
+                }
+            }
+        }
+        if e.metadata().target() == "pacific::resume" {
+            let mut m = Message(String::new());
+            e.record(&mut m);
+            self.0.lock().unwrap().push(m.0);
+        }
+    }
+}
+
+/// A sign-in says what it reached as it goes: the walk, then one line per object the
+/// spine names, with the outcome `Resumed` carries for it.
+#[tokio::test]
+async fn a_sign_in_says_what_it_reached() {
+    use tracing_subscriber::layer::SubscriberExt;
+    let mut h = Harness::new(&["ada", "bo"]).await;
+    let (phone, bo) = (0, 1);
+    let obj = h.form_forum(phone, &[bo]).await;
+    h.settle().await;
+    let key = h.with_sync(phone, |n| n.identity_key());
+    let wrap = h.with_sync(phone, |n| n.export_wrap(&PRF, HOST).unwrap());
+    let head = head_of(&h, phone);
+    h.partition(phone);
+
+    let said = Said::default();
+    let _on = tracing::subscriber::set_default(tracing_subscriber::registry().with(said.clone()));
+    let (_, r) = h.sign_in_from_wrap("ada", "said", &PRF, &wrap, HOST, &key, Some(head)).await.unwrap();
+
+    let lines = said.0.lock().unwrap().clone();
+    let n = r.objects.len();
+    assert!(n >= 2, "the spine and the forum: {r:?}");
+    assert_eq!(lines.len(), n + 1, "the walk, then each object: {lines:#?}");
+    assert!(lines[0].ends_with(&format!("{n} objects")), "{}", lines[0]);
+    for (i, (line, o)) in lines[1..].iter().zip(&r.objects).enumerate() {
+        assert!(line.starts_with(&format!("{}/{n} {} {}: ", i + 1, o.kind, &o.object[..8])), "{line}");
+        assert!(line.ends_with(&format!("{:?}", o.outcome)), "{line}");
+    }
+    assert!(lines.iter().any(|l| l.contains(&obj[..8])), "the forum is named: {lines:#?}");
+}
+
 #[tokio::test]
 async fn a_second_sign_in_before_a_refill_mints_no_second_self_record() {
     let mut h = Harness::new(&["ada"]).await;

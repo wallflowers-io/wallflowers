@@ -15,6 +15,7 @@ mod b1_epoch_record_size;
 mod carriage_ceiling_refuses_at_the_door;
 mod catalogue_reach;
 mod catalogue_wire_values;
+mod comments_section_is_its_parents;
 mod compliance_noncompliant_objects_are_named;
 mod d58_admission_to_the_sites_rooms;
 mod devstate_seal;
