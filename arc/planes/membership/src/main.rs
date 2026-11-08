@@ -57,6 +57,27 @@ where
         .block_on(fut)
 }
 
+/// One sync pass on the held Node, opening one if none is held. The Node and its runtime come
+/// back only if the pass ended well. What the pass folded is dropped: see the sync loop.
+fn sync_pass(held: Option<(Node, tokio::runtime::Runtime)>) -> Option<(Node, tokio::runtime::Runtime)> {
+    let opened = held.map(Ok).unwrap_or_else(|| {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| CoreError::Transport(format!("runtime: {e}")))?;
+        Ok((Node::open()?, rt))
+    });
+    let failed = match opened {
+        Ok((node, rt)) => match rt.block_on(node.sync_once()) {
+            Ok(_) => return Some((node, rt)),
+            Err(e) => e,
+        },
+        Err(e) => e,
+    };
+    eprintln!("arc-node: sync failed: {failed}");
+    None
+}
+
 fn err_json(msg: &str) -> String {
     serde_json::json!({ "error": msg }).to_string()
 }
@@ -273,6 +294,7 @@ fn main() {
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
         .with_writer(std::io::stderr)
+        .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
         .init();
 
     let name = env_or("ARC_NAME", "Arc");
@@ -356,20 +378,26 @@ fn main() {
     // we RECEIVE Welcomes = get added to other GroupObjects) and folds incoming deltas on the
     // groups we belong to (so we receive messages / FL updates on our tethers). Without it the
     // Arc can create tethers but never sees anything come back.
+    //
+    // ONE Node and ONE runtime for the loop's life, so the Node holds its relay session between
+    // passes (K-33); a pass that fails drops both and the next reopens. Reopened every pass, it
+    // dialled the relay every 2s and hung up without a close (8 Nov 2026).
+    //
+    // NO TRANSCRIPT IN THE LOG. The Arc reads the Site and the rooms it admits for (A-3, O-75);
+    // `sync_once` returns what it folded, and printing that put every room's messages in
+    // syslog in plaintext. What a pass folded is never logged here.
     {
-        let relay = relay_url.clone();
         let lock = Arc::clone(&node_lock);
         let interval_ms: u64 = std::env::var("ARC_SYNC_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000);
-        std::thread::spawn(move || loop {
-            {
-                let _g = lock.lock().unwrap();
-                match Node::open().and_then(|n| block_on(n.sync_once())) {
-                    Ok(lines) if !lines.is_empty() => eprintln!("[sync] {}", lines.join(" · ")),
-                    Ok(_) => {}
-                    Err(e) => eprintln!("[sync] {e}"),
+        std::thread::spawn(move || {
+            let mut held: Option<(Node, tokio::runtime::Runtime)> = None;
+            loop {
+                {
+                    let _g = lock.lock().unwrap();
+                    held = sync_pass(held.take());
                 }
+                std::thread::sleep(std::time::Duration::from_millis(interval_ms));
             }
-            std::thread::sleep(std::time::Duration::from_millis(interval_ms));
         });
     }
 
