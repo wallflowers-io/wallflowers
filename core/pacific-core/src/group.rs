@@ -1490,6 +1490,55 @@ mod tests {
         ObjectKind::Group.type_id() as u32
     }
 
+    fn named(epoch: u64, seq: u64, prev: [u8; 32], name: &str) -> crate::coordinator::Delta {
+        let mut a = Args::new();
+        a.insert("displayName".into(), ArgVal::Text(name.into()));
+        a.insert("shape".into(), ArgVal::Text("individual".into()));
+        sequenced_delta(tid(), OP_SET_PROFILE, a, epoch, seq, prev)
+    }
+
+    fn fold_of(log: &[&crate::coordinator::Delta]) -> Result<Coordinator<GroupType>, crate::CoreError> {
+        crate::fold::fold_entries_owned::<GroupType>(
+            vec![OWNER],
+            vec![(0, OWNER)],
+            log.iter().map(|d| (OWNER, d.canonical_bytes())),
+        )
+    }
+
+    /// TWO OF THE OWNER'S DEVICES AT ONE SLOT (ICD `mls.sequencing.tiebreak`, RFC 9750
+    /// §5.2.2): every replica keeps the lowest DeltaId and sets the other branch aside,
+    /// whatever order the log arrived in. The branch that lost is named, not lost.
+    #[test]
+    fn a_fork_resolves_to_the_lowest_delta_id_in_any_arrival_order() {
+        let g = named(0, 0, GENESIS_PREV, "base");
+        let a = named(0, 1, g.id(), "phone");
+        let b = named(0, 1, g.id(), "laptop");
+        let a2 = named(0, 2, a.id(), "phone again");
+        let b2 = named(0, 2, b.id(), "laptop again");
+        let (win, lose, lose2, last) = if a.id() < b.id() { (&a, &b, &b2, "phone again") } else { (&b, &a, &a2, "laptop again") };
+
+        let one = fold_of(&[&g, &a, &b, &a2, &b2]).expect("a fork resolves; it does not stop the fold");
+        let two = fold_of(&[&b2, &a2, &b, &a, &g]).expect("in any order");
+        assert_eq!(one.state().display_name, last, "the lower id's branch stands: {}", hex::encode(win.id()));
+        assert_eq!(two.state().display_name, one.state().display_name);
+        assert_eq!(one.accepted_digest(), two.accepted_digest(), "one fold, wherever it runs");
+        let mut gone = vec![lose.id(), lose2.id()];
+        gone.sort();
+        assert_eq!(one.superseded(), gone, "the losing slot and its chain are set aside, and named");
+        assert_eq!(two.superseded(), gone);
+    }
+
+    /// The tie-break settles TWO claimants; it does not paper over a gap. A delta whose
+    /// predecessor this replica never held still breaks the chain (`mls`: "a partial
+    /// spine breaks the chain").
+    #[test]
+    fn a_broken_chain_no_fork_explains_still_stops_the_fold() {
+        let g = named(0, 0, GENESIS_PREV, "base");
+        let orphan = named(0, 1, [0xEEu8; 32], "from a delta never held");
+        let err = fold_of(&[&g, &orphan]).err().expect("a gap is not a fork");
+        assert!(format!("{err}").contains("ChainBroken"), "{err}");
+    }
+
     /// A removal the owner recorded survives that owner handing over (§10.2 of
     /// membership-through-mls.md): the fold judges each record by the owner of ITS
     /// epoch. Judged by today's owner, the removal would stop folding, and the log would

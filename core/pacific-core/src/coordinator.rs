@@ -1554,6 +1554,9 @@ pub struct Coordinator<T: ObjectType> {
     seen: HashSet<(MemberId, [u8; 32])>,
     /// the accepted commutative deltas (folded in canonical order at read time).
     commutative: Vec<(Delta, MemberId)>,
+    /// sequenced deltas set aside by [`Self::deliver_resolving`]: a slot lost to an earlier
+    /// claimant, or a chain from one that was (ICD `mls.sequencing.tiebreak`).
+    superseded: std::collections::BTreeSet<[u8; 32]>,
     // `fn() -> T`: the marker never owns a T, so a coordinator is Send and Sync whatever
     // T is, and the fold cache (O-69) can hold it.
     _type: PhantomData<fn() -> T>,
@@ -1569,6 +1572,7 @@ impl<T: ObjectType> Clone for Coordinator<T> {
             spine: self.spine.clone(),
             seen: self.seen.clone(),
             commutative: self.commutative.clone(),
+            superseded: self.superseded.clone(),
             _type: PhantomData,
         }
     }
@@ -1620,8 +1624,37 @@ impl<T: ObjectType> Coordinator<T> {
             spine,
             seen: HashSet::new(),
             commutative: Vec::new(),
+            superseded: Default::default(),
             _type: PhantomData,
         }
+    }
+
+    /// [`Self::deliver`], with the one order among the owner's devices (ICD
+    /// `mls.sequencing.tiebreak`; RFC 9750 §5.2.2). A sequenced delta that finds its slot
+    /// taken, or that chains from one that did, is SUPERSEDED: set aside and named, not a
+    /// reason to stop the fold. Delivered in [`crate::fold::spine_order`], the lowest
+    /// DeltaId at a slot is the one that stands. Every other rejection is returned as is.
+    pub fn deliver_resolving(&mut self, delta: Delta, author: MemberId) -> Result<bool, DeltaRejection> {
+        let Some(_) = delta.seq else {
+            return self.deliver(delta, author);
+        };
+        let (id, prev) = (delta.id(), delta.prev);
+        match self.deliver(delta, author) {
+            Err(DeltaRejection::ForkDetected) => {
+                self.superseded.insert(id);
+                Ok(false)
+            }
+            Err(DeltaRejection::ChainBroken) if self.superseded.contains(&prev) => {
+                self.superseded.insert(id);
+                Ok(false)
+            }
+            other => other,
+        }
+    }
+
+    /// The sequenced deltas [`Self::deliver_resolving`] set aside, by DeltaId.
+    pub fn superseded(&self) -> Vec<[u8; 32]> {
+        self.superseded.iter().copied().collect()
     }
 
     /// Accept one delta, routed by its op's DECLARED fold rule. `Ok(true)` =
