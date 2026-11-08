@@ -5,6 +5,7 @@
 //  list, one write path.
 
 import SwiftUI
+import PacificCore   // ObjectRow — the forums the list is built from
 
 struct ChatsView: View {
     @EnvironmentObject private var core: CoreService
@@ -13,6 +14,8 @@ struct ChatsView: View {
     @EnvironmentObject private var chatIndex: ChatIndex
 
     @State private var rows: [ConvRowVM] = []
+    /// The rebuild reading now, cancelled by the next.
+    @State private var rebuilding: Task<Void, Never>?
     @State private var query = ""
     /// The semantic lane's answer for the CURRENT query: conversation id → rank,
     /// from the union store's cosine search over every indexed message. Refreshed
@@ -199,12 +202,8 @@ struct ChatsView: View {
                                                 unread: r.unread,
                                                 tint: r.conversation.tint,
                                                 initials: r.conversation.initials,
-                                                // A DM shows the face the peer PUBLISHED to us.
-                                                // A group has no single face, so it keeps initials.
-                                                photo: r.conversation.kind == .dm
-                                                    ? core.peerPhoto(r.conversation.id) : nil,
-                                                blockColor: r.conversation.kind == .dm
-                                                    ? core.peerColor(r.conversation.id) : nil,
+                                                photo: r.photo,
+                                                blockColor: r.blockColor,
                                                 // A Group-hosted room wears the forum dress:
                                                 // the room glyph + "Host … / Room".
                                                 host: r.host)
@@ -276,26 +275,43 @@ struct ChatsView: View {
         return r.snippet.isEmpty ? name : "\(name), \(r.snippet)"
     }
 
+    /// The list, re-read OFF the main thread and drawn from what it read: an arrival on
+    /// CHAT shows the last rows at once, and the new ones when they land. A rebuild asked
+    /// for while one is reading supersedes it.
     private func rebuild() {
-        // The forum→host map, re-read with the list: a room minted or detached
-        // since the last pass must arrive already wearing (or shedding) its group.
-        core.refreshForumHosts()
+        rebuilding?.cancel()
+        rebuilding = Task {
+            // The forum→host map, re-read with the list: a room minted or detached
+            // since the last pass must arrive already wearing (or shedding) its group.
+            await core.refreshForumHosts().value
+            // An object's comments section is reached from the object, not listed here (#34).
+            let groups = core.groupObjects.filter { !core.isCommentsSection($0.id) }
+            let snap = await core.chatSnapshot(groups: groups)
+            guard !Task.isCancelled else { return }
+            rows = build(groups: groups, snap)
+        }
+    }
+
+    /// The rows from a snapshot: no FFI here, it all came with `snap`.
+    private func build(groups: [ObjectRow], _ snap: CoreService.ChatSnapshot) -> [ConvRowVM] {
         var out: [ConvRowVM] = []
 
-        // One roster-name map for the whole rebuild, not one lookup per row.
-        let peerNames = core.peerNamesByIdentity()
+        // One roster-name map for the whole rebuild, not one lookup per row. Blocked peers
+        // included: a blocked member's group messages still render, with a name.
+        var peerNames: [String: String] = [:]
+        for c in snap.connections where !c.displayName.isEmpty {
+            peerNames[CoreService.identityHex(c.peerId)] = c.displayName
+        }
 
-        for o in core.groupObjects {
-            // An object's comments section is reached from the object, not listed here (#34).
-            if core.isCommentsSection(o.id) { continue }
-            let convo = Conversation(id: o.id, kind: .group, title: "", tint: tintFor(o.id))
-            let rows = core.messages(convo)
+        for o in groups {
+            let rows = snap.messages[o.id] ?? []
             convos.noteSeen(o.id, count: rows.count)
             // The MLS GroupContext name is authoritative and synced — it arrives with
             // the Welcome and is rewritten by an owner rename commit. An unnamed group
             // (a Project ChatRoom, a dev-link room) gets a roster-derived label; the id
             // hex is an address and is never shown as a name.
-            let title = o.name.isEmpty ? core.derivedGroupName(o.id, names: peerNames) : o.name
+            let title = o.name.isEmpty
+                ? core.derivedGroupName(members: snap.members[o.id] ?? [], names: peerNames) : o.name
             let snip = ChatRow.lastSnippet(rows)
             let lastTs = Int64(rows.last?.ts ?? 0)
             // A group-hosted forum wears its group; a channel-hosted room wears
@@ -317,9 +333,9 @@ struct ChatsView: View {
             ))
         }
 
-        for c in core.connectionRows() {
-            let convo = Conversation(id: c.peerId, kind: .dm, title: "", tint: tintFor(c.peerId))
-            let rows = core.messages(convo)
+        // The blocklist is THE people seam (`connectionRows`): a blocked peer has no row.
+        for c in snap.connections where !BlockStore.shared.contains(c.peerId) {
+            let rows = snap.messages[c.peerId] ?? []
             convos.noteSeen(c.peerId, count: rows.count)
             // A bare CONNECTED connection with no chat yet belongs under "+", not in
             // Chats. An UN-accepted one is different: it is an inbound request, and
@@ -331,20 +347,23 @@ struct ChatsView: View {
             let snip = ChatRow.lastSnippet(rows)
             let lastTs = Int64(rows.last?.ts ?? 0)
             chatIndex.ingest(conversation: c.peerId, kind: .chat, msgs: rows)
+            let card = snap.profiles[c.peerId]?.card
             out.append(ConvRowVM(
                 conversation: Conversation(id: c.peerId, kind: .dm, title: title, tint: tintFor(c.peerId)),
                 snippet: snip.isEmpty ? (c.connected ? "Connected — say hello" : "Pending connection") : snip,
                 unread: convos.unread(c.peerId, count: rows.count),
                 time: Self.activityLabel(lastTs),
                 lastTs: lastTs,
-                tags: chatIndex.tags(conversation: c.peerId, msgs: rows)
+                tags: chatIndex.tags(conversation: c.peerId, msgs: rows),
+                photo: card.flatMap { $0.photo.isEmpty ? nil : Data(base64Encoded: $0.photo) },
+                blockColor: card.flatMap { $0.avatarColor.isEmpty ? nil : Color(hex: $0.avatarColor) }
             ))
         }
 
         // Newest activity first: sort by the last message's stamp descending, regardless of
         // group-vs-DM or the core's own listing order. A conversation with no messages (ts 0)
         // falls to the bottom.
-        rows = out.sorted { $0.lastTs > $1.lastTs }
+        return out.sorted { $0.lastTs > $1.lastTs }
     }
 
     /// A Signal-style last-activity label from an epoch-ms stamp: the time today, "Yesterday",
@@ -384,6 +403,10 @@ struct ConvRowVM: Identifiable {
     /// Every #tag anywhere in this conversation's transcript, lowercased —
     /// derived from the fold at list build, never stored. The "#…" query lane.
     var tags: Set<String> = []
+    /// The face a DM's peer PUBLISHED to us, read with the list: a group has no single
+    /// face, so it keeps initials.
+    var photo: Data? = nil
+    var blockColor: Color? = nil
     var id: String { conversation.kind.rawValue + ":" + conversation.id }
 }
 

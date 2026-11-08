@@ -977,7 +977,7 @@ struct RootShell: View {
             #if DEBUG
             // Headless drive: seed the two real launch events (real mints, real posters)
             // and land on EVENTS when asked — simctl can't tap the LIFE disc.
-            EventSeeder.seedIfRequested(core: core)
+            await EventSeeder.seedIfRequested(core: core)
             if EventSeeder.wantsEventsScreen { show(.life) }
             #endif
             core.warmCaches()           // re-ask the graph (n-2) so every shelf is warm
@@ -1022,9 +1022,11 @@ struct RootShell: View {
         // The ticket sweeps ride the sync tick: new deliveries → the tray; pending free
         // requests against listings this device owns → fulfilled (the phone-fulfilled path).
         .onReceive(core.$syncTick) { _ in
-            core.refreshEvents()
-            TicketSweep.arrivals(core: core, outputs: outputs)
-            Task { await TicketSweep.fulfilFree(core: core) }
+            Task {
+                await core.refreshEvents().value
+                TicketSweep.arrivals(core: core, outputs: outputs)
+                await TicketSweep.fulfilFree(core: core)
+            }
         }
         .sheet(isPresented: $showTickets) {
             NavigationStack { TicketWalletView(present: presentTicket) }
