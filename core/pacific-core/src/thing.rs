@@ -64,7 +64,7 @@ pub const MAX_ADDED_PHOTO_B64: usize = 150_000;
 pub const MAX_PHOTOS: usize = 20;
 
 /// One of a listing's photos (`thing.addPhoto`).
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ThingPhoto {
     pub id: String,
     pub mime: String,
@@ -87,7 +87,7 @@ pub struct ThingPhoto {
 }
 
 /// Whether the thing is still for sale (`thing.setDisposition`).
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Disposition {
     pub state: String,
     #[serde(rename = "for", skip_serializing_if = "Option::is_none")]
@@ -105,7 +105,7 @@ fn hex_of(t: &str, n: usize) -> bool {
 
 /// Where this thing stands in the market. Parsed from the wire string; an unknown value is
 /// a malformed delta rather than a silent default, so a typo can never quietly become `has`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Posture {
     Has,
     Wants,
@@ -148,7 +148,7 @@ impl Posture {
 /// (SKILLS), `Job` work moving between people (JOBS). Closed vocabulary, like
 /// `Posture`: a typo'd category is a malformed delta, never a silent fifth face.
 /// Absent on the wire = `Artifact`, so every pre-category log folds identically.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum Category {
     #[default]
     Artifact,
@@ -177,7 +177,7 @@ impl Category {
 /// How far a posture may travel. This is the CONSENT control, and it is also the
 /// identity-disclosure control: a listing that reaches the network carries the origin
 /// signature, so `Network` means "my identity travels with this".
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum Reach {
     /// Direct connections only. Never forwarded. The "sell privately" case.
     #[default]
@@ -271,7 +271,7 @@ fn parse_area(s: &str) -> Result<String, DeltaRejection> {
 }
 
 /// The compiled read-side state of a Thing.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ThingState {
     /// THE PARTS THIS OBJECT IS MADE OF, keyed by the part's object id — its comments
     /// section is one, a real Forum GroupObject with its own roster and not a field

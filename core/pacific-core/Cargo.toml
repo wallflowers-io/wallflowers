@@ -51,7 +51,7 @@ mls = ["dep:mls-rs", "dep:mls-rs-core", "dep:mls-rs-crypto-rustcrypto"]
 #   cargo build -p pacific-core --no-default-features --target wasm32-unknown-unknown
 
 [dependencies]
-pacific-media = { path = "../pacific-media" }
+pacific-media = { path = "../pacific-media", features = ["serde"] }
 pacific-wire.workspace = true
 mls-rs = { workspace = true, optional = true }
 mls-rs-core = { workspace = true, optional = true }

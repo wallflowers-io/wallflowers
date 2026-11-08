@@ -131,7 +131,7 @@ pub fn kp_id(kp: &[u8]) -> [u8; 32] {
 /// One offered key package in the pool. SELF-CONTAINED: carries everything needed to
 /// add the offerer to a new group — the key package AND their intro-mailbox tag (so
 /// the consumer can seal the Welcome to them without a fresh code exchange).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct KeyPackageOffer {
     /// The KP owner = the `prekeySupply` author. You consume a PEER's offers to add
     /// them; you never consume your own.
@@ -145,7 +145,7 @@ pub struct KeyPackageOffer {
 }
 
 /// The folded prekey pool for a Contact: unspent offers + a tombstone set.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PrekeyPool {
     /// kp_id -> offer, for offers not yet consumed or revoked.
     pub available: BTreeMap<[u8; 32], KeyPackageOffer>,
@@ -157,7 +157,7 @@ pub struct PrekeyPool {
 /// Authorship is not a field: it is the MLS-authenticated sender of the delta that
 /// carried it (`mls::Incoming::Application { sender, .. }` — "the author is never on
 /// the wire"), so a profile cannot be published in someone else's name.
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct SelfProfile {
     pub display_name: String,
     pub shape: GroupShape,
@@ -179,7 +179,7 @@ pub struct SelfProfile {
 /// paths — directly from Ada, and relayed by Ben who also knows her. Keying on the origin
 /// collapses those to one row; keying on the author would show it twice and let the second
 /// path overwrite the first with a longer one.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Listing {
     /// The identity that CREATED this listing. Preserved unchanged across every forward,
     /// so a listing is always attributed to its author, never to whoever passed it on.
@@ -228,7 +228,7 @@ pub struct Listing {
 /// `(origin, rid)` is the network-wide identity, and the hop invariants are enforced at
 /// fold so a patched client cannot flood. A request is immutable — two copies can differ
 /// only in the path that carried them, so the fold keeps the shortest.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DiscoverRequest {
     /// The identity that ASKED. Preserved unchanged across every forward.
     pub origin: MemberId,
@@ -280,7 +280,7 @@ pub struct DiscoverItem {
 /// One holder's complete answer to one request, as it reached me on this channel.
 /// Keyed `(origin, rid, holder)`: the same holder's answer down two paths collapses
 /// to one row, and a re-answer (their public set changed) replaces it wholesale.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DiscoverResponse {
     /// The ASKER these rows are for — responses only ever travel toward them.
     pub origin: MemberId,
@@ -302,7 +302,7 @@ pub struct DiscoverResponse {
 /// profile, AND the listings that reached me here. Three arms of ONE op-group over ONE log
 /// — the same "one log, many lenses" discipline `folded_forum`/`folded_group` apply across
 /// op-groups, applied here within one.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ContactState {
     /// WHAT THE OTHER PARTY IS TO US. The standing facet (`crate::roles`), which
     /// is what collapsed `member-tether` and `arc-tether` back into `connection`:
@@ -342,7 +342,7 @@ pub struct ContactState {
 }
 
 /// One side's wish for the link (`contact.setLink`), the highest gen that side wrote.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LinkWish {
     pub active: bool,
     pub gen: u64,

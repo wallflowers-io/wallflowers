@@ -57,7 +57,7 @@ pub struct Ctx<'a> {
 }
 
 /// Why the door would not write it — in words, with the op.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Refusal {
     /// No lens folds this kind, so nothing could tell whether the delta does anything.
     NoLens { kind: String },

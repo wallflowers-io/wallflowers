@@ -62,7 +62,7 @@ pub const OP_REMOVE_KPI: u32 = 19; // owner / sequenced
 
 // ---- typed vocab (unknown values self-reject as MalformedArgs) ---------------
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum ProjectStatus {
     #[default]
     Active,
@@ -87,7 +87,7 @@ impl ProjectStatus {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ItemKind {
     Action, // a unit of work
     Event,  // an externally-driven marker/window (a show, a launch)
@@ -113,7 +113,7 @@ impl ItemKind {
 
 /// Stored progress vocab — NOTE `blocked` is deliberately absent: it is DERIVED
 /// from dependency edges, never a stored status (no second source of truth).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ItemStatus {
     Open,
     InProgress,
@@ -140,7 +140,7 @@ impl ItemStatus {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum DepKind {
     Blocks,
     Gates,
@@ -161,7 +161,7 @@ impl DepKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SubKind {
     Topic,
     System,
@@ -180,7 +180,7 @@ impl SubKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Disclosure {
     Existence,
     Summary,
@@ -208,7 +208,7 @@ impl Disclosure {
 
 /// A participant's role in the Project — bounds how far their CLA may act on their
 /// behalf (Brick 3); advisory to the UI today.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum Role {
     Viewer,
     #[default]
@@ -238,14 +238,14 @@ impl Role {
 
 /// An external stakeholder — a party the project touches who is NOT a member (no
 /// device, no CLA). Gets its own timeline swimlane (a supplier's lead time).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ExternalStakeholder {
     pub name: String,
     pub note: String,
 }
 
 /// A KPI the objective is measured against.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Kpi {
     pub label: String,
     pub target: String,
@@ -253,7 +253,7 @@ pub struct Kpi {
 
 /// One timeline node (owner-sequenced structure). Its live status/fields live in
 /// the commutative cells, not here.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TimelineItem {
     pub kind: ItemKind,
     pub title: String,
@@ -265,7 +265,7 @@ pub struct TimelineItem {
 
 /// A typed dependency edge (owner-sequenced structure). `from` must be done for
 /// `to` to be unblocked.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Dependency {
     pub from: String,
     pub to: String,
@@ -273,7 +273,7 @@ pub struct Dependency {
 }
 
 /// A cross-object edge: EDGE + disclosure only, never a copy of the target.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Subscription {
     pub target: String, // the referenced object id (a child Project id for deliverables)
     pub kind: SubKind,
@@ -281,7 +281,7 @@ pub struct Subscription {
     pub origin_item: Option<String>, // the timeline item this edge hangs off, if pinned
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ProjectState {
     /// THE PARTS THIS OBJECT IS MADE OF, keyed by the part's object id — its comments
     /// section is one, a real Forum GroupObject with its own roster and not a field

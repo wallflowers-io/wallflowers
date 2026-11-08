@@ -112,7 +112,7 @@ pub fn is_membership_op(op_id: u32) -> bool {
 /// recorded it yourself; you were removed if someone else did. That makes the
 /// distinction unforgeable: nobody can dress an ejection up as a resignation, and
 /// nobody can claim to have removed someone who walked.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum Departure {
     /// Still in the roster.
     #[default]
@@ -137,7 +137,7 @@ impl Departure {
 /// a removal can say why without carrying prose into the log. Optional on the wire:
 /// a leave needs none (authorship already says "left"), and an owner may decline to
 /// give one. An unknown value is malformed, never guessed at.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum RemovalReason {
     /// The person asked to be removed, and the owner did it for them.
     Requested,
@@ -175,7 +175,7 @@ impl RemovalReason {
 
 /// One authored transition. The stored unit, because the ops are commutative and
 /// an OR-set of events is the only shape that folds the same in any delivery order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct Transition {
     /// Unix ms the transition happened (event time, author-supplied).
     pub at: i64,
@@ -209,7 +209,7 @@ impl Tenure {
 
 /// One authored transfer of ownership. Rides the sequenced spine, so the Vec is in
 /// authored order and the LAST one wins.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Handover {
     pub at: i64,
     /// The new owner's identity pubkey (hex).
@@ -224,7 +224,7 @@ pub struct Handover {
 /// A `BTreeSet` per member, so re-delivering the same delta is idempotent and the
 /// fold is identical on every replica regardless of arrival order — the two things
 /// a commutative op must guarantee.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MembershipLog {
     pub transitions: BTreeMap<String, BTreeSet<Transition>>,
     /// Ownership transfers, in spine order.

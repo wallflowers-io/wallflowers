@@ -6,3 +6,6 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+# Off by default, so the crate stays dependency-free for wasm32: pacific-core turns it on
+# to persist folded state that carries media (O-69).
+serde = { workspace = true, optional = true }

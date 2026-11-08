@@ -67,7 +67,7 @@ pub struct Card {
 }
 
 /// An author's card as folded, with the gen it was published at.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Profile {
     pub card: Card,
     pub gen: u64,

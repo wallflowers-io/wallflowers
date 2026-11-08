@@ -94,7 +94,7 @@ pub const MAX_AT_MS: i64 = 4_102_444_800_000;
 // ---- state -------------------------------------------------------------------
 
 /// One author's current entry for one note, keyed `(author, note)`.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NoteEntry {
     pub note: String,
     pub title: String,
@@ -115,7 +115,7 @@ pub struct NoteEntry {
 
 /// One comment, keyed `(author, commentId)` — so two authors may use the same
 /// comment id without colliding.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NoteComment {
     pub note: String,
     pub comment: String,
@@ -126,7 +126,7 @@ pub struct NoteComment {
 /// One author's reaction to one note, keyed `(author, note)`. An empty `emoji` is
 /// the CLEARED state rather than a removal: a removal would need a tombstone to
 /// stay commutative, and an empty string already is one.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NoteReaction {
     pub note: String,
     pub emoji: String,
@@ -134,7 +134,7 @@ pub struct NoteReaction {
 }
 
 /// Where a private note's SHARED twin lives, keyed `(author, note)`.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NotePromotion {
     pub note: String,
     pub object: String,
@@ -142,7 +142,7 @@ pub struct NotePromotion {
 }
 
 /// The folded notebook — the facet a Group-typed object carries.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NoteBook {
     pub entries: BTreeMap<(MemberId, String), NoteEntry>,
     pub comments: BTreeMap<(MemberId, String), NoteComment>,

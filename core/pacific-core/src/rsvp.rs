@@ -43,7 +43,7 @@ pub const MAX_GUESTS: i64 = 10;
 /// A guest's name, in characters.
 pub const MAX_GUEST_NAME: usize = 80;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Status {
     Going,
     Maybe,
@@ -69,7 +69,7 @@ impl Status {
 }
 
 /// A host's decision on one member's answer (`group.rsvpDecide`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Decision {
     Approved,
     Waitlisted,
@@ -96,7 +96,7 @@ impl Decision {
 
 /// Where a going answer stands: it counts as going, waits for a place, awaits the host's
 /// approval, or was not admitted.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Place {
     Going,
     Waitlisted,
@@ -116,7 +116,7 @@ impl Place {
 }
 
 /// Whether the venue reaches the Site's public copy.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Location {
     #[default]
     Public,
@@ -140,7 +140,7 @@ impl Location {
 }
 
 /// One member's answer to one event.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Answer {
     pub status: Status,
     pub guests: i64,
@@ -160,7 +160,7 @@ impl Answer {
 }
 
 /// How the Site takes answers for one event. `Default` is the register absent one.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Registration {
     /// Going places, 0 uncapped.
     pub capacity: i64,
@@ -180,7 +180,7 @@ impl Default for Registration {
 }
 
 /// Everything the three ops fold to, by event id.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Rsvps {
     pub answers: BTreeMap<String, BTreeMap<MemberId, Answer>>,
     pub registration: BTreeMap<String, Registration>,

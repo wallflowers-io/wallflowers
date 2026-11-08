@@ -212,7 +212,7 @@ impl LandClaim {
 ///
 /// So: the host's device must be running for someone to get in, and closing the Place
 /// stops future admissions without evicting anyone already inside.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Access {
     /// Invite-only. The QR is meaningless; membership comes from the owner reaching out.
     #[default]
@@ -245,7 +245,7 @@ impl Access {
 }
 
 /// The compiled read-side state of a Place.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PlaceState {
     /// THE PARTS THIS OBJECT IS MADE OF, keyed by the part's object id — its comments
     /// section is one, a real Forum GroupObject with its own roster and not a field
@@ -309,7 +309,7 @@ pub struct PlaceState {
 }
 
 /// One note published at a Place by one member.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PlacePost {
     /// The MLS-authenticated delta author — never on the wire.
     pub author: crate::object::MemberId,
