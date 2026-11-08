@@ -1,0 +1,37 @@
+# arc-resolver — the on-device, cross-platform bi-temporal graph core.
+#
+# One handle over the `lodedb-graph` engine: the app's minted GroupObjects are projected into
+# it deterministically, and the LIFE tab reads it back, with semantic search over embeddings the
+# device computes itself. No language model and no network client. Written ONCE in Rust so iOS
+# (Swift) and Android (Kotlin) share it — the platform layer is only UI + config.
+[package]
+name = "arc-resolver"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "On-device bi-temporal graph over lodedb-graph: deterministic object projection and on-device embeddings, no language model."
+
+[lib]
+# staticlib: the C-ABI archive linked into the iOS/macOS app. rlib: tests and any Rust consumer.
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+# The bi-temporal engine: upstream LodeDB, pinned, as core pins lodedb-core.
+lodedb-graph = { git = "https://github.com/Egoist-Machines/LodeDB.git", tag = "v2.1.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# ONNX Runtime + the canonical HF tokenizer — the DESKTOP/dev embedder (feature `ort-embedder`),
+# behind the `default`. `ort` has no prebuilt binary for iOS/Android, so mobile builds with
+# `--no-default-features` and injects the platform's embedder via the C callback (CallbackEmbedder).
+ort = { version = "=2.0.0-rc.10", features = ["download-binaries"], optional = true }
+tokenizers = { version = "0.20", optional = true }
+log = "0.4"
+
+[features]
+# Desktop/dev default: the in-Rust ort BGE embedder. Mobile builds --no-default-features and
+# injects the platform embedder through the C callback instead.
+default = ["ort-embedder"]
+ort-embedder = ["dep:ort", "dep:tokenizers"]
+
+# Standalone: NOT a member of the root workspace. Its own lock and target/.
+[workspace]

@@ -171,6 +171,10 @@ pub enum Commutativity {
     Commutative,
 }
 
+/// The role of the Forum every published kind is minted with: its comments section
+/// (ICD `kinds.*.parts`). A Forum in this role is its parent's, not a conversation.
+pub const COMMENTS: &str = "comments";
+
 /// One constituent of a macro-node: what it is FOR, and what kind it is. `mint`
 /// brings each into being with the parent and writes both halves of the edge:
 /// `base.setPart` on the parent, `base.setParent` on the part.
@@ -411,7 +415,7 @@ impl ObjectKind {
     /// it, so a shape stated in the document and not here is a failing test rather
     /// than an object that quietly comes up half-built.
     pub const fn parts(self) -> &'static [Part] {
-        const COMMENTS: &[Part] = &[Part { role: "comments", kind: ObjectKind::Forum }];
+        const COMMENTS_PART: &[Part] = &[Part { role: COMMENTS, kind: ObjectKind::Forum }];
         match self {
             // A Treasury is made of nothing. Comments on the money belong on the
             // thing being paid for, and a room hung here would have the TREASURY's
@@ -427,7 +431,7 @@ impl ObjectKind {
             | ObjectKind::Event
             | ObjectKind::Thing
             | ObjectKind::Place
-            | ObjectKind::Project => COMMENTS,
+            | ObjectKind::Project => COMMENTS_PART,
             // A GROUP is deliberately not here. A Site's rooms are CHOSEN — it
             // hosts the forums its owner attaches, and one implied "comments"
             // room would be a room nobody asked for on every Space ever made.

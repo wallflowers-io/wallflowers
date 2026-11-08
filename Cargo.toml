@@ -37,6 +37,8 @@ exclude = [
   "core/vendor",
   # Its own workspace: harness/adversary/emitter.py builds it.
   "core/harness/adversary/intro_emit",
+  # Its own workspace: the iOS app's on-device graph, built by its package_xcframework.sh.
+  "app/ios/LocalStore/graph/arc-resolver",
 ]
 
 [workspace.package]

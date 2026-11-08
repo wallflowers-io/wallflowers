@@ -1,0 +1,1833 @@
+{
+  "version": "feed-sim-1",
+  "persona": "Ha-eun (강하은) — 17, 고2, Mapo-gu, Seoul.",
+  "nowMs": 1786363200000,
+  "objects": [
+    {
+      "id": "person:ha-eun",
+      "kind": "person",
+      "title": "강하은",
+      "descriptor": "the device owner — 17, 고2, Mapo-gu",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "member_of",
+          "target": "group:yeonhui-dance-crew"
+        },
+        {
+          "rel": "member_of",
+          "target": "group:band-bu"
+        },
+        {
+          "rel": "member_of",
+          "target": "group:family-kang"
+        },
+        {
+          "rel": "member_of",
+          "target": "group:hongdae-sketchwalk"
+        }
+      ]
+    },
+    {
+      "id": "person:jisoo",
+      "kind": "person",
+      "title": "박지수",
+      "descriptor": "best friend",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "member_of",
+          "target": "group:yeonhui-dance-crew"
+        },
+        {
+          "rel": "going",
+          "target": "event:autumn-festival"
+        }
+      ]
+    },
+    {
+      "id": "person:minho",
+      "kind": "person",
+      "title": "이민호",
+      "descriptor": "bandmate",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "member_of",
+          "target": "group:band-bu"
+        }
+      ]
+    },
+    {
+      "id": "person:yuna",
+      "kind": "person",
+      "title": "최유나",
+      "descriptor": "crew lead",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:yeonhui-dance-crew"
+        }
+      ]
+    },
+    {
+      "id": "person:umma",
+      "kind": "person",
+      "title": "김미란",
+      "descriptor": "엄마",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:family-kang"
+        }
+      ]
+    },
+    {
+      "id": "person:teacher-kim",
+      "kind": "person",
+      "title": "김담임 선생님",
+      "descriptor": "homeroom teacher",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        }
+      ]
+    },
+    {
+      "id": "person:tutor-park",
+      "kind": "person",
+      "title": "박과외쌤",
+      "descriptor": "maths tutor",
+      "provenance": "hop",
+      "hops": 1,
+      "edges": []
+    },
+    {
+      "id": "person:sebin",
+      "kind": "person",
+      "title": "정세빈",
+      "descriptor": "sketchwalk friend",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:hongdae-sketchwalk"
+        }
+      ]
+    },
+    {
+      "id": "group:class-2-4",
+      "kind": "group",
+      "title": "2-4반",
+      "shape": "team",
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "group:yeonhui-dance-crew",
+      "kind": "group",
+      "title": "연희 댄스 크루",
+      "shape": "team",
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "group:band-bu",
+      "kind": "group",
+      "title": "밴드부",
+      "shape": "team",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "affiliated_with",
+          "target": "group:class-2-4"
+        }
+      ]
+    },
+    {
+      "id": "group:family-kang",
+      "kind": "group",
+      "title": "가족",
+      "shape": "team",
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "group:hongdae-sketchwalk",
+      "kind": "group",
+      "title": "Hongdae Sketchwalk",
+      "shape": "organisation",
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "place:mapo-high",
+      "kind": "place",
+      "title": "마포고등학교",
+      "area": "mapo",
+      "lat": 37.5563,
+      "lng": 126.9451,
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "place:mangwon-library",
+      "kind": "place",
+      "title": "망원도서관",
+      "area": "mangwon",
+      "lat": 37.5561,
+      "lng": 126.9012,
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "place:hapjeong-practice",
+      "kind": "place",
+      "title": "합정 합주실",
+      "area": "hapjeong",
+      "lat": 37.5494,
+      "lng": 126.9137,
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "place:hongdae-skate",
+      "kind": "place",
+      "title": "홍대 스케이트 스팟",
+      "area": "hongdae",
+      "lat": 37.5533,
+      "lng": 126.9221,
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "place:bunsikjib",
+      "kind": "place",
+      "title": "망원 분식집",
+      "area": "mangwon",
+      "lat": 37.5548,
+      "lng": 126.9034,
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "place:jisoo-rooftop",
+      "kind": "place",
+      "title": "지수네 옥상",
+      "area": "mangwon",
+      "lat": 37.5571,
+      "lng": 126.9046,
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "place:studios-hall",
+      "kind": "place",
+      "title": "Open Studios Hall",
+      "area": "hongdae",
+      "lat": 37.5528,
+      "lng": 126.9243,
+      "provenance": "member",
+      "edges": []
+    },
+    {
+      "id": "event:autumn-festival",
+      "kind": "event",
+      "title": "가을 축제",
+      "category": "school",
+      "audience": "all",
+      "startMs": 1789185600000,
+      "endMs": 1789200000000,
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:mapo-high"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "going",
+          "target": "person:jisoo"
+        }
+      ]
+    },
+    {
+      "id": "event:crew-practice",
+      "kind": "event",
+      "title": "연습",
+      "category": "dance",
+      "audience": "all",
+      "startMs": 1786755600000,
+      "endMs": 1786766400000,
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:hapjeong-practice"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:yeonhui-dance-crew"
+        }
+      ]
+    },
+    {
+      "id": "event:open-studios",
+      "kind": "event",
+      "title": "Hongdae Open Studios",
+      "category": "art",
+      "audience": "all",
+      "startMs": 1786770000000,
+      "endMs": 1786788000000,
+      "provenance": "system",
+      "system": "artrabbit.seoul",
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:studios-hall"
+        }
+      ]
+    },
+    {
+      "id": "event:grandma-birthday",
+      "kind": "event",
+      "title": "할머니 생신",
+      "category": "family",
+      "audience": "all",
+      "startMs": 1786872000000,
+      "endMs": 0,
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:bunsikjib"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:family-kang"
+        }
+      ]
+    },
+    {
+      "id": "listing:boss-ds1",
+      "kind": "listing",
+      "title": "Boss DS-1",
+      "posture": "offers",
+      "area": "hapjeong",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "offers",
+          "target": "person:minho"
+        }
+      ]
+    },
+    {
+      "id": "person:seo-jiwoo",
+      "kind": "person",
+      "title": "서지우",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "school",
+      "area": "mapo",
+      "descriptor": "짝꿍, 수행평가 조 같이함",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "going",
+          "target": "event:autumn-festival"
+        }
+      ]
+    },
+    {
+      "id": "person:han-dain",
+      "kind": "person",
+      "title": "한다인",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "school",
+      "area": "mangwon",
+      "descriptor": "망원도서관 스터디 메이트",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "place:mangwon-library"
+        }
+      ]
+    },
+    {
+      "id": "person:oh-taeyang",
+      "kind": "person",
+      "title": "오태양",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "music",
+      "area": "hapjeong",
+      "descriptor": "밴드부 드럼",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "member_of",
+          "target": "group:band-bu"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "place:hapjeong-practice"
+        }
+      ]
+    },
+    {
+      "id": "person:moon-chaewon",
+      "kind": "person",
+      "title": "문채원",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "school",
+      "area": "mapo",
+      "descriptor": "반장, 축제 부스 총괄",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "organised_by",
+          "target": "event:autumn-festival"
+        }
+      ]
+    },
+    {
+      "id": "person:yoo-seongmin",
+      "kind": "person",
+      "title": "유성민",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "music",
+      "area": "mapo",
+      "descriptor": "밴드부 기타, 페달 알아보는 중",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "member_of",
+          "target": "group:band-bu"
+        },
+        {
+          "rel": "wants",
+          "target": "listing:boss-ds1"
+        }
+      ]
+    },
+    {
+      "id": "person:baek-sua",
+      "kind": "person",
+      "title": "백수아",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "school",
+      "area": "mangwon",
+      "descriptor": "급식 줄 같이 서는 애",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "going",
+          "target": "event:autumn-festival"
+        }
+      ]
+    },
+    {
+      "id": "person:lim-junseo",
+      "kind": "person",
+      "title": "임준서",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "school",
+      "area": "mangwon",
+      "descriptor": "망원 분식집 아들",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "place:bunsikjib"
+        }
+      ]
+    },
+    {
+      "id": "person:nam-gyuri",
+      "kind": "person",
+      "title": "남규리",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "school",
+      "area": "mapo",
+      "descriptor": "그림 잘 그리는 애, 포스터 담당",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "invited",
+          "target": "event:autumn-festival"
+        }
+      ]
+    },
+    {
+      "id": "person:hwang-mirae",
+      "kind": "person",
+      "title": "황미래",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "dance",
+      "area": "seogyo",
+      "descriptor": "크루 리더, 안무 큐 잡는 언니",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:yeonhui-dance-crew"
+        },
+        {
+          "rel": "going",
+          "target": "event:crew-practice"
+        }
+      ]
+    },
+    {
+      "id": "person:jeon-woojin",
+      "kind": "person",
+      "title": "전우진",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "dance",
+      "area": "hongdae",
+      "descriptor": "팝핀 담당",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:yeonhui-dance-crew"
+        },
+        {
+          "rel": "going",
+          "target": "event:crew-practice"
+        }
+      ]
+    },
+    {
+      "id": "person:song-dahye",
+      "kind": "person",
+      "title": "송다혜",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "dance",
+      "area": "seogyo",
+      "descriptor": "안무 짜는 언니, 옥상 연습 자주 잡음",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:yeonhui-dance-crew"
+        },
+        {
+          "rel": "going",
+          "target": "event:crew-practice"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "place:jisoo-rooftop"
+        }
+      ]
+    },
+    {
+      "id": "person:ryu-jaeha",
+      "kind": "person",
+      "title": "류재하",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "dance",
+      "area": "hapjeong",
+      "descriptor": "브레이킹, 축제 무대 준비 중",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:yeonhui-dance-crew"
+        },
+        {
+          "rel": "going",
+          "target": "event:crew-practice"
+        },
+        {
+          "rel": "going",
+          "target": "event:autumn-festival"
+        }
+      ]
+    },
+    {
+      "id": "person:ko-yeseul",
+      "kind": "person",
+      "title": "고예슬",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "dance",
+      "area": "mangwon",
+      "descriptor": "크루 막내, 하은이랑 동갑",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:yeonhui-dance-crew"
+        },
+        {
+          "rel": "going",
+          "target": "event:crew-practice"
+        }
+      ]
+    },
+    {
+      "id": "person:halmoni-sunja",
+      "kind": "person",
+      "title": "할머니",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "family",
+      "area": "mangwon",
+      "descriptor": "김순자, 8월 생신",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:family-kang"
+        },
+        {
+          "rel": "going",
+          "target": "event:grandma-birthday"
+        }
+      ]
+    },
+    {
+      "id": "person:samchon-taeho",
+      "kind": "person",
+      "title": "태호 삼촌",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "family",
+      "area": "hapjeong",
+      "descriptor": "아빠 동생, 합정 삼",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:family-kang"
+        },
+        {
+          "rel": "going",
+          "target": "event:grandma-birthday"
+        }
+      ]
+    },
+    {
+      "id": "person:gomo-jiyeon",
+      "kind": "person",
+      "title": "지연 고모",
+      "provenance": "member",
+      "shape": "individual",
+      "category": "family",
+      "area": "mapo",
+      "descriptor": "생신상 준비 담당",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:family-kang"
+        },
+        {
+          "rel": "invited",
+          "target": "event:grandma-birthday"
+        }
+      ]
+    },
+    {
+      "id": "person:yang-hyeonwoo",
+      "kind": "person",
+      "title": "양현우",
+      "provenance": "hop",
+      "hops": 1,
+      "shape": "individual",
+      "category": "art",
+      "area": "hongdae",
+      "descriptor": "어반 스케처, 펜 드로잉",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:hongdae-sketchwalk"
+        },
+        {
+          "rel": "going",
+          "target": "event:open-studios"
+        }
+      ]
+    },
+    {
+      "id": "person:bomi-jakga",
+      "kind": "person",
+      "title": "봄이 작가",
+      "provenance": "hop",
+      "hops": 1,
+      "shape": "individual",
+      "category": "art",
+      "area": "hongdae",
+      "descriptor": "일러스트레이터, Open Studios 부스 참여",
+      "edges": [
+        {
+          "rel": "member_of",
+          "target": "group:hongdae-sketchwalk"
+        },
+        {
+          "rel": "going",
+          "target": "event:open-studios"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "place:studios-hall"
+        }
+      ]
+    },
+    {
+      "id": "person:jung-doyun",
+      "kind": "person",
+      "title": "정도윤",
+      "provenance": "hop",
+      "hops": 2,
+      "shape": "individual",
+      "category": "sport",
+      "area": "hongdae",
+      "descriptor": "홍대 스팟 로컬, 매일 저녁 나옴",
+      "edges": [
+        {
+          "rel": "affiliated_with",
+          "target": "place:hongdae-skate"
+        }
+      ]
+    },
+    {
+      "id": "person:vinny",
+      "kind": "person",
+      "title": "Vinny",
+      "provenance": "hop",
+      "hops": 2,
+      "shape": "individual",
+      "category": "sport",
+      "area": "hongdae",
+      "descriptor": "보드 크루 형, 클립 찍어줌",
+      "edges": [
+        {
+          "rel": "affiliated_with",
+          "target": "place:hongdae-skate"
+        }
+      ]
+    },
+    {
+      "id": "event:opening-ceremony-0817",
+      "kind": "event",
+      "title": "2학기 개학식",
+      "provenance": "member",
+      "category": "school",
+      "audience": "all",
+      "area": "mapo",
+      "startMs": 1786923600000,
+      "endMs": 1786926600000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:mapo-high"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:class-2-4"
+        }
+      ]
+    },
+    {
+      "id": "event:club-fair-0821",
+      "kind": "event",
+      "title": "2학기 동아리 박람회",
+      "descriptor": "밴드부 부스 + 미니 버스킹 무대",
+      "provenance": "member",
+      "category": "school",
+      "audience": "all",
+      "area": "mapo",
+      "startMs": 1787284800000,
+      "endMs": 1787299200000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:mapo-high"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:band-bu"
+        },
+        {
+          "rel": "going",
+          "target": "person:minho"
+        }
+      ]
+    },
+    {
+      "id": "event:bandbu-audition-0826",
+      "kind": "event",
+      "title": "밴드부 가을축제 오디션",
+      "provenance": "member",
+      "category": "school",
+      "audience": "all",
+      "area": "mapo",
+      "startMs": 1787727600000,
+      "endMs": 1787738400000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:mapo-high"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:band-bu"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "event:autumn-festival"
+        },
+        {
+          "rel": "going",
+          "target": "person:minho"
+        }
+      ]
+    },
+    {
+      "id": "event:suhaeng-deadline-0828",
+      "kind": "event",
+      "title": "국어 수행평가 제출 마감",
+      "descriptor": "독서 감상문 — 담임쌤한테 직접 제출",
+      "provenance": "member",
+      "category": "school",
+      "audience": "all",
+      "area": "mapo",
+      "startMs": 1787904000000,
+      "endMs": 0,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:mapo-high"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:class-2-4"
+        }
+      ]
+    },
+    {
+      "id": "event:mock-exam-0903",
+      "kind": "event",
+      "title": "9월 전국연합 모의고사",
+      "provenance": "member",
+      "category": "school",
+      "audience": "all",
+      "area": "mapo",
+      "startMs": 1788392400000,
+      "endMs": 1788420600000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:mapo-high"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:class-2-4"
+        }
+      ]
+    },
+    {
+      "id": "event:sports-day-0911",
+      "kind": "event",
+      "title": "가을 체육대회",
+      "descriptor": "반티 맞추기 — 2-4반 계주 출전",
+      "provenance": "member",
+      "category": "school",
+      "audience": "all",
+      "area": "mapo",
+      "startMs": 1789084800000,
+      "endMs": 1789110000000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:mapo-high"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:class-2-4"
+        },
+        {
+          "rel": "going",
+          "target": "person:jisoo"
+        }
+      ]
+    },
+    {
+      "id": "event:crew-practice-0815",
+      "kind": "event",
+      "title": "토요 정기 연습",
+      "provenance": "member",
+      "category": "dance",
+      "audience": "all",
+      "area": "hapjeong",
+      "startMs": 1786755600000,
+      "endMs": 1786766400000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:hapjeong-practice"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:yeonhui-dance-crew"
+        },
+        {
+          "rel": "going",
+          "target": "person:yuna"
+        }
+      ]
+    },
+    {
+      "id": "event:crew-practice-0822",
+      "kind": "event",
+      "title": "축제 안무 맞추기",
+      "provenance": "member",
+      "category": "dance",
+      "audience": "all",
+      "area": "hapjeong",
+      "startMs": 1787360400000,
+      "endMs": 1787371200000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:hapjeong-practice"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:yeonhui-dance-crew"
+        }
+      ]
+    },
+    {
+      "id": "event:crew-practice-0829",
+      "kind": "event",
+      "title": "연습 — 대형 정리 + 영상 촬영",
+      "provenance": "member",
+      "category": "dance",
+      "audience": "all",
+      "area": "hapjeong",
+      "startMs": 1787965200000,
+      "endMs": 1787976000000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:hapjeong-practice"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:yeonhui-dance-crew"
+        },
+        {
+          "rel": "going",
+          "target": "person:yuna"
+        }
+      ]
+    },
+    {
+      "id": "event:crew-practice-0905",
+      "kind": "event",
+      "title": "가을 축제 리허설 런스루",
+      "provenance": "member",
+      "category": "dance",
+      "audience": "all",
+      "area": "hapjeong",
+      "startMs": 1788570000000,
+      "endMs": 1788580800000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:hapjeong-practice"
+        },
+        {
+          "rel": "organised_by",
+          "target": "group:yeonhui-dance-crew"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "event:autumn-festival"
+        },
+        {
+          "rel": "going",
+          "target": "person:ha-eun"
+        }
+      ]
+    },
+    {
+      "id": "event:ra-vurt-0814",
+      "kind": "event",
+      "title": "vurt.: Deep Current — 심야 테크노",
+      "descriptor": "23:00–05:00, 로컬 셀렉터 4인",
+      "provenance": "system",
+      "system": "ra.seoul",
+      "category": "music",
+      "audience": "19+",
+      "area": "hapjeong",
+      "lat": 37.5478,
+      "lng": 126.9209,
+      "startMs": 1786716000000,
+      "endMs": 1786737600000,
+      "edges": [
+        {
+          "rel": "going",
+          "target": "person:tutor-park"
+        }
+      ]
+    },
+    {
+      "id": "event:ra-clubff-0815",
+      "kind": "event",
+      "title": "Club FF 락 나이트: 라이브 밴드 5팀",
+      "provenance": "system",
+      "system": "ra.seoul",
+      "category": "music",
+      "audience": "19+",
+      "area": "hongdae",
+      "lat": 37.5549,
+      "lng": 126.9224,
+      "startMs": 1786798800000,
+      "endMs": 1786820400000,
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:minho"
+        }
+      ]
+    },
+    {
+      "id": "event:ra-rollinghall-0815",
+      "kind": "event",
+      "title": "롤링홀 인디 합동공연 (전연령)",
+      "descriptor": "인디락 4팀 — 티켓 현장 판매",
+      "provenance": "system",
+      "system": "ra.seoul",
+      "category": "music",
+      "audience": "all",
+      "area": "hongdae",
+      "lat": 37.5507,
+      "lng": 126.9204,
+      "startMs": 1786784400000,
+      "endMs": 1786795200000,
+      "edges": [
+        {
+          "rel": "going",
+          "target": "person:minho"
+        },
+        {
+          "rel": "invited",
+          "target": "person:ha-eun"
+        }
+      ]
+    },
+    {
+      "id": "event:ra-cakeshop-0822",
+      "kind": "event",
+      "title": "Cakeshop: UK Garage Special",
+      "provenance": "system",
+      "system": "ra.seoul",
+      "category": "music",
+      "audience": "19+",
+      "area": "itaewon",
+      "lat": 37.541,
+      "lng": 126.949,
+      "startMs": 1787407200000,
+      "endMs": 1787432400000,
+      "edges": [
+        {
+          "rel": "going",
+          "target": "person:tutor-park"
+        }
+      ]
+    },
+    {
+      "id": "event:ra-sangsangmadang-0823",
+      "kind": "event",
+      "title": "상상마당 라이브홀: 어쿠스틱 선데이 (전연령)",
+      "provenance": "system",
+      "system": "ra.seoul",
+      "category": "music",
+      "audience": "all",
+      "area": "seogyo",
+      "lat": 37.5506,
+      "lng": 126.9218,
+      "startMs": 1787472000000,
+      "endMs": 1787481000000,
+      "edges": [
+        {
+          "rel": "going",
+          "target": "person:sebin"
+        }
+      ]
+    },
+    {
+      "id": "event:ra-faust-0828",
+      "kind": "event",
+      "title": "Faust: Local Selectors 하우스 나이트",
+      "provenance": "system",
+      "system": "ra.seoul",
+      "category": "music",
+      "audience": "19+",
+      "area": "itaewon",
+      "lat": 37.5402,
+      "lng": 126.9445,
+      "startMs": 1787927400000,
+      "endMs": 1787947200000,
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:ha-eun"
+        }
+      ]
+    },
+    {
+      "id": "event:ra-prismhall-0829",
+      "kind": "event",
+      "title": "프리즘홀 하이틴 펑크 쇼케이스 (전연령)",
+      "descriptor": "고등학생 밴드 6팀 경연",
+      "provenance": "system",
+      "system": "ra.seoul",
+      "category": "music",
+      "audience": "all",
+      "area": "hongdae",
+      "lat": 37.5565,
+      "lng": 126.9237,
+      "startMs": 1787994000000,
+      "endMs": 1788006600000,
+      "edges": [
+        {
+          "rel": "going",
+          "target": "person:minho"
+        },
+        {
+          "rel": "invited",
+          "target": "person:ha-eun"
+        }
+      ]
+    },
+    {
+      "id": "event:ra-modeci-0905",
+      "kind": "event",
+      "title": "Modeci: 신스웨이브 파티",
+      "provenance": "system",
+      "system": "ra.seoul",
+      "category": "music",
+      "audience": "19+",
+      "area": "hongdae",
+      "lat": 37.5539,
+      "lng": 126.9187,
+      "startMs": 1788613200000,
+      "endMs": 1788634800000,
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:minho"
+        }
+      ]
+    },
+    {
+      "id": "event:ar-sketchwalk-0816",
+      "kind": "event",
+      "title": "연남동 골목 스케치워크",
+      "descriptor": "준비물: 스케치북, 펜 — 끝나고 카페 정산",
+      "provenance": "system",
+      "system": "artrabbit.seoul",
+      "category": "art",
+      "audience": "all",
+      "area": "seogyo",
+      "lat": 37.5622,
+      "lng": 126.9255,
+      "startMs": 1786856400000,
+      "endMs": 1786867200000,
+      "edges": [
+        {
+          "rel": "organised_by",
+          "target": "group:hongdae-sketchwalk"
+        },
+        {
+          "rel": "going",
+          "target": "person:sebin"
+        },
+        {
+          "rel": "invited",
+          "target": "person:ha-eun"
+        }
+      ]
+    },
+    {
+      "id": "event:ar-gallery-opening-0821",
+      "kind": "event",
+      "title": "《도시의 잔상》 오프닝 리셉션",
+      "descriptor": "서교동 신생 갤러리 — 드로잉 연작 12점",
+      "provenance": "system",
+      "system": "artrabbit.seoul",
+      "category": "art",
+      "audience": "all",
+      "area": "seogyo",
+      "lat": 37.5578,
+      "lng": 126.9198,
+      "startMs": 1787302800000,
+      "endMs": 1787310000000,
+      "edges": [
+        {
+          "rel": "going",
+          "target": "person:sebin"
+        }
+      ]
+    },
+    {
+      "id": "event:ar-artist-talk-0822",
+      "kind": "event",
+      "title": "Open Studios 작가와의 대화",
+      "provenance": "system",
+      "system": "artrabbit.seoul",
+      "category": "art",
+      "audience": "all",
+      "area": "hongdae",
+      "startMs": 1787378400000,
+      "endMs": 1787383800000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:studios-hall"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "event:open-studios"
+        }
+      ]
+    },
+    {
+      "id": "event:ar-illust-popup-0829",
+      "kind": "event",
+      "title": "망원 일러스트 팝업전 《골목의 기록》",
+      "provenance": "system",
+      "system": "artrabbit.seoul",
+      "category": "art",
+      "audience": "all",
+      "area": "mangwon",
+      "lat": 37.5561,
+      "lng": 126.9042,
+      "startMs": 1787976000000,
+      "endMs": 1787994000000,
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:ha-eun"
+        }
+      ]
+    },
+    {
+      "id": "event:ar-first-light-0904",
+      "kind": "event",
+      "title": "신진작가전 《First Light》 오프닝",
+      "provenance": "system",
+      "system": "artrabbit.seoul",
+      "category": "art",
+      "audience": "all",
+      "area": "hongdae",
+      "lat": 37.5528,
+      "lng": 126.9215,
+      "startMs": 1788514200000,
+      "endMs": 1788523200000,
+      "edges": [
+        {
+          "rel": "invited",
+          "target": "person:ha-eun"
+        },
+        {
+          "rel": "going",
+          "target": "person:sebin"
+        }
+      ]
+    },
+    {
+      "id": "event:jesa-0819",
+      "kind": "event",
+      "title": "할아버지 제사",
+      "descriptor": "저녁 6시까지 집 — 엄마가 전 부치는 거 도와달라심",
+      "provenance": "member",
+      "category": "family",
+      "audience": "all",
+      "area": "mangwon",
+      "startMs": 1787130000000,
+      "endMs": 1787140800000,
+      "edges": [
+        {
+          "rel": "organised_by",
+          "target": "group:family-kang"
+        },
+        {
+          "rel": "going",
+          "target": "person:umma"
+        },
+        {
+          "rel": "going",
+          "target": "person:ha-eun"
+        }
+      ]
+    },
+    {
+      "id": "event:library-bookclub-0827",
+      "kind": "event",
+      "title": "망원도서관 청소년 독서모임",
+      "descriptor": "8월 책: 「아몬드」",
+      "provenance": "member",
+      "category": "civic",
+      "audience": "all",
+      "area": "mangwon",
+      "startMs": 1787824800000,
+      "endMs": 1787830200000,
+      "edges": [
+        {
+          "rel": "happens_at",
+          "target": "place:mangwon-library"
+        },
+        {
+          "rel": "going",
+          "target": "person:ha-eun"
+        }
+      ]
+    },
+    {
+      "id": "event:mangwon-flea-0830",
+      "kind": "event",
+      "title": "망원동 플리마켓",
+      "descriptor": "망원시장 뒷길 — 빈티지·핸드메이드 부스",
+      "provenance": "member",
+      "category": "market",
+      "audience": "all",
+      "area": "mangwon",
+      "lat": 37.5548,
+      "lng": 126.901,
+      "startMs": 1788058800000,
+      "endMs": 1788080400000,
+      "edges": [
+        {
+          "rel": "going",
+          "target": "person:jisoo"
+        },
+        {
+          "rel": "going",
+          "target": "person:ha-eun"
+        }
+      ]
+    },
+    {
+      "id": "place:onda-livehall",
+      "kind": "place",
+      "title": "온다 라이브홀",
+      "provenance": "member",
+      "area": "hongdae",
+      "descriptor": "전연령 라이브 공연장",
+      "category": "music",
+      "audience": "all",
+      "lat": 37.5537,
+      "lng": 126.9215,
+      "edges": []
+    },
+    {
+      "id": "place:club-vent",
+      "kind": "place",
+      "title": "Club VENT",
+      "provenance": "member",
+      "area": "hongdae",
+      "descriptor": "19+ 테크노 클럽",
+      "category": "music",
+      "audience": "19+",
+      "lat": 37.5528,
+      "lng": 126.9199,
+      "edges": []
+    },
+    {
+      "id": "place:gallery-objet",
+      "kind": "place",
+      "title": "갤러리 오브제",
+      "provenance": "member",
+      "area": "hongdae",
+      "descriptor": "신진 작가 소규모 전시 공간",
+      "category": "art",
+      "audience": "all",
+      "lat": 37.5551,
+      "lng": 126.9238,
+      "edges": []
+    },
+    {
+      "id": "place:beatroot-studio",
+      "kind": "place",
+      "title": "비트루트 연습실",
+      "provenance": "member",
+      "area": "hongdae",
+      "descriptor": "시간제 댄스·밴드 연습실",
+      "category": "dance",
+      "audience": "all",
+      "lat": 37.5563,
+      "lng": 126.9187,
+      "edges": []
+    },
+    {
+      "id": "place:mangwon-tteokbokki",
+      "kind": "place",
+      "title": "망원동 즉석떡볶이",
+      "provenance": "member",
+      "area": "mangwon",
+      "descriptor": "즉석떡볶이 분식집",
+      "audience": "all",
+      "lat": 37.5561,
+      "lng": 126.9021,
+      "edges": []
+    },
+    {
+      "id": "place:levelup-pcbang",
+      "kind": "place",
+      "title": "레벨업 PC방",
+      "provenance": "member",
+      "area": "mangwon",
+      "descriptor": "24시간 PC방",
+      "audience": "all",
+      "lat": 37.5572,
+      "lng": 126.9048,
+      "edges": []
+    },
+    {
+      "id": "place:pilseung-math",
+      "kind": "place",
+      "title": "필승 수학학원",
+      "provenance": "member",
+      "area": "mapo",
+      "descriptor": "고등 내신·수능 수학 전문",
+      "category": "school",
+      "audience": "all",
+      "lat": 37.5539,
+      "lng": 126.945,
+      "edges": []
+    },
+    {
+      "id": "place:dream-mungu",
+      "kind": "place",
+      "title": "드림문구",
+      "provenance": "member",
+      "area": "mapo",
+      "descriptor": "학교 앞 문구·팬시",
+      "audience": "all",
+      "lat": 37.5498,
+      "lng": 126.9401,
+      "edges": []
+    },
+    {
+      "id": "place:cafe-muje",
+      "kind": "place",
+      "title": "카페 무제",
+      "provenance": "member",
+      "area": "hapjeong",
+      "descriptor": "콘센트 많은 스터디 좌석 카페",
+      "audience": "all",
+      "lat": 37.5495,
+      "lng": 126.9137,
+      "edges": []
+    },
+    {
+      "id": "place:hoejeon-records",
+      "kind": "place",
+      "title": "회전 레코드",
+      "provenance": "member",
+      "area": "hapjeong",
+      "descriptor": "중고 LP·카세트 샵",
+      "category": "music",
+      "audience": "all",
+      "lat": 37.5482,
+      "lng": 126.9155,
+      "edges": []
+    },
+    {
+      "id": "place:seogyo-oksang",
+      "kind": "place",
+      "title": "서교 옥상정원",
+      "provenance": "member",
+      "area": "seogyo",
+      "descriptor": "노을 맛집 옥상 아지트",
+      "audience": "all",
+      "lat": 37.5526,
+      "lng": 126.9176,
+      "edges": []
+    },
+    {
+      "id": "place:push-skateshop",
+      "kind": "place",
+      "title": "푸시 스케이트샵",
+      "provenance": "hop",
+      "hops": 2,
+      "area": "hongdae",
+      "descriptor": "데크·베어링 스케이트샵",
+      "category": "sport",
+      "audience": "all",
+      "lat": 37.557,
+      "lng": 126.9224,
+      "edges": [
+        {
+          "rel": "affiliated_with",
+          "target": "place:hongdae-skate"
+        }
+      ]
+    },
+    {
+      "id": "place:bunker-hapjusil",
+      "kind": "place",
+      "title": "지하합주실 벙커",
+      "provenance": "hop",
+      "hops": 2,
+      "area": "seogyo",
+      "descriptor": "지하 언더그라운드 합주실",
+      "category": "music",
+      "audience": "all",
+      "lat": 37.5513,
+      "lng": 126.9168,
+      "edges": []
+    },
+    {
+      "id": "place:mangwon-amsil",
+      "kind": "place",
+      "title": "망원 공동암실",
+      "provenance": "hop",
+      "hops": 2,
+      "area": "mangwon",
+      "descriptor": "필름 현상 공동 암실",
+      "category": "art",
+      "audience": "all",
+      "lat": 37.5555,
+      "lng": 126.8985,
+      "edges": [
+        {
+          "rel": "affiliated_with",
+          "target": "group:hongdae-sketchwalk"
+        }
+      ]
+    },
+    {
+      "id": "listing:cruiser-board-775",
+      "kind": "listing",
+      "title": "타던 스케이트보드 (7.75인치)",
+      "descriptor": "키 커서 이제 안 타요. 트럭 상태 좋음, 홍대 스팟에서 직거래",
+      "posture": "offers",
+      "category": "sport",
+      "area": "hongdae",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "offers",
+          "target": "person:ha-eun"
+        },
+        {
+          "rel": "located_in",
+          "target": "place:hongdae-skate"
+        }
+      ]
+    },
+    {
+      "id": "listing:ehx-big-muff",
+      "kind": "listing",
+      "title": "Big Muff 퍼즈 페달",
+      "descriptor": "밴드부 페달보드 정리 중. 박스·어댑터 포함, 합주실에서 테스트 가능",
+      "posture": "offers",
+      "category": "music",
+      "area": "hapjeong",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "offers",
+          "target": "person:minho"
+        },
+        {
+          "rel": "located_in",
+          "target": "place:hapjeong-practice"
+        }
+      ]
+    },
+    {
+      "id": "listing:kpop-album-box",
+      "kind": "listing",
+      "title": "아이브·뉴진스 앨범 일괄 (12장)",
+      "descriptor": "포카 일부 빠졌어요. 낱장 말고 한 번에 교환 원해요",
+      "posture": "offers",
+      "category": "music",
+      "area": "mangwon",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "offers",
+          "target": "person:yuna"
+        }
+      ]
+    },
+    {
+      "id": "listing:math-workbook-set",
+      "kind": "listing",
+      "title": "쎈 수학(상)·(하) + 마플 세트",
+      "descriptor": "필기 연하게 있음, 답지 전부 포함. 도서관 앞에서 전달 가능",
+      "posture": "offers",
+      "category": "school",
+      "area": "mapo",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "offers",
+          "target": "person:jisoo"
+        },
+        {
+          "rel": "located_in",
+          "target": "place:mangwon-library"
+        }
+      ]
+    },
+    {
+      "id": "listing:hybrid-bike-26",
+      "kind": "listing",
+      "title": "26인치 하이브리드 자전거",
+      "descriptor": "쌤이 유학 준비로 정리해요. 기어 21단, 자물쇠 같이 드림",
+      "posture": "offers",
+      "category": "market",
+      "area": "mangwon",
+      "provenance": "hop",
+      "hops": 1,
+      "edges": [
+        {
+          "rel": "offers",
+          "target": "person:tutor-park"
+        }
+      ]
+    },
+    {
+      "id": "listing:concert-print-a4",
+      "kind": "listing",
+      "title": "홍대 공연 필름 프린트 A4 5장",
+      "descriptor": "직접 찍은 밴드 공연 사진 인화본, 무광지. 스티커나 필름이랑 교환해요",
+      "posture": "offers",
+      "category": "art",
+      "area": "hongdae",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "offers",
+          "target": "person:ha-eun"
+        }
+      ]
+    },
+    {
+      "id": "listing:film-camera-wanted",
+      "kind": "listing",
+      "title": "필름 카메라 구해요",
+      "descriptor": "스케치워크 기록용, 자동 똑딱이(mju 계열)도 환영",
+      "posture": "wants",
+      "category": "art",
+      "area": "hongdae",
+      "provenance": "hop",
+      "hops": 1,
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:sebin"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "group:hongdae-sketchwalk"
+        }
+      ]
+    },
+    {
+      "id": "listing:drumsticks-5a",
+      "kind": "listing",
+      "title": "드럼 스틱 5A 구함",
+      "descriptor": "합주하다 한 짝 부러뜨림… Vic Firth면 최고, 중고 환영",
+      "posture": "wants",
+      "category": "music",
+      "area": "hapjeong",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:minho"
+        },
+        {
+          "rel": "located_in",
+          "target": "place:hapjeong-practice"
+        }
+      ]
+    },
+    {
+      "id": "listing:korean-history-notes",
+      "kind": "listing",
+      "title": "한국사 필기노트 구해요",
+      "descriptor": "2학기 수행 대비, 근현대사 파트 위주면 좋아요. 간식으로 보답",
+      "posture": "wants",
+      "category": "school",
+      "area": "mapo",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:jisoo"
+        }
+      ]
+    },
+    {
+      "id": "listing:dance-shoes-240",
+      "kind": "listing",
+      "title": "댄스화 240 구해요",
+      "descriptor": "연습용, 스플릿솔이면 좋아요. 축제 무대 전까지 급해요",
+      "posture": "wants",
+      "category": "dance",
+      "area": "seogyo",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:yuna"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "group:yeonhui-dance-crew"
+        }
+      ]
+    },
+    {
+      "id": "listing:desk-lamp-wanted",
+      "kind": "listing",
+      "title": "책상 스탠드 구함",
+      "descriptor": "과외방에 둘 조명, 밝기 조절되는 걸로 찾아요",
+      "posture": "wants",
+      "category": "market",
+      "area": "mangwon",
+      "provenance": "hop",
+      "hops": 1,
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:tutor-park"
+        }
+      ]
+    },
+    {
+      "id": "listing:midi-keyboard-25",
+      "kind": "listing",
+      "title": "미디 키보드(25건반) 구해요",
+      "descriptor": "홈레코딩 입문용, 로직 되는 걸로. 상태만 괜찮으면 뭐든",
+      "posture": "wants",
+      "category": "music",
+      "area": "mapo",
+      "provenance": "hop",
+      "hops": 2,
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:teacher-kim"
+        }
+      ]
+    },
+    {
+      "id": "listing:jung1-math-tutor",
+      "kind": "listing",
+      "title": "중1 수학 과외 구함",
+      "descriptor": "동생 주 2회, 망원동 집 근처에서. 반찬이나 김치로 사례 가능해요",
+      "posture": "wants",
+      "category": "civic",
+      "area": "mangwon",
+      "provenance": "hop",
+      "hops": 1,
+      "edges": [
+        {
+          "rel": "wants",
+          "target": "person:umma"
+        }
+      ]
+    },
+    {
+      "id": "listing:poster-design-offer",
+      "kind": "listing",
+      "title": "포스터 디자인 도와드려요",
+      "descriptor": "공연·전시 포스터 위주. 포트폴리오용이라 물물교환 환영",
+      "posture": "offers",
+      "category": "market",
+      "area": "hongdae",
+      "provenance": "hop",
+      "hops": 1,
+      "edges": [
+        {
+          "rel": "offers",
+          "target": "person:sebin"
+        },
+        {
+          "rel": "affiliated_with",
+          "target": "group:hongdae-sketchwalk"
+        }
+      ]
+    },
+    {
+      "id": "listing:english-exchange",
+      "kind": "listing",
+      "title": "영어 회화 교환해요",
+      "descriptor": "주 1회 도서관에서 서로 30분씩. 저는 포토샵이랑 그림 알려드릴 수 있어요",
+      "posture": "offers",
+      "category": "civic",
+      "area": "mangwon",
+      "provenance": "member",
+      "edges": [
+        {
+          "rel": "offers",
+          "target": "person:ha-eun"
+        },
+        {
+          "rel": "located_in",
+          "target": "place:mangwon-library"
+        }
+      ]
+    }
+  ]
+}

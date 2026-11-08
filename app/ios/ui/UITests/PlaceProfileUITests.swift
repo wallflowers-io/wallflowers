@@ -1,0 +1,167 @@
+//  PlaceProfileUITests.swift
+//  The Place Profile path on the REAL app (T4): a REAL Place minted through the
+//  wizard (a simulated fix makes it PLACED), its pin on THE map, the pin's
+//  bottom sheet — the quick resolution — and the sheet's tap-through to the
+//  Place Profile page: headline, the location card whose area cells derive from
+//  the Place's own GeoPoint, and the walk-up bar (the POV, reachable from the
+//  page). Coordinate-tap discipline throughout: beside the rail the
+//  hittability oracle is flaky while real touches land fine (the
+//  GroupsPageUITests lesson), so taps go by coordinate, as a finger does.
+
+import XCTest
+import CoreLocation
+
+final class PlaceProfileUITests: XCTestCase {
+
+    private let app = XCUIApplication()
+    private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+        addUIInterruptionMonitor(withDescription: "system-alert") { [weak self] _ in
+            self?.tapSpringboard(["Allow While Using App", "Allow Once", "Allow", "OK",
+                                  "Don’t Allow", "Don't Allow"]) ?? false
+        }
+    }
+
+    func test_mapPin_sheet_page_walkUp() throws {
+        // A SIMULATED fix, so the wizard's locator delivers and the minted Place
+        // is PLACED — pinned, not just listed. Set before launch so the first
+        // location read already has it.
+        XCUIDevice.shared.location = XCUILocation(
+            location: CLLocation(latitude: 51.5074, longitude: -0.1278))
+
+        launchToLife()
+
+        // PLACES left the rail (11 Aug order) — the map needs its next door
+        // (Events MAP lens or a dedicated surface) before this flow can walk it.
+        throw XCTSkip("places jewel left the rail 11 Aug; retarget via the map's new door")
+        let jewel = app.buttons["jewel-places"]
+        XCTAssertTrue(jewel.waitForExistence(timeout: 10), "PLACE jewel")
+        jewel.tap()
+        XCTAssertTrue(waitAny(["places-map"], timeout: 10), "the map takes the ground")
+
+        // Mint a real Place through the wizard (the LIFE chrome's one ＋ mints
+        // the selected category). Unique name per run — places accumulate.
+        let placeName = "QA Pin \(Int(Date().timeIntervalSince1970) % 100_000)"
+        app.buttons["tab-new"].tap()
+        let nameField = app.textFields["Place name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 6), "the wizard's name field")
+        nameField.tap()
+        nameField.typeText(placeName)
+
+        // The location prompt lands when the fix field's locator starts —
+        // grant it explicitly rather than trusting the interruption monitor.
+        _ = tapSpringboard(["Allow While Using App", "Allow Once", "Allow"], waitFor: 5)
+
+        // Wait for the fix readout ("gcpvj0… · ±N m") — saving earlier mints an
+        // UNPLACED Place, which the map honestly declines to pin.
+        let fixReadout = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS '±'")).firstMatch
+        XCTAssertTrue(fixReadout.waitForExistence(timeout: 20),
+                      "the simulated fix reaches the wizard")
+
+        let save = app.buttons["Save Place"]
+        XCTAssertTrue(save.waitForExistence(timeout: 6), "the wizard's commit disc")
+        save.tap()
+
+        // The pin folds in at the simulated coordinate. The camera follows the
+        // user location (the same coordinate), so the pin is on screen.
+        let pinMatch = NSPredicate(format: "identifier BEGINSWITH 'map-pin:' AND label == %@",
+                                   placeName)
+        var pin = app.otherElements.matching(pinMatch).firstMatch
+        if !pin.waitForExistence(timeout: 12) {
+            pin = app.buttons.matching(pinMatch).firstMatch
+        }
+        XCTAssertTrue(pin.exists, "the minted place's pin")
+        shoot("map-pin")
+
+        // Pin → sheet: the quick resolution. Coordinate tap — the map's
+        // annotation views sit under MapKit's own gesture plumbing.
+        pin.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let sheet = app.otherElements["place-sheet"]
+        XCTAssertTrue(waitAny(["place-sheet"], timeout: 8) || sheet.exists,
+                      "the pin raises the detail sheet")
+        shoot("place-sheet")
+
+        // Sheet → page: the deep resolution.
+        let open = app.buttons["place-sheet-open"]
+        XCTAssertTrue(open.waitForExistence(timeout: 6), "the sheet's tap-through")
+        open.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+
+        XCTAssertTrue(waitAny(["place-profile"], timeout: 10), "the Place Profile page")
+        XCTAssertTrue(app.otherElements["profile-headline"].waitForExistence(timeout: 8),
+                      "the headline card")
+        // The location card exists ⇔ area cells derived from the Place's own
+        // GeoPoint (the page draws no map card for an unplaced Place).
+        XCTAssertTrue(waitAny(["profile-map"], timeout: 8),
+                      "the location card's area cells render from the GeoPoint")
+        shoot("place-profile")
+
+        // POV reachable from the page: the walk-up bar opens PlacePOVView. A
+        // coordinate-minted place has no scan — "No interior" is the honest
+        // interior, and proof the POV screen is the one on top.
+        let walkUp = app.buttons["place-walk-up"]
+        XCTAssertTrue(walkUp.waitForExistence(timeout: 6), "the walk-up bar")
+        walkUp.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.staticTexts["No interior"].waitForExistence(timeout: 10),
+                      "the POV opens from the page")
+        shoot("place-pov")
+    }
+
+    // MARK: - Helpers
+
+    /// Land on LIFE (the LifeFacesUITests walk: env name skips Welcome on a
+    /// fresh sim; the manual walk covers a build without the seam).
+    private func launchToLife() {
+        app.launchArguments += ["-pacificNoWake"]
+        app.launchEnvironment["PACIFIC_IDENTITY_NAME"] = "QA"
+        app.launch()
+        _ = tapSpringboard(["Allow", "Don’t Allow", "Don't Allow"], waitFor: 4)
+
+        let welcome = app.textFields["welcome-name"]
+        if welcome.waitForExistence(timeout: 3) {
+            welcome.tap(); welcome.typeText("QA")
+            app.buttons["welcome-begin"].tap()
+        }
+
+        let life = app.buttons["shell-life"]
+        XCTAssertTrue(life.waitForExistence(timeout: 10), "LIFE disc")
+        if !life.isSelected { life.tap() }
+    }
+
+    /// An identified surface the OS may expose as scrollView, otherElement or
+    /// map — poll the narrow queries, never a broad `.any` descendants sweep
+    /// (the GroupsPageUITests lesson: that snapshot can take the runner down).
+    private func surfaceExists(_ id: String) -> Bool {
+        app.scrollViews[id].exists || app.otherElements[id].exists || app.maps[id].exists
+    }
+
+    @discardableResult
+    private func waitAny(_ ids: [String], timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if ids.contains(where: surfaceExists) { return true }
+            usleep(300_000)
+        }
+        return ids.contains(where: surfaceExists)
+    }
+
+    private func shoot(_ name: String) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    @discardableResult
+    private func tapSpringboard(_ labels: [String], waitFor timeout: TimeInterval = 0) -> Bool {
+        for label in labels {
+            let button = springboard.buttons[label]
+            let present = timeout > 0 ? button.waitForExistence(timeout: timeout) : button.exists
+            if present { button.tap(); return true }
+        }
+        return false
+    }
+}

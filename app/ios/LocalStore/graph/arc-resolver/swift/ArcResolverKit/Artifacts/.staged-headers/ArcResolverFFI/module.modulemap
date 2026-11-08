@@ -1,0 +1,4 @@
+module ArcResolverFFI {
+    header "arc_resolver.h"
+    export *
+}

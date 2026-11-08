@@ -338,6 +338,33 @@ impl Harness {
         expect_key: &str,
         head: Option<pacific_core::resumption::HeadInput>,
     ) -> Result<(usize, pacific_core::resumption::Resumed), pacific_core::CoreError> {
+        self.signed_in(person, label, || Node::sign_in_from_wrap(prf, wrap, host, person, expect_key, head)).await
+    }
+
+    /// A person signs in on a device that holds nothing, from their 24 words:
+    /// `Node::sign_in_from_words`, the iOS words door. As [`Harness::sign_in_from_wrap`].
+    pub async fn sign_in_from_words(
+        &mut self,
+        person: &str,
+        label: &str,
+        words: &str,
+        head: Option<pacific_core::resumption::HeadInput>,
+    ) -> Result<(usize, pacific_core::resumption::Resumed), pacific_core::CoreError> {
+        self.signed_in(person, label, || Node::sign_in_from_words(words, person, head)).await
+    }
+
+    /// The device bookkeeping both sign-ins share: a fresh state dir with this
+    /// harness's relay in it, then `sign`, then the device joins `person`.
+    async fn signed_in<F, Fut>(
+        &mut self,
+        person: &str,
+        label: &str,
+        sign: F,
+    ) -> Result<(usize, pacific_core::resumption::Resumed), pacific_core::CoreError>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Result<(Node, pacific_core::resumption::Resumed), pacific_core::CoreError>>,
+    {
         let pi = self.people.iter().position(|p| p.name == person);
         if let Some(pi) = pi {
             assert!(
@@ -348,8 +375,7 @@ impl Harness {
         let home = tempfile::tempdir().unwrap();
         std::env::set_var("PACIFIC_STATE_DIR", home.path());
         pin(&self.relay);
-        let (node, resumed) =
-            Node::sign_in_from_wrap(prf, wrap, host, person, expect_key, head).await?;
+        let (node, resumed) = sign().await?;
         let id = node.id.identity_pk();
         let recovery = node.recovery_key();
         drop(node);

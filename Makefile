@@ -25,7 +25,7 @@ PKGS = $(shell cd $(PRODUCT) && PATH='$(PATH)' cargo metadata --no-deps --format
 ARC_HOST   := https://arc.wallflowers.io
 
 .DEFAULT_GOAL := help
-.PHONY: help status check check-icd check-play check-core check-arc check-auth check-harness check-door e2e e2e-browser ci ci-hooks \
+.PHONY: help status check check-icd check-play check-core check-arc check-auth check-harness check-door check-ios e2e e2e-browser ci ci-hooks \
         wasm serve stop deploy-app deploy-door deploy-arc deploy-docs live site-setup
 
 help:  ## this list
@@ -66,7 +66,7 @@ status:  ## what is committed, what is pushed, what is live
 # which the old awk pipeline swallowed: `check` printed "all suites green"
 # unconditionally, including over a red suite.
 
-check: check-icd check-play check-auth check-harness check-core check-arc check-door  ## every suite, cheapest first
+check: check-icd check-play check-auth check-harness check-core check-arc check-door check-ios  ## every suite, cheapest first
 	@echo "  all suites green, on a tree that did not move"
 
 # O-68 (mdr/icd-pin.md): the ICD at its pin, first. Not under pinned.sh, which keeps one line
@@ -107,6 +107,9 @@ check-door:  ## the Door (app/door), and its window's and the webapp's node test
 	else echo '  door    site-setup.test.mjs (the operator tool draws with macOS sips) NOT RUN: not macOS'; fi
 	@printf '  door    '
 	@$(PINNED) door sh -c 'cd $(PRODUCT)/arc && cargo build -q -p relay && cd $(PRODUCT)/app/door && { DOOR_TEST_PYTHON=$(PY) cargo test --no-fail-fast; s=$$?; cd $(PRODUCT) && node --test app/web/door/return-path.test.mjs app/web/door/pow-worker.test.mjs app/web/door/signin.test.mjs app/web/door/element.test.mjs app/web/door/perf.test.mjs app/web/webapp/door-origin.test.mjs app/web/webapp/register.test.mjs app/web/webapp/session.test.mjs app/web/webapp/card.test.mjs app/web/webapp/create.test.mjs app/web/webapp/events.test.mjs app/web/webapp/events-icd.test.mjs app/web/webapp/events-edit.test.mjs app/web/webapp/events-page.test.mjs app/web/webapp/palette.test.mjs app/web/webapp/rooms.test.mjs app/web/webapp/members.test.mjs app/door/hosting/one-signin/one-signin-today.test.mjs app/door/hosting/one-signin/one-signin-2.1.0.test.mjs app/door/hosting/one-signin/rooms-unmarked.test.mjs app/door/hosting/one-signin/hr-arc-history.test.mjs app/door/hosting/one-signin/founder-r3.test.mjs app/web/shared/wallflowers-ops.test.mjs app/web/webapp/icd.test.mjs app/door/docs/docs.test.mjs app/door/docs/examples/members-events/app.test.mjs app/door/docs/icd-changelog.test.mjs app/web/resources/resources.test.mjs app/web/resources/pdf.test.mjs app/web/webapp/resources-seam.test.mjs app/web/webapp/trade.test.mjs; n=$$?; exit $$(( s | n )); }'
+
+check-ios:  ## app/ios is NOT READY FOR MERGE until this passes
+	@cd $(PRODUCT) && node --test app/ios/not-ready-for-merge.test.mjs
 
 e2e:  ## the WallFlowers path end to end on loopback; outside check for now
 	@printf '  e2e     '
