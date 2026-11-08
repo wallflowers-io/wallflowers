@@ -1614,28 +1614,35 @@ fn deliverable_row(d: pacific_core::project::DeliverableView) -> DeliverableRow 
     }
 }
 
-/// The single handle the Swift app holds, one per process: the state dir, and the Node it
-/// reads through for as long as the process lives. Its directory's checked signatures and
+/// The single handle the Swift app holds, one per process: the state dir, and the open of
+/// it every call reads through for as long as the process lives. Its checked signatures and
 /// folds outlive every call (O-69), where a Node per call re-verified and refolded every
 /// object on every read.
 ///
-/// READS go through the one held Node (`read`), one at a time. Anything that may touch the
-/// network (every `block_on`) opens a Node of its own BESIDE it (`write`), sharing its open:
-/// so a sync holds up no read, and writes run side by side as they always have, arbitrated
-/// by SQLite.
+/// READS borrow a Node from a pool beside that open (`read`), so two reads never wait on
+/// each other: a main-thread read is not held up by a background one. Anything that may
+/// touch the network (every `block_on`) opens a Node of its own beside it (`write`): so a
+/// sync holds up no read, and writes run side by side as they always have, arbitrated by
+/// SQLite.
 #[derive(uniffi::Object)]
 pub struct Core {
     state_dir: String,
-    reader: std::sync::Mutex<Option<Held>>,
-    /// The reader's open, for a writer to open beside without waiting on the reader.
-    open: std::sync::Mutex<Option<(pacific_core::directory::Shared, u64)>>,
+    held: std::sync::Mutex<Option<Held>>,
+    /// Opens of the state dir since start: a Node lent under one is not taken back under
+    /// the next.
+    opens: std::sync::atomic::AtomicU64,
 }
 
-/// The reader, and the device key it was opened under.
+/// The open every Node shares, the device key it was made under, and the readers idle.
 struct Held {
-    node: Node,
+    open: pacific_core::directory::Shared,
     key: u64,
+    gen: u64,
+    idle: Vec<Node>,
 }
+
+/// Readers kept idle for the next call; more are opened when more read at once.
+const IDLE: usize = 4;
 
 /// Device-key changes since start: a Node opened under one key reopens under the next.
 static DEVICE_KEY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -1645,7 +1652,7 @@ fn device_key() -> u64 {
 }
 
 /// A lock whose holder panicked (UniFFI turns a panic into an error) is taken, and what it
-/// held dropped: a Node a panic interrupted is opened again.
+/// held dropped: an open a panic interrupted is opened again.
 fn take<T>(m: &std::sync::Mutex<Option<T>>) -> std::sync::MutexGuard<'_, Option<T>> {
     m.lock().unwrap_or_else(|p| {
         m.clear_poison();
@@ -1655,45 +1662,68 @@ fn take<T>(m: &std::sync::Mutex<Option<T>>) -> std::sync::MutexGuard<'_, Option<
     })
 }
 
-/// The held reader, borrowed for one call.
-struct Reading<'a>(std::sync::MutexGuard<'a, Option<Held>>);
+/// A reader, lent for one call and given back when it ends.
+struct Reading<'a> {
+    core: &'a Core,
+    node: Option<Node>,
+    gen: u64,
+}
 
 impl std::ops::Deref for Reading<'_> {
     type Target = Node;
     fn deref(&self) -> &Node {
-        &self.0.as_ref().expect("opened before it is lent").node
+        self.node.as_ref().expect("lent until dropped")
+    }
+}
+
+impl Drop for Reading<'_> {
+    fn drop(&mut self) {
+        let Some(node) = self.node.take() else { return };
+        if let Some(h) = take(&self.core.held).as_mut() {
+            if h.gen == self.gen && h.idle.len() < IDLE {
+                h.idle.push(node);
+            }
+        }
     }
 }
 
 impl Core {
-    /// The held Node, opened on first use and again after the identity or the device key
-    /// changes.
-    fn read(&self) -> Result<Reading<'_>, FfiError> {
-        let mut held = take(&self.reader);
+    /// The held open, made on first use and again after the identity or the device key
+    /// changes: its first Node runs the schema, every later one connects beside it.
+    fn opened(&self) -> Result<(pacific_core::directory::Shared, u64, Option<Node>), FfiError> {
+        let mut held = take(&self.held);
         let key = device_key();
         if held.as_ref().map_or(true, |h| h.key != key) {
             *held = None;
             let node = Node::open()?;
-            *take(&self.open) = Some((node.dir.shared()?, key));
-            *held = Some(Held { node, key });
+            let gen = self.opens.fetch_add(1, std::sync::atomic::Ordering::AcqRel) + 1;
+            *held = Some(Held { open: node.dir.shared()?, key, gen, idle: vec![node] });
         }
-        Ok(Reading(held))
+        let h = held.as_mut().expect("opened above");
+        Ok((h.open.clone(), h.gen, h.idle.pop()))
     }
 
-    /// A Node for one call that may touch the network, beside the held one.
-    fn write(&self) -> Result<Node, FfiError> {
-        let open = take(&self.open).clone().filter(|(_, key)| *key == device_key());
-        let open = match open {
-            Some((open, _)) => open,
-            None => self.read()?.dir.shared()?,
+    /// A reader for one call: an idle one, or a new one beside the held open.
+    fn read(&self) -> Result<Reading<'_>, FfiError> {
+        let (open, gen, idle) = self.opened()?;
+        let node = match idle {
+            Some(n) => n,
+            None => Node::open_beside(&open)?,
         };
+        Ok(Reading { core: self, node: Some(node), gen })
+    }
+
+    /// A Node for one call that may touch the network, beside the held open.
+    fn write(&self) -> Result<Node, FfiError> {
+        let (open, gen, idle) = self.opened()?;
+        // A reader taken only to find the open goes back.
+        drop(Reading { core: self, node: idle, gen });
         Ok(Node::open_beside(&open)?)
     }
 
-    /// The identity changed under the held Node: the next call opens a new one.
+    /// The identity changed under the held open: the next call opens a new one.
     fn reopen(&self) {
-        *take(&self.reader) = None;
-        *take(&self.open) = None;
+        *take(&self.held) = None;
     }
 }
 
@@ -1722,7 +1752,7 @@ impl Core {
             pacific_core::fold_cache::set_model((!arc_build::DIRTY).then_some(arc_build::CORE));
         }
         pacific_core::fold_cache::set_measure(pacific_counting::allocated);
-        Arc::new(Self { state_dir, reader: Default::default(), open: Default::default() })
+        Arc::new(Self { state_dir, held: Default::default(), opens: Default::default() })
     }
 
     /// True once an identity has been minted on this device.
@@ -4399,9 +4429,9 @@ mod held_node_tests {
         (folds.hits, folds.misses)
     }
 
-    /// One Node for the process (O-69): the second read of a room is all hits, a write
-    /// through a Node beside it is the reader's miss, a writer held open holds up no read,
-    /// and a new identity is read without a new `Core`.
+    /// One open for the process (O-69): the second read of a room is all hits, a write
+    /// through a Node beside it is the reader's miss, neither a writer nor a reader held open
+    /// holds up a read, and a new identity is read without a new `Core`.
     #[test]
     fn reads_share_one_node_and_writes_open_beside_it() {
         let _held = STATE_DIR.lock().unwrap_or_else(|e| e.into_inner());
@@ -4433,8 +4463,15 @@ mod held_node_tests {
         assert!(now.iter().any(|l| l.contains("second")), "and the read sees it: {now:?}");
 
         let writer = core.write().expect("a writer");
-        assert_eq!(core.object_transcript(room).unwrap(), now, "a writer held open holds up no read");
+        assert_eq!(core.object_transcript(room.clone()).unwrap(), now, "a writer held open holds up no read");
         drop(writer);
+
+        // A read in flight on one thread holds up none on another: each borrows a reader.
+        let busy = core.read().expect("a reader, held");
+        let other = std::thread::scope(|s| s.spawn(|| core.object_transcript(room.clone())).join().unwrap());
+        assert_eq!(other.unwrap(), now, "a second thread reads beside the first");
+        drop(busy);
+        assert!(counts(&core).0 > h1, "and both share one fold cache");
 
         let _ = std::fs::remove_dir_all(&dir);
     }
