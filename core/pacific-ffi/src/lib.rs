@@ -1824,22 +1824,6 @@ impl Core {
         Ok(Reading { core: self, node: Some(node), gen })
     }
 
-    /// Where this device keeps the media objects it has fetched or made (`media_store`).
-    fn media_kept(&self) -> std::path::PathBuf {
-        std::path::Path::new(&self.state_dir).join("media")
-    }
-
-    /// This device's relay, for a call that dials a session of its own (media): its first
-    /// ws/wss route.
-    fn relay_url(&self) -> Result<String, FfiError> {
-        self.read()?
-            .routes()
-            .urls()
-            .find(|u| u.starts_with("ws://") || u.starts_with("wss://"))
-            .map(str::to_string)
-            .ok_or_else(|| FfiError::Core("media needs a relay, and this device has no relay route".into()))
-    }
-
     /// A Node for one call that may touch the network, beside the held open.
     fn write(&self) -> Result<Node, FfiError> {
         let (open, gen, idle) = self.opened()?;
@@ -2539,8 +2523,7 @@ impl Core {
     /// Seal `bytes`, upload them to this device's relay's object storage, and return the
     /// reference a Delta carries (O-79, #56). Nothing is written to any object here.
     pub fn media_put(&self, bytes: Vec<u8>, mime: String) -> Result<MediaRefRow, FfiError> {
-        let relay = self.relay_url()?;
-        let r = block_on(pacific_core::media_store::put(&relay, Some(&self.media_kept()), &bytes, &mime))?;
+        let r = block_on(self.read()?.media_put(&bytes, &mime))?;
         match r.delivery {
             pacific_core::media::Delivery::Sealed { digest, bytes, key, secret } => {
                 Ok(MediaRefRow { mime: r.mime, digest: hex::encode(digest), bytes, key, secret })
@@ -2558,8 +2541,7 @@ impl Core {
             .ok_or_else(|| FfiError::Core("media: the digest is not 32 bytes of hex".into()))?;
         let reference = pacific_core::media::MediaRef::sealed(&r.mime, digest, r.bytes, r.key, r.secret)
             .map_err(|e| FfiError::Core(format!("media: {e}")))?;
-        let relay = self.relay_url()?;
-        Ok(block_on(pacific_core::media_store::get(&relay, Some(&self.media_kept()), &reference))?)
+        Ok(block_on(self.read()?.media_get(&reference))?)
     }
 
     /// The full media facet of one event — the detail page's read.

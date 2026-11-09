@@ -5454,6 +5454,30 @@ impl Node {
         &self.routes
     }
 
+    /// Seal `bytes` and put them in this device's relay's object storage (O-79, #56): the
+    /// reference a media op carries. The one entry point for media: which relay, where this
+    /// device keeps objects, and what an upload is paid with are this method's to decide.
+    #[cfg(feature = "transport")]
+    pub async fn media_put(&self, bytes: &[u8], mime: &str) -> Result<crate::media::MediaRef, CoreError> {
+        crate::media_store::put(&self.media_relay()?, Some(&crate::paths::state_dir().join("media")), bytes, mime).await
+    }
+
+    /// A reference's bytes: kept on this device, or fetched once and kept (O-79, #56).
+    #[cfg(feature = "transport")]
+    pub async fn media_get(&self, r: &crate::media::MediaRef) -> Result<Vec<u8>, CoreError> {
+        crate::media_store::get(&self.media_relay()?, Some(&crate::paths::state_dir().join("media")), r).await
+    }
+
+    /// The relay media goes through: this device's first ws/wss route.
+    #[cfg(feature = "transport")]
+    fn media_relay(&self) -> Result<String, CoreError> {
+        self.routes
+            .urls()
+            .find(|u| u.starts_with("ws://") || u.starts_with("wss://"))
+            .map(str::to_string)
+            .ok_or_else(|| CoreError::Transport("media needs a relay, and this device has no relay route".into()))
+    }
+
     /// Point this device's messaging at a new transport set, and persist it. The ONE way transport
     /// changes — there is no per-call override, deliberately: a message that quietly went somewhere
     /// other than where you pointed it is the failure this whole refactor exists to make impossible.
