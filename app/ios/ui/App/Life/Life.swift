@@ -836,9 +836,13 @@ struct LifeView: View {
         // opening answer (a Choice takes its first value, a Date takes now), from the
         // type's own declaration. That is what closes the 1970 bug — a required field is
         // never unanswered behind a control that looks filled in.
-        return NewSession(kind: kind) { draft in
-            guard let id = core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
+        // A kind with a page (a Space) publishes it at BLUE, after the mint. A retry after a
+        // failed publish mints nothing again: the page keeps what was made.
+        let site = kind.coreKind.map(SiteDraft.kindHasAPage) == true ? SiteDraft() : nil
+        return NewSession(kind: kind, site: site) { draft in
+            guard let id = site?.site ?? core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
             else { return nil }          // core surfaced the error; the surface stays up
+            if let site, await !core.finishSite(id, site) { return nil }
             await afterMint(kind, id: id, draft: draft)
             return .saved
         }

@@ -484,12 +484,17 @@ final class NewSession: ObservableObject, Identifiable {
     /// open question about what GOLD means: it is privacy/sharing, everywhere.
     @Published var audience: Audience = .onlyMe
 
+    /// THE PAGE, for a kind the ICD gives one (`SiteDraft.kindHasAPage`): its address and
+    /// link, on the GOLD face under the audience. nil for every other kind.
+    let site: SiteDraft?
+    private var siteSink: AnyCancellable?
+
     /// The draft as it opened, seeded. What `edited` measures against.
     private var opening: NewDraft
 
     /// Has the person changed anything — a field, a choice, a date, the audience? On the
     /// creator the first edit chooses the kind.
-    var edited: Bool { draft != opening || audience != .onlyMe }
+    var edited: Bool { draft != opening || audience != .onlyMe || site?.edited == true }
 
     /// What moved from the opening, by name — for the log that says why a kind locked.
     var edits: [String] {
@@ -498,6 +503,7 @@ final class NewSession: ObservableObject, Identifiable {
             String(describing: a.value) == String(describing: b.value) ? nil : a.label
         }
         if audience != .onlyMe { moved.append("audience") }
+        if site?.edited == true { moved.append("page") }
         return moved
     }
 
@@ -515,8 +521,10 @@ final class NewSession: ObservableObject, Identifiable {
     init(kind: NewKind,
          draft: NewDraft = NewDraft(),
          parent: String? = nil,
+         site: SiteDraft? = nil,
          commit: @escaping (NewDraft) async -> NewExit?) {
         self.kind = kind
+        self.site = site
         // Read the type's declaration ONCE, at construction. A pure static lookup in the
         // core — no node, no state — so it is safe to call while building a view.
         self.fields = kind.coreKind.map { mintFields(kind: $0) } ?? []
@@ -538,6 +546,9 @@ final class NewSession: ObservableObject, Identifiable {
         self.opening = seeded
         self.parent = parent
         self.commit = commit
+        // The page's edits are the session's: they lock the creator's kind and re-derive
+        // the disc cell like any other edit.
+        siteSink = site?.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
 
     /// The row's identity, derived — never stored, so the circles cannot disagree with
@@ -905,6 +916,9 @@ struct NewCard: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("visibility-\(option.rawValue)")
             .accessibilityAddTraits(session.audience == option ? .isSelected : [])
+        }
+        if let site = session.site {
+            SitePanel(site: site, tint: tint)
         }
     }
 

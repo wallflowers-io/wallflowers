@@ -2897,4 +2897,73 @@ final class CoreService: ObservableObject {
             try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
         }
     }
+
+    // MARK: - A Site's page (Design/SitePanel.swift)
+    //
+    // What wallflowers.io's sign-up does, on the core's one sequence (`Node::site_*`):
+    // the Host, the face, the address claimed at the Arc, then published
+    // with the Arc on the Host. Each step once: `SiteDraft` keeps what was made, so a retry
+    // writes only what is left.
+
+    /// Finish the Site `id` as `site` says. Returns whether every step it asked for was
+    /// made; a failure is surfaced against its step and the rest wait for a retry.
+    ///
+    /// NOTHING UNLESS IT IS PUBLISHED. The ICD mints a Site's Host on publication, and
+    /// only a Site with a Host has a face: a Space kept private puts nothing an Arc can
+    /// read on its owner's spine.
+    func finishSite(_ id: String, _ site: SiteDraft) async -> Bool {
+        let c = core
+        site.site = id
+        guard site.publish, !site.slug.isEmpty else { return true }
+        do {
+            if site.host == nil {
+                site.host = try await Task.detached { try c.siteHost(site: id) }.value
+            }
+            if !site.faceWritten {
+                let face = site.face.text
+                _ = try await Task.detached { try c.siteEditFace(site: id, face: face, pictures: []) }.value
+                site.faceWritten = true
+            }
+            if site.published != site.slug, let host = site.host {
+                let signIn = makeSignIn()
+                if site.claimed != site.slug {
+                    try await signIn.claimAddress(site.slug, host: host)
+                    site.claimed = site.slug
+                }
+                let bundle = try await signIn.arcBundle()
+                let slug = site.slug
+                try await Task.detached { try c.sitePublish(site: id, slug: slug, arcBundle: bundle) }.value
+                site.published = slug
+            }
+            return true
+        } catch {
+            fail("finish the Space's page", error, object: id)
+            return false
+        }
+    }
+
+    /// A Site's page as it stands, for its GOLD ^ panel.
+    func siteDraft(_ id: String) async -> SiteDraft? {
+        let c = core
+        do {
+            let row = try await Task.detached { try c.siteFace(site: id) }.value
+            let d = SiteDraft(face: JSON(text: row.face) ?? FaceSpec.shared.opening,
+                              slug: row.slug, published: row.published ? row.slug : nil)
+            d.site = id
+            d.host = row.host
+            d.claimed = row.published ? row.slug : nil
+            // A Space made before it had a page has no face: it publishes the opening one.
+            d.faceWritten = !row.face.isEmpty
+            return d
+        } catch {
+            fail("read the Space's page", error, object: id)
+            return nil
+        }
+    }
+
+    /// Whether `slug` can be had at the Arc.
+    func checkAddress(_ slug: String) async -> AddressCheck {
+        do { return try await makeSignIn().checkAddress(slug) }
+        catch { return .refused(error.localizedDescription) }
+    }
 }

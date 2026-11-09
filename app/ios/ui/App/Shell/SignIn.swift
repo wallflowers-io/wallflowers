@@ -496,6 +496,56 @@ final class SignInService: NSObject, ObservableObject {
         }
     }
 
+    // MARK: A Site's address
+    //
+    // The Arc's site routes, as the Door calls them (app/door/src/auth.rs claim_site,
+    // bind_host): the address claimed for this account, then bound to the Host it is
+    // served from. The publication itself is a delta (`base.publish`), the core's.
+
+    /// `/auth/site/check`: whether an address is free, and why not.
+    func checkAddress(_ slug: String) async throws -> AddressCheck {
+        var q = URLComponents(url: AuthHost.base.appendingPathComponent("/auth/site/check"), resolvingAgainstBaseURL: false)!
+        q.queryItems = [URLQueryItem(name: "slug", value: slug)]
+        let (data, _) = try await net.data(from: q.url!)
+        let j = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        if j?["available"] as? Bool == true { return .free }
+        switch j?["reason"] as? String {
+        case "taken": return .refused("That address is taken")
+        case "held": return .refused("Someone is signing up with that address")
+        case let why?: return .refused(why)
+        case nil: return .refused("The Arc did not say")
+        }
+    }
+
+    /// Claim `slug` for this account and bind it to `host`.
+    func claimAddress(_ slug: String, host: String) async throws {
+        let pk = Self.hex(Self.rawKey(try core.identityKey()))
+        var h = try await signedHeaders()
+        h["Content-Type"] = "application/json"
+        _ = try await send("/auth/users/\(pk)/sites", method: "POST",
+                           body: try JSONSerialization.data(withJSONObject: ["slug": slug]), headers: h)
+        var b = try await signedHeaders()
+        b["Content-Type"] = "application/json"
+        _ = try await send("/auth/users/\(pk)/sites/\(slug)/host", method: "PUT",
+                           body: try JSONSerialization.data(withJSONObject: ["host": host]), headers: b)
+    }
+
+    /// The Arc's pairing bundle (`/v1/bundle`), single-use, for adding it to a Host. The
+    /// Arc's gateway, which is the account routes' host in production; `PACIFIC_ARC_HTTP`
+    /// names it where the two are apart (the e2e stack).
+    func arcBundle() async throws -> String {
+        let base = ProcessInfo.processInfo.environment["PACIFIC_ARC_HTTP"].flatMap(URL.init(string:)) ?? AuthHost.base
+        let (data, response) = try await net.data(from: base.appendingPathComponent("/v1/bundle"))
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw SignInError.service("the Arc gave no bundle (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0))")
+        }
+        let t = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        if let j = try? JSONSerialization.jsonObject(with: Data(t.utf8)) as? [String: Any], let b = j["bundle"] as? String {
+            return b.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return t
+    }
+
     // MARK: HTTP
 
     private func getJSON(_ path: String,

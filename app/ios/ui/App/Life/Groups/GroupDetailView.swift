@@ -1011,6 +1011,11 @@ struct GroupDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("group-cover-set")
+                if SiteDraft.kindHasAPage(NewKind.space.rawValue) {
+                    NavigationLink { SitePageView(objectId: objectId) } label: { manageRow("globe", "Page") }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("group-page")
+                }
                 if let v = view, !v.cover.isEmpty {
                     Button {
                         _ = core.setGroupCover(objectId, data: nil, mime: "")

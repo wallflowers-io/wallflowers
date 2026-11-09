@@ -160,10 +160,19 @@ struct ChatsView: View {
         let peers = convo.kind == .dm
             ? [convo.id]
             : core.objectMembers(convo.id).filter { CoreService.identityHex($0) != core.myIdentityHex }
-        shell.beginNew(NewSession(kind: .space) { draft in
-            guard let id = core.mint(kind: NewKind.space.rawValue, draft: draft.mint(for: .space))
+        // A Space's page publishes at BLUE, as LIFE's does; a retry mints and adds no one twice.
+        let site = SiteDraft.kindHasAPage(NewKind.space.rawValue) ? SiteDraft() : nil
+        var made: String?
+        var added = false
+        shell.beginNew(NewSession(kind: .space, site: site) { draft in
+            guard let id = made ?? core.mint(kind: NewKind.space.rawValue, draft: draft.mint(for: .space))
             else { return nil }          // core surfaced the failure; the surface stays up
-            for peer in peers { _ = await core.addContact(id, peerId: peer) }
+            made = id
+            if !added {
+                for peer in peers { _ = await core.addContact(id, peerId: peer) }
+                added = true
+            }
+            if let site, await !core.finishSite(id, site) { return nil }
             core.refreshOrgs()
             return .saved
         })
