@@ -159,7 +159,7 @@ struct NewSpaceFromChat: View {
                          commit: { Task { await create() } })
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .composeGlass(tint: gloss.hi, glow: gloss.lo, flash: exit == .created ? gloss.hi : nil)
+        .composeGlass(tint: gloss.hi, flash: exit == .created ? gloss.hi : nil)
     }
 
     private var header: some View {
@@ -272,7 +272,7 @@ struct NewSpaceFromChat: View {
                 .padding(.bottom, 20)
             }
             .frame(maxWidth: .infinity)
-            .composeGlass(tint: gloss.hi, glow: gloss.lo)
+            .composeGlass(tint: gloss.hi)
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
             // A CONTAINER, or the identifier is invisible to XCUITest — an id on a

@@ -38,7 +38,6 @@ struct DetailSurface: View {
     /// the disc that closes this. Read from `DiscSlot` rather than written as a
     /// hex here, so a repalette moves the modal with the discs.
     private var tint: Color { DiscSlot.note.blockColor }
-    private var glow: Color { DiscSlot.note.blockColor.darkened(0.3) }
 
     var body: some View {
         ZStack {
@@ -79,7 +78,7 @@ struct DetailSurface: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .modifier(ComposeGlass(tint: tint, glow: glow, flash: flash, opaque: true))
+        .modifier(ComposeGlass(tint: tint, flash: flash, opaque: true))
         .background(GeometryReader { geo in
             Color.clear.preference(key: DetailCardFrameKey.self,
                                    value: geo.frame(in: .global))
