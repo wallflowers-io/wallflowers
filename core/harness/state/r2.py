@@ -31,8 +31,8 @@ LIST_PAGE_SIZE = 1000
 MAX_LIST_PAGES = 64
 #: media.rs DEFAULT_MAX_BYTES — 25 MiB, a placeholder, not a ruled product limit.
 DEFAULT_MAX_OBJECT_BYTES = 25 * 1024 * 1024
-#: media.rs DEFAULT_TTL — five minutes.
-DEFAULT_TTL_SECS = 300
+#: media.rs DEFAULT_TTL — fifteen minutes (#56, ruled 9 Nov 2026).
+DEFAULT_TTL_SECS = 900
 
 
 class Verdict(str, Enum):
