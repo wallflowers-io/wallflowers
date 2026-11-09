@@ -8,6 +8,20 @@ Method: deploy.md § 10.
 Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on an object that exists, or
 `POST /v2/mint` to make one. `GET /v2/icd` serves the model production runs; model.html lists every op and its args.
 
+## 2.7.0
+
+<!-- generated 2.7.0: icd-changelog.mjs --write; do not edit between the markers -->
+- Draft (media.detached, detached media sealed and read, #56), from `5268627`; its ICD `a9eac5c92bf6f0a484a33f526170c94df20d11109f4b6d436746334bcbe2f7e0`, not a release until its icd/* tag
+- Against 2.6.0 (`75de632bfbb95e23…`):
+  - model sections changed besides ops: media, mls
+<!-- end generated 2.7.0 -->
+
+Detached media (#56): `media.detached` states how a media object outside the Delta is sealed and read, so that any
+implementation opens what another wrote. XChaCha20-Poly1305 under a fresh content key, the object key as AAD, the
+digest over the stored object, uploads create-only, fetched by key alone. No op changes: every media op's `<p>Secret`
+already carried the content key; it now says how the bytes are sealed with it. A site uploads media through
+WallFlowers' app; there is no Community API route for it in this release.
+
 ## 2.6.0
 
 <!-- generated 2.6.0: icd-changelog.mjs --write; do not edit between the markers -->
