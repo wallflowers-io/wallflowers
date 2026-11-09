@@ -14,6 +14,10 @@ use crate::project::{ProjectState, ProjectType};
 use crate::vcard;
 use crate::{coordinator, handshake, mls, paths, router::Router, seal, CoreError};
 
+/// The exterior on a Node: writing it, carrying it, its door (#76, ICD 2.6.0).
+mod exteriors;
+pub use exteriors::{DoorRequest, HeldExterior};
+
 /// One row of a (forum) object's folded RATIFY projection — a proposal with its
 /// deferred payload, passing rule, DERIVED outcome, ballot tallies, and this device's
 /// own ballot. The read model the ratify UI binds to.
@@ -1235,6 +1239,10 @@ impl Node {
         let Ok(gid) = self.object_group_id(object_id_hex) else {
             return false;
         };
+        // An `auto` door (ICD 2.6.0 `base.setDoor`) is the same consent, for any kind.
+        if self.admits_at_an_auto_door(object_id_hex) {
+            return true;
+        }
         match self.dir.group_kind(&gid) {
             Ok(Some(k)) if k == "place" => self
                 .place_state(object_id_hex)
@@ -10963,6 +10971,15 @@ impl Node {
             Err(e) => tracing::warn!(error = %e, "market reconciliation failed this sync"),
         }
 
+        // 3b'. CARRY EXTERIORS (#76): every object's I am in, to my connections outside it, and
+        //     every `network` one that reached me, one hop on. Gated by what each channel's
+        //     own fold already holds, so a settled mesh authors nothing.
+        match boxed(|| async { Ok::<usize, CoreError>(self.publish_exteriors().await? + self.relay_exteriors().await?) }).await {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(deltas = n, "carried exteriors"),
+            Err(e) => tracing::warn!(error = %e, "carrying exteriors failed this sync"),
+        }
+
         // 3c. RECONCILE discovery. Answer every live question that reached us, forward
         //     the ones whose budget still reaches someone, and relay answers back
         //     toward their asker. Every gate reads a Contact fold that already
@@ -10998,6 +11015,12 @@ impl Node {
             Ok(v) if v.is_empty() => {}
             Ok(v) => tracing::info!(count = v.len(), "admitted knockers at public doors"),
             Err(e) => tracing::warn!(error = %e, "answering doors failed this sync"),
+        }
+        // ...and every `auto` exterior door (ICD 2.6.0 mls.door), likewise on every member.
+        match boxed(|| self.answer_exterior_doors()).await {
+            Ok(v) if v.is_empty() => {}
+            Ok(v) => tracing::info!(count = v.len(), "admitted askers at auto doors"),
+            Err(e) => tracing::warn!(error = %e, "answering exterior doors failed this sync"),
         }
 
         // 5. REPLENISH our prekey offers. Same shape and same reason as the two passes

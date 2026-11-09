@@ -27,6 +27,11 @@ pub(crate) mod icd {
 }
 pub use icd::{OP_DECIDE_REQUEST, OP_SET_DOOR, OP_SET_EXTERIOR};
 
+/// `base.setExterior`'s inline ceiling for its still, base64 characters (the ICD's).
+pub const fn icd_photo_max() -> usize {
+    icd::PHOTO_MAX
+}
+
 pub const SET_EXTERIOR: OpDecl = OpDecl {
     op_id: OP_SET_EXTERIOR,
     name: "base.setExterior",
@@ -207,6 +212,9 @@ pub struct Carried {
     /// The rows, verbatim, so a holder can carry them on.
     pub exterior_row: Vec<u8>,
     pub visibility_row: Option<Vec<u8>>,
+    /// Withdrawn by a narrower visibility: held as a tombstone, so the withdrawal is carried
+    /// on down every path the copy took, and an older copy cannot come back.
+    pub withdrawn: bool,
 }
 
 /// `contact.publishExterior`'s args, checked: the rows signed by the owner, the copy within its
@@ -237,7 +245,7 @@ pub fn carried(args: &Args, via: &MemberId) -> Result<Carried, DeltaRejection> {
     if hops == 0 {
         return Err(bad);
     }
-    Ok(Carried { object, kind, owner, exterior, pos, visibility, visibility_pos, hops, via: *via, exterior_row, visibility_row })
+    Ok(Carried { object, kind, owner, exterior, pos, visibility, visibility_pos, hops, via: *via, exterior_row, visibility_row, withdrawn: false })
 }
 
 impl Carried {
@@ -248,20 +256,22 @@ impl Carried {
     }
 
     /// Newer rows win; the same rows, the shorter path.
-    fn supersedes(&self, held: &Carried) -> bool {
+    pub fn supersedes(&self, held: &Carried) -> bool {
         let (new, old) = ((self.pos, self.visibility_pos), (held.pos, held.visibility_pos));
         new > old || (new == old && self.hops < held.hops)
     }
 }
 
 /// Fold one carried copy into the copies held, by object. A copy past its reach is refused, and
-/// when its visibility row is newer than the one held it WITHDRAWS the held copy: narrowing the
-/// dial chases the exterior down every path it took, as a withdrawn listing does.
-pub fn fold_carried(held: &mut BTreeMap<String, Carried>, c: Carried) -> Result<(), DeltaRejection> {
+/// when its visibility row is newer than the one held it WITHDRAWS the held copy, kept as a
+/// tombstone: narrowing the dial chases the exterior down every path it took, as a withdrawn
+/// listing does.
+pub fn fold_carried(held: &mut BTreeMap<String, Carried>, mut c: Carried) -> Result<(), DeltaRejection> {
     let prior = held.get(&c.object);
     if !c.within_reach() {
         if prior.is_some_and(|h| c.visibility_pos > h.visibility_pos) {
-            held.remove(&c.object);
+            c.withdrawn = true;
+            held.insert(c.object.clone(), c);
             return Ok(());
         }
         return Err(DeltaRejection::PreconditionFailed);
@@ -383,7 +393,9 @@ mod tests {
         fold(&mut held, &net, 2).unwrap();
         assert_eq!((held[&hex::encode(GROUP)].hops, held[&hex::encode(GROUP)].visibility), (2, crate::visibility::Visibility::Network), "the newer row wins");
         fold(&mut held, &private, 2).unwrap();
-        assert!(held.is_empty(), "a newer, narrower visibility withdraws the copy");
+        assert!(held[&hex::encode(GROUP)].withdrawn, "a newer, narrower visibility withdraws the copy");
+        assert_eq!(fold(&mut held, &net, 1), Ok(()));
+        assert!(held[&hex::encode(GROUP)].withdrawn, "an older copy does not come back");
     }
 
     #[test]

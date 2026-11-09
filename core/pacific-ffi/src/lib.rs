@@ -708,6 +708,78 @@ fn attach(input: &MediaInput) -> Result<pacific_media::MediaRef, FfiError> {
     Ok(out.media)
 }
 
+/// An object's exterior as it reached me (`contact.publishExterior`): an object I am not in.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct ExteriorRow {
+    pub object: String,
+    /// The ICD kind name.
+    pub kind: String,
+    pub name: String,
+    pub description: String,
+    /// Inline base64, "" for none.
+    pub photo: String,
+    pub photo_mime: String,
+    /// The owner's identity key, hex.
+    pub owner: String,
+    /// Who carried it to me, hex.
+    pub via: String,
+    /// My distance from its roster: 1, a connection is inside.
+    pub hops: u32,
+    /// Whether it has a door to knock at.
+    pub door: bool,
+    /// Whether I have asked to join and not withdrawn.
+    pub requested: bool,
+}
+
+impl ExteriorRow {
+    fn of(e: pacific_core::node::HeldExterior) -> Self {
+        let c = e.carried;
+        let (photo, photo_mime) = match c.exterior.photo.as_ref().map(|m| (&m.delivery, m.mime.clone())) {
+            Some((pacific_media::Delivery::Inline { data }, mime)) => (data.clone(), mime),
+            _ => (String::new(), String::new()),
+        };
+        ExteriorRow {
+            object: c.object,
+            kind: c.kind.name().to_string(),
+            name: c.exterior.name,
+            description: c.exterior.description,
+            photo,
+            photo_mime,
+            owner: hex::encode(c.owner),
+            via: hex::encode(c.via),
+            hops: c.hops,
+            door: c.exterior.door.is_some(),
+            requested: e.requested,
+        }
+    }
+}
+
+/// One of my objects' exteriors, as I wrote it.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct MyExterior {
+    pub name: String,
+    pub description: String,
+    /// "" no door, "review" or "auto".
+    pub door: String,
+    /// "private" | "connections" | "network".
+    pub visibility: String,
+}
+
+/// A request waiting at one of my doors.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct RequestRow {
+    pub object: String,
+    pub kind: String,
+    /// The request's id, hex.
+    pub request: String,
+    /// The asker's identity key, hex.
+    pub asker: String,
+    pub asker_name: String,
+    pub note: String,
+    /// Unix ms.
+    pub at: i64,
+}
+
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct ListingRow {
     /// Identity pubkey (hex) of whoever created the listing.
@@ -3057,6 +3129,92 @@ impl Core {
     pub fn place_answer_doors(&self) -> Result<Vec<String>, FfiError> {
         self.point();
         Ok(block_on(Node::open()?.answer_all_doors())?)
+    }
+
+    // ---- THE EXTERIOR (#76, ICD 2.6.0) ----
+
+    /// The exteriors that reached me through my connections: objects I am not in, each with
+    /// whether I have asked to join.
+    pub fn exteriors(&self) -> Result<Vec<ExteriorRow>, FfiError> {
+        self.point();
+        Ok(Node::open()?.exteriors()?.into_iter().map(ExteriorRow::of).collect())
+    }
+
+    /// One object of mine's exterior, as its owner wrote it; None until one is written.
+    pub fn object_exterior(&self, object_id: String) -> Result<Option<MyExterior>, FfiError> {
+        self.point();
+        let Some((_, st, vis)) = Node::open()?.exterior_state(&object_id)? else { return Ok(None) };
+        Ok(st.exterior.map(|e| MyExterior {
+            name: e.name,
+            description: e.description,
+            door: st.door.map(|d| d.mode.as_str().to_string()).unwrap_or_default(),
+            visibility: vis.as_str().to_string(),
+        }))
+    }
+
+    /// Write an object's exterior: a name, a description, a still (inline base64, at most
+    /// `exterior_photo_max()` characters; "" for none) and its door: "" none, "review" or
+    /// "auto". The owner's alone. Call OFF the Swift main thread.
+    pub fn set_exterior(
+        &self,
+        object_id: String,
+        name: String,
+        description: String,
+        photo: String,
+        photo_mime: String,
+        door: String,
+    ) -> Result<(), FfiError> {
+        self.point();
+        let photo = if photo.is_empty() {
+            None
+        } else {
+            Some(pacific_media::MediaRef::inline(&photo_mime, photo).map_err(|e| FfiError::Core(format!("the picture: {e}")))?)
+        };
+        let door = match door.as_str() {
+            "" => None,
+            m => Some(pacific_core::exterior::DoorMode::parse(m).ok_or_else(|| FfiError::Core("door must be \"\" | \"review\" | \"auto\"".into()))?),
+        };
+        Ok(block_on(Node::open()?.set_exterior(&object_id, &name, &description, photo.as_ref(), door))?)
+    }
+
+    /// How far an object, and its exterior, may travel: "private" | "connections" | "network".
+    pub fn set_visibility(&self, object_id: String, visibility: String) -> Result<String, FfiError> {
+        self.point();
+        let v = pacific_core::visibility::Visibility::parse(&visibility)
+            .map_err(|_| FfiError::Core("visibility must be \"private\" | \"connections\" | \"network\"".into()))?;
+        Ok(block_on(Node::open()?.set_visibility(&object_id, v))?)
+    }
+
+    /// The ICD's inline ceiling for an exterior's still, base64 characters.
+    pub fn exterior_photo_max(&self) -> u32 {
+        pacific_core::exterior::icd_photo_max() as u32
+    }
+
+    /// Ask to join an object whose exterior reached me. Returns the request's id.
+    pub fn request_join(&self, object_id: String, note: String) -> Result<String, FfiError> {
+        self.point();
+        Ok(block_on(Node::open()?.request_join(&object_id, &note))?)
+    }
+
+    /// Withdraw my ask to join.
+    pub fn withdraw_request(&self, object_id: String) -> Result<(), FfiError> {
+        self.point();
+        Ok(block_on(Node::open()?.withdraw_request(&object_id))?)
+    }
+
+    /// The requests waiting for me: at the review doors of objects I own or admit to.
+    pub fn pending_requests(&self) -> Result<Vec<RequestRow>, FfiError> {
+        self.point();
+        Ok(block_on(Node::open()?.pending_requests())?
+            .into_iter()
+            .map(|r| RequestRow { object: r.object, kind: r.kind, request: r.request, asker: hex::encode(r.asker), asker_name: r.asker_name, note: r.note, at: r.at as i64 })
+            .collect())
+    }
+
+    /// Admit, or decline, one request. A decline is not told to the asker.
+    pub fn decide_request(&self, object_id: String, request: String, admit: bool) -> Result<(), FfiError> {
+        self.point();
+        Ok(block_on(Node::open()?.decide_request(&object_id, &request, admit))?)
     }
 
     // -- Anchoring a group to a place (the agreement) -------------------------
