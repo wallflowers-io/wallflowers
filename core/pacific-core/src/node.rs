@@ -11202,6 +11202,13 @@ impl Node {
             }
         }
 
+        // A pairing channel carries prekeys, profiles and legs, and no messages: drained and
+        // flushed, it is done. Folded as a chat it was refused (`chat_type_id`), and every
+        // sync named every connection a failure.
+        if matches!(self.dir.group_kind(group_id)?.as_deref().and_then(crate::fold::lens_for), Some(ObjectKind::Contact)) {
+            return Ok(());
+        }
+
         // (d) fold ONCE, over the roster: rebuild the transcript AND emit a single
         //     batched DELIVERY receipt for any foreign messages we now hold but have
         //     not yet acknowledged. Reusing this fold (not a second pass) and the

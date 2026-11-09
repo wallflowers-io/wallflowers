@@ -119,3 +119,42 @@ async fn the_conversation_takes_a_vertebra_on_both_spines() {
         assert!(named.contains(&convo), "device {u} names it: {named:?}");
     }
 }
+
+/// A SYNC DOES NOT FOLD A CONNECTION AS A CHAT. `sync_group` built every object's transcript,
+/// and a pairing channel has none (`chat_type_id` refuses it), so every tick named every
+/// connection "object sync failed". Its rows are drained and its outbox flushed; that is all.
+#[tokio::test]
+async fn a_sync_names_no_connection_a_failure() {
+    use tracing_subscriber::layer::SubscriberExt;
+    let h = common::Harness::new(&["ada", "bo"]).await;
+    h.pair(0, 1).await;
+    let failed = Failed::default();
+    let _on = tracing::subscriber::set_default(tracing_subscriber::registry().with(failed.clone()));
+    h.sync(0).await;
+    h.sync(1).await;
+    assert_eq!(failed.0.lock().unwrap().clone(), Vec::<String>::new(), "no object's sync failed");
+}
+
+/// Every "object sync failed" a subscriber on this thread sees, with its error.
+#[derive(Clone, Default)]
+struct Failed(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Failed {
+    fn on_event(&self, e: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Fields(String, String);
+        impl tracing::field::Visit for Fields {
+            fn record_debug(&mut self, f: &tracing::field::Field, v: &dyn std::fmt::Debug) {
+                match f.name() {
+                    "message" => self.0 = format!("{v:?}"),
+                    "error" => self.1 = format!("{v:?}"),
+                    _ => {}
+                }
+            }
+        }
+        let mut m = Fields(String::new(), String::new());
+        e.record(&mut m);
+        if m.0.contains("object sync failed") {
+            self.0.lock().unwrap().push(m.1);
+        }
+    }
+}
