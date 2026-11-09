@@ -76,6 +76,10 @@ final class EventsPageUITests: XCTestCase {
                                 "QA Fixture")
         let row = app.buttons.matching(match).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10), "the seeded future event lists")
+        // It lists third, below the fold: a coordinate tap needs it on screen.
+        let mid = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+        let up = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25))
+        for _ in 0..<10 where row.frame.midY > app.frame.maxY * 0.8 { mid.press(forDuration: 0.05, thenDragTo: up) }
         row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
 
         let close = app.buttons["event-close"]
