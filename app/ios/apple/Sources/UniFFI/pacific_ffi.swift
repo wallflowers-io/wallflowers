@@ -6523,7 +6523,7 @@ public struct EventRow {
         /**
          * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
          * where present they win over this row's inline picture, which stays for older objects.
-         */iconRef: MediaRefRow?, bannerRef: MediaRefRow?) {
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.id = id
         self.title = title
         self.descriptor = descriptor
@@ -7602,7 +7602,7 @@ public struct GroupRow {
         /**
          * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
          * where present they win over this row's inline picture, which stays for older objects.
-         */iconRef: MediaRefRow?, bannerRef: MediaRefRow?) {
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.displayName = displayName
         self.shape = shape
         self.presence = presence
@@ -11195,7 +11195,7 @@ public struct PostRow {
         /**
          * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
          * where present they win over this row's inline picture, which stays for older objects.
-         */iconRef: MediaRefRow?, bannerRef: MediaRefRow?) {
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.id = id
         self.title = title
         self.body = body
@@ -12584,7 +12584,7 @@ public struct ThingRow {
         /**
          * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
          * where present they win over this row's inline picture, which stays for older objects.
-         */iconRef: MediaRefRow?, bannerRef: MediaRefRow?) {
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.id = id
         self.name = name
         self.descriptor = descriptor

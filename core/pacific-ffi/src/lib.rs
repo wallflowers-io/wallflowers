@@ -561,7 +561,9 @@ pub struct PostRow {
     pub comments: u32,
     /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
     /// where present they win over this row's inline picture, which stays for older objects.
+    #[uniffi(default = None)]
     pub icon_ref: Option<MediaRefRow>,
+    #[uniffi(default = None)]
     pub banner_ref: Option<MediaRefRow>,
 }
 
@@ -944,7 +946,9 @@ pub struct ThingRow {
     pub photo_mime: String,
     /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
     /// where present they win over this row's inline picture, which stays for older objects.
+    #[uniffi(default = None)]
     pub icon_ref: Option<MediaRefRow>,
+    #[uniffi(default = None)]
     pub banner_ref: Option<MediaRefRow>,
 }
 
@@ -1122,7 +1126,9 @@ pub struct EventRow {
     pub recurrence: String,
     /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
     /// where present they win over this row's inline picture, which stays for older objects.
+    #[uniffi(default = None)]
     pub icon_ref: Option<MediaRefRow>,
+    #[uniffi(default = None)]
     pub banner_ref: Option<MediaRefRow>,
 }
 
@@ -1664,7 +1670,9 @@ pub struct GroupRow {
     pub cover_mime: String,
     /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
     /// where present they win over this row's inline picture, which stays for older objects.
+    #[uniffi(default = None)]
     pub icon_ref: Option<MediaRefRow>,
+    #[uniffi(default = None)]
     pub banner_ref: Option<MediaRefRow>,
 }
 
