@@ -1082,6 +1082,15 @@ pub enum OpValue {
     Int { v: i64 },
 }
 
+impl From<OpValue> for pacific_media::ArgVal {
+    fn from(v: OpValue) -> Self {
+        match v {
+            OpValue::Text { v } => pacific_media::ArgVal::Text(v),
+            OpValue::Int { v } => pacific_media::ArgVal::Int(v),
+        }
+    }
+}
+
 /// One picture, clip or document on a maximised detail. INLINE ONLY: a detached or
 /// sealed ref (O-79) has no fetch path at this boundary yet (#56), so it does not cross —
 /// a row with no bytes would render as a promise the reader cannot keep.
@@ -2255,16 +2264,55 @@ impl Core {
         let kind = node.object_kind(&object_id)?;
         let d = pacific_core::authoring::op_on(&kind, &op)
             .ok_or_else(|| FfiError::Core(format!("a {kind} has no op '{op}'")))?;
-        let args = args
-            .into_iter()
-            .map(|a| {
-                let v = match a.value {
-                    OpValue::Text { v } => pacific_media::ArgVal::Text(v),
-                    OpValue::Int { v } => pacific_media::ArgVal::Int(v),
-                };
-                (a.key, v)
-            })
-            .collect::<pacific_media::Args>();
+        let args = args.into_iter().map(|a| (a.key, a.value.into())).collect::<pacific_media::Args>();
+        Ok(block_on(node.apply(&object_id, d.op_id, args))?)
+    }
+
+    /// The ICD's words for `op`'s `arg` — what a choice row offers. Empty when the arg is
+    /// free text.
+    pub fn op_vocabulary(&self, op: String, arg: String) -> Vec<String> {
+        pacific_core::authoring::vocabulary(&op, &arg)
+            .map(|w| w.iter().map(|s| s.to_string()).collect())
+            .unwrap_or_default()
+    }
+
+    /// An owner's edit to an op that REPLACES WHOLE — `event.setProfile`, `thing.setProfile`,
+    /// `post.setProfile`, `post.setMedia`: the held args, with `changes` laid over them (an
+    /// empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
+    /// the answer is "". Any other op is refused: it is `object_apply`'s.
+    pub fn object_edit(&self, object_id: String, op: String, changes: Vec<OpArg>) -> Result<String, FfiError> {
+        let node = self.write()?;
+        let held = match op.as_str() {
+            "event.setProfile" => node.event_state(&object_id)?.profile_args(),
+            "thing.setProfile" => node.thing_state(&object_id)?.profile_args(),
+            "post.setProfile" | "post.setMedia" => {
+                let st = node
+                    .posts()?
+                    .into_iter()
+                    .find(|(id, _)| *id == object_id)
+                    .map(|(_, st)| st)
+                    .ok_or_else(|| FfiError::Core(format!("no post {object_id}")))?;
+                if op == "post.setProfile" { st.profile_args() } else { st.media_args() }
+            }
+            _ => return Err(FfiError::Core(format!("'{op}' is not an edit; apply it"))),
+        };
+        let mut args = held.clone();
+        for c in changes {
+            match c.value.into() {
+                pacific_media::ArgVal::Text(t) if t.is_empty() => {
+                    args.remove(&c.key);
+                }
+                v => {
+                    args.insert(c.key, v);
+                }
+            }
+        }
+        if args == held {
+            return Ok(String::new());
+        }
+        let kind = node.object_kind(&object_id)?;
+        let d = pacific_core::authoring::op_on(&kind, &op)
+            .ok_or_else(|| FfiError::Core(format!("a {kind} has no op '{op}'")))?;
         Ok(block_on(node.apply(&object_id, d.op_id, args))?)
     }
 
@@ -4900,12 +4948,11 @@ mod detail_tests {
             ("tz", t("Europe/London")),
             ("allDay", i(1)),
             ("descriptorFormat", t("markdown")),
-            ("gen", i(1)),
         ]);
-        core.object_apply(ev.clone(), "event.editProfile".into(), profile).expect("editProfile");
-        let photo = args(&[("id", t("0000000000000001")), ("photo", t(PNG)), ("photoMime", t("image/png")), ("at", i(5)), ("gen", i(2))]);
+        core.object_apply(ev.clone(), "event.setProfile".into(), profile).expect("setProfile");
+        let photo = args(&[("id", t("0000000000000001")), ("photo", t(PNG)), ("photoMime", t("image/png")), ("at", i(5))]);
         core.object_apply(ev.clone(), "event.addPhoto".into(), photo).expect("addPhoto");
-        let banner = args(&[("banner", t(PNG)), ("bannerMime", t("image/png")), ("gen", i(3))]);
+        let banner = args(&[("banner", t(PNG)), ("bannerMime", t("image/png"))]);
         core.object_apply(ev.clone(), "event.setBanner".into(), banner).expect("setBanner");
         let d = core.event_detail(ev.clone()).expect("event_detail");
         assert_eq!(
@@ -4922,9 +4969,12 @@ mod detail_tests {
         core.object_apply(th.clone(), "thing.addPhoto".into(), photo).expect("thing.addPhoto");
         core.object_apply(th.clone(), "thing.setDisposition".into(), args(&[("state", t("sold")), ("at", i(6))]))
             .expect("setDisposition");
-        let d = core.thing_detail(th).expect("thing_detail");
+        let d = core.thing_detail(th.clone()).expect("thing_detail");
         assert_eq!((d.condition.as_str(), d.description.as_str(), d.disposition.as_str()), ("good", "Oak, one leg mended.", "sold"));
         assert_eq!(d.photos.len(), 1, "the added photo");
+        core.object_edit(th.clone(), "thing.setProfile".into(), args(&[("condition", t("fair"))])).expect("a thing edit");
+        let d = core.thing_detail(th).expect("thing_detail");
+        assert_eq!((d.condition.as_str(), d.description.as_str()), ("fair", "Oak, one leg mended."), "the rest stands");
 
         let po = mint(&core, "post", "Zine");
         let profile = args(&[("title", t("Zine")), ("form", t("pdf")), ("link", t("https://zine.example/a.pdf")), ("bodyFormat", t("markdown")), ("excerpt", t("Issue one."))]);
@@ -4933,10 +4983,26 @@ mod detail_tests {
         core.object_apply(po.clone(), "post.setDocument".into(), doc).expect("setDocument");
         let asset = args(&[("id", t("0000000000000001")), ("asset", t(PNG)), ("assetMime", t("image/png")), ("alt", t("a still")), ("at", i(5))]);
         core.object_apply(po.clone(), "post.addAsset".into(), asset).expect("addAsset");
+        core.object_edit(po.clone(), "post.setProfile".into(), args(&[("excerpt", t("Issue two."))])).expect("a post edit");
         let d = core.post_detail(po).expect("post_detail");
-        assert_eq!((d.form.as_str(), d.body_format.as_str(), d.excerpt.as_str()), ("pdf", "markdown", "Issue one."));
+        assert_eq!((d.form.as_str(), d.link.as_str(), d.body_format.as_str(), d.excerpt.as_str()), ("pdf", "https://zine.example/a.pdf", "markdown", "Issue two."), "the rest stands");
         assert_eq!(d.document.as_ref().map(|m| m.alt.as_str()), Some("zine.pdf"), "the document, named");
         assert_eq!(d.assets.iter().map(|a| a.alt.as_str()).collect::<Vec<_>>(), ["a still"]);
+
+        // An edit restates the held profile: one field changes, the rest stand; an empty
+        // text clears its arg; an edit that changes nothing sends nothing.
+        core.object_edit(ev.clone(), "event.setProfile".into(), args(&[("status", t("postponed")), ("online", t(""))]))
+            .expect("an owner's edit");
+        let d = core.event_detail(ev.clone()).expect("event_detail");
+        assert_eq!((d.status.as_str(), d.online.as_str(), d.ticket_url.as_str()), ("postponed", "", "https://tix.example/a"));
+        assert_eq!(
+            core.object_edit(ev.clone(), "event.setProfile".into(), args(&[("status", t("postponed"))])).expect("a no-op"),
+            "",
+            "nothing changed, nothing sent"
+        );
+        assert!(core.object_edit(ev.clone(), "event.addPhoto".into(), vec![]).is_err(), "not an edit");
+        assert!(core.op_vocabulary("thing.setProfile".into(), "condition".into()).contains(&"good".to_string()));
+        assert!(core.op_vocabulary("thing.setProfile".into(), "description".into()).is_empty(), "free text");
 
         assert!(
             core.object_apply(ev, "thing.setProfile".into(), vec![]).is_err(),
