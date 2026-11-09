@@ -1,11 +1,8 @@
-//! NC-65's guard. A device that joined an object after it began, and was handed no
-//! restatement of it, folds what it cannot see as empty. A sequenced op from it chains to
-//! nothing and breaks the chain for every replica that holds it (ChainBroken); after
-//! that the Arc's node failed every admission. So core refuses, and says why.
-//!
-//! The Door's fresh session is that device: it joins through a pool leaf, and nobody
-//! restates the object for it. A device the owner adds is not: the Add re-emits the
-//! owner's spine at the newcomer's epoch (`reemit_own_spine`), so it holds the chain.
+//! NC-65, under #68 (Ralph, 9 Nov 2026: "they get everything"). A device that joined an
+//! object after it began, through a pool leaf, once folded what it could not see as empty, and
+//! core refused its sequenced ops rather than let them break the chain (ChainBroken). Now the
+//! leaf's segment (ICD `mls.poolHistory`) brings what came before it, so the session holds the
+//! chain and writes. A device the owner adds still holds it from the Add's re-emission.
 
 use crate::common;
 
@@ -15,8 +12,6 @@ use pacific_core::resumption::{HeadInput, Outcome};
 
 const HOST: &str = "arc.example";
 const PRF: [u8; 32] = [0x11; 32];
-const WHY: &str = "this device joined after this object began, and can't see its current state; \
-                   sign in on a device that holds it";
 
 fn face(doc: &str) -> pacific_core::coordinator::Args {
     let mut a = pacific_core::coordinator::Args::new();
@@ -37,7 +32,7 @@ async fn a_site(h: &Harness, phone: usize, bo: usize) -> String {
 }
 
 #[tokio::test]
-async fn a_session_that_joined_through_the_pool_is_refused_the_sites_sequenced_ops() {
+async fn a_session_that_joined_through_the_pool_holds_the_sites_chain_and_writes() {
     let mut h = Harness::people(&[("ada", &["phone"]), ("bo", &["sim"])]).await;
     let (phone, bo) = (h.device("ada", "phone"), h.device("bo", "sim"));
     let site = a_site(&h, phone, bo).await;
@@ -48,28 +43,21 @@ async fn a_session_that_joined_through_the_pool_is_refused_the_sites_sequenced_o
         HeadInput { blob: u.sealed, declared_position: u.position }
     };
 
-    // The first session takes the pool leaf the Site began with, and goes (a Door
-    // session that ended). Upkeep adds the next leaf, after the Site's state was
-    // published, and `pool_provision` restates nothing: the session that takes that
-    // leaf folds the Site as empty.
+    // The first session takes the pool leaf the Site began with, and goes (a Door session
+    // that ended). Upkeep adds the next leaf after the Site's state was published, and gives
+    // it the segment of what came before it: the session that takes that leaf holds the chain.
     let (first, _) = h.sign_in_from_wrap("ada", "first", &PRF, &wrap, HOST, &key, Some(head(&h))).await.unwrap();
     h.partition(first);
     h.settle_among(&[phone, bo]).await;
     let (door, r) = h.sign_in_from_wrap("ada", "door", &PRF, &wrap, HOST, &key, Some(head(&h))).await.unwrap();
     let site_outcome = r.objects.iter().find(|o| o.object == site).map(|o| o.outcome.clone());
     assert!(matches!(site_outcome, Some(Outcome::Joined { .. })), "the session holds the Site: {r:?}");
-    assert!(h.node(door).object_log(&site).unwrap().is_empty(), "and folds it as empty");
+    assert_eq!(h.node(door).group_state(&site).unwrap().display_name, "Mill Road Allotments", "and folds its state");
 
-    let refused = h.node(door).apply(&site, OP_SET_FACE, face(r#"{"v":1,"listed":true}"#)).await.unwrap_err();
-    assert!(refused.to_string().contains(WHY), "setFace: {refused}");
+    h.node(door).apply(&site, OP_SET_FACE, face(r#"{"v":1,"listed":true}"#)).await.unwrap();
     let room = h.node(phone).object_new("forum", "Workshop").unwrap();
     let part = pacific_core::parts::set_part_args(&room, "room", 1);
-    let refused = h.node(door).apply(&site, pacific_core::parts::OP_SET_PART, part.clone()).await.unwrap_err();
-    assert!(refused.to_string().contains(WHY), "setPart: {refused}");
-
-    // The device that minted it writes as before, and its chain is whole.
-    h.node(phone).apply(&site, OP_SET_FACE, face(r#"{"v":1,"listed":true}"#)).await.unwrap();
-    h.node(phone).apply(&site, pacific_core::parts::OP_SET_PART, part).await.unwrap();
+    h.node(door).apply(&site, pacific_core::parts::OP_SET_PART, part).await.unwrap();
     h.settle_among(&[phone, bo, door]).await;
     h.node(phone).object_compliance(&site).unwrap();
     h.node(bo).object_compliance(&site).unwrap();
