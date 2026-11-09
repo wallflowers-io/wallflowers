@@ -45,8 +45,8 @@ struct FeedView: View {
                         // can regression-test). `.combine` keeps the texts readable.
                         .accessibilityElement(children: .combine)
                         // Tapping it opens the object: it is a button to VoiceOver and to a test.
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityIdentifier("feed-row-\(row.id)")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityIdentifier("feed-row-\(row.id)")
                 }
                 if shown.isEmpty {
                     Text("—")
