@@ -344,10 +344,14 @@ impl Node {
             .await;
         self.keep_session(sess);
         let (drained, lost) = drained?;
-        // A FLOOD, SEEN: what each door has lost to its cap, ever. Named, so an owner's device
-        // says when a door is being flooded; rotating the door is the owner's remedy.
-        for (tag, total) in lost.iter().filter(|(_, n)| **n > 0) {
-            tracing::warn!(door = %tag, evicted = total, "a door's cap has evicted knocks");
+        // A FLOOD, SEEN: what each door has lost to its cap since the total last seen, named
+        // once when it rises; rotating the door is the owner's remedy.
+        for (tag, total) in &lost {
+            let Some(i) = tags.iter().position(|t| t == tag) else { continue };
+            let rose = self.dir.evicted_rose(&seeds[i], *total)?;
+            if rose > 0 {
+                tracing::warn!(door = %tag, evicted = rose, total, "a door's cap has evicted knocks");
+            }
         }
         let (now, ttl) = (unix_now(), ext::DOOR_TTL_DAYS as i64 * 86_400);
         let mut new = 0;
