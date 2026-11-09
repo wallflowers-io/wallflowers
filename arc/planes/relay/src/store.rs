@@ -42,7 +42,7 @@
 
 use std::collections::HashMap;
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 
 use crate::mailbox::{Appended, Evicted, Mailbox, Result};
@@ -126,6 +126,16 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         "CREATE UNIQUE INDEX IF NOT EXISTS blob_by_digest ON blob(tag, digest)
            WHERE digest IS NOT NULL;",
     )
+}
+
+/// The least string above every string that begins `prefix`: its last byte plus one. ASCII
+/// prefixes only (a door's is `mls.door.relay.prefix`).
+fn past(prefix: &str) -> String {
+    let mut b = prefix.as_bytes().to_vec();
+    let last = b.pop().expect("a non-empty prefix");
+    assert!(last < 0x7f, "an ASCII prefix");
+    b.push(last + 1);
+    String::from_utf8(b).expect("ASCII")
 }
 
 /// SHA-256 of a blob as published — the identity ONE COPY PER (tag, blob) is kept by.
@@ -442,6 +452,20 @@ impl Store {
     ) -> rusqlite::Result<(u64, Vec<String>)> {
         let mut conn = self.conn.lock().expect("store mutex");
         let tx = conn.transaction()?;
+        // A scope is a RANGE on the primary key (tag, seq), so a door's expiry walks the
+        // door tags, not every row older than the window (ARC_NETWORK, C3).
+        let (scope_sql, bounds) = match scope {
+            Some(p) => ("blob.tag >= ?2 AND blob.tag < ?3", Some((p.to_string(), past(p)))),
+            None => ("1", None),
+        };
+        let args = |first: i64| -> Vec<rusqlite::types::Value> {
+            let mut v = vec![rusqlite::types::Value::Integer(first)];
+            if let Some((lo, hi)) = &bounds {
+                v.push(rusqlite::types::Value::Text(lo.clone()));
+                v.push(rusqlite::types::Value::Text(hi.clone()));
+            }
+            v
+        };
         let mut removed = 0u64;
         let mut bodies: Vec<String> = Vec::new();
 
@@ -450,65 +474,65 @@ impl Store {
             // Record the floor BEFORE deleting: once the rows are gone we cannot
             // know what the highest removed seq was.
             tx.execute(
-                "INSERT INTO retention_floor (tag, floor)
-                 SELECT tag, MAX(seq) FROM blob WHERE seq <= ?1 AND (?2 IS NULL OR substr(tag, 1, length(?2)) = ?2)
+                &format!("INSERT INTO retention_floor (tag, floor)
+                 SELECT tag, MAX(seq) FROM blob WHERE seq <= ?1 AND {scope}
                    AND NOT (EXISTS (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)) GROUP BY tag
-                 ON CONFLICT(tag) DO UPDATE SET floor = MAX(floor, excluded.floor)",
-                params![cutoff, scope],
+                 ON CONFLICT(tag) DO UPDATE SET floor = MAX(floor, excluded.floor)", scope = scope_sql),
+                params_from_iter(args(cutoff)),
             )?;
             if collect {
                 // Inside the transaction, so what is collected is exactly what the
                 // DELETE on the next line removes.
                 let mut stmt = tx.prepare(
-                    "SELECT body FROM blob WHERE seq <= ?1 AND (?2 IS NULL OR substr(tag, 1, length(?2)) = ?2)
-                       AND NOT EXISTS (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)",
+                    &format!("SELECT body FROM blob WHERE seq <= ?1 AND {scope}
+                       AND NOT EXISTS (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)", scope = scope_sql),
                 )?;
-                let rows = stmt.query_map(params![cutoff, scope], |r| r.get::<_, String>(0))?;
+                let rows = stmt.query_map(params_from_iter(args(cutoff)), |r| r.get::<_, String>(0))?;
                 for b in rows {
                     bodies.push(b?);
                 }
             }
             removed += tx.execute(
-                "DELETE FROM blob WHERE seq <= ?1 AND (?2 IS NULL OR substr(tag, 1, length(?2)) = ?2)
-                   AND NOT EXISTS (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)",
-                params![cutoff, scope],
+                &format!("DELETE FROM blob WHERE seq <= ?1 AND {scope}
+                   AND NOT EXISTS (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)", scope = scope_sql),
+                params_from_iter(args(cutoff)),
             )? as u64;
         }
 
         if max_per_tag > 0 {
             // Per tag, everything below the newest `max_per_tag` rows goes.
             tx.execute(
-                "INSERT INTO retention_floor (tag, floor)
+                &format!("INSERT INTO retention_floor (tag, floor)
                  SELECT tag, MAX(seq) FROM (
                    SELECT tag, seq, ROW_NUMBER() OVER (PARTITION BY tag ORDER BY seq DESC) AS rn
-                   FROM blob WHERE (?2 IS NULL OR substr(tag, 1, length(?2)) = ?2) AND NOT EXISTS
+                   FROM blob WHERE {scope} AND NOT EXISTS
                      (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)
                  ) WHERE rn > ?1 GROUP BY tag
-                 ON CONFLICT(tag) DO UPDATE SET floor = MAX(floor, excluded.floor)",
-                params![max_per_tag as i64, scope],
+                 ON CONFLICT(tag) DO UPDATE SET floor = MAX(floor, excluded.floor)", scope = scope_sql),
+                params_from_iter(args(max_per_tag as i64)),
             )?;
             if collect {
                 let mut stmt = tx.prepare(
-                    "SELECT body FROM (
+                    &format!("SELECT body FROM (
                        SELECT body, ROW_NUMBER() OVER (PARTITION BY tag ORDER BY seq DESC) AS rn
-                       FROM blob WHERE (?2 IS NULL OR substr(tag, 1, length(?2)) = ?2) AND NOT EXISTS
+                       FROM blob WHERE {scope} AND NOT EXISTS
                          (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)
-                     ) WHERE rn > ?1",
+                     ) WHERE rn > ?1", scope = scope_sql),
                 )?;
-                let rows = stmt.query_map(params![max_per_tag as i64, scope], |r| r.get::<_, String>(0))?;
+                let rows = stmt.query_map(params_from_iter(args(max_per_tag as i64)), |r| r.get::<_, String>(0))?;
                 for b in rows {
                     bodies.push(b?);
                 }
             }
             removed += tx.execute(
-                "DELETE FROM blob WHERE (tag, seq) IN (
+                &format!("DELETE FROM blob WHERE (tag, seq) IN (
                    SELECT tag, seq FROM (
                      SELECT tag, seq, ROW_NUMBER() OVER (PARTITION BY tag ORDER BY seq DESC) AS rn
-                     FROM blob WHERE (?2 IS NULL OR substr(tag, 1, length(?2)) = ?2) AND NOT EXISTS
+                     FROM blob WHERE {scope} AND NOT EXISTS
                        (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)
                    ) WHERE rn > ?1
-                 )",
-                params![max_per_tag as i64, scope],
+                 )", scope = scope_sql),
+                params_from_iter(args(max_per_tag as i64)),
             )? as u64;
         }
 
