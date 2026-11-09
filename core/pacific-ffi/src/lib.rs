@@ -2276,6 +2276,12 @@ impl Core {
             .unwrap_or_default()
     }
 
+    /// The ICD's `maxLength` for `op`'s `arg` — characters for text, base64 characters for
+    /// inline media. 0 when the ICD states none.
+    pub fn op_arg_max(&self, op: String, arg: String) -> u64 {
+        pacific_core::authoring::max_length(&op, &arg).unwrap_or(0)
+    }
+
     /// An owner's edit to an op that REPLACES WHOLE — `event.setProfile`, `thing.setProfile`,
     /// `post.setProfile`, `post.setMedia`: the held args, with `changes` laid over them (an
     /// empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
@@ -5003,6 +5009,11 @@ mod detail_tests {
         assert!(core.object_edit(ev.clone(), "event.addPhoto".into(), vec![]).is_err(), "not an edit");
         assert!(core.op_vocabulary("thing.setProfile".into(), "condition".into()).contains(&"good".to_string()));
         assert!(core.op_vocabulary("thing.setProfile".into(), "description".into()).is_empty(), "free text");
+        assert_eq!(
+            core.op_arg_max("thing.setProfile".into(), "description".into()),
+            pacific_core::thing::MAX_DESCRIPTION as u64,
+            "the ICD's ceiling"
+        );
 
         assert!(
             core.object_apply(ev, "thing.setProfile".into(), vec![]).is_err(),

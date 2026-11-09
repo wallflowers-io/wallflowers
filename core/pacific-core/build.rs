@@ -44,31 +44,39 @@ fn main() {
     vocabularies(&icd);
 }
 
-/// EVERY CLOSED VOCABULARY, into OUT_DIR/icd_vocabularies.rs: `(op, arg, words)` for each op
-/// arg, on a kind or a facet, that states one — what a UI offers for a choice, so no surface
-/// keeps its own copy of the words.
+/// EVERY CLOSED VOCABULARY AND CEILING, into OUT_DIR/icd_vocabularies.rs: `(op, arg, words)`
+/// and `(op, arg, maxLength)` for each op arg, on a kind or a facet, that states one — what a
+/// UI offers for a choice and how long a value may be, so no surface keeps its own copy.
 fn vocabularies(icd: &serde_json::Value) {
-    let mut rows = std::collections::BTreeMap::new();
+    let mut words = std::collections::BTreeMap::new();
+    let mut ceilings = std::collections::BTreeMap::new();
     for section in ["kinds", "facets"] {
         for holder in icd[section].as_object().expect("the ICD's kinds and facets").values() {
             for (op, decl) in holder["ops"].as_object().into_iter().flatten() {
                 for (arg, a) in decl["args"].as_object().into_iter().flatten() {
                     if let Some(v) = a["vocabulary"].as_object() {
-                        let words: Vec<String> = v.keys().map(|k| format!("{k:?}")).collect();
-                        rows.insert((op.clone(), arg.clone()), words.join(", "));
+                        let w: Vec<String> = v.keys().map(|k| format!("{k:?}")).collect();
+                        words.insert((op.clone(), arg.clone()), w.join(", "));
+                    }
+                    if let Some(n) = a["maxLength"].as_u64() {
+                        ceilings.insert((op.clone(), arg.clone()), n);
                     }
                 }
             }
         }
     }
-    let body: Vec<String> = rows.iter().map(|((op, arg), w)| format!("    ({op:?}, {arg:?}, &[{w}]),")).collect();
+    let words: Vec<String> = words.iter().map(|((op, arg), w)| format!("    ({op:?}, {arg:?}, &[{w}]),")).collect();
+    let ceilings: Vec<String> = ceilings.iter().map(|((op, arg), n)| format!("    ({op:?}, {arg:?}, {n}),")).collect();
     let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_vocabularies.rs");
     std::fs::write(
         out,
         format!(
             "/// Every op arg's closed vocabulary, `(op, arg, words)`, from the ICD at build.\n\
-             pub const VOCABULARIES: &[(&str, &str, &[&str])] = &[\n{}\n];\n",
-            body.join("\n")
+             pub const VOCABULARIES: &[(&str, &str, &[&str])] = &[\n{}\n];\n\
+             /// Every op arg's `maxLength`, `(op, arg, n)`, from the ICD at build.\n\
+             pub const MAX_LENGTHS: &[(&str, &str, u64)] = &[\n{}\n];\n",
+            words.join("\n"),
+            ceilings.join("\n")
         ),
     )
     .expect("icd_vocabularies.rs");

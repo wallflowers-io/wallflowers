@@ -446,6 +446,11 @@ pub fn vocabulary(op: &str, arg: &str) -> Option<&'static [&'static str]> {
     icd_vocabularies::VOCABULARIES.iter().find(|(o, a, _)| *o == op && *a == arg).map(|(_, _, w)| *w)
 }
 
+/// The `maxLength` the ICD states for `op`'s `arg`, or `None`.
+pub fn max_length(op: &str, arg: &str) -> Option<u64> {
+    icd_vocabularies::MAX_LENGTHS.iter().find(|(o, a, _)| *o == op && *a == arg).map(|(_, _, n)| *n)
+}
+
 pub fn catalogue() -> Vec<(&'static OpDecl, Vec<&'static str>)> {
     let mut on: std::collections::BTreeMap<&'static str, (&'static OpDecl, Vec<&'static str>)> = Default::default();
     for kind in kinds() {
