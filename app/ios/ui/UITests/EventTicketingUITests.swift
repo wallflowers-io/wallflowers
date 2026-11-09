@@ -61,7 +61,7 @@ final class EventTicketingUITests: XCTestCase {
     /// One typed-list row, by identifier — the rows are combined elements, so their
     /// inner text is not queryable (TypedListPage combines them on purpose).
     private func eventRow(containing text: String) -> XCUIElement {
-        app.otherElements.matching(
+        app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'list-row-event:' AND label CONTAINS %@", text)
         ).firstMatch
     }

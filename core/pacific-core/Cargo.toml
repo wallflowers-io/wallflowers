@@ -38,7 +38,7 @@ transport = ["dep:tokio", "dep:tokio-tungstenite", "dep:rustls", "dep:futures-ut
 # Left out of a wasm build, mls-rs takes getrandom's `js` backend with it, and
 # with that wasm-bindgen: 697 KB of un-post-processed bindgen describe machinery
 # and four imports the module cannot be instantiated without.
-mls = ["dep:mls-rs", "dep:mls-rs-core", "dep:mls-rs-crypto-rustcrypto"]
+mls = ["dep:mls-rs", "dep:mls-rs-core", "dep:mls-rs-crypto-rustcrypto", "trust/mls"]
 
 # WHY THIS EXISTS. wasm32 has no filesystem and no sockets, so neither SQLite nor
 # mio can cross — `cargo build --target wasm32-unknown-unknown` fails in mio with
@@ -51,12 +51,13 @@ mls = ["dep:mls-rs", "dep:mls-rs-core", "dep:mls-rs-crypto-rustcrypto"]
 #   cargo build -p pacific-core --no-default-features --target wasm32-unknown-unknown
 
 [dependencies]
-pacific-media = { path = "../pacific-media" }
+pacific-media = { path = "../pacific-media", features = ["serde"] }
 pacific-wire.workspace = true
 mls-rs = { workspace = true, optional = true }
 mls-rs-core = { workspace = true, optional = true }
 mls-rs-crypto-rustcrypto = { workspace = true, optional = true }
 ed25519-dalek.workspace = true
+trust.workspace = true
 rand_core = { workspace = true, optional = true }
 sha2.workspace = true
 bip39.workspace = true
@@ -101,6 +102,8 @@ serde_json.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+# The tests' global allocator: the fold cache's measure (tests/it/common).
+pacific-counting = { workspace = true }
 # The resume lines a sign-in emits, captured by its test.
 tracing-subscriber = "0.3"
 # Integration/transport tests spin up a real in-process Semaphore relay: the Arc's, in

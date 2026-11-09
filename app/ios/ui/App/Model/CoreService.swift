@@ -10,6 +10,7 @@
 
 import Foundation
 import SwiftUI
+import Combine      // the Feed's merged inputs (feedInputsChanged)
 import UIKit        // event media: downscale/compress stills under the fold's b64 caps
 import PacificCore
 
@@ -29,7 +30,11 @@ final class CoreService: ObservableObject {
     /// mint). The self avatar + Me profile read this, so two devices show their
     /// own identities rather than a shared hardcoded mock.
     @Published var displayName = ""
-    @Published var objects: [ObjectRow] = []
+    /// THE index of what this device holds (ObjectIndex.swift): every object by kind,
+    /// every person with their avatar.
+    @Published private(set) var index = ObjectIndex()
+    /// Every object held, from the index.
+    var objects: [ObjectRow] { index.rows }
 
     /// The legacy slot: a bare message with no idea what was being attempted. Still
     /// written by call sites that have not been given their operation yet, and promoted
@@ -57,6 +62,32 @@ final class CoreService: ObservableObject {
     /// A read that a person IS waiting on is not this — it is `fail`, with a name.
     func readFailed(_ what: String, _ error: Error, object: String = "") {
         Trace.shared.log("read", object: object, "\(what) — \(error)", ok: false)
+    }
+
+    // MARK: - Reads off the main thread
+
+    /// The latest read asked for, per property: a result that lands after a newer one was
+    /// asked for is dropped, never applied over it.
+    private var asked: [String: Int] = [:]
+
+    /// READ OFF THE MAIN THREAD, APPLY ON IT: the screen never waits on a fold. `read` runs
+    /// detached against the core; `apply` runs on the main actor with its result, if no
+    /// newer read of `what` was asked for meanwhile. The returned task ends once applied,
+    /// for a caller that reads the property next.
+    @discardableResult
+    private func offMain<T>(_ what: String, _ read: @escaping (Core) throws -> T,
+                            apply: @escaping (CoreService, T) -> Void) -> Task<Void, Never> {
+        let gen = (asked[what] ?? 0) &+ 1
+        asked[what] = gen
+        let c = core
+        return Task { [weak self] in
+            let r = await Task.detached(priority: .userInitiated) { Result { try read(c) } }.value
+            guard let self, self.asked[what] == gen else { return }
+            switch r {
+            case .success(let v): apply(self, v)
+            case .failure(let e): self.readFailed(what, e)
+            }
+        }
     }
 
     /// Record a failure against the operation that failed. `operation` completes
@@ -182,6 +213,12 @@ final class CoreService: ObservableObject {
     /// signed Delta — debounced. Idempotent by construction: the core compares a
     /// digest per connection, so a commit that changes nothing authors nothing.
     private func commitProfile() {
+        // Not before the stored card is read: a commit then would publish the empty card
+        // over the profile this person already has.
+        guard profileLoaded else {
+            NSLog("[profile] commit before the profile loaded — not written")
+            return
+        }
         profileCommit?.cancel()
         profileCommit = Task { [weak self] in
             try? await Task.sleep(for: Self.profileDebounce)
@@ -215,8 +252,20 @@ final class CoreService: ObservableObject {
     /// The photo + block colour used to live in UserDefaults and never crossed the
     /// FFI. Anyone upgrading has one there and none in the core, so we lift it in
     /// once — otherwise upgrading would silently blank the avatar the user chose.
-    private func loadProfile() {
-        guard let row = try? core.myProfile() else { return }
+    /// The stored card has been read (`loadProfile`); until then nothing commits one.
+    private var profileLoaded = false
+
+    /// Read off the main thread (a cold fold, most of a second at launch), applied on it,
+    /// then `then` — what reads the card next waits for it.
+    private func loadProfile(then: (() -> Void)? = nil) {
+        offMain("read your profile", { try $0.myProfile() }) { s, row in
+            s.applyProfile(row)
+            then?()
+        }
+    }
+
+    private func applyProfile(_ row: ProfileRow) {
+        profileLoaded = true
         card = row.card
         if card.avatarColor.isEmpty { card.avatarColor = Self.defaultAvatarColorHex }
 
@@ -245,18 +294,6 @@ final class CoreService: ObservableObject {
     /// than rendering a blank one.
     func peerProfile(_ peerId: String) -> ProfileRow? {
         (try? core.peerProfile(peerId: peerId)) ?? nil
-    }
-
-    /// A peer's avatar photo bytes, if they published one.
-    func peerPhoto(_ peerId: String) -> Data? {
-        guard let p = peerProfile(peerId), !p.card.photo.isEmpty else { return nil }
-        return Data(base64Encoded: p.card.photo)
-    }
-
-    /// A peer's chosen block colour, or nil to keep the neutral fallback disc.
-    func peerColor(_ peerId: String) -> Color? {
-        guard let p = peerProfile(peerId), !p.card.avatarColor.isEmpty else { return nil }
-        return Color(hex: p.card.avatarColor)
     }
 
     /// Two-letter initials from the real display name, for the avatar badge.
@@ -498,11 +535,10 @@ final class CoreService: ObservableObject {
                 d.set(true, forKey: Self.firstBootCompleteKey)
             }
         }
-        finishBootstrap()
-        // AFTER the fold is up: an edit made before `finishBootstrap` is clobbered
-        // when the stored card loads (11 Aug — the fleet's colours silently never
-        // landed). A CI mint gets the same key-derived face a real one does.
-        if minted { seedDerivedFace() }
+        // AFTER the stored card loads: an edit made before it is clobbered when it
+        // lands (11 Aug — the fleet's colours silently never landed). A CI mint gets the
+        // same key-derived face a real one does.
+        finishBootstrap(then: minted ? { [weak self] in self?.seedDerivedFace() } : nil)
         // A sequence interrupted AFTER the identity was created (the app was
         // killed between the mint and the last step) resumes rather than
         // stranding a half-set-up user in the shell.
@@ -533,8 +569,7 @@ final class CoreService: ObservableObject {
         guard !trimmed.isEmpty else { return false }
         do {
             _ = try core.initIdentity(displayName: trimmed)
-            finishBootstrap()
-            seedDerivedFace()
+            finishBootstrap { [weak self] in self?.seedDerivedFace() }
             return true
         } catch {
             self.error = String(describing: error)
@@ -663,8 +698,7 @@ final class CoreService: ObservableObject {
     /// catches the app up to it.
     func adoptRestoredIdentity(_ identityKey: String) {
         guard !identityKey.isEmpty else { return }
-        finishBootstrap()
-        seedDerivedFace()
+        finishBootstrap { [weak self] in self?.seedDerivedFace() }
     }
 
     /// A SIGN-IN LANDS, by either door: this device IS the person, so no mint, no
@@ -700,7 +734,8 @@ final class CoreService: ObservableObject {
 
     /// Everything after the identity exists: load it, the profile, the credential
     /// minter, and the first fold.
-    private func finishBootstrap() {
+    /// `then` runs once the stored card has loaded, off the main thread (`loadProfile`).
+    private func finishBootstrap(then: (() -> Void)? = nil) {
         // ROUTES, RE-APPLIED NOW THE IDENTITY EXISTS. The init-time setRoutes fails
         // on a first session (the node opens with the identity) and used to be
         // swallowed whole — so a fresh device spent its ENTIRE first session syncing
@@ -712,7 +747,7 @@ final class CoreService: ObservableObject {
             sas = try core.sas()
             sasWords = (try? core.sasWords()) ?? ""
             displayName = (try? core.displayName()) ?? ""
-            loadProfile()
+            loadProfile(then: then)
             registerArcCredentialMinter()
             refresh()
             #if DEBUG
@@ -780,36 +815,26 @@ final class CoreService: ObservableObject {
     /// freshly-built bundle. Callable via the `export-contact` dev link.
     func reexportContact() { exportDevContact() }
 
-    func refresh() {
+    @discardableResult
+    func refresh() -> Task<Void, Never> {
         // Publish only on CHANGE. @Published fires on every assignment, and this runs
         // on every 3-second sync tick — an ungated write here re-fires every $objects
         // subscriber (the graph projection among them) on a steady-state tick.
-        do {
-            let fresh = try core.objects()
-            if fresh != objects { objects = fresh }
-        } catch { readFailed("re-read your objects", error) }
-        // Places are folded per-object (each has its own log), so they are not derivable
-        // from `objects` — they need their own read, exactly like Things.
-        refreshPlaces()
-        // Posts are folded per-object too — same reason as Places and Things. The FEED
-        // reads them, so a Post minted anywhere reaches the scroll on the next pass.
-        refreshPosts()
-        // The forum→host map rides every re-list: the CHAT list joins on it, and a
-        // room minted or detached anywhere must re-dress its row on the next pass.
-        refreshForumHosts()
-        // Exteriors arrive by sync from connections, so they are re-read on every pass.
-        refreshExteriors()
-    }
-
-    /// THE EXTERIORS THAT REACHED ME (#76): objects I am not in, carried by their members.
-    /// Equality-gated like every tick read.
-    @Published private(set) var exteriors: [ExteriorRow] = []
-
-    func refreshExteriors() {
-        do {
-            let fresh = try core.exteriors()
-            if fresh != exteriors { exteriors = fresh }
-        } catch { readFailed("re-read exteriors", error) }
+        let reads = [
+            refreshIndex(),
+            // Places are folded per-object (each has its own log), so they are not
+            // derivable from `objects` — they need their own read, exactly like Things.
+            refreshPlaces(),
+            // Posts are folded per-object too — same reason as Places and Things. The FEED
+            // reads them, so a Post minted anywhere reaches the scroll on the next pass.
+            refreshPosts(),
+            // The forum→host map rides every re-list: the CHAT list joins on it, and a
+            // room minted or detached anywhere must re-dress its row on the next pass.
+            refreshForumHosts(),
+            // Exteriors arrive by sync from connections, so they are re-read on every pass.
+            refreshExteriors(),
+        ]
+        return Task { for r in reads { await r.value } }
     }
 
     /// forum object id → its hosting Group, the whole map in one FFI call. What
@@ -822,36 +847,44 @@ final class CoreService: ObservableObject {
     /// "Channel / Room"; ThreadView reads the forward set per channel for tabs.
     @Published private(set) var roomHosts: [String: RoomHostRow] = [:]
 
-    /// forum object id → the object it is a part of, and in what role, from the
-    /// forum's OWN fold. A forum in the comments role is its parent's comments
-    /// section: reached from its object, never listed as a conversation.
-    @Published private(set) var forumParents: [String: ForumParentRow] = [:]
+    /// THE EXTERIORS THAT REACHED ME (#76): objects I am not in, carried by their members.
+    /// Read off main and published only on change, like every tick read.
+    @Published private(set) var exteriors: [ExteriorRow] = []
 
-    /// The comments role, as the core's ICD-pinned table names it.
-    private static let commentsPart = commentsRole()
-
-    func isCommentsSection(_ forumId: String) -> Bool {
-        forumParents[forumId]?.role == Self.commentsPart
+    @discardableResult
+    func refreshExteriors() -> Task<Void, Never> {
+        offMain("re-read exteriors", { c in try c.exteriors() }) { s, fresh in
+            if fresh != s.exteriors { s.exteriors = fresh }
+        }
     }
 
-    /// The object's comments section, by the forum's own back-edge: nil until the
-    /// device holds it.
-    func commentsForum(of objectId: String) -> String? {
-        forumParents.values.first { $0.parent == objectId && $0.role == Self.commentsPart }?.forum
+    @discardableResult
+    func refreshForumHosts() -> Task<Void, Never> {
+        offMain("re-read channel hosts", { c in
+            (Dictionary(try c.forumHosts().map { ($0.forum, $0) }, uniquingKeysWith: { a, _ in a }),
+             Dictionary(try c.roomHosts().map { ($0.room, $0) }, uniquingKeysWith: { a, _ in a }))
+        }) { s, read in
+            let (hosts, rooms) = read
+            if hosts != s.forumHosts { s.forumHosts = hosts }
+            if rooms != s.roomHosts { s.roomHosts = rooms }
+        }
     }
 
-    func refreshForumHosts() {
-        do {
-            let fresh = Dictionary(try core.forumHosts().map { ($0.forum, $0) },
-                                   uniquingKeysWith: { a, _ in a })
-            if fresh != forumHosts { forumHosts = fresh }
-            let rooms = Dictionary(try core.roomHosts().map { ($0.room, $0) },
-                                   uniquingKeysWith: { a, _ in a })
-            if rooms != roomHosts { roomHosts = rooms }
-            let parents = Dictionary(try core.forumParents().map { ($0.forum, $0) },
-                                     uniquingKeysWith: { a, _ in a })
-            if parents != forumParents { forumParents = parents }
-        } catch { readFailed("re-read channel hosts", error) }
+    /// The index's two reads, every object and every person, plus the photos that
+    /// moved, off main. Published only on change: this runs on every sync tick.
+    @discardableResult
+    func refreshIndex() -> Task<Void, Never> {
+        let known = index
+        return offMain("re-read your objects and people", { c in
+            let people = try c.people()
+            var photos: [String: PersonPhoto?] = [:]
+            for id in known.stalePhotos(in: people) { photos[id] = try c.personPhoto(identity: id) }
+            return (try c.objects(kind: nil), people, photos)
+        }) { s, read in
+            var next = s.index
+            next.apply(rows: read.0, people: read.1, fetched: read.2)
+            if next != s.index { s.index = next }
+        }
     }
 
     /// A fresh signed contact bundle for the pairing QR. Fails loudly (surfaces
@@ -1006,11 +1039,15 @@ final class CoreService: ObservableObject {
     /// an OutlineModel entity row: those are device-local and cannot be sent to anyone.
     @Published private(set) var places: [PlaceRow] = []
 
-    func refreshPlaces() {
-        do {
-            let fresh = try core.places()
-            if fresh != places { places = fresh }
-        } catch { readFailed("re-read your places", error) }
+    /// The places as the core holds them NOW, read on the caller's thread: only for a
+    /// lookup that missed the published list (a deep link ahead of the first refresh).
+    func placesNow() -> [PlaceRow] { (try? core.places()) ?? places }
+
+    @discardableResult
+    func refreshPlaces() -> Task<Void, Never> {
+        offMain("re-read your places", { try $0.places() }) { s, fresh in
+            if fresh != s.places { s.places = fresh }
+        }
     }
 
     /// Mint a Place from a live location fix. A group of 1: local, no relay, until shared.
@@ -1065,12 +1102,11 @@ final class CoreService: ObservableObject {
     }
 
     /// Re-read the merged listing (pure fold read; asks nobody anything).
-    func refreshDiscovered(hops: UInt32 = 2) {
-        do {
-            let fresh = try core.discoverResults(kind: "place", hops: hops)
-            if fresh != discovered { discovered = fresh }
+    @discardableResult
+    func refreshDiscovered(hops: UInt32 = 2) -> Task<Void, Never> {
+        offMain("re-read discovered places", { try $0.discoverResults(kind: "place", hops: hops) }) { s, fresh in
+            if fresh != s.discovered { s.discovered = fresh }
         }
-        catch { readFailed("re-read discovered places", error) }
     }
 
     /// Adopt a discovered place as a held Place I can publish into. Minted-wins:
@@ -1318,21 +1354,22 @@ final class CoreService: ObservableObject {
 
     // Equality-gated like `refresh()`: an unchanged read must not republish — with the
     // feed subscribed to the tick, an ungated assignment is the 4 Aug storm again.
-    func refreshThings() {
-        do {
-            let fresh = try core.things()
-            if fresh != things { things = fresh }
-        }
-        catch { readFailed("re-read your things", error) }
-        refreshListings()
+    @discardableResult
+    func refreshThings() -> Task<Void, Never> {
+        let reads = [
+            offMain("re-read your things", { try $0.things() }) { s, fresh in
+                if fresh != s.things { s.things = fresh }
+            },
+            refreshListings(),
+        ]
+        return Task { for r in reads { await r.value } }
     }
 
-    func refreshListings() {
-        do {
-            let fresh = try core.listings()
-            if fresh != listings { listings = fresh }
+    @discardableResult
+    func refreshListings() -> Task<Void, Never> {
+        offMain("re-read listings", { try $0.listings() }) { s, fresh in
+            if fresh != s.listings { s.listings = fresh }
         }
-        catch { readFailed("re-read listings", error) }
     }
 
     /// Fan my postures out to every connection and relay onward what I hold. The sync loop
@@ -1564,23 +1601,38 @@ final class CoreService: ObservableObject {
     /// is what keeps the 3s sync tick from re-rendering the feed over unchanged rows.
     @Published private(set) var posts: [PostRow] = []
 
-    func refreshPosts() {
-        do {
-            let fresh = try core.posts()
-            if fresh != posts { posts = fresh }
+    @discardableResult
+    func refreshPosts() -> Task<Void, Never> {
+        offMain("re-read your posts", { try $0.posts() }) { s, fresh in
+            if fresh != s.posts { s.posts = fresh }
         }
-        catch { readFailed("re-read your posts", error) }
     }
 
     @Published private(set) var events: [EventRow] = []
 
-    func refreshEvents() {
-        do {
-            let fresh = try core.events()
-            if fresh != events { events = fresh }
-        }
-        catch { readFailed("re-read your events", error) }
-        refreshInvites()
+    /// Fires when anything the Feed assembles from changes: a mint lands with no sync,
+    /// and a device that cannot reach the relay never ticks. A @Published publisher
+    /// emits before its property is set, so this delivers on the next main-queue turn,
+    /// when the new values are readable.
+    lazy var feedInputsChanged: AnyPublisher<Void, Never> =
+        Publishers.Merge4($events.map { _ in () }, $posts.map { _ in () },
+                          $listings.map { _ in () }, $index.map { _ in () })
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
+
+    /// The events as the core holds them NOW, read on the caller's thread: only for a
+    /// lookup that missed the published list (a deep link ahead of the first refresh).
+    func eventsNow() -> [EventRow] { (try? core.events()) ?? events }
+
+    @discardableResult
+    func refreshEvents() -> Task<Void, Never> {
+        let reads = [
+            offMain("re-read your events", { try $0.events() }) { s, fresh in
+                if fresh != s.events { s.events = fresh }
+            },
+            refreshInvites(),
+        ]
+        return Task { for r in reads { await r.value } }
     }
 
     /// Events I have said I am GOING to — the delta-backed commitment that replaced
@@ -1593,28 +1645,34 @@ final class CoreService: ObservableObject {
 
     /// eventId -> the peer whose channel carries the invitation. An answer has to be
     /// authored to SOMEBODY; this is who.
-    private var inviteChannels: [String: String] = [:]
+    /// Published: `EventsPage.canCommit` reads it as it draws, and it now lands off main.
+    @Published private(set) var inviteChannels: [String: String] = [:]
 
     /// Re-fold the invitations on every connection. Cheap enough to run on the sync
     /// tick (one fold per connection) and it must not be lazy — a row asking "am I
     /// going" mid-scroll cannot afford a per-row fold.
-    func refreshInvites() {
-        var going: Set<String> = []
-        var channels: [String: String] = [:]
+    @discardableResult
+    func refreshInvites() -> Task<Void, Never> {
         let me = myIdentityHex
-        // includeBlocked: a commitment you made stays true after you block the inviter.
-        for c in connectionRows(includeBlocked: true) {
-            for inv in invites(peer: c.peerId) {
-                // An invitation I RECEIVED — mine to answer, so this channel is where
-                // the answer goes.
-                if inv.author != me {
-                    channels[inv.event] = c.peerId
-                    if inv.reply == "going" { going.insert(inv.event) }
+        return offMain("read your connections", { c in
+            var going: Set<String> = []
+            var channels: [String: String] = [:]
+            // includeBlocked: a commitment you made stays true after you block the inviter.
+            for conn in try c.connections() {
+                for inv in (try? c.invites(peer: IdentityKey.hex(conn.peerId))) ?? [] {
+                    // An invitation I RECEIVED — mine to answer, so this channel is where
+                    // the answer goes.
+                    if inv.author != me {
+                        channels[inv.event] = conn.peerId
+                        if inv.reply == "going" { going.insert(inv.event) }
+                    }
                 }
             }
+            return (going, channels)
+        }) { s, read in
+            if read.0 != s.goingEvents { s.goingEvents = read.0 }
+            if read.1 != s.inviteChannels { s.inviteChannels = read.1 }
         }
-        if going != goingEvents { goingEvents = going }
-        inviteChannels = channels
     }
 
     /// Commit, or withdraw. Returns false when there is nobody to tell — an event
@@ -1905,6 +1963,25 @@ final class CoreService: ObservableObject {
     }
 
     /// BUYER: the ticket wallet folded off the connection with `peer` (who delivered).
+    /// LIFE's people and the listings the wallet holds tickets for, read off the main
+    /// thread in one pass: on it, the wallet's per-connection fold stalled every arrival.
+    func peopleAndHeldListings() async -> (people: [ConnectionRow], held: Set<String>) {
+        let core = self.core
+        let read = await Task.detached(priority: .userInitiated) { () -> ([ConnectionRow], Set<String>, Error?) in
+            do {
+                let people = try core.connections()
+                var held: Set<String> = []
+                for p in people {
+                    // A not-yet-formed channel is not an error worth an alert.
+                    for t in (try? core.wallet(peer: IdentityKey.hex(p.peerId))) ?? [] { held.insert(t.listing) }
+                }
+                return (people, held, nil)
+            } catch { return ([], [], error) }
+        }.value
+        if let e = read.2 { readFailed("read your connections", e) }
+        return (read.0.filter { !BlockStore.shared.contains($0.peerId) }, read.1)
+    }
+
     func walletTickets(peer: String) -> [WalletTicketRow] {
         do { return try core.wallet(peer: Self.identityHex(peer)) }
         catch { return [] }   // a not-yet-formed channel is not an error worth an alert
@@ -1990,31 +2067,51 @@ final class CoreService: ObservableObject {
 
     // MARK: - Graph projection inputs
 
-    /// Everything `ObjectProjection` reads through the FFI, gathered in ONE detached
-    /// pass: connections, each object's roster, each group's folded view. Off-main
-    /// because this is ~2N FFI calls and its triggers fire on the sync cadence — on
-    /// the main actor it was a per-tick UI stall proportional to the object count.
+    /// What `ObjectProjection` needs beyond the object rows (which carry each roster):
+    /// the index's names, and each group's folded view, read off-main in one pass.
     struct ProjectionInputs {
-        let connections: [ConnectionRow]
-        let members: [String: [String]]   // object id → roster identity hexes
+        let names: [String: String]       // identity hex → name (ObjectIndex.names)
         let groups: [String: GroupRow]    // group object id → folded view
     }
 
     func projectionInputs(for objects: [ObjectRow]) async -> ProjectionInputs {
         let core = self.core
-        let wanted = objects
-            .filter { ["group", "project", "thing", "place", "event"].contains($0.kind) }
-            .map { (id: $0.id, kind: $0.kind) }
+        let names = index.names
+        let wanted = objects.filter { $0.kind == "group" }.map(\.id)
         return await Task.detached(priority: .utility) {
-            var members: [String: [String]] = [:]
             var groups: [String: GroupRow] = [:]
-            for o in wanted {
-                members[o.id] = (try? core.objectMembers(objectId: o.id)) ?? []
-                if o.kind == "group" { groups[o.id] = try? core.groupView(objectId: o.id) }
-            }
-            return ProjectionInputs(connections: (try? core.connections()) ?? [],
-                                    members: members, groups: groups)
+            for id in wanted { groups[id] = try? core.groupView(objectId: id) }
+            return ProjectionInputs(names: names, groups: groups)
         }.value
+    }
+
+    // MARK: - The chat list, read in one pass off the main thread
+
+    /// What the CHAT list draws, gathered off the main actor: on it, the list's per-group
+    /// and per-DM transcript folds made every arrival on CHAT a stall.
+    struct ChatSnapshot {
+        let connections: [ConnectionRow]           // blocked ones included; the list filters
+        let messages: [String: [ChatMsg]]          // group object id or peer id → transcript
+    }
+
+    func chatSnapshot(groups: [ObjectRow]) async -> ChatSnapshot {
+        let core = self.core
+        let wanted = groups.map(\.id)
+        let read = await Task.detached(priority: .userInitiated) { () -> (ChatSnapshot, [Error]) in
+            var failed: [Error] = []
+            var messages: [String: [ChatMsg]] = [:]
+            for g in wanted {
+                do { messages[g] = try core.objectMessages(objectId: g) } catch { failed.append(error) }
+            }
+            var connections: [ConnectionRow] = []
+            do { connections = try core.connections() } catch { failed.append(error) }
+            for c in connections {
+                do { messages[c.peerId] = try core.dmMessages(peerId: c.peerId) } catch { failed.append(error) }
+            }
+            return (ChatSnapshot(connections: connections, messages: messages), failed)
+        }.value
+        for e in read.1 { readFailed("read the transcript", e) }
+        return read.0
     }
 
     // MARK: - Orgs (the LIFE ▸ GROUPS ▸ ＋ hot path)
@@ -2123,7 +2220,7 @@ final class CoreService: ObservableObject {
     /// bare hex as if it were a name.
     func displayName(forSpace space: String) -> String {
         let hex = Self.identityHex(space)
-        if let n = peerNamesByIdentity()[hex], !n.isEmpty { return n }
+        if let n = index.names[hex] { return n }
         if hex == myIdentityHex { return displayName }
         return String(hex.prefix(10)) + "…"
     }
@@ -2171,12 +2268,11 @@ final class CoreService: ObservableObject {
     /// name in the MLS GroupContext and not in its folded profile.
     var spaces: [GroupListRow] { orgs.filter(\.isSpace) }
 
-    func refreshOrgs() {
-        do {
-            let fresh = try core.groups()
-            if fresh != orgs { orgs = fresh }
+    @discardableResult
+    func refreshOrgs() -> Task<Void, Never> {
+        offMain("re-read your Spaces", { try $0.groups() }) { s, fresh in
+            if fresh != s.orgs { s.orgs = fresh }
         }
-        catch { readFailed("re-read your Spaces", error) }
     }
 
     /// ONE group's LIFE listing row — roster count (MLS, the single source) +
@@ -2486,19 +2582,6 @@ final class CoreService: ObservableObject {
         } catch { fail("rename the Space", error); return false }
     }
 
-    /// Peer display names keyed by 64-char identity hex — the roster form
-    /// (`objectMembers`, `ChatMsg.author`) rather than the `space1…` address that
-    /// `connections()` returns. Built once per list rebuild, not once per row.
-    func peerNamesByIdentity() -> [String: String] {
-        var out: [String: String] = [:]
-        // includeBlocked: a label map, not a people surface — a blocked member's group
-        // messages still render, and they should carry a name rather than raw hex.
-        for c in connectionRows(includeBlocked: true) where !c.displayName.isEmpty {
-            out[Self.identityHex(c.peerId)] = c.displayName
-        }
-        return out
-    }
-
     /// A space id (`space1<hex>`) reduced to the bare 64-char identity hex.
     static func identityHex(_ spaceId: String) -> String {
         IdentityKey.hex(spaceId)
@@ -2509,8 +2592,12 @@ final class CoreService: ObservableObject {
     /// object id: that is an address, not a name. Members we have no name for are
     /// counted ("+2") rather than rendered as hex.
     func derivedGroupName(_ objectId: String, names: [String: String]? = nil) -> String {
-        let names = names ?? peerNamesByIdentity()
-        let others = objectMembers(objectId).filter { $0 != myIdentityHex }
+        derivedGroupName(members: objectMembers(objectId), names: names ?? index.names)
+    }
+
+    /// The same label from a roster already read.
+    func derivedGroupName(members: [String], names: [String: String]) -> String {
+        let others = members.filter { $0 != myIdentityHex }
         guard !others.isEmpty else { return "Just you" }
         let known = others.compactMap { names[$0] }
         let unknown = others.count - known.count
@@ -2803,11 +2890,14 @@ final class CoreService: ObservableObject {
         syncing = true
         defer { syncing = false }
         let c = core
+        var synced = false
         do {
             _ = try await Task.detached { try c.sync() }.value
-            syncTick &+= 1
+            synced = true
         } catch { if !silent { self.error = String(describing: error) } }
-        refresh()
+        // The re-read lands BEFORE the tick: every handler on `syncTick` reads this pass.
+        await refresh().value
+        if synced { syncTick &+= 1 }
         TimingProbe.shared.drain(core: self)   // no-op unless PACIFIC_TIMING=1
     }
 

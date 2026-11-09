@@ -1,7 +1,8 @@
 //  ObjectCard.swift
 //  THE card (FEED-TRANSMISSION 0-ANSWER-G S28/S34) — ONE component, inherited by
-//  every GroupObject kind. The Instagram frame: a header LINE above the square
-//  (author leading, location trailing, the provenance mark as the avatar slot),
+//  every GroupObject kind. The Instagram frame: a header above the square (the
+//  author's avatar, ringed by provenance, their name and the place leading; the
+//  kind's glyph trailing),
 //  the SQUARE (media when the item carries it, dark ground otherwise, the title
 //  as caption), and the footer line BELOW, leading. Cards breathe — spacing lives
 //  in the owning stack.
@@ -24,37 +25,37 @@ struct ObjectCard: View {
     /// profile — person or Space — routed at the call site like every card tap.
     /// nil handler or nil route = plain text, never a dead button.
     var onAuthor: ((AuthorRoute) -> Void)? = nil
+    @EnvironmentObject private var core: CoreService
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Card.vstackSpacing) {
-            HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Card.headerGap) {
-                provenanceMark
-                    .frame(width: DesignTokens.Card.provenanceDot, height: DesignTokens.Card.provenanceDot)
-                    .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] + 3 }
+            // ABOVE THE CARD: who made it on the left (avatar, name, and the place under
+            // the name), what it is on the right, as its glyph alone.
+            HStack(alignment: .center, spacing: DesignTokens.Card.headerGap) {
                 if !row.author.isEmpty {
-                    if let route = row.authorRoute, let onAuthor {
-                        Button { onAuthor(route) } label: {
-                            Text(row.author)
-                                .font(.system(size: DesignTokens.Card.authorSize, weight: .semibold))
-                                .lineLimit(1)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("card-author")
-                    } else {
-                        Text(row.author)
-                            .font(.system(size: DesignTokens.Card.authorSize, weight: .semibold))
+                    avatar
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    if !row.author.isEmpty { author }
+                    if !row.location.isEmpty {
+                        Text(row.location)
+                            .font(.system(size: DesignTokens.Card.locationSize))
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
                 Spacer(minLength: 12)
-                if !row.location.isEmpty {
-                    Text(row.location)
-                        .font(.system(size: DesignTokens.Card.locationSize))
+                if let kind {
+                    Image(systemName: kind.glyph)
+                        .font(.system(size: DesignTokens.Card.kindSize, weight: .semibold))
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .accessibilityLabel(kind.noun)
+                        .accessibilityIdentifier("card-kind-\(kind.rawValue)")
                 }
             }
             .padding(.horizontal, DesignTokens.Card.lineInset)
+            // The title says all of this aloud (`spoken`).
+            .accessibilityHidden(true)
 
             // The title's ink depends on its ground: white over media (the scrim
             // guarantees it in both keys), themed ink over the bare card.
@@ -73,6 +74,7 @@ struct ObjectCard: View {
                     .font(.system(size: DesignTokens.Card.titleSize, weight: .semibold))
                     .foregroundStyle(banner == nil ? Theme.textPrimary : Color.white)
                     .lineLimit(2)
+                    .accessibilityLabel(spoken)
                     .padding(DesignTokens.Card.titleInset)
             }
             .aspectRatio(1, contentMode: .fit)
@@ -88,21 +90,76 @@ struct ObjectCard: View {
             }
         }
         .padding(.horizontal, DesignTokens.Life.gutter)
+        // The author's door is an action on the card, not a button lost inside it.
+        .accessibilityActions {
+            if let route = row.authorRoute, let onAuthor {
+                Button(row.author) { onAuthor(route) }
+            }
+        }
+    }
+
+    /// What the title says aloud: the card's title first, then what it is, who made it
+    /// and where. The header above is hidden from VoiceOver, as this already says it.
+    private var spoken: String {
+        [row.title, kind?.noun ?? "", row.author.isEmpty ? "" : "by \(row.author)", row.location]
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 
     private var square: RoundedRectangle {
         RoundedRectangle(cornerRadius: DesignTokens.Skin.radius, style: .continuous)
     }
 
-    @ViewBuilder private var provenanceMark: some View {
+    /// The author's name: a door to their profile where the row has one.
+    @ViewBuilder private var author: some View {
+        let name = Text(row.author)
+            .font(.system(size: DesignTokens.Card.authorSize, weight: .semibold))
+            .lineLimit(1)
+        if let route = row.authorRoute, let onAuthor {
+            Button { onAuthor(route) } label: { name }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("card-author")
+        } else {
+            name.accessibilityIdentifier("card-author")
+        }
+    }
+
+    /// The author's face, from the index: their photo, else their colour, else the
+    /// colour their key derives. Its ring is the provenance mark.
+    private var avatar: some View {
+        let id = row.authorID ?? ""
+        return Avatar(initials: Avatar.initials(row.author), tint: Theme.fill,
+                      size: DesignTokens.Card.avatar,
+                      photo: id.isEmpty ? nil : core.index.photo(id),
+                      color: id.isEmpty ? nil
+                          : core.index.color(id) ?? Color(hex: CoreService.derivedAvatarColorHex(forIdentityKey: id)))
+            .overlay(provenanceRing)
+            .accessibilityIdentifier("card-avatar")
+    }
+
+    @ViewBuilder private var provenanceRing: some View {
         switch row.provenance {
         case .member:
-            Circle().fill(Color.primary)
+            Circle().strokeBorder(Color.primary, lineWidth: DesignTokens.Card.ring)
         case .hops:
-            Circle().strokeBorder(style: StrokeStyle(lineWidth: 1.4, dash: [2, 2]))
+            Circle().strokeBorder(style: StrokeStyle(lineWidth: DesignTokens.Card.ring, dash: [2, 2]))
                 .foregroundStyle(.secondary)
         case .hydrated:
-            Circle().strokeBorder(lineWidth: 1.4)
+            Circle().strokeBorder(.secondary, lineWidth: DesignTokens.Card.ring)
+        }
+    }
+
+    /// The kind the card shows, as the creator names it (the same glyph as RED's dial).
+    private var kind: NewKind? {
+        switch row.category {
+        case .events:   return .event
+        case .posts:    return .post
+        case .trade:    return .listing
+        case .places:   return .place
+        case .projects: return .project
+        case .groups:   return .space
+        case .channels: return .channel
+        case .people, .things, .job: return nil
         }
     }
 }

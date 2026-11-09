@@ -453,21 +453,26 @@ struct LifeView: View {
         Task { _ = await core.requestTicket(peer: owner, listing: row.listing, qty: 1, pi: pi) }
     }
 
-    /// The listings the wallet holds credentials for, across every connection.
-    private func reloadHeldListings() {
-        heldListings = Set(connections.flatMap { core.walletTickets(peer: $0.peerId).map(\.listing) })
+    /// PEOPLE's real people, and the listings the wallet holds credentials for across
+    /// them — read off the main thread, applied when they land.
+    private func reloadPeople() {
+        Task {
+            let read = await core.peopleAndHeldListings()
+            connections = read.people
+            heldListings = read.held
+        }
     }
 
     /// Entry work — run at launch (the preload warm-up) and again on every real
     /// arrival at this page. Cheap enough to repeat; keeping it in one place is
     /// what keeps the parked screen's data as fresh as the visited one's.
     private func enterLife() {
+        // Every read here lands off the main thread: the page shows what it has at once.
         core.refresh()
-        connections = core.connectionRows()      // PEOPLE's real people
+        reloadPeople()                           // PEOPLE, and the ticket capsule's TICKET ✓ state
         core.refreshThings()                     // the market face's minted objects
         core.refreshEvents()                     // the minted Event GroupObjects
         core.refreshOrgs()                       // the Group identity records (GROUPS)
-        reloadHeldListings()                     // the ticket capsule's TICKET ✓ state
         Task { await graph.refreshEntities() }   // pull the latest resolved entities on entry
         shell.suppressPageSwipe = jiggle || showingMap
         shell.showCompass = showingMap
@@ -480,8 +485,8 @@ struct LifeView: View {
         let real = connections.map { c -> ContactJewel in
             let name = c.displayName.isEmpty ? String(c.peerId.prefix(12)) + "…" : c.displayName
             return ContactJewel(id: c.peerId, name: name,
-                                photo: core.peerPhoto(c.peerId),
-                                color: core.peerColor(c.peerId) ?? LifeFilter.people.color)
+                                photo: core.index.photo(c.peerId),
+                                color: core.index.color(c.peerId) ?? LifeFilter.people.color)
         }
         return real.isEmpty ? ContactJewel.demo : real
     }
@@ -494,7 +499,7 @@ struct LifeView: View {
 
 
     /// Connection display names keyed by identity hex — built once per render, not per row.
-    private var peerNames: [String: String] { core.peerNamesByIdentity() }
+    private var peerNames: [String: String] { core.index.names }
 
     /// DEBUG-only headless drives of the pages simctl cannot reach by tapping
     /// (`-pacificOpenEvent` / `-pacificOpenListing`). Lifted OUT of `body`'s
@@ -583,9 +588,13 @@ struct LifeView: View {
                                    onNew: (filter.newKind == nil && filter != .people) ? nil : onNew)
                 }
         }
-        // The feed assembles once per sync tick and once per filter change — the
-        // equality gate inside the store makes redundant ticks free.
+        // The feed assembles once per sync tick, once per filter change, and whenever one
+        // of its inputs changes: a mint lands with no sync, and a device that cannot reach
+        // the relay never ticks. (`feedInputsChanged` delivers on the next main-queue turn,
+        // after the @Published property is set.) The equality gate inside the store makes
+        // repeats free.
         .onReceive(core.$syncTick) { _ in feedStore.refresh(core: core, query: lifeQuery) }
+        .onReceive(core.feedInputsChanged) { feedStore.refresh(core: core, query: lifeQuery) }
         .onChange(of: lifeQuery.locked) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
         .onChange(of: lifeQuery.bound) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
         .task {
@@ -662,8 +671,7 @@ struct LifeView: View {
         // A landed sync can add a connection — re-read it so PEOPLE self-heals. It can also
         // deliver a ticket or fold an event, so the capsule's inputs re-read with it.
         .onReceive(core.$syncTick) { _ in
-            connections = core.connectionRows()
-            reloadHeldListings()
+            reloadPeople()
             // A landed sync can add a group, fold a profile edit, or land a
             // forum edge — the GROUPS page re-lists from the same tick.
             core.refreshOrgs()

@@ -434,10 +434,14 @@ pub struct HistorySent {
 type HistoryPlan = (Option<crate::history::Bundle>, Vec<crate::history::Bundle>, HistorySent);
 
 /// How long an admitter waits for a Site not yet on its Node (NC-140), inside the Door's 20 s
-/// call to the Arc, and the pause between its checks ([`Node::site_ready`]). The wait holds no
-/// lock: each check takes the Node alone, and the admission after it.
+/// call to the Arc, and the pause between its checks ([`Node::intro_fetch`], with no lock, then
+/// [`Node::site_take`] under it). The wait holds no lock: each check's ingest takes the Node
+/// alone, and the admission after it.
 pub const SITE_WAIT: std::time::Duration = std::time::Duration::from_millis(2500);
 pub const SITE_WAIT_PAUSE: std::time::Duration = std::time::Duration::from_millis(400);
+/// An intro mailbox fetched outside the node lock ([`Node::intro_fetch`]), for [`Node::site_take`].
+pub struct IntroFetched(Vec<crate::router::Drained>);
+
 /// A Site not on this Node after the wait: `NotReady`'s words, which the Arc answers 503.
 pub const SITE_NOT_HERE: &str = "the Site is not on this Arc yet; try again";
 
@@ -529,6 +533,26 @@ impl Node {
         Ok(Self {
             id: identity::load()?,
             dir: Directory::open()?,
+            projection: None,
+            routes: crate::router::Routes::load(),
+            held: Default::default(),
+            skipped_own: Default::default(),
+            own_unsent: Default::default(),
+            card_everywhere: Default::default(),
+            joined_tried: Default::default(),
+            restated: Default::default(),
+            live: Default::default(),
+            live_state: Default::default(),
+        })
+    }
+
+    /// A Node on an open another Node holds (`Directory::shared`), sharing its checked
+    /// signatures and folds (`Directory::open_beside`): a long-lived embedding reads on one
+    /// while another writes. Everything else is opened as `open` opens it.
+    pub fn open_beside(open: &crate::directory::Shared) -> Result<Self, CoreError> {
+        Ok(Self {
+            id: identity::load()?,
+            dir: Directory::open_beside(open)?,
             projection: None,
             routes: crate::router::Routes::load(),
             held: Default::default(),
@@ -743,7 +767,7 @@ impl Node {
         let kp = mls::make_key_package_bytes(&client)?;
         let intro = self.dir.my_intro_tag()?;
         let bundle = handshake::build_bundle(&self.id, kp, intro, &name)?;
-        bundle.encode()
+        Ok(bundle.encode()?)
     }
 
     // ---- `pacific pair --scan <bundle>` (scanner: create group + send Welcome) ----
@@ -1084,7 +1108,7 @@ impl Node {
                 continue;
             }
             let live: Vec<([u8; 32], crate::bundles::Offer)> =
-                self.folded_group(&gid)?.state().bundles.live(&me).map(|(k, o)| (k, o.clone())).collect();
+                self.group_state_of(&gid)?.bundles.live(&me).map(|(k, o)| (k, o.clone())).collect();
             let mut held = 0;
             for (kp, o) in live {
                 let used = self.dir.offered_here(&kp)?
@@ -1770,7 +1794,7 @@ impl Node {
             if self.dir.pending_outbox(&gid, &me)?.is_empty() {
                 continue;
             }
-            match self.publish_pending(&hex::encode(&gid)).await {
+            match self.publish_pending_as(&hex::encode(&gid), true).await {
                 Ok(k) => sent += k,
                 Err(e) => tracing::warn!(target: "pacific::sync", group = %hex::encode(&gid), error = %e,
                                          "a local commit stays in the outbox for the next sync"),
@@ -1783,8 +1807,20 @@ impl Node {
     /// answer): the group drained to head, a waiting proposal committed, and each of this
     /// device's undelivered Deltas sealed at the live epoch, published on the held
     /// session and marked delivered on its Ack. A link that fails leaves them in the
-    /// outbox for the next sync, as a write made offline does. The count sent.
+    /// outbox for the next sync, as a write made offline does. The count sent: rows that
+    /// left the outbox, not rows walked.
+    ///
+    /// A WRITE TO A NAMED OBJECT TRIES NOW (#75): a queue backed off after a lost slot is
+    /// claimed on this call all the same, and a failure is an error, never a quiet `Ok` —
+    /// the Door answers a write as relayed on this (NC-93). RFC 9420 §14 backs off the
+    /// loser, not the person.
     pub async fn publish_pending(&self, object_id_hex: &str) -> Result<usize, CoreError> {
+        self.publish_pending_as(object_id_hex, false).await
+    }
+
+    /// [`Self::publish_pending`]; `patient` honours a slot backoff, as a sweep or a tick
+    /// does (`publish_all_pending`), leaving that object's sequenced rows queued.
+    async fn publish_pending_as(&self, object_id_hex: &str, patient: bool) -> Result<usize, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
         if self.dir.group_leaf_count(&group_id)? <= 1 {
             return Ok(0);
@@ -1804,13 +1840,12 @@ impl Node {
             let client = mls::build_client_sqlite(&paths::db_path(), sid, sk)?;
             group = self.load_member_group(&client, &group_id)?;
         }
-        let mut sent = 0;
-        for (did, env) in self.dir.pending_outbox(&group_id, &me)? {
-            self.flush_one(&mut sess, &mut group, &group_id, &did, &env).await?;
-            sent += 1;
+        let queued = self.dir.pending_outbox(&group_id, &me)?;
+        for (did, env) in &queued {
+            self.flush_one(&mut sess, &mut group, &group_id, did, env, patient).await?;
         }
         self.done_with(sess, home).await;
-        Ok(sent)
+        Ok(queued.len().saturating_sub(self.dir.pending_outbox(&group_id, &me)?.len()))
     }
 
     async fn post_to_group(
@@ -1953,7 +1988,7 @@ impl Node {
             if let Ok(mut sess) = Router::open(&routes).await {
                 for (did, env) in self.dir.pending_outbox(group_id, &me)? {
                     let _ = self
-                        .flush_one(&mut sess, &mut group, group_id, &did, &env)
+                        .flush_one(&mut sess, &mut group, group_id, &did, &env, true)
                         .await;
                 }
                 sess.close().await;
@@ -2063,7 +2098,7 @@ impl Node {
                 }
             }
             if let Err(e) = self
-                .flush_one(&mut sess, group, group_id, &delta_id, &envelope)
+                .flush_one(&mut sess, group, group_id, &delta_id, &envelope, false)
                 .await
             {
                 // STILL A WARN, AND STILL NOT THE CALLER'S BUSINESS: the outbox's
@@ -2126,7 +2161,8 @@ impl Node {
     /// still queued, the whole queue on its object goes, each through its slot; if it is
     /// not (sent by an earlier step of the same walk, or replaced after a lost slot), it is
     /// done — publishing the snapshot's copy would send it twice, or send a dropped one and
-    /// fork. Re-emission of sent deltas calls [`Self::publish_one`] itself.
+    /// fork. Re-emission of sent deltas calls [`Self::publish_one`] itself. `patient`: a
+    /// sweep or a tick, which leaves a backed-off queue waiting; a person's write is not.
     async fn flush_one(
         &self,
         sess: &mut Router,
@@ -2134,10 +2170,11 @@ impl Node {
         group_id: &[u8],
         delta_id: &[u8; 32],
         envelope: &[u8],
+        patient: bool,
     ) -> Result<(), CoreError> {
         if coordinator::decode_delta(envelope)?.seq.is_some() {
             if self.dir.pending_outbox(group_id, &self.id.identity_pk())?.iter().any(|(d, _)| d == delta_id) {
-                return self.flush_sequenced(sess, group, group_id).await;
+                return self.flush_sequenced(sess, group, group_id, patient).await;
             }
             return Ok(());
         }
@@ -2153,10 +2190,13 @@ impl Node {
     /// anything: it climbs, takes the winner into the log, and authors that delta and
     /// every one queued after it again from the new head. An op the new head refuses is
     /// said, not sent.
-    async fn flush_sequenced(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8]) -> Result<(), CoreError> {
-        // A queue that could not take its slot waits before it is claimed again: one
-        // failure costs one pass, not a pass per queued delta or per sync tick.
-        if matches!(self.live_state().slot_backoff.get(group_id), Some((until, _)) if std::time::Instant::now() < *until) {
+    async fn flush_sequenced(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8], patient: bool) -> Result<(), CoreError> {
+        // A queue that could not take its slot waits before a sweep or a tick claims it
+        // again: one failure costs one pass, not a pass per queued delta or per sync tick.
+        // A person's own write is not made to wait (#75).
+        if patient && matches!(self.live_state().slot_backoff.get(group_id), Some((until, _)) if std::time::Instant::now() < *until) {
+            tracing::info!(target: "pacific::sync", group = %hex::encode(&group_id[..group_id.len().min(6)]),
+                           "sequenced writes wait out the slot backoff; a write to this object sends them now");
             return Ok(());
         }
         let out = self.claim_and_send(sess, group, group_id).await;
@@ -2179,7 +2219,7 @@ impl Node {
             let mut lost = false;
             let queue = if round == 0 { self.queued_sequenced(group_id)? } else { self.requeue_sequenced(group, group_id)? };
             for (did, envelope, prev) in queue {
-                let slot = seq_slot(&root, group_id, &prev);
+                let slot = sequenced_slot(&root, group_id, &prev);
                 let won = match sess.publish_commit(&slot, &pacific_wire::blob_b64(&self.slot_claim(&root, &slot, group_id, &did, &envelope)?)).await? {
                     Some(_) => true,
                     // Taken: by this delta (a resend after its claim was acked), or by another.
@@ -2928,7 +2968,7 @@ impl Node {
         // THE VIEW IS A FOLD'S PRODUCT, cached with it (O-69): unscoped, the same for every
         // session of this process, and filtered by each caller after, as a fresh one is.
         // Its inputs are read inside, after the key.
-        let view = self.dir.cached(&id, &kind, "view", |a: &String, b| a == b, || {
+        let view = self.dir.cached_kept(&id, &kind, "view", |a: &String, b| a == b, || {
             let members = self.dir.group_members(&id)?;
             let owners = self.dir.owner_history(&id)?;
             let owner = self
@@ -4909,6 +4949,35 @@ impl Node {
         }
     }
 
+    /// #79: AN ADMITTER'S CHECK, SPLIT AT THE NODE LOCK. For a Site not on this Node, the
+    /// intro mailbox fetched on the held session, writing nothing, so the caller makes it
+    /// outside its lock; then, under it, [`Node::site_take`].
+    pub async fn intro_fetch(&self, site_hex: &str) -> Result<IntroFetched, CoreError> {
+        if self.holds(site_hex) {
+            return Ok(IntroFetched(Vec::new()));
+        }
+        let mut sess = self.home_session().await?;
+        match self.fetch_intro(&mut sess).await {
+            Ok(msgs) => {
+                self.keep_session(sess);
+                Ok(IntroFetched(msgs))
+            }
+            Err(e) => {
+                sess.close().await;
+                Err(e)
+            }
+        }
+    }
+
+    /// What [`Node::intro_fetch`] brought, ingested as a drain's (each Welcome joined, past
+    /// what a sync took since), then whether the Site is on this Node.
+    pub fn site_take(&self, site_hex: &str, fetched: IntroFetched) -> Result<bool, CoreError> {
+        if self.ingest_intro(fetched.0)? > 0 {
+            self.live_state().joined = true;
+        }
+        Ok(self.holds(site_hex))
+    }
+
     /// Drain a Site and the parts it names over the home session: one pipelined round, and a
     /// second for parts the first did not reach. Groups on another relay are left to it. A
     /// part this Node does not hold sends it to its intro mailbox first (NC-140): a room it
@@ -5203,7 +5272,7 @@ impl Node {
             return Ok(None);
         }
         let roster = self.dir.group_members(&group_id)?;
-        Ok(self.folded_group(&group_id)?.state().membership.divergence(&roster))
+        Ok(self.group_state_of(&group_id)?.membership.divergence(&roster))
     }
 
     /// Is a leave in flight for this object (§6)?
@@ -5504,7 +5573,7 @@ impl Node {
     /// The chat lens's state, folded and reduced, through the fold cache (O-69): what a
     /// sync reads on every pass and a view on every read, so a quiet room costs neither.
     fn forum_state(&self, group_id: &[u8]) -> Result<coordinator::ForumState, CoreError> {
-        self.dir.cached(group_id, "chat", "state", |a: &coordinator::ForumState, b| format!("{a:?}") == format!("{b:?}"), || {
+        self.dir.cached_kept(group_id, "chat", "state", |a: &coordinator::ForumState, b| format!("{a:?}") == format!("{b:?}"), || {
             self.folded_forum_fresh(group_id).map(|f| f.state())
         })
     }
@@ -5548,7 +5617,15 @@ impl Node {
     /// Fold `group_id`'s CONTACT op-group (the other lens over the same log): the
     /// prekey pool AND each side's self-published profile. A malformed delta is
     /// skipped, never fatal to the fold.
+    /// A Contact channel's state, through the fold cache (O-69): its own fold, which skips
+    /// a bad offer rather than failing, so its own product.
     fn folded_contact(&self, group_id: &[u8]) -> Result<crate::contact::ContactState, CoreError> {
+        self.dir.cached_kept(group_id, ObjectKind::Contact.name(), "contact-state", |a: &crate::contact::ContactState, b| format!("{a:?}") == format!("{b:?}"), || {
+            self.folded_contact_fresh(group_id)
+        })
+    }
+
+    fn folded_contact_fresh(&self, group_id: &[u8]) -> Result<crate::contact::ContactState, CoreError> {
         let members = self.dir.group_members(group_id)?;
         // The owner at each delta's epoch (§10.2), not only today's: a spine delta the
         // previous owner wrote before a handover is still theirs to have written.
@@ -5620,7 +5697,7 @@ impl Node {
         // name is an unwritten one, not an empty one — fall through rather than
         // report a blank card over a stored one.
         if let Some(gid) = self.dir.my_object()? {
-            if let Ok(st) = self.folded_group(&gid).map(|c| c.state().clone()) {
+            if let Ok(st) = self.group_state_of(&gid) {
                 if !st.display_name.is_empty() {
                     return Ok((st.display_name, st.shape, st.card));
                 }
@@ -5686,7 +5763,7 @@ impl Node {
                 .map_err(|e| CoreError::Directory(format!("self object id hex: {e}")))?;
             // A record that will not fold holds no profile to compare, and is not seeded:
             // read as "none yet", a failed fold wrote the cache onto it on every pass.
-            let st = self.folded_group(&gid)?.state().clone();
+            let st = self.group_state_of(&gid)?;
             let (name, shape, card) = self.cached_profile()?;
             if !st.display_name.is_empty() {
                 if st.display_name != name || st.shape != shape || st.card != card {
@@ -5769,13 +5846,8 @@ impl Node {
         // A RECORD THAT WILL NOT FOLD NAMES NOTHING, AND IS NOT TOLD AGAIN. Read as an
         // empty list, a failed fold had every sync re-name every object, and each write
         // landed on the log that would not fold (8 Nov: 61k deltas on one record).
-        let named: std::collections::BTreeSet<String> = self
-            .folded_group(&self_gid)?
-            .state()
-            .joined
-            .keys()
-            .cloned()
-            .collect();
+        let named: std::collections::BTreeSet<String> =
+            self.group_state_of(&self_gid)?.joined.keys().cloned().collect();
 
         let mut wrote = 0usize;
         for (index, entry) in self.spine_entries()? {
@@ -5887,7 +5959,7 @@ impl Node {
             }
             let held = match crate::authoring::channel_of(&kind) {
                 Some(crate::object::ObjectKind::Forum) => self.forum_state(&gid).map(|s| s.profiles.get(&me).cloned()),
-                _ => self.folded_group(&gid).map(|c| c.state().profiles.get(&me).cloned()),
+                _ => self.group_state_of(&gid).map(|st| st.profiles.get(&me).cloned()),
             };
             // AN OBJECT THAT WILL NOT FOLD DOES NOT SAY MY CARD IS MISSING: read that way,
             // the Arc published its card into one Site on every 3 s tick (8 Nov, 3,905 times).
@@ -5922,9 +5994,8 @@ impl Node {
         let Some(self_gid) = self.dir.my_object()? else {
             return Ok(Vec::new());
         };
-        let named: Vec<String> = self
-            .folded_group(&self_gid)
-            .map(|c| c.state().joined.keys().cloned().collect())
+        let named: Vec<String> = self.group_state_of(&self_gid)
+            .map(|st| st.joined.keys().cloned().collect())
             .unwrap_or_default();
         let mut out = Vec::new();
         for object in named {
@@ -7417,7 +7488,17 @@ impl Node {
     /// stored in content-address order, but the SEQUENCED spine requires strict
     /// `(epoch, seq)` succession — so deliver sequenced deltas in `(epoch, seq)`
     /// order first (commutative deltas are order-independent, the OR-set).
+    /// Through the fold cache (O-69), as its own product: this fold is not `folded::<T>`'s.
     fn folded_project(
+        &self,
+        group_id: &[u8],
+    ) -> Result<coordinator::Coordinator<ProjectType>, CoreError> {
+        self.dir.cached(group_id, ObjectKind::Project.name(), "project-fold", |a: &coordinator::Coordinator<ProjectType>, b| a.accepted_digest() == b.accepted_digest(), || {
+            self.folded_project_fresh(group_id)
+        })
+    }
+
+    fn folded_project_fresh(
         &self,
         group_id: &[u8],
     ) -> Result<coordinator::Coordinator<ProjectType>, CoreError> {
@@ -7440,7 +7521,7 @@ impl Node {
     /// The compiled [`ProjectState`], folded over the current roster.
     pub fn project_state(&self, object_id_hex: &str) -> Result<ProjectState, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
-        Ok(self.folded_project(&group_id)?.state())
+        Ok(self.project_state_of(&group_id)?)
     }
 
     /// The project's dependency edges as `(edge_id, from_item, to_item, kind)` — the
@@ -7496,6 +7577,84 @@ impl Node {
 
     /// Fold a group object's persisted log into a `Coordinator<GroupType>` —
     /// sequenced spine in `(epoch, seq)` order first, mirroring `folded_project`.
+    /// KEEP WHAT ARRIVED (O-69 option B): fold, and so keep on disk, every object whose
+    /// generation moved past what `fold_store` holds. Run after a sync, on the Node that
+    /// synced, so a delta that arrived is folded before the app is next opened rather than
+    /// at the first read after it. The folds are the read paths' own (`cached_kept`): there
+    /// is no second fold. Returns how many objects were folded.
+    pub fn refold_moved(&self) -> Result<usize, CoreError> {
+        let Some(model) = crate::fold_cache::model() else { return Ok(0) };
+        if !crate::fold_cache::persist() {
+            return Ok(0);
+        }
+        let mut n = 0;
+        for (gid, kind) in self.dir.moved_objects(&model)? {
+            // A fold that fails is kept as that failure, and named where it is read.
+            let _ = match kind.as_str() {
+                "group" => self.group_state_of(&gid).map(drop),
+                "thing" => self.thing_state_of(&gid).map(drop),
+                "post" => self.post_state_of(&gid).map(drop),
+                "event" => self.event_state_of(&gid).map(drop),
+                "place" => self.place_state_of(&gid).map(drop),
+                "project" => self.project_state_of(&gid).map(drop),
+                "host" => self.host_state_of(&gid).map(drop),
+                "system" => self.system_state_of(&gid).map(drop),
+                "forum" | "conversation" => self.forum_state(&gid).map(drop),
+                "connection" => self.folded_contact(&gid).map(drop),
+                _ => continue,
+            };
+            n += 1;
+        }
+        Ok(n)
+    }
+
+    /// A kind's folded STATE through the fold cache (O-69), a product beside its fold: a
+    /// hit is a clone, where reading `state()` off a cached fold reduced the whole spine
+    /// on every read. Kept on disk where the embedding keeps folds (`cached_kept`).
+    fn state_of<T: ObjectType>(
+        &self,
+        group_id: &[u8],
+        what: &'static str,
+        fold: impl Fn() -> Result<coordinator::Coordinator<T>, CoreError>,
+    ) -> Result<T::State, CoreError>
+    where
+        T::State: std::fmt::Debug + Send + Sync + serde::Serialize + serde::de::DeserializeOwned,
+    {
+        self.dir.cached_kept(group_id, T::KIND.name(), what, |a: &T::State, b| format!("{a:?}") == format!("{b:?}"), || fold().map(|c| c.state()))
+    }
+
+    fn group_state_of(&self, group_id: &[u8]) -> Result<<crate::group::GroupType as ObjectType>::State, CoreError> {
+        self.state_of::<crate::group::GroupType>(group_id, "state", || self.folded_group(group_id))
+    }
+
+    fn thing_state_of(&self, group_id: &[u8]) -> Result<<crate::thing::ThingType as ObjectType>::State, CoreError> {
+        self.state_of::<crate::thing::ThingType>(group_id, "state", || self.folded_thing(group_id))
+    }
+
+    fn post_state_of(&self, group_id: &[u8]) -> Result<<crate::post::PostType as ObjectType>::State, CoreError> {
+        self.state_of::<crate::post::PostType>(group_id, "state", || self.folded_post(group_id))
+    }
+
+    fn event_state_of(&self, group_id: &[u8]) -> Result<<crate::event::EventType as ObjectType>::State, CoreError> {
+        self.state_of::<crate::event::EventType>(group_id, "state", || self.folded_event(group_id))
+    }
+
+    fn place_state_of(&self, group_id: &[u8]) -> Result<<crate::place::PlaceType as ObjectType>::State, CoreError> {
+        self.state_of::<crate::place::PlaceType>(group_id, "state", || self.folded_place(group_id))
+    }
+
+    fn project_state_of(&self, group_id: &[u8]) -> Result<<ProjectType as ObjectType>::State, CoreError> {
+        self.state_of::<ProjectType>(group_id, "project-state", || self.folded_project(group_id))
+    }
+
+    fn host_state_of(&self, group_id: &[u8]) -> Result<<crate::host::HostType as ObjectType>::State, CoreError> {
+        self.state_of::<crate::host::HostType>(group_id, "host-state", || self.folded_host(group_id))
+    }
+
+    fn system_state_of(&self, group_id: &[u8]) -> Result<<crate::system::SystemType as ObjectType>::State, CoreError> {
+        self.state_of::<crate::system::SystemType>(group_id, "system-state", || self.folded_system(group_id))
+    }
+
     fn folded_group(
         &self,
         group_id: &[u8],
@@ -7550,7 +7709,7 @@ impl Node {
     /// The compiled [`crate::thing::ThingState`] for one Thing object.
     pub fn thing_state(&self, object_id_hex: &str) -> Result<crate::thing::ThingState, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
-        Ok(self.folded_thing(&group_id)?.state())
+        Ok(self.thing_state_of(&group_id)?)
     }
 
     /// Every Thing we own, folded: `(object_id, ThingState)`. The LIFE market list reads
@@ -7563,7 +7722,7 @@ impl Node {
             if kind != "thing" {
                 continue;
             }
-            let state = self.folded_thing(&gid)?.state();
+            let state = self.thing_state_of(&gid)?;
             out.push((hex::encode(gid), state));
         }
         Ok(out)
@@ -7667,7 +7826,7 @@ impl Node {
             Ok(g) => g,
             Err(_) => return Ok(None),
         };
-        let st = self.folded_host(&gid)?.state();
+        let st = self.host_state_of(&gid)?;
         if !st.publication.is_published()
             || st.publication.publisher.as_ref() != Some(as_publisher)
             || !self.group_roster(host_id_hex)?.contains(as_publisher)
@@ -7743,7 +7902,7 @@ impl Node {
         for (slot, mime, data) in media {
             crate::host::check_media(slot, data, mime).map_err(CoreError::Coordinator)?;
         }
-        let held = self.folded_host(&self.object_group_id(host_id_hex)?)?.state().publication;
+        let held = self.host_state_of(&self.object_group_id(host_id_hex)?)?.publication;
 
         for (slot, mime, data) in media {
             self.apply(host_id_hex, crate::host::OP_SET_MEDIA, crate::host::set_media_args(slot, data, mime))
@@ -7812,14 +7971,14 @@ impl Node {
         if self.group_owner_id(&site_gid)? != self.id.identity_pk() {
             return Err(CoreError::Coordinator("only the Site's owner hydrates its Host".into()));
         }
-        let site = self.folded_group(&site_gid)?.state();
+        let site = self.group_state_of(&site_gid)?;
         let host = site
             .parts
             .iter()
             .find(|(_, p)| p.role == HOST_ROLE)
             .map(|(id, _)| id.clone())
             .ok_or_else(|| CoreError::Coordinator("this Site has no Host".into()))?;
-        let held = self.folded_host(&self.object_group_id(&host)?)?.state();
+        let held = self.host_state_of(&self.object_group_id(&host)?)?;
         if !held.parent.as_ref().is_some_and(|p| p.parent == site_hex && p.role == HOST_ROLE) {
             return Err(CoreError::Coordinator(format!(
                 "the Site names {host} as its Host, and the Host does not name the Site"
@@ -7832,7 +7991,7 @@ impl Node {
         let (mut events, mut posts) = (Vec::new(), Vec::new());
         for (id, a) in site.affiliations.iter().filter(|(_, a)| a.rel == crate::group::AffiliationRel::Created) {
             let folded = match self.object_kind(id).as_deref() {
-                Ok("event") => self.object_group_id(id).and_then(|g| self.folded_event(&g)).map(|c| events.push((id, a.at, c.state()))),
+                Ok("event") => self.object_group_id(id).and_then(|g| self.event_state_of(&g)).map(|st| events.push((id, a.at, st))),
                 Ok("post") => self.object_group_id(id).and_then(|g| self.folded_post(&g)).map(|c| posts.push((id, a.at, c.state()))),
                 Ok(_) => Ok(()),
                 Err(_) => {
@@ -7928,7 +8087,17 @@ impl Node {
     /// is its own kind (33) since 25 Sep 2026 — it was a System wearing the connector
     /// `wallflowers.host`, and every host-only op had to ask `is_host()` at reduce
     /// time. The kind is that statement now.
+    /// Through the fold cache (O-69), as its own product: this fold is not `folded::<T>`'s.
     fn folded_host(
+        &self,
+        group_id: &[u8],
+    ) -> Result<coordinator::Coordinator<crate::host::HostType>, CoreError> {
+        self.dir.cached(group_id, ObjectKind::Host.name(), "host-fold", |a: &coordinator::Coordinator<crate::host::HostType>, b| a.accepted_digest() == b.accepted_digest(), || {
+            self.folded_host_fresh(group_id)
+        })
+    }
+
+    fn folded_host_fresh(
         &self,
         group_id: &[u8],
     ) -> Result<coordinator::Coordinator<crate::host::HostType>, CoreError> {
@@ -7950,7 +8119,17 @@ impl Node {
         Ok(coord)
     }
 
+    /// Through the fold cache (O-69), as its own product: this fold is not `folded::<T>`'s.
     fn folded_system(
+        &self,
+        group_id: &[u8],
+    ) -> Result<coordinator::Coordinator<crate::system::SystemType>, CoreError> {
+        self.dir.cached(group_id, ObjectKind::System.name(), "system-fold", |a: &coordinator::Coordinator<crate::system::SystemType>, b| a.accepted_digest() == b.accepted_digest(), || {
+            self.folded_system_fresh(group_id)
+        })
+    }
+
+    fn folded_system_fresh(
         &self,
         group_id: &[u8],
     ) -> Result<coordinator::Coordinator<crate::system::SystemType>, CoreError> {
@@ -7989,7 +8168,7 @@ impl Node {
         object_id_hex: &str,
     ) -> Result<crate::system::SystemState, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
-        Ok(self.folded_system(&group_id)?.state())
+        Ok(self.system_state_of(&group_id)?)
     }
 
     /// Every System this device holds: `(object_id, SystemState)`. The app dispatches a
@@ -8000,7 +8179,7 @@ impl Node {
             if kind != "system" {
                 continue;
             }
-            let state = self.folded_system(&gid)?.state();
+            let state = self.system_state_of(&gid)?;
             out.push((hex::encode(gid), state));
         }
         Ok(out)
@@ -8091,7 +8270,7 @@ impl Node {
     /// The compiled [`crate::event::EventState`] for one Event object.
     pub fn event_state(&self, object_id_hex: &str) -> Result<crate::event::EventState, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
-        Ok(self.folded_event(&group_id)?.state())
+        Ok(self.event_state_of(&group_id)?)
     }
 
     /// The stable listing key for one Event — what travels to buyers and the box
@@ -8110,7 +8289,7 @@ impl Node {
         let store = crate::object_store::GroupObjectStore::new(&self.dir);
         let mut out = Vec::new();
         for r in store.by_kind("post")? {
-            let state = self.folded_post(&r.id)?.state();
+            let state = self.post_state_of(&r.id)?;
             out.push((hex::encode(r.id), state));
         }
         Ok(out)
@@ -8120,7 +8299,7 @@ impl Node {
         let store = crate::object_store::GroupObjectStore::new(&self.dir);
         let mut out = Vec::new();
         for r in store.by_kind("event")? {
-            let state = self.folded_event(&r.id)?.state();
+            let state = self.event_state_of(&r.id)?;
             out.push((hex::encode(r.id), state));
         }
         Ok(out)
@@ -8165,7 +8344,7 @@ impl Node {
             if kind != "place" {
                 continue;
             }
-            if let Ok(st) = self.folded_place(&gid).map(|c| c.state()) {
+            if let Ok(st) = self.place_state_of(&gid).map(|st| st) {
                 if let Some(bell) = st.doorbell {
                     tags.insert(Address::from_seed(&bell).tag_hex());
                 }
@@ -8212,7 +8391,7 @@ impl Node {
         pi: &str,
     ) -> Result<Vec<(String, String)>, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
-        let state = self.folded_event(&group_id)?.state();
+        let state = self.event_state_of(&group_id)?;
         let sale = state.ledger.get(pi).ok_or_else(|| {
             CoreError::Coordinator(format!("no sale {pi} in the ledger of {object_id_hex}"))
         })?;
@@ -8260,7 +8439,7 @@ impl Node {
     pub async fn event_reemit(&self, object_id_hex: &str) -> Result<usize, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
         let me = self.id.identity_pk();
-        let state = self.folded_event(&group_id)?.state();
+        let state = self.event_state_of(&group_id)?;
         let mut emitted = 0usize;
 
         if self.group_owner_id(&group_id)? == me {
@@ -8368,7 +8547,7 @@ impl Node {
     /// The compiled [`crate::place::PlaceState`] for one Place object.
     pub fn place_state(&self, object_id_hex: &str) -> Result<crate::place::PlaceState, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
-        Ok(self.folded_place(&group_id)?.state())
+        Ok(self.place_state_of(&group_id)?)
     }
 
     /// Every Place we own, folded: `(object_id, PlaceState)`. LIFE's PLACES list reads
@@ -8380,7 +8559,7 @@ impl Node {
             if kind != "place" {
                 continue;
             }
-            let state = self.folded_place(&gid)?.state();
+            let state = self.place_state_of(&gid)?;
             out.push((hex::encode(gid), state));
         }
         Ok(out)
@@ -9437,10 +9616,9 @@ impl Node {
             if kind != "forum" {
                 continue;
             }
-            let Ok(coord) = self.folded_forum(&gid) else {
+            let Ok(state) = self.forum_state(&gid) else {
                 continue;
             };
-            let state = coord.state();
             if !state.parts.values().any(|p| p.role == ROOM) {
                 continue;
             }
@@ -9448,25 +9626,6 @@ impl Node {
             let host_name = self.object_name(&gid_hex).unwrap_or_default();
             for room_id in state.parts.iter().filter(|(_, p)| p.role == ROOM).map(|(id, _)| id) {
                 out.push((room_id.clone(), gid_hex.clone(), host_name.clone()));
-            }
-        }
-        Ok(out)
-    }
-
-    /// Every Forum's back-edge, `(forum, parent, role)`, from the Forum's OWN fold
-    /// (`base.setParent`): a member who holds the Forum and not its parent can still
-    /// say what it is for. One sweep, so the chat list does no per-row fold.
-    pub fn forum_parents(&self) -> Result<Vec<(String, String, String)>, CoreError> {
-        let mut out = Vec::new();
-        for (gid, kind) in self.dir.list_objects()? {
-            if kind != "forum" {
-                continue;
-            }
-            let Ok(coord) = self.folded_forum(&gid) else {
-                continue;
-            };
-            if let Some(p) = &coord.state().parent {
-                out.push((hex::encode(&gid), p.parent.clone(), p.role.clone()));
             }
         }
         Ok(out)
@@ -10184,7 +10343,7 @@ impl Node {
 
     pub fn group_state(&self, object_id_hex: &str) -> Result<GroupState, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
-        Ok(self.folded_group(&group_id)?.state())
+        Ok(self.group_state_of(&group_id)?)
     }
 
     /// The read-model the directory UI/CLI shows: profile + presence + card + the
@@ -10193,7 +10352,7 @@ impl Node {
     pub fn group_view(&self, object_id_hex: &str) -> Result<GroupView, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
         let roster = self.dir.group_members(&group_id)?;
-        Ok(self.folded_group(&group_id)?.state().view(&roster))
+        Ok(self.group_state_of(&group_id)?.view(&roster))
     }
 
     /// The role `member` holds in a Group-typed object — the identity record, or a tether.
@@ -10313,7 +10472,7 @@ impl Node {
                 "object kind '{kind}' is not a group"
             )));
         }
-        let state = self.folded_group(&group_id)?.state();
+        let state = self.group_state_of(&group_id)?;
         let roster = self.dir.group_members(&group_id)?;
         Ok(vcard::group_to_vcard(&state, object_id_hex, &roster))
     }
@@ -11104,14 +11263,29 @@ impl Node {
         }
         let confirmed = self.live_since(&intro_hex);
         self.live_state().tag_drains += 1;
+        let intro_msgs = self.fetch_intro(sess).await?;
+        let joined = self.ingest_intro(intro_msgs)?;
+        self.live_drained(intro_hex, confirmed);
+        Ok(joined)
+    }
+
+    /// The intro mailbox past its cursors, on `sess`: relay I/O and cursor reads, no write.
+    async fn fetch_intro(&self, sess: &mut Router) -> Result<Vec<crate::router::Drained>, CoreError> {
+        let (intro_tag, intro_hex) = self.intro_wire()?;
         let dir = &self.dir;
-        let intro_msgs = sess
-            .drain(&[intro_hex.clone()], |source| {
-                dir.cursor(&intro_tag, source)
-            })
-            .await?;
+        sess.drain(&[intro_hex], |source| dir.cursor(&intro_tag, source)).await
+    }
+
+    /// Ingest what `fetch_intro` brought, in its order: each Welcome joined or quarantined, its
+    /// cursor advanced. One at or below its cursor was taken since the fetch (#79: an admitter
+    /// fetches outside the node lock, and the sync loop may take it first) and is passed by.
+    fn ingest_intro(&self, intro_msgs: Vec<crate::router::Drained>) -> Result<usize, CoreError> {
+        let (intro_tag, _) = self.intro_wire()?;
         let mut joined = 0;
         for m in intro_msgs {
+            if m.seq <= self.dir.cursor(&intro_tag, m.source)? {
+                continue;
+            }
             let (seq, blob_b64) = (m.seq, m.blob);
             match self.process_intro_blob(&intro_tag, &blob_b64) {
                 Ok(()) => joined += 1,
@@ -11131,7 +11305,6 @@ impl Node {
             }
             self.dir.advance_cursor(&intro_tag, m.source, seq)?;
         }
-        self.live_drained(intro_hex, confirmed);
         Ok(joined)
     }
 
@@ -11236,8 +11409,15 @@ impl Node {
         //     LEAVES, not members — see `Directory::group_leaf_count`.
         if self.dir.group_leaf_count(group_id)? > 1 {
             for (did, env) in self.dir.pending_outbox(group_id, &self.id.identity_pk())? {
-                let _ = self.flush_one(sess, &mut group, group_id, &did, &env).await;
+                let _ = self.flush_one(sess, &mut group, group_id, &did, &env, true).await;
             }
+        }
+
+        // A pairing channel carries prekeys, profiles and legs, and no messages: drained and
+        // flushed, it is done. Folded as a chat it was refused (`chat_type_id`), and every
+        // sync named every connection a failure.
+        if matches!(self.dir.group_kind(group_id)?.as_deref().and_then(crate::fold::lens_for), Some(ObjectKind::Contact)) {
+            return Ok(());
         }
 
         // (d) fold ONCE, over the roster: rebuild the transcript AND emit a single
@@ -11280,7 +11460,7 @@ impl Node {
                     unix_now(),
                 )?;
                 let _ = self
-                    .flush_one(sess, &mut group, group_id, &delta_id, &envelope)
+                    .flush_one(sess, &mut group, group_id, &delta_id, &envelope, true)
                     .await;
             }
         }
@@ -11898,11 +12078,11 @@ fn pool_keys_in(group: &mls::Group) -> std::collections::HashSet<[u8; 32]> {
 }
 
 /// THE SLOT a sequenced delta claims on one object: the place after its predecessor
-/// (ICD `mls.sequencing.slot`). Two deltas after one `prev` are a fork wherever their
+/// (ICD `mls.sequencing.slot`), as any implementation of the ICD derives it. Two deltas after one `prev` are a fork wherever their
 /// `(epoch, seq)` fall, so `prev` is the key. From the owner's storage root, so only the
 /// owner's own devices, the sequenced spine's only writers, can claim or read it; the
 /// relay sees a tag.
-fn seq_slot(root: &[u8; 32], group_id: &[u8], prev: &[u8; 32]) -> Address {
+pub fn sequenced_slot(root: &[u8; 32], group_id: &[u8], prev: &[u8; 32]) -> Address {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
     h.update(crate::icd_consts::SEQ_SLOT_LABEL.as_bytes());

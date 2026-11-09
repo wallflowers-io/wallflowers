@@ -121,7 +121,7 @@ pub fn listing_id(event_group_id: &[u8], owner_pk: &[u8; 32]) -> String {
 }
 
 /// The ticket listing — the owner's sequenced assertion of what is for sale.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TicketListing {
     /// Minor units of `currency`. 0 = a free event (no rail, phone-fulfilled).
     pub price_cents: i64,
@@ -142,7 +142,7 @@ pub struct TicketListing {
 }
 
 /// One recorded sale — the ledger row. Keyed by `pi` in [`EventState::ledger`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Sale {
     pub buyer: MemberId,
     pub qty: u32,
@@ -159,7 +159,7 @@ pub struct Sale {
 /// The redemption record for one ticket id. `authors` rather than a count so that
 /// re-emission (and a device re-scanning its own admit) stays idempotent: fraud is two
 /// DIFFERENT doors admitting the same ticket, not one door checking twice.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Redemption {
     pub authors: BTreeSet<MemberId>,
     /// Deterministic first admitter (canonical fold order), for display.
@@ -197,7 +197,7 @@ pub struct EventPhoto {
 /// The event's media facet: the BANNER (the poster — the page hero), a bounded
 /// photo strip, and one short motion CLIP (the pinhole grammar: parallel to the
 /// banner, never a replacement — a device that can't play it still has the poster).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EventMedia {
     /// base64 still; "" when none.
     pub banner: String,
@@ -216,7 +216,7 @@ impl EventMedia {
 
 /// WHO an act is (W-98, Ralph 30 Sep): a person by their member key, or an organisation or
 /// band by its GroupObject id. Never a name: the name is the performer's own card.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum Performer {
     Member(MemberId),
     Object([u8; 32]),
@@ -232,7 +232,7 @@ impl Performer {
 }
 
 /// One act of `event.setLineup`: who, in what role, and when on, if said.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Act {
     pub performer: Performer,
     pub role: String,
@@ -241,7 +241,7 @@ pub struct Act {
 }
 
 /// One photo of the W-98 set (`event.addPhoto`), keyed by its id.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SetPhoto {
     pub media: pacific_media::MediaRef,
     pub at: i64,
@@ -250,7 +250,7 @@ pub struct SetPhoto {
 /// The venue as a REFERENCE to a Place GroupObject — what the graph projector folds
 /// into the `happens_at` edge. Distinct from `EventState::venue` (free text on the
 /// profile): the string says what the flyer says, the ref says WHICH Place object.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct VenueRef {
     /// The Place's object id (group id hex) — the graph entity on the far end.
     pub place: String,
@@ -261,7 +261,7 @@ pub struct VenueRef {
 }
 
 /// The compiled read-side state of an Event.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct EventState {
     /// THE PARTS THIS OBJECT IS MADE OF, keyed by the part's object id — its comments
     /// section is one, a real Forum GroupObject with its own roster and not a field
@@ -1162,7 +1162,7 @@ pub fn media_view(m: &pacific_media::MediaRef) -> serde_json::Value {
 
 /// A buyer's claim on a checkout session, authored BEFORE the payment page opens so a
 /// paid-then-killed-app session always has a request for the sweep to find.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TicketRequest {
     pub listing: String,
     pub qty: u32,
@@ -1173,7 +1173,7 @@ pub struct TicketRequest {
 /// One delivered ticket at rest in the buyer's wallet. `core` is the credential's
 /// signed JSON **verbatim** — stored and re-presented byte-for-byte, never
 /// re-serialized, or the signature dies (the SELLING-DELTA rule).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WalletTicket {
     pub listing: String,
     pub core: String,
@@ -1207,7 +1207,7 @@ impl WalletTicket {
 /// It is a SNAPSHOT, not a mirror: if the organiser later moves the event, this
 /// invite still says what was sent. The event id is the join back to the live object
 /// for anyone who does hold it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Invite {
     /// The Event object id (hex) — the join back to the live object.
     pub event: String,
@@ -1227,7 +1227,7 @@ pub struct Invite {
 /// The invitee's answer. Its own leg rather than a field on the invite, because the
 /// two are authored by DIFFERENT people — one author may never write the other's
 /// slot, and a reply must not be able to rewrite the invitation it answers.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct InviteReply {
     pub event: String,
     pub going: bool,

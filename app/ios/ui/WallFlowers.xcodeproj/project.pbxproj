@@ -27,6 +27,7 @@
 		0CEA254E611E8BF1B520E908 /* BootFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13294F3923EEFF8AD3C49EC5 /* BootFlow.swift */; };
 		0CF0FC1E1335BDBA542FAEA8 /* Selector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121386061DD985F6EBC39553 /* Selector.swift */; };
 		0E38EFE0E321BA7CB026F918 /* LodeResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81583E9696C62A8F2345C2B7 /* LodeResolver.swift */; };
+		0EDFF1A2856E8FB1D59DD573 /* ObjectIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42D9322B17A08845EC32E9D /* ObjectIndex.swift */; };
 		0EEA1E28919C683BEE2986FC /* InAppNotify.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A97FCCE8524A6C56DCC6E0 /* InAppNotify.swift */; };
 		0F10F70EC88F40486F03BA85 /* PosterImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4305249C0368819CB55CB12C /* PosterImage.swift */; };
 		0F4C787890C5881DACD628D4 /* Pixel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE954BFEC963F5B5F208E29F /* Pixel.swift */; };
@@ -249,6 +250,7 @@
 		835121E6EF357C745ADB4A31 /* DetailSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E54EDF60D5371C611D1D94 /* DetailSession.swift */; };
 		83728B68E81B06F292DCB06C /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 879037BF1D89096FD290718F /* LocationService.swift */; };
 		83C680967F5678C71FC138DD /* WallFlowersApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3DBB40D0CC68F1E75E2877 /* WallFlowersApp.swift */; };
+		83DB9ADA46117D5496455B61 /* ObjectIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42D9322B17A08845EC32E9D /* ObjectIndex.swift */; };
 		8441C190BD5DB3749F9D078E /* ProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0FB2FC115669D42155F4ECF /* ProfileModels.swift */; };
 		845B4B5244DE66092A9EBAEE /* DeviceKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15A524A7A296E1093C17ADE /* DeviceKey.swift */; };
 		850752B5CBC0F10B50D43268 /* AriesDemoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A364353AE2B6E5C66BF81933 /* AriesDemoUITests.swift */; };
@@ -307,6 +309,7 @@
 		AE46B09D1052B105520BD0D6 /* PointCloudAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80D946DC1AD26EFA33FAFCE /* PointCloudAsset.swift */; };
 		AF43BE1A7F873D3D9B9E437F /* GoogleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9960545BC6CFF4DDF5506BE5 /* GoogleService.swift */; };
 		AFE7D06083CD5023E71B1DE7 /* WakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B048F393FEAB807A0ADF137C /* WakeTests.swift */; };
+		B0A52DE15F8F0F528796F9A9 /* FeedCardUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12DACBEA95FC60FCB2B8FB75 /* FeedCardUITests.swift */; };
 		B181E20A94AB4C4ED9705871 /* EventsFeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F6D0E4A8DBA0D99FCA71D71 /* EventsFeedTests.swift */; };
 		B18FEA4DC535DA02F999EB93 /* SysiphusClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD4A5A93C6E270176B389DBB /* SysiphusClient.swift */; };
 		B22CDAA6888C5322E2F09055 /* RankFusion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1621ADB420D3140835739240 /* RankFusion.swift */; };
@@ -513,6 +516,7 @@
 		113E04F94032A058A853B69B /* NewItemBloomUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewItemBloomUITests.swift; sourceTree = "<group>"; };
 		121386061DD985F6EBC39553 /* Selector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Selector.swift; sourceTree = "<group>"; };
 		12819162F3A46D75D2573C0A /* Credential.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Credential.swift; sourceTree = "<group>"; };
+		12DACBEA95FC60FCB2B8FB75 /* FeedCardUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedCardUITests.swift; sourceTree = "<group>"; };
 		13294F3923EEFF8AD3C49EC5 /* BootFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootFlow.swift; sourceTree = "<group>"; };
 		149CDA01A378FB9356583C67 /* PlaygroundPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaygroundPage.swift; sourceTree = "<group>"; };
 		150BCCABCC0262D4DBB562B3 /* ChatGesturesUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGesturesUITests.swift; sourceTree = "<group>"; };
@@ -683,6 +687,7 @@
 		C084001B5B710444452221C3 /* NotificationService.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = NotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0B80632CC01398C2713685F /* InviteSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteSheet.swift; sourceTree = "<group>"; };
 		C3655DC046195797F3E7A08A /* MarketSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketSelector.swift; sourceTree = "<group>"; };
+		C42D9322B17A08845EC32E9D /* ObjectIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectIndex.swift; sourceTree = "<group>"; };
 		C44898BF431C474E7C6E1F37 /* EventProfilePageUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventProfilePageUITests.swift; sourceTree = "<group>"; };
 		C760F05AEBDC99B0E0B1F86F /* upward.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = upward.jpg; sourceTree = "<group>"; };
 		C96C12B88687A927063F1D44 /* Geohash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geohash.swift; sourceTree = "<group>"; };
@@ -912,6 +917,7 @@
 				E9B23E8C2B3881D81FAF6528 /* EventsPageUITests.swift */,
 				872B295B145F99AE293CAF70 /* EventTicketingUITests.swift */,
 				F772BE8131F2271A668CC1E7 /* ExteriorUITests.swift */,
+				12DACBEA95FC60FCB2B8FB75 /* FeedCardUITests.swift */,
 				863D3D2AA7C809B3D77984DF /* FeedUITests.swift */,
 				5237B9073AD9D7C3051DC1DA /* FirstBootUITests.swift */,
 				7BC4BF3781CCB2ADE220EB9C /* FleetIdentityUITests.swift */,
@@ -1167,6 +1173,7 @@
 				9BADB48F83840E642FF1562A /* InboundWake.swift */,
 				221DD701C94B2E3CE2A2F9F9 /* LiveSync.swift */,
 				A6FB03C9EBA5EB6A4712FCAD /* NotifPresenter.swift */,
+				C42D9322B17A08845EC32E9D /* ObjectIndex.swift */,
 				5CBB898AAC29E4038BAA5D89 /* ObjectProjection.swift */,
 				CC6E5307252DC8BBC974ACB1 /* OutlineModel.swift */,
 				9538501BF0E905C1EDD40C70 /* OutputStore.swift */,
@@ -1629,6 +1636,7 @@
 				B8B652BAED1A0558E7B1F533 /* NotesView.swift in Sources */,
 				7887BD6BED513517C220DE4F /* NotifPresenter.swift in Sources */,
 				926B99B88911F7F9C119743F /* ObjectCard.swift in Sources */,
+				83DB9ADA46117D5496455B61 /* ObjectIndex.swift in Sources */,
 				3D2D25DA762EF0B89274E7CE /* ObjectProjection.swift in Sources */,
 				9F291DCAACF540A901975D99 /* Offices.swift in Sources */,
 				1313A24B9D224EAF21610E8E /* Outline.swift in Sources */,
@@ -1713,6 +1721,7 @@
 				27F1BF2C0E0E14A6800AF516 /* EventTicketingUITests.swift in Sources */,
 				68186B7E81B05F8DCA0506E5 /* EventsPageUITests.swift in Sources */,
 				42471A9C269F698ADB327BF8 /* ExteriorUITests.swift in Sources */,
+				B0A52DE15F8F0F528796F9A9 /* FeedCardUITests.swift in Sources */,
 				F84ED5C41ECCC49891A8933F /* FeedUITests.swift in Sources */,
 				8CD0CC596DE17099EC07C180 /* FirstBootUITests.swift in Sources */,
 				EAC409D7A26455E805C0D18C /* FleetIdentityUITests.swift in Sources */,
@@ -1882,6 +1891,7 @@
 				F307B7BEA9329B22932DCCBC /* NotesView.swift in Sources */,
 				467917AEDDE7FB0684CABD87 /* NotifPresenter.swift in Sources */,
 				D669A141955B484C0FB6C6BD /* ObjectCard.swift in Sources */,
+				0EDFF1A2856E8FB1D59DD573 /* ObjectIndex.swift in Sources */,
 				7D86279E4A4E748C388540FA /* ObjectProjection.swift in Sources */,
 				C6B284186991B01C986D5D18 /* Offices.swift in Sources */,
 				29123283A9ED04A37992AF52 /* Outline.swift in Sources */,

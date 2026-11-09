@@ -39,6 +39,7 @@ use std::fmt;
 /// animation, a seekable clip or a live session; `image/png` vs `image/jpeg` is
 /// a decode detail underneath that.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MediaKind {
     /// One frame, no timeline.
     Still,
@@ -173,6 +174,7 @@ impl Slot {
 
 /// How the bytes reach a consumer.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Delivery {
     /// Bytes ride inside the Delta, base64-encoded. Simple and self-contained:
     /// once a peer has the delta it has the media, with no second round trip and
@@ -214,6 +216,7 @@ impl Delivery {
 /// any bytes arrive. Without them a feed re-flows as each image resolves, which
 /// is the single most visible way a media pipeline feels cheap.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MediaRef {
     pub kind: MediaKind,
     /// Container type. Empty exactly when the ref is empty or `Live`.

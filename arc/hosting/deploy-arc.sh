@@ -412,7 +412,9 @@ note "stamping ${ARC_BUILD_SHA:0:12} ($ARC_BUILD_REF) dirty=$ARC_BUILD_DIRTY cor
 
 
 note "cross-building for $TARGET (glibc $GLIBC)"
-cargo zigbuild --release --offline \
+# --locked, not --offline: the deploy job's cargo cache is its own and starts empty, so the
+# dependencies Cargo.lock names are fetched; nothing outside the lock is taken.
+cargo zigbuild --release --locked \
   --target "$TARGET.$GLIBC" -p arc-gateway -p relay -p waker -p boxoffice -p node \
   || die "build failed"
 

@@ -190,7 +190,7 @@ pub struct PostState {
     #[serde(skip)]
     pub visibility: Option<crate::visibility::Visibility>,
     /// The exterior facet (`crate::exterior`; ICD 2.6.0): what a non-member holds of it.
-    #[serde(skip)]
+    #[serde(default)]
     pub exterior: crate::exterior::ExteriorState,
 }
 

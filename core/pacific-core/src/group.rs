@@ -555,7 +555,7 @@ pub struct Affiliation {
 /// One ask to join, on the asker's own record (`group.setRequest`). Answered when the object's
 /// Welcome arrives and `joined` names it; a decline is silent, so an unanswered ask stands until
 /// it is withdrawn.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Asked {
     pub kind: String,
     /// The owner the exterior named; a Welcome naming another is refused.
@@ -566,7 +566,7 @@ pub struct Asked {
     pub withdrawn: bool,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Joined {
     /// The directory kind — "forum", "place", "project", … — which decides the lens.
     /// It rides here because it only ever travels in a sealed Welcome otherwise, and
@@ -592,7 +592,7 @@ pub struct Joined {
 // ---- the folded state --------------------------------------------------------
 
 /// What a spent claim carried besides its member (ICD 2.1.0 row 2): the claim's `c` and `a`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ClaimPick {
     pub choice: Option<String>,
     pub share: Option<String>,
@@ -601,7 +601,7 @@ pub struct ClaimPick {
 /// The compiled projection of a Group's Delta log — the source of truth for the
 /// identity. `Default` is the genesis of a fresh group-of-1 (an individual).
 /// NOTE: member SET is NOT here — that is the MLS roster; this holds the overlay.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GroupState {
     pub display_name: String,
     pub shape: GroupShape,
@@ -693,7 +693,7 @@ impl GroupState {
 
 /// One listing on a Site's Trade board: a snapshot of the lister's Thing, as
 /// `contact.publishListing` carries one pairwise, less the relay's fields.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SiteListing {
     #[serde(serialize_with = "hex_member")]

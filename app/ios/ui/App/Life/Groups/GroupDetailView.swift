@@ -809,8 +809,8 @@ struct GroupDetailView: View {
         return NavigationLink(value: PersonLink(id: space)) {
             spaceBar(title: core.displayName(forSpace: space),
                      label: "",
-                     photo: isMe ? core.avatarPhoto : core.peerPhoto(space),
-                     color: isMe ? core.avatarColor : core.peerColor(space),
+                     photo: isMe ? core.avatarPhoto : core.index.photo(space),
+                     color: isMe ? core.avatarColor : core.index.color(space),
                      mark: isMe ? "(me)" : nil,
                      width: width)
                 .accessibilityIdentifier("group-member-\(hex(of: space).prefix(12))")
@@ -892,9 +892,7 @@ struct GroupDetailView: View {
     /// events that Space carries, and a night that already happened still happened.
     private func eventCard(_ row: AffiliationRow) -> FeedItem? {
         guard let event = core.events.first(where: { $0.id == row.peer }) else { return nil }
-        return FeedAssembler.item(for: event,
-                                  selfName: view?.displayName ?? "",
-                                  selfID: nil)
+        return FeedAssembler.item(for: event, maker: core.index.maker(of: event.id))
     }
 
     private func createdBar(_ row: AffiliationRow, width: CGFloat) -> some View {

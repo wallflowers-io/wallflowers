@@ -595,9 +595,16 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 
 
 /**
- * The single handle the Swift app holds. Immutable (just the state dir), so it
- * is trivially `Send + Sync` as UniFFI requires. Every call rebuilds the Node
- * from persisted state — the exact per-call model the CLI uses.
+ * The single handle the Swift app holds, one per process: the state dir, and the open of
+ * it every call reads through for as long as the process lives. Its checked signatures and
+ * folds outlive every call (O-69), where a Node per call re-verified and refolded every
+ * object on every read.
+ *
+ * READS borrow a Node from a pool beside that open (`read`), so two reads never wait on
+ * each other: a main-thread read is not held up by a background one. Anything that may
+ * touch the network (every `block_on`) opens a Node of its own beside it (`write`): so a
+ * sync holds up no read, and writes run side by side as they always have, arbitrated by
+ * SQLite.
  */
 public protocol CoreProtocol : AnyObject {
     
@@ -806,12 +813,6 @@ public protocol CoreProtocol : AnyObject {
      * so the CHAT list never does a per-row fold. Synchronous read.
      */
     func forumHosts() throws  -> [ForumHostRow]
-    
-    /**
-     * Every Forum's back-edge this device can fold, in one call, so the CHAT list
-     * never does a per-row fold. Synchronous read.
-     */
-    func forumParents() throws  -> [ForumParentRow]
     
     /**
      * Attach an EXISTING Forum object to a Channel as a Room (the set half of
@@ -1163,7 +1164,7 @@ public protocol CoreProtocol : AnyObject {
      * display name — read live, and resolved for the whole list on one MLS client,
      * so the chat list needs no per-row `object_title` round trip.
      */
-    func objects() throws  -> [ObjectRow]
+    func objects(kind: ObjectKind?) throws  -> [ObjectRow]
     
     /**
      * Accept a pending connection (double-opt-in): mark the peer Connected.
@@ -1197,6 +1198,18 @@ public protocol CoreProtocol : AnyObject {
      * this device's syncs have drained. No relay round trip.
      */
     func pendingRequests() throws  -> [RequestRow]
+    
+    /**
+     * Every person: this device's identity first, then each connection, with the
+     * profile they published. Photos are fetched apart: [`Core::person_photo`].
+     */
+    func people() throws  -> [PersonRow]
+    
+    /**
+     * One person's avatar photo, by identity (hex or `space1…`), or None. The one
+     * read of photo bytes.
+     */
+    func personPhoto(identity: String) throws  -> PersonPhoto?
     
     /**
      * One Place, folded.
@@ -1705,9 +1718,16 @@ public protocol CoreProtocol : AnyObject {
 }
 
 /**
- * The single handle the Swift app holds. Immutable (just the state dir), so it
- * is trivially `Send + Sync` as UniFFI requires. Every call rebuilds the Node
- * from persisted state — the exact per-call model the CLI uses.
+ * The single handle the Swift app holds, one per process: the state dir, and the open of
+ * it every call reads through for as long as the process lives. Its checked signatures and
+ * folds outlive every call (O-69), where a Node per call re-verified and refolded every
+ * object on every read.
+ *
+ * READS borrow a Node from a pool beside that open (`read`), so two reads never wait on
+ * each other: a main-thread read is not held up by a background one. Anything that may
+ * touch the network (every `block_on`) opens a Node of its own beside it (`write`): so a
+ * sync holds up no read, and writes run side by side as they always have, arbitrated by
+ * SQLite.
  */
 open class Core:
     CoreProtocol {
@@ -2175,17 +2195,6 @@ open func exteriors()throws  -> [ExteriorRow] {
 open func forumHosts()throws  -> [ForumHostRow] {
     return try  FfiConverterSequenceTypeForumHostRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_forum_hosts(self.uniffiClonePointer(),$0
-    )
-})
-}
-    
-    /**
-     * Every Forum's back-edge this device can fold, in one call, so the CHAT list
-     * never does a per-row fold. Synchronous read.
-     */
-open func forumParents()throws  -> [ForumParentRow] {
-    return try  FfiConverterSequenceTypeForumParentRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
-    uniffi_pacific_ffi_fn_method_core_forum_parents(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -2873,9 +2882,10 @@ open func objectVotePost(objectId: String, targetAuthor: String, targetGen: UInt
      * display name — read live, and resolved for the whole list on one MLS client,
      * so the chat list needs no per-row `object_title` round trip.
      */
-open func objects()throws  -> [ObjectRow] {
+open func objects(kind: ObjectKind? = nil)throws  -> [ObjectRow] {
     return try  FfiConverterSequenceTypeObjectRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
-    uniffi_pacific_ffi_fn_method_core_objects(self.uniffiClonePointer(),$0
+    uniffi_pacific_ffi_fn_method_core_objects(self.uniffiClonePointer(),
+        FfiConverterOptionTypeObjectKind.lower(kind),$0
     )
 })
 }
@@ -2938,6 +2948,29 @@ open func peerProfile(peerId: String)throws  -> ProfileRow? {
 open func pendingRequests()throws  -> [RequestRow] {
     return try  FfiConverterSequenceTypeRequestRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_pending_requests(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * Every person: this device's identity first, then each connection, with the
+     * profile they published. Photos are fetched apart: [`Core::person_photo`].
+     */
+open func people()throws  -> [PersonRow] {
+    return try  FfiConverterSequenceTypePersonRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_people(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * One person's avatar photo, by identity (hex or `space1…`), or None. The one
+     * read of photo bytes.
+     */
+open func personPhoto(identity: String)throws  -> PersonPhoto? {
+    return try  FfiConverterOptionTypePersonPhoto.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_person_photo(self.uniffiClonePointer(),
+        FfiConverterString.lower(identity),$0
     )
 })
 }
@@ -6515,102 +6548,6 @@ public func FfiConverterTypeForumHostRow_lower(_ value: ForumHostRow) -> RustBuf
 
 
 /**
- * One Forum's back-edge, from the Forum's own fold: the object it is a part of, and
- * in what role. A Forum in the comments role is its parent's, not a conversation.
- */
-public struct ForumParentRow {
-    /**
-     * The Forum's object id.
-     */
-    public var forum: String
-    /**
-     * The object it is a part of.
-     */
-    public var parent: String
-    /**
-     * What it is for there: `comments`, `room`, …
-     */
-    public var role: String
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(
-        /**
-         * The Forum's object id.
-         */forum: String, 
-        /**
-         * The object it is a part of.
-         */parent: String, 
-        /**
-         * What it is for there: `comments`, `room`, …
-         */role: String) {
-        self.forum = forum
-        self.parent = parent
-        self.role = role
-    }
-}
-
-
-
-extension ForumParentRow: Equatable, Hashable {
-    public static func ==(lhs: ForumParentRow, rhs: ForumParentRow) -> Bool {
-        if lhs.forum != rhs.forum {
-            return false
-        }
-        if lhs.parent != rhs.parent {
-            return false
-        }
-        if lhs.role != rhs.role {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(forum)
-        hasher.combine(parent)
-        hasher.combine(role)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeForumParentRow: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ForumParentRow {
-        return
-            try ForumParentRow(
-                forum: FfiConverterString.read(from: &buf), 
-                parent: FfiConverterString.read(from: &buf), 
-                role: FfiConverterString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: ForumParentRow, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.forum, into: &buf)
-        FfiConverterString.write(value.parent, into: &buf)
-        FfiConverterString.write(value.role, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeForumParentRow_lift(_ buf: RustBuffer) throws -> ForumParentRow {
-    return try FfiConverterTypeForumParentRow.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeForumParentRow_lower(_ value: ForumParentRow) -> RustBuffer {
-    return FfiConverterTypeForumParentRow.lower(value)
-}
-
-
-/**
  * One constituent Room a Channel (forum) hosts, folded from the PARENT forum's
  * log — `GroupForumRow`'s contract one level down. `held` says whether THIS
  * device carries the room's MLS group: the difference between a tab that opens
@@ -9146,17 +9083,53 @@ public func FfiConverterTypeMyExterior_lower(_ value: MyExterior) -> RustBuffer 
 }
 
 
+/**
+ * One object from the core's one sweep (`Node::object_rows`). Identities are 64-char
+ * hex; "" where there is none.
+ */
 public struct ObjectRow {
     public var id: String
     public var kind: String
     public var name: String
+    public var owner: String
+    /**
+     * Who made it: the group's first owner. A handover never changes it.
+     */
+    public var creator: String
+    public var members: [String]
+    /**
+     * The object it is a part of (`base.setParent`), and in what role (`comments`, `room`, …).
+     */
+    public var parent: String
+    public var parentRole: String
+    /**
+     * For a connection's objects: the peer, and `channel` or `chat`.
+     */
+    public var peer: String
+    public var link: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, kind: String, name: String) {
+    public init(id: String, kind: String, name: String, owner: String, 
+        /**
+         * Who made it: the group's first owner. A handover never changes it.
+         */creator: String, members: [String], 
+        /**
+         * The object it is a part of (`base.setParent`), and in what role (`comments`, `room`, …).
+         */parent: String, parentRole: String, 
+        /**
+         * For a connection's objects: the peer, and `channel` or `chat`.
+         */peer: String, link: String) {
         self.id = id
         self.kind = kind
         self.name = name
+        self.owner = owner
+        self.creator = creator
+        self.members = members
+        self.parent = parent
+        self.parentRole = parentRole
+        self.peer = peer
+        self.link = link
     }
 }
 
@@ -9173,6 +9146,27 @@ extension ObjectRow: Equatable, Hashable {
         if lhs.name != rhs.name {
             return false
         }
+        if lhs.owner != rhs.owner {
+            return false
+        }
+        if lhs.creator != rhs.creator {
+            return false
+        }
+        if lhs.members != rhs.members {
+            return false
+        }
+        if lhs.parent != rhs.parent {
+            return false
+        }
+        if lhs.parentRole != rhs.parentRole {
+            return false
+        }
+        if lhs.peer != rhs.peer {
+            return false
+        }
+        if lhs.link != rhs.link {
+            return false
+        }
         return true
     }
 
@@ -9180,6 +9174,13 @@ extension ObjectRow: Equatable, Hashable {
         hasher.combine(id)
         hasher.combine(kind)
         hasher.combine(name)
+        hasher.combine(owner)
+        hasher.combine(creator)
+        hasher.combine(members)
+        hasher.combine(parent)
+        hasher.combine(parentRole)
+        hasher.combine(peer)
+        hasher.combine(link)
     }
 }
 
@@ -9193,7 +9194,14 @@ public struct FfiConverterTypeObjectRow: FfiConverterRustBuffer {
             try ObjectRow(
                 id: FfiConverterString.read(from: &buf), 
                 kind: FfiConverterString.read(from: &buf), 
-                name: FfiConverterString.read(from: &buf)
+                name: FfiConverterString.read(from: &buf), 
+                owner: FfiConverterString.read(from: &buf), 
+                creator: FfiConverterString.read(from: &buf), 
+                members: FfiConverterSequenceString.read(from: &buf), 
+                parent: FfiConverterString.read(from: &buf), 
+                parentRole: FfiConverterString.read(from: &buf), 
+                peer: FfiConverterString.read(from: &buf), 
+                link: FfiConverterString.read(from: &buf)
         )
     }
 
@@ -9201,6 +9209,13 @@ public struct FfiConverterTypeObjectRow: FfiConverterRustBuffer {
         FfiConverterString.write(value.id, into: &buf)
         FfiConverterString.write(value.kind, into: &buf)
         FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.owner, into: &buf)
+        FfiConverterString.write(value.creator, into: &buf)
+        FfiConverterSequenceString.write(value.members, into: &buf)
+        FfiConverterString.write(value.parent, into: &buf)
+        FfiConverterString.write(value.parentRole, into: &buf)
+        FfiConverterString.write(value.peer, into: &buf)
+        FfiConverterString.write(value.link, into: &buf)
     }
 }
 
@@ -9628,6 +9643,210 @@ public func FfiConverterTypeParticipantRow_lift(_ buf: RustBuffer) throws -> Par
 #endif
 public func FfiConverterTypeParticipantRow_lower(_ value: ParticipantRow) -> RustBuffer {
     return FfiConverterTypeParticipantRow.lower(value)
+}
+
+
+/**
+ * A person's avatar photo, base64, and its mime type.
+ */
+public struct PersonPhoto {
+    public var photo: String
+    public var mime: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(photo: String, mime: String) {
+        self.photo = photo
+        self.mime = mime
+    }
+}
+
+
+
+extension PersonPhoto: Equatable, Hashable {
+    public static func ==(lhs: PersonPhoto, rhs: PersonPhoto) -> Bool {
+        if lhs.photo != rhs.photo {
+            return false
+        }
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(photo)
+        hasher.combine(mime)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePersonPhoto: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PersonPhoto {
+        return
+            try PersonPhoto(
+                photo: FfiConverterString.read(from: &buf), 
+                mime: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PersonPhoto, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.photo, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePersonPhoto_lift(_ buf: RustBuffer) throws -> PersonPhoto {
+    return try FfiConverterTypePersonPhoto.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePersonPhoto_lower(_ value: PersonPhoto) -> RustBuffer {
+    return FfiConverterTypePersonPhoto.lower(value)
+}
+
+
+/**
+ * One person: this device's identity (`is_me`), or a connection.
+ */
+public struct PersonRow {
+    /**
+     * 64-char identity hex: the key every roster and author field uses.
+     */
+    public var identity: String
+    /**
+     * The `space1…` address `connections()` and pairing use.
+     */
+    public var spaceId: String
+    public var name: String
+    public var connected: Bool
+    public var isMe: Bool
+    /**
+     * The avatar's block colour, "RRGGBB", or "".
+     */
+    public var color: String
+    /**
+     * When the avatar photo was captured (unix secs; 0 = none): moves exactly when the
+     * photo does, so a decoded copy is keyed on it.
+     */
+    public var photoAt: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * 64-char identity hex: the key every roster and author field uses.
+         */identity: String, 
+        /**
+         * The `space1…` address `connections()` and pairing use.
+         */spaceId: String, name: String, connected: Bool, isMe: Bool, 
+        /**
+         * The avatar's block colour, "RRGGBB", or "".
+         */color: String, 
+        /**
+         * When the avatar photo was captured (unix secs; 0 = none): moves exactly when the
+         * photo does, so a decoded copy is keyed on it.
+         */photoAt: UInt64) {
+        self.identity = identity
+        self.spaceId = spaceId
+        self.name = name
+        self.connected = connected
+        self.isMe = isMe
+        self.color = color
+        self.photoAt = photoAt
+    }
+}
+
+
+
+extension PersonRow: Equatable, Hashable {
+    public static func ==(lhs: PersonRow, rhs: PersonRow) -> Bool {
+        if lhs.identity != rhs.identity {
+            return false
+        }
+        if lhs.spaceId != rhs.spaceId {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.connected != rhs.connected {
+            return false
+        }
+        if lhs.isMe != rhs.isMe {
+            return false
+        }
+        if lhs.color != rhs.color {
+            return false
+        }
+        if lhs.photoAt != rhs.photoAt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(identity)
+        hasher.combine(spaceId)
+        hasher.combine(name)
+        hasher.combine(connected)
+        hasher.combine(isMe)
+        hasher.combine(color)
+        hasher.combine(photoAt)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePersonRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PersonRow {
+        return
+            try PersonRow(
+                identity: FfiConverterString.read(from: &buf), 
+                spaceId: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                connected: FfiConverterBool.read(from: &buf), 
+                isMe: FfiConverterBool.read(from: &buf), 
+                color: FfiConverterString.read(from: &buf), 
+                photoAt: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PersonRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.identity, into: &buf)
+        FfiConverterString.write(value.spaceId, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterBool.write(value.connected, into: &buf)
+        FfiConverterBool.write(value.isMe, into: &buf)
+        FfiConverterString.write(value.color, into: &buf)
+        FfiConverterUInt64.write(value.photoAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePersonRow_lift(_ buf: RustBuffer) throws -> PersonRow {
+    return try FfiConverterTypePersonRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePersonRow_lower(_ value: PersonRow) -> RustBuffer {
+    return FfiConverterTypePersonRow.lower(value)
 }
 
 
@@ -12299,6 +12518,173 @@ extension MintKey: Equatable, Hashable {}
 
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * The core's object kinds (`pacific_core::object::ObjectKind`, pinned to the ICD), as
+ * Swift sees them. Both conversions are exhaustive matches, so a kind added to the core
+ * fails this build until it is added here: the list cannot drift.
+ */
+
+public enum ObjectKind {
+    
+    case group
+    case forum
+    case field
+    case system
+    case project
+    case topic
+    case contact
+    case conversation
+    case thing
+    case place
+    case event
+    case post
+    case treasury
+    case note
+    case host
+    case transaction
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeObjectKind: FfiConverterRustBuffer {
+    typealias SwiftType = ObjectKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ObjectKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .group
+        
+        case 2: return .forum
+        
+        case 3: return .field
+        
+        case 4: return .system
+        
+        case 5: return .project
+        
+        case 6: return .topic
+        
+        case 7: return .contact
+        
+        case 8: return .conversation
+        
+        case 9: return .thing
+        
+        case 10: return .place
+        
+        case 11: return .event
+        
+        case 12: return .post
+        
+        case 13: return .treasury
+        
+        case 14: return .note
+        
+        case 15: return .host
+        
+        case 16: return .transaction
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ObjectKind, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .group:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .forum:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .field:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .system:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .project:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .topic:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .contact:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .conversation:
+            writeInt(&buf, Int32(8))
+        
+        
+        case .thing:
+            writeInt(&buf, Int32(9))
+        
+        
+        case .place:
+            writeInt(&buf, Int32(10))
+        
+        
+        case .event:
+            writeInt(&buf, Int32(11))
+        
+        
+        case .post:
+            writeInt(&buf, Int32(12))
+        
+        
+        case .treasury:
+            writeInt(&buf, Int32(13))
+        
+        
+        case .note:
+            writeInt(&buf, Int32(14))
+        
+        
+        case .host:
+            writeInt(&buf, Int32(15))
+        
+        
+        case .transaction:
+            writeInt(&buf, Int32(16))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeObjectKind_lift(_ buf: RustBuffer) throws -> ObjectKind {
+    return try FfiConverterTypeObjectKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeObjectKind_lower(_ value: ObjectKind) -> RustBuffer {
+    return FfiConverterTypeObjectKind.lower(value)
+}
+
+
+
+extension ObjectKind: Equatable, Hashable {}
+
+
+
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
@@ -12470,6 +12856,30 @@ fileprivate struct FfiConverterOptionTypeMyExterior: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypePersonPhoto: FfiConverterRustBuffer {
+    typealias SwiftType = PersonPhoto?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypePersonPhoto.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypePersonPhoto.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeProfileRow: FfiConverterRustBuffer {
     typealias SwiftType = ProfileRow?
 
@@ -12486,6 +12896,30 @@ fileprivate struct FfiConverterOptionTypeProfileRow: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeProfileRow.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeObjectKind: FfiConverterRustBuffer {
+    typealias SwiftType = ObjectKind?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeObjectKind.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeObjectKind.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -12886,31 +13320,6 @@ fileprivate struct FfiConverterSequenceTypeForumHostRow: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeForumHostRow.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterSequenceTypeForumParentRow: FfiConverterRustBuffer {
-    typealias SwiftType = [ForumParentRow]
-
-    public static func write(_ value: [ForumParentRow], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeForumParentRow.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ForumParentRow] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [ForumParentRow]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeForumParentRow.read(from: &buf))
         }
         return seq
     }
@@ -13336,6 +13745,31 @@ fileprivate struct FfiConverterSequenceTypeParticipantRow: FfiConverterRustBuffe
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeParticipantRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypePersonRow: FfiConverterRustBuffer {
+    typealias SwiftType = [PersonRow]
+
+    public static func write(_ value: [PersonRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePersonRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PersonRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PersonRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePersonRow.read(from: &buf))
         }
         return seq
     }
@@ -14198,6 +14632,16 @@ public func mintFields(kind: String) -> [MintFieldRow] {
     )
 })
 }
+/**
+ * A kind's name as the directory and `ObjectRow.kind` spell it, from the core's table.
+ */
+public func objectKindName(kind: ObjectKind) -> String {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_pacific_ffi_fn_func_object_kind_name(
+        FfiConverterTypeObjectKind.lower(kind),$0
+    )
+})
+}
 public func projectAddDependency(edgeId: String, from: String, to: String, kind: String) -> DeltaDraft {
     return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
     uniffi_pacific_ffi_fn_func_project_add_dependency(
@@ -14688,6 +15132,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_func_mint_fields() != 30458) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_func_object_kind_name() != 17944) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_func_project_add_dependency() != 33824) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14880,9 +15327,6 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_forum_hosts() != 12944) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_forum_parents() != 33776) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_pacific_ffi_checksum_method_core_forum_room_attach() != 27743) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15033,7 +15477,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_object_vote_post() != 53653) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_objects() != 27584) {
+    if (uniffi_pacific_ffi_checksum_method_core_objects() != 55043) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_pair_accept() != 18910) {
@@ -15049,6 +15493,12 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_pending_requests() != 22902) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_people() != 36751) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_person_photo() != 63126) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_place() != 43788) {

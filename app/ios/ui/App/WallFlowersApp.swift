@@ -284,7 +284,7 @@ struct WallFlowersApp: App {
                     await venues.seedIfRequested(core: core, proposals: proposals)
                     #endif
                 }
-                .onReceive(core.$objects) { objs in
+                .onReceive(core.$index.map(\.rows).removeDuplicates()) { objs in
                     // ChatRooms (Forum GroupObjects) join the catalogue so a mention of a room's
                     // name resolves and the type-router opens the real thread. Re-runs on every
                     // object change, so it self-heals as the sync loop lands seeded titles.

@@ -67,6 +67,17 @@ TARGET_DIR="${CARGO_TARGET_DIR:-$(cd "$CORE/.." && pwd)/target}"
 export IPHONEOS_DEPLOYMENT_TARGET=18.0
 cd "$CORE"
 
+# THE STAMP (arc/lib/arc-build), as deploy-door.sh sets it: the fold cache's model is the core
+# commit this build is from, and a dirty core names none, so it folds uncached (O-69, FC-8).
+COMMIT="$(git rev-parse HEAD)"
+DIRTY=0; [ -z "$(git status --porcelain -- . ../Cargo.toml ../Cargo.lock)" ] || DIRTY=1
+export ARC_BUILD_SHA="$COMMIT"
+export ARC_BUILD_REF="$(git rev-parse --abbrev-ref HEAD)"
+export ARC_BUILD_DIRTY="$DIRTY"
+export ARC_BUILD_CORE="$COMMIT"; [ "$DIRTY" = 1 ] && ARC_BUILD_CORE="$COMMIT-dirty"
+export ARC_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+[ "$DIRTY" = 1 ] && echo "⚠ core is dirty: this build folds uncached"
+
 # rusqlite's bundled SQLite C is cross-compiled per slice, so SDKROOT must MATCH the
 # slice: iphonesimulator for the sim, iphoneos for a physical device. A single global
 # SDKROOT would mis-compile one of them.

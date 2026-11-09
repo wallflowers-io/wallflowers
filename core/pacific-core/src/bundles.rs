@@ -41,14 +41,14 @@ pub fn is_bundle_op(op_id: u32) -> bool {
 }
 
 /// One offer: the bundle and the key package's expiry.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Offer {
     pub bundle: String,
     pub not_after: u64,
 }
 
 /// Every member's offers and withdrawals, by (author, kp_id).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Bundles {
     offers: BTreeMap<(MemberId, [u8; 32]), Offer>,
     withdrawn: BTreeSet<(MemberId, [u8; 32])>,

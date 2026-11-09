@@ -42,11 +42,10 @@ enum ObjectProjection {
         // rendering meant a member whose id arrived differently silently lost its
         // name (caught 12 Aug by the rename). Compare the bytes, never the text.
         var names: [String: String] = [:]
-        for c in inputs.connections where !c.displayName.isEmpty {
-            names[IdentityKey.hex(c.peerId)] = c.displayName
-        }
+        for (id, name) in inputs.names { names[IdentityKey.hex(id)] = name }
+        let rosters = Dictionary(objects.map { ($0.id, $0.members) }, uniquingKeysWith: { a, _ in a })
         func members(of objectId: String) -> [(space: String, name: String?)] {
-            (inputs.members[objectId] ?? []).map { hex in
+            (rosters[objectId] ?? []).map { hex in
                 (IdentityKey.display(hex), names[IdentityKey.hex(hex)])
             }
         }

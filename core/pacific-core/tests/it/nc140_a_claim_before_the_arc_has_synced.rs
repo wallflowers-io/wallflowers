@@ -192,3 +192,35 @@ async fn a_room_the_arc_cannot_admit_to_yet_is_named_never_a_clean_success() {
     assert_eq!(h.node(ada).group_state(&site).unwrap().claims_spent.len(), 1, "spent once");
     assert_eq!(h.node(vis).object_kind(&room).expect("the visitor holds the room"), "forum");
 }
+
+/// #79: the Arc's wait fetches the intro mailbox outside its node lock and ingests under it.
+/// A Site's Welcome fetched so is joined on the take.
+#[tokio::test]
+async fn a_welcome_fetched_outside_the_lock_is_joined_on_the_take() {
+    let h = Harness::new(&["ada", "arc"]).await;
+    let (ada, arc) = (0, 1);
+    let site = mint(&h, ada, ObjectKind::Group, "Egregore").await;
+    add_unsynced(&h, ada, arc, &site).await;
+
+    let node = h.node(arc);
+    let fetched = node.intro_fetch(&site).await.expect("fetched");
+    assert!(node.site_take(&site, fetched).expect("taken"), "the Site is on the node");
+    assert_eq!(h.node(arc).object_kind(&site).expect("held"), "group");
+}
+
+/// #79: between the fetch and the take the sync loop may take the same Welcome. The take
+/// passes it by: joined once, nothing quarantined.
+#[tokio::test]
+async fn a_welcome_a_sync_took_first_is_not_taken_twice() {
+    let h = Harness::new(&["ada", "arc"]).await;
+    let (ada, arc) = (0, 1);
+    let site = mint(&h, ada, ObjectKind::Group, "Egregore").await;
+    add_unsynced(&h, ada, arc, &site).await;
+
+    let node = h.node(arc);
+    let held = node.dir.quarantine_count().unwrap();
+    let fetched = node.intro_fetch(&site).await.expect("fetched");
+    h.sync(arc).await;
+    assert!(node.site_take(&site, fetched).expect("taken"), "the Site is on the node");
+    assert_eq!(node.dir.quarantine_count().unwrap(), held, "the sync's Welcome is not quarantined as a second copy");
+}

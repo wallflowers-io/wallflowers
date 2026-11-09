@@ -114,6 +114,8 @@ pub mod mls_mem;
 /// The spine: the per-account chain of entries that lets a seed NAME its objects.
 /// Pure format — every platform imports THIS rather than writing its own encoder.
 pub mod spine;
+#[cfg(all(feature = "mls", feature = "storage", feature = "transport"))]
+pub mod summary;
 pub mod lease;
 pub mod resumption;
 /// SQLite impls of the two `mls-rs` storage traits. `storage`, not `mls`: they
@@ -230,6 +232,17 @@ pub enum CoreError {
     NotReady(String),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+}
+
+/// A trust refusal, as the engine has always classified it: a bad bundle is the
+/// handshake's, a bad key or signature the identity's.
+impl From<trust::Error> for CoreError {
+    fn from(e: trust::Error) -> Self {
+        match e {
+            trust::Error::Bundle(m) => CoreError::Handshake(m),
+            trust::Error::Signature(m) => CoreError::Identity(m),
+        }
+    }
 }
 
 impl CoreError {

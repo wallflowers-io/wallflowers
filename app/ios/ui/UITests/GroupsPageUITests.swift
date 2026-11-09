@@ -86,7 +86,7 @@ final class GroupsPageUITests: XCTestCase {
         // bare staticText that could also match chrome.
         let rowMatch = NSPredicate(format: "identifier BEGINSWITH 'list-row-group:' AND label CONTAINS %@",
                                    groupName)
-        var row = app.otherElements.matching(rowMatch).firstMatch
+        var row = app.buttons.matching(rowMatch).firstMatch
         if !row.waitForExistence(timeout: 8) {
             row = app.staticTexts.matching(rowMatch).firstMatch
         }
@@ -492,7 +492,7 @@ final class GroupsPageUITests: XCTestCase {
         jewel.tap()
 
         let rowMatch = NSPredicate(format: "identifier BEGINSWITH 'list-row-group:'")
-        var row = app.otherElements.matching(rowMatch).firstMatch
+        var row = app.buttons.matching(rowMatch).firstMatch
         if !row.waitForExistence(timeout: 8) {
             row = app.staticTexts.matching(rowMatch).firstMatch
         }

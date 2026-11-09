@@ -36,7 +36,7 @@ pub fn is_about_op(op_id: u32) -> bool {
 }
 
 /// A member's bio and links here, with the gen they were published at.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct About {
     pub bio: String,
     pub links: Vec<String>,

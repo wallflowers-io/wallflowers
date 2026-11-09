@@ -12,8 +12,8 @@ enum ExteriorDetail {
     /// gone, or that has no door to ask at.
     static func open(_ objectId: String, core: CoreService, shell: ShellState) {
         guard let row = core.exteriors.first(where: { $0.object == objectId }), row.door else { return }
-        let name = core.peerNamesByIdentity()[row.owner] ?? String(row.owner.prefix(8))
-        let source = ExteriorDetailSource(row: row, ownerName: name)
+        let name = core.index.name(row.owner) ?? String(row.owner.prefix(8))
+        let source = ExteriorDetailSource(row: row, ownerName: name, ownerPhoto: core.index.photo(row.owner))
         let primary: DetailPrimary = row.requested
             ? .action(label: "Requested") { await core.withdrawRequest(objectId) ? .saved : nil }
             : .action(label: "Ask to join") { await core.requestJoin(objectId) ? .saved : nil }
@@ -27,13 +27,14 @@ enum ExteriorDetail {
 struct ExteriorDetailSource: DetailSource {
     let row: ExteriorRow
     let ownerName: String
+    let ownerPhoto: Data?
 
     func headline() async -> DetailHeadline? {
         DetailHeadline(title: row.name, facts: row.description.isEmpty ? [] : [row.description])
     }
 
     func author() async -> DetailAuthor? {
-        DetailAuthor(id: row.owner, name: ownerName, initials: Avatar.initials(ownerName), isSpace: false)
+        DetailAuthor(id: row.owner, name: ownerName, initials: Avatar.initials(ownerName), isSpace: false, photo: ownerPhoto)
     }
 
     func comments() async -> [DetailComment] { [] }

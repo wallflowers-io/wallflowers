@@ -55,7 +55,7 @@ pub fn is_exterior_op(op_id: u32) -> bool {
 }
 
 /// The outside, as its owner wrote it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Exterior {
     pub name: String,
     pub description: String,
@@ -64,7 +64,7 @@ pub struct Exterior {
     pub door: Option<[u8; 32]>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum DoorMode {
     Review,
     Auto,
@@ -83,14 +83,14 @@ impl DoorMode {
 }
 
 /// The door, as the roster holds it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Door {
     pub key: [u8; 32],
     pub mode: DoorMode,
 }
 
 /// One request answered.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Decision {
     pub asker: MemberId,
     pub admit: bool,
@@ -98,7 +98,7 @@ pub struct Decision {
     pub gen: u64,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ExteriorState {
     pub exterior: Option<Exterior>,
     pub door: Option<Door>,
@@ -190,7 +190,7 @@ pub fn signed_row(group: &[u8], kind: crate::object::ObjectKind, owner: &MemberI
 }
 
 /// An object's exterior as a non-member holds it, off `contact.publishExterior`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Carried {
     pub object: String,
     pub kind: crate::object::ObjectKind,

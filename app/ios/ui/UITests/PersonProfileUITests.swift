@@ -39,7 +39,7 @@ final class PersonProfileUITests: XCTestCase {
 
         // A person row exists only when this device truly has a connection.
         let rowMatch = NSPredicate(format: "identifier BEGINSWITH 'list-row-person:'")
-        var row = app.otherElements.matching(rowMatch).firstMatch
+        var row = app.buttons.matching(rowMatch).firstMatch
         if !row.waitForExistence(timeout: 4) {
             row = app.staticTexts.matching(rowMatch).firstMatch
         }
