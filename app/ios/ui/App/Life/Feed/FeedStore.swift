@@ -24,11 +24,11 @@ final class FeedStore: ObservableObject {
     /// Snapshot the published reads, assemble + notch-filter, publish only on change.
     func refresh(core: CoreService, query: LifeQuery) {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
-        let names = core.peerNamesByIdentity()
-        let me = core.displayName.isEmpty ? "me" : core.displayName
+        let index = core.index
+        let names = index.names
         let assembled = FeedAssembler.rows(events: core.events, listings: core.listings,
-                                           posts: core.posts,
-                                           nowMs: now, selfName: me, selfID: core.myIdentityHex,
+                                           posts: core.posts, nowMs: now,
+                                           makerOf: index.maker(of:),
                                            nameFor: { names[$0] ?? String($0.prefix(8)) })
         let filtered = FeedAssembler.filter(assembled, locked: query.locked)
         ledger.observe(filtered, nowMs: now)

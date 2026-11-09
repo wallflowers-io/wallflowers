@@ -58,8 +58,12 @@ enum DesignTokens {
         static let vstackSpacing: CGFloat = 9
         /// Header HStack spacing.
         static let headerGap: CGFloat = 10
-        /// The provenance mark: filled = member, dashed = over hops.
-        static let provenanceDot: CGFloat = 10
+        /// The author's avatar; its ring is the provenance mark: solid = member,
+        /// dashed = over hops.
+        static let avatar: CGFloat = 30
+        static let ring: CGFloat = 1.5
+        /// The kind's glyph, above the card's top right.
+        static let kindSize: CGFloat = 15
         static let authorSize: CGFloat = 13
         static let locationSize: CGFloat = 12
         static let titleSize: CGFloat = 22

@@ -10,6 +10,7 @@
 
 import Foundation
 import SwiftUI
+import Combine      // the Feed's merged inputs (feedInputsChanged)
 import UIKit        // event media: downscale/compress stills under the fold's b64 caps
 import PacificCore
 
@@ -29,7 +30,11 @@ final class CoreService: ObservableObject {
     /// mint). The self avatar + Me profile read this, so two devices show their
     /// own identities rather than a shared hardcoded mock.
     @Published var displayName = ""
-    @Published var objects: [ObjectRow] = []
+    /// THE index of what this device holds (ObjectIndex.swift): every object by kind,
+    /// every person with their avatar.
+    @Published private(set) var index = ObjectIndex()
+    /// Every object held, from the index.
+    var objects: [ObjectRow] { index.rows }
 
     /// The legacy slot: a bare message with no idea what was being attempted. Still
     /// written by call sites that have not been given their operation yet, and promoted
@@ -289,18 +294,6 @@ final class CoreService: ObservableObject {
     /// than rendering a blank one.
     func peerProfile(_ peerId: String) -> ProfileRow? {
         (try? core.peerProfile(peerId: peerId)) ?? nil
-    }
-
-    /// A peer's avatar photo bytes, if they published one.
-    func peerPhoto(_ peerId: String) -> Data? {
-        guard let p = peerProfile(peerId), !p.card.photo.isEmpty else { return nil }
-        return Data(base64Encoded: p.card.photo)
-    }
-
-    /// A peer's chosen block colour, or nil to keep the neutral fallback disc.
-    func peerColor(_ peerId: String) -> Color? {
-        guard let p = peerProfile(peerId), !p.card.avatarColor.isEmpty else { return nil }
-        return Color(hex: p.card.avatarColor)
     }
 
     /// Two-letter initials from the real display name, for the avatar badge.
@@ -828,9 +821,7 @@ final class CoreService: ObservableObject {
         // on every 3-second sync tick — an ungated write here re-fires every $objects
         // subscriber (the graph projection among them) on a steady-state tick.
         let reads = [
-            offMain("re-read your objects", { try $0.objects() }) { s, fresh in
-                if fresh != s.objects { s.objects = fresh }
-            },
+            refreshIndex(),
             // Places are folded per-object (each has its own log), so they are not
             // derivable from `objects` — they need their own read, exactly like Things.
             refreshPlaces(),
@@ -854,35 +845,32 @@ final class CoreService: ObservableObject {
     /// "Channel / Room"; ThreadView reads the forward set per channel for tabs.
     @Published private(set) var roomHosts: [String: RoomHostRow] = [:]
 
-    /// forum object id → the object it is a part of, and in what role, from the
-    /// forum's OWN fold. A forum in the comments role is its parent's comments
-    /// section: reached from its object, never listed as a conversation.
-    @Published private(set) var forumParents: [String: ForumParentRow] = [:]
-
-    /// The comments role, as the core's ICD-pinned table names it.
-    private static let commentsPart = commentsRole()
-
-    func isCommentsSection(_ forumId: String) -> Bool {
-        forumParents[forumId]?.role == Self.commentsPart
-    }
-
-    /// The object's comments section, by the forum's own back-edge: nil until the
-    /// device holds it.
-    func commentsForum(of objectId: String) -> String? {
-        forumParents.values.first { $0.parent == objectId && $0.role == Self.commentsPart }?.forum
-    }
-
     @discardableResult
     func refreshForumHosts() -> Task<Void, Never> {
         offMain("re-read channel hosts", { c in
             (Dictionary(try c.forumHosts().map { ($0.forum, $0) }, uniquingKeysWith: { a, _ in a }),
-             Dictionary(try c.roomHosts().map { ($0.room, $0) }, uniquingKeysWith: { a, _ in a }),
-             Dictionary(try c.forumParents().map { ($0.forum, $0) }, uniquingKeysWith: { a, _ in a }))
+             Dictionary(try c.roomHosts().map { ($0.room, $0) }, uniquingKeysWith: { a, _ in a }))
         }) { s, read in
-            let (hosts, rooms, parents) = read
+            let (hosts, rooms) = read
             if hosts != s.forumHosts { s.forumHosts = hosts }
             if rooms != s.roomHosts { s.roomHosts = rooms }
-            if parents != s.forumParents { s.forumParents = parents }
+        }
+    }
+
+    /// The index's two reads, every object and every person, plus the photos that
+    /// moved, off main. Published only on change: this runs on every sync tick.
+    @discardableResult
+    func refreshIndex() -> Task<Void, Never> {
+        let known = index
+        return offMain("re-read your objects and people", { c in
+            let people = try c.people()
+            var photos: [String: PersonPhoto?] = [:]
+            for id in known.stalePhotos(in: people) { photos[id] = try c.personPhoto(identity: id) }
+            return (try c.objects(kind: nil), people, photos)
+        }) { s, read in
+            var next = s.index
+            next.apply(rows: read.0, people: read.1, fetched: read.2)
+            if next != s.index { s.index = next }
         }
     }
 
@@ -1609,6 +1597,16 @@ final class CoreService: ObservableObject {
 
     @Published private(set) var events: [EventRow] = []
 
+    /// Fires when anything the Feed assembles from changes: a mint lands with no sync,
+    /// and a device that cannot reach the relay never ticks. A @Published publisher
+    /// emits before its property is set, so this delivers on the next main-queue turn,
+    /// when the new values are readable.
+    lazy var feedInputsChanged: AnyPublisher<Void, Never> =
+        Publishers.Merge4($events.map { _ in () }, $posts.map { _ in () },
+                          $listings.map { _ in () }, $index.map { _ in () })
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
+
     /// The events as the core holds them NOW, read on the caller's thread: only for a
     /// lookup that missed the published list (a deep link ahead of the first refresh).
     func eventsNow() -> [EventRow] { (try? core.events()) ?? events }
@@ -2056,30 +2054,21 @@ final class CoreService: ObservableObject {
 
     // MARK: - Graph projection inputs
 
-    /// Everything `ObjectProjection` reads through the FFI, gathered in ONE detached
-    /// pass: connections, each object's roster, each group's folded view. Off-main
-    /// because this is ~2N FFI calls and its triggers fire on the sync cadence — on
-    /// the main actor it was a per-tick UI stall proportional to the object count.
+    /// What `ObjectProjection` needs beyond the object rows (which carry each roster):
+    /// the index's names, and each group's folded view, read off-main in one pass.
     struct ProjectionInputs {
-        let connections: [ConnectionRow]
-        let members: [String: [String]]   // object id → roster identity hexes
+        let names: [String: String]       // identity hex → name (ObjectIndex.names)
         let groups: [String: GroupRow]    // group object id → folded view
     }
 
     func projectionInputs(for objects: [ObjectRow]) async -> ProjectionInputs {
         let core = self.core
-        let wanted = objects
-            .filter { ["group", "project", "thing", "place", "event"].contains($0.kind) }
-            .map { (id: $0.id, kind: $0.kind) }
+        let names = index.names
+        let wanted = objects.filter { $0.kind == "group" }.map(\.id)
         return await Task.detached(priority: .utility) {
-            var members: [String: [String]] = [:]
             var groups: [String: GroupRow] = [:]
-            for o in wanted {
-                members[o.id] = (try? core.objectMembers(objectId: o.id)) ?? []
-                if o.kind == "group" { groups[o.id] = try? core.groupView(objectId: o.id) }
-            }
-            return ProjectionInputs(connections: (try? core.connections()) ?? [],
-                                    members: members, groups: groups)
+            for id in wanted { groups[id] = try? core.groupView(objectId: id) }
+            return ProjectionInputs(names: names, groups: groups)
         }.value
     }
 
@@ -2090,30 +2079,23 @@ final class CoreService: ObservableObject {
     struct ChatSnapshot {
         let connections: [ConnectionRow]           // blocked ones included; the list filters
         let messages: [String: [ChatMsg]]          // group object id or peer id → transcript
-        let members: [String: [String]]            // unnamed group id → roster identity hexes
-        let profiles: [String: ProfileRow]         // peer id → the profile they published
     }
 
     func chatSnapshot(groups: [ObjectRow]) async -> ChatSnapshot {
         let core = self.core
-        let wanted = groups.map { (id: $0.id, named: !$0.name.isEmpty) }
+        let wanted = groups.map(\.id)
         let read = await Task.detached(priority: .userInitiated) { () -> (ChatSnapshot, [Error]) in
             var failed: [Error] = []
             var messages: [String: [ChatMsg]] = [:]
-            var members: [String: [String]] = [:]
-            var profiles: [String: ProfileRow] = [:]
             for g in wanted {
-                do { messages[g.id] = try core.objectMessages(objectId: g.id) } catch { failed.append(error) }
-                if !g.named { members[g.id] = (try? core.objectMembers(objectId: g.id)) ?? [] }
+                do { messages[g] = try core.objectMessages(objectId: g) } catch { failed.append(error) }
             }
             var connections: [ConnectionRow] = []
             do { connections = try core.connections() } catch { failed.append(error) }
             for c in connections {
                 do { messages[c.peerId] = try core.dmMessages(peerId: c.peerId) } catch { failed.append(error) }
-                if let p = (try? core.peerProfile(peerId: c.peerId)) ?? nil { profiles[c.peerId] = p }
             }
-            return (ChatSnapshot(connections: connections, messages: messages,
-                                 members: members, profiles: profiles), failed)
+            return (ChatSnapshot(connections: connections, messages: messages), failed)
         }.value
         for e in read.1 { readFailed("read the transcript", e) }
         return read.0
@@ -2225,7 +2207,7 @@ final class CoreService: ObservableObject {
     /// bare hex as if it were a name.
     func displayName(forSpace space: String) -> String {
         let hex = Self.identityHex(space)
-        if let n = peerNamesByIdentity()[hex], !n.isEmpty { return n }
+        if let n = index.names[hex] { return n }
         if hex == myIdentityHex { return displayName }
         return String(hex.prefix(10)) + "…"
     }
@@ -2587,19 +2569,6 @@ final class CoreService: ObservableObject {
         } catch { fail("rename the Space", error); return false }
     }
 
-    /// Peer display names keyed by 64-char identity hex — the roster form
-    /// (`objectMembers`, `ChatMsg.author`) rather than the `space1…` address that
-    /// `connections()` returns. Built once per list rebuild, not once per row.
-    func peerNamesByIdentity() -> [String: String] {
-        var out: [String: String] = [:]
-        // includeBlocked: a label map, not a people surface — a blocked member's group
-        // messages still render, and they should carry a name rather than raw hex.
-        for c in connectionRows(includeBlocked: true) where !c.displayName.isEmpty {
-            out[Self.identityHex(c.peerId)] = c.displayName
-        }
-        return out
-    }
-
     /// A space id (`space1<hex>`) reduced to the bare 64-char identity hex.
     static func identityHex(_ spaceId: String) -> String {
         IdentityKey.hex(spaceId)
@@ -2610,7 +2579,7 @@ final class CoreService: ObservableObject {
     /// object id: that is an address, not a name. Members we have no name for are
     /// counted ("+2") rather than rendered as hex.
     func derivedGroupName(_ objectId: String, names: [String: String]? = nil) -> String {
-        derivedGroupName(members: objectMembers(objectId), names: names ?? peerNamesByIdentity())
+        derivedGroupName(members: objectMembers(objectId), names: names ?? index.names)
     }
 
     /// The same label from a roster already read.

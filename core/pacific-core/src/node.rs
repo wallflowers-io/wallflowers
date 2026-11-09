@@ -9613,25 +9613,6 @@ impl Node {
         Ok(out)
     }
 
-    /// Every Forum's back-edge, `(forum, parent, role)`, from the Forum's OWN fold
-    /// (`base.setParent`): a member who holds the Forum and not its parent can still
-    /// say what it is for. One sweep, so the chat list does no per-row fold.
-    pub fn forum_parents(&self) -> Result<Vec<(String, String, String)>, CoreError> {
-        let mut out = Vec::new();
-        for (gid, kind) in self.dir.list_objects()? {
-            if kind != "forum" {
-                continue;
-            }
-            let Ok(state) = self.forum_state(&gid) else {
-                continue;
-            };
-            if let Some(p) = &state.parent {
-                out.push((hex::encode(&gid), p.parent.clone(), p.role.clone()));
-            }
-        }
-        Ok(out)
-    }
-
     // ======================================================================
     // COMPLIANCE — an object either folds, or it does not
     // ======================================================================
