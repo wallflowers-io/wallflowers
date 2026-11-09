@@ -2124,7 +2124,7 @@ impl Directory {
 
     // ---- the knocks at a door (mls.door) ----
 
-    /// Keep a knock drained from a door, within the door's bound (ICD `mls.door.bound`, as the
+    /// Keep a knock drained from a door, within the door's bound (ICD `mls.door.relay`, as the
     /// relay keeps it): at most `cap` per door, the oldest evicted, none older than `ttl_s`.
     /// Idempotent by its id. A flood fills neither the relay nor a member's device.
     pub fn put_knock(&self, door: &[u8; 32], id: &[u8; 32], blob: &[u8], now: i64, cap: usize, ttl_s: i64) -> Result<(), CoreError> {

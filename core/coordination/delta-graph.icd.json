@@ -144,17 +144,24 @@
       "bundles": 4,
       "noteMax": 280,
       "refused": "a blob that does not open, a request whose signature fails, a bundle that is not the asker's, or one naming another object, is set aside and named, never answered",
-      "bound": {
-        "summary": "What bounds a door (B3; Ralph, 9 Nov: ruled for ARC_STORAGE's proposal). The relay, which cannot read a knock, keeps a door's tag under its own class, and a member's device keeps its knock store under the same numbers, so a flood fills neither",
-        "tagClass": "door: — a door's tag is published and drained as \"door:\" + the address's tag, the class the relay bounds",
+      "relay": {
+        "summary": "The relay's bound on a door tag (B3, ruled 9 Nov 2026), and a member's device keeps its knock store under the same numbers, so a flood fills neither. The relay sees only that a tag is a door; door_pub is public, so any holder of the exterior could derive that anyway (RFC 9420 §16.4.1).",
+        "prefix": "door:",
+        "prefixSummary": "a door's tag on the relay is \"door:\" + the hex tag of Address::from_seed(the door's address seed), a literal colon",
         "cap": 256,
+        "evict": "oldest",
         "capSummary": "knocks kept per door, at most; past it the OLDEST is evicted, never the newest refused, so a flood cannot lock a door: the owner's remedy against a long one is a new door (a new base.setDoor key)",
         "ttlDays": 30,
         "ttlSummary": "a knock is kept this long, then let go: an ask unanswered for 30 days expires, and the asker may ask again",
         "maxBytes": 8192,
         "maxBytesSummary": "a knock's sealed bytes, at most; a request with every bundle and the longest note is 3,542 (4,724 published), so 1.7× headroom",
         "perConnectionPerHour": 4,
-        "perConnectionPerHourSummary": "knocks one relay connection may publish to one door tag in an hour"
+        "perConnectionPerHourSummary": "knocks one relay connection may publish to one door tag in an hour",
+        "evicted": {
+          "v": 3,
+          "frame": "evicted",
+          "summary": "After a Sub's replay of a door: tag, a Sub with v >= 3 receives one {t:\"evicted\", tag, total}: the number of knocks ever evicted from that tag, monotonic. The client keeps the last total it saw and shows the difference. Below v 3 it is never sent."
+        }
       }
     }
   },
