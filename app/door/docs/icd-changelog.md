@@ -8,6 +8,24 @@ Method: deploy.md § 10.
 Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on an object that exists, or
 `POST /v2/mint` to make one. `GET /v2/icd` serves the model production runs; model.html lists every op and its args.
 
+## 2.5.0
+
+<!-- generated 2.5.0: icd-changelog.mjs --write; do not edit between the markers -->
+- Release: `icd/2.5.0`, 2026-11-09; the pin `5e51f052ad216850aea5486e1d3f3a45ca6e94cb39fb34f4ae5e1b57b668c83f`
+- Against 2.4.0 (`9dddc15de97414e7…`):
+  - model sections changed besides ops: glossary, mls
+<!-- end generated 2.5.0 -->
+
+## 2.4.0
+
+<!-- generated 2.4.0: icd-changelog.mjs --write; do not edit between the markers -->
+- Release: `icd/2.4.0`, 2026-11-08; the pin `9dddc15de97414e7ecffd31e91af6f0337806325d5a8977a7aa52589177a99ce`
+- Against 2.3.1 (`a71fb32573731ca2…`):
+  - added: base.offerBundle (facet bundles, op 4027383808, member, commutative)
+  - added: base.withdrawBundle (facet bundles, op 4027383809, member, commutative)
+  - model sections changed besides ops: facets, mls
+<!-- end generated 2.4.0 -->
+
 ## 2.3.1
 
 <!-- generated 2.3.1: icd-changelog.mjs --write; do not edit between the markers -->
