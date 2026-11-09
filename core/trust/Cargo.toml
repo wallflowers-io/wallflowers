@@ -19,3 +19,7 @@ base64.workspace = true
 hex.workspace = true
 thiserror.workspace = true
 mls-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+# A real key package for the binding check's own tests.
+mls-rs-crypto-rustcrypto.workspace = true

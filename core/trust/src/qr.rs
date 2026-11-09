@@ -221,6 +221,42 @@ mod tests {
         assert!(matches!(parse_and_verify(&bad.encode().unwrap()), Err(Error::Signature(_))));
     }
 
+    /// A real key package whose leaf carries `cred_id` as its BasicCredential.
+    #[cfg(feature = "mls")]
+    fn key_package_for(cred_id: [u8; 32]) -> Vec<u8> {
+        use mls_rs::identity::basic::{BasicCredential, BasicIdentityProvider};
+        use mls_rs::identity::SigningIdentity;
+        use mls_rs::{CipherSuite, CipherSuiteProvider, Client, CryptoProvider, ExtensionList};
+        use mls_rs_crypto_rustcrypto::RustCryptoProvider;
+        let suite = CipherSuite::CURVE25519_AES128;
+        let crypto = RustCryptoProvider::new();
+        let (sk, pk) = crypto.cipher_suite_provider(suite).unwrap().signature_key_generate().unwrap();
+        let id = SigningIdentity::new(BasicCredential::new(cred_id.to_vec()).into_credential(), pk);
+        let client = Client::builder()
+            .crypto_provider(crypto)
+            .identity_provider(BasicIdentityProvider)
+            .signing_identity(id, sk, suite)
+            .build();
+        client
+            .generate_key_package_message(ExtensionList::default(), ExtensionList::default(), None)
+            .unwrap()
+            .to_bytes()
+            .unwrap()
+    }
+
+    #[cfg(feature = "mls")]
+    #[test]
+    fn a_key_package_binds_to_its_signer_and_to_no_one_else() {
+        let ada = [5u8; 32];
+        verify_key_package_identity(&ada, &key_package_for(ada)).unwrap();
+
+        let e = verify_key_package_identity(&ada, &key_package_for([6u8; 32])).unwrap_err();
+        assert!(matches!(&e, Error::Bundle(m) if m.starts_with(ERR_KEY_PACKAGE_IDENTITY) && m.contains("speaks for")), "{e}");
+
+        let e = verify_key_package_identity(&ada, &[1, 2, 3, 4]).unwrap_err();
+        assert!(matches!(&e, Error::Bundle(m) if m.starts_with(ERR_KEY_PACKAGE_IDENTITY)), "{e}");
+    }
+
     #[test]
     fn another_version_is_refused() {
         let sk = SigningKey::from_bytes(&[7u8; 32]);

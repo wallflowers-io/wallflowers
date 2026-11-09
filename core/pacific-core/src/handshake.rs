@@ -113,11 +113,7 @@ pub fn verify_key_package_identity(identity_pk: &[u8; 32], key_package: &[u8]) -
     Ok(trust::qr::verify_key_package_identity(identity_pk, key_package)?)
 }
 
-// --- serde helpers ---------------------------------------------------------
-
-
-
-/// [`serde_bytes_array32`] for an OPTIONAL field: the value, when present, is the
+/// [`trust::cbor::bytes32`] for an OPTIONAL field: the value, when present, is the
 /// same CBOR byte string; absence is handled by the field's `#[serde(default)]`.
 mod serde_opt_bytes_array32 {
     use serde::{Deserialize, Deserializer, Serializer};
