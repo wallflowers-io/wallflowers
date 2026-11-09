@@ -42,10 +42,10 @@
 
 use std::collections::HashMap;
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 
-use crate::mailbox::{Appended, Mailbox, Result};
+use crate::mailbox::{Appended, Evicted, Mailbox, Result};
 
 /// Durable mailbox. One connection behind a mutex — every caller already
 /// serialises on the `Hub` mutex, so a pool would buy nothing here.
@@ -90,6 +90,13 @@ CREATE TABLE IF NOT EXISTS retention_floor (
   floor INTEGER NOT NULL
 ) WITHOUT ROWID;
 
+-- Blobs a capped tag (a door's, mls.door.relay) has lost to its cap, ever. Only raised:
+-- the number a door's members are told, so a flood is seen by the door it targets.
+CREATE TABLE IF NOT EXISTS evicted_total (
+  tag TEXT    PRIMARY KEY,
+  n   INTEGER NOT NULL
+) WITHOUT ROWID;
+
 -- meta['last_seq'] — the durable seq high-water. See `resume_seq`.
 CREATE TABLE IF NOT EXISTS meta (
   k TEXT    PRIMARY KEY,
@@ -119,6 +126,16 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         "CREATE UNIQUE INDEX IF NOT EXISTS blob_by_digest ON blob(tag, digest)
            WHERE digest IS NOT NULL;",
     )
+}
+
+/// The least string above every string that begins `prefix`: its last byte plus one. ASCII
+/// prefixes only (a door's is `mls.door.relay.prefix`).
+fn past(prefix: &str) -> String {
+    let mut b = prefix.as_bytes().to_vec();
+    let last = b.pop().expect("a non-empty prefix");
+    assert!(last < 0x7f, "an ASCII prefix");
+    b.push(last + 1);
+    String::from_utf8(b).expect("ASCII")
 }
 
 /// SHA-256 of a blob as published — the identity ONE COPY PER (tag, blob) is kept by.
@@ -208,6 +225,27 @@ impl Store {
         size: u64,
         commit: bool,
     ) -> rusqlite::Result<Appended> {
+        Ok(self.append_capped_row(tag, seq, stored, digest, size, commit, 0)?.0)
+    }
+
+    /// [`Store::append_row`], holding `tag` at `cap` rows (0 = uncapped): past it the oldest
+    /// go IN THE SAME TRANSACTION as the insert, so the cap is never overshot between
+    /// sweeps. The floor rises past them (a subscriber below it is sent a `Gap`) and the
+    /// tag's evicted total by their count. Returns what went, and the removed rows' body
+    /// column, which the offload backend needs to delete their objects. A commit-slot row
+    /// is never removed.
+    #[allow(clippy::too_many_arguments)]
+    pub fn append_capped_row(
+        &self,
+        tag: &str,
+        seq: u64,
+        stored: &str,
+        digest: &[u8; 32],
+        size: u64,
+        commit: bool,
+        cap: u64,
+    ) -> rusqlite::Result<(Appended, Evicted, Vec<String>)> {
+        let none = || (Evicted::default(), Vec::new());
         let mut conn = self.conn.lock().expect("store mutex");
         let tx = conn.transaction()?;
         let prior: Option<i64> = tx
@@ -218,7 +256,8 @@ impl Store {
             )
             .optional()?;
         if let Some(prior) = prior {
-            return Ok(Appended::Duplicate { seq: prior as u64 });
+            let (e, b) = none();
+            return Ok((Appended::Duplicate { seq: prior as u64 }, e, b));
         }
         if commit {
             // The PRIMARY KEY is the arbitration; a conflict means we lost.
@@ -227,7 +266,8 @@ impl Store {
                 params![tag, seq as i64],
             )?;
             if claimed == 0 {
-                return Ok(Appended::SlotTaken); // tx drops = rollback; nothing stored.
+                let (e, b) = none();
+                return Ok((Appended::SlotTaken, e, b)); // tx drops = rollback; nothing stored.
             }
         }
         tx.execute(
@@ -240,8 +280,59 @@ impl Store {
              ON CONFLICT(k) DO UPDATE SET v = MAX(v, excluded.v)",
             params![seq as i64],
         )?;
+        let mut evicted = Evicted::default();
+        let mut bodies = Vec::new();
+        if cap > 0 {
+            // Newest first, so everything past the first `cap` rows is the oldest.
+            let over: Vec<(i64, String, i64)> = tx
+                .prepare(
+                    "SELECT seq, body, COALESCE(size, LENGTH(body)) FROM blob WHERE tag = ?1 AND NOT EXISTS
+                       (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)
+                     ORDER BY seq DESC LIMIT -1 OFFSET ?2",
+                )?
+                .query_map(params![tag, cap as i64], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+                .collect::<rusqlite::Result<_>>()?;
+            if let Some(floor) = over.iter().map(|o| o.0).max() {
+                tx.execute(
+                    "INSERT INTO retention_floor (tag, floor) VALUES (?1, ?2)
+                     ON CONFLICT(tag) DO UPDATE SET floor = MAX(floor, excluded.floor)",
+                    params![tag, floor],
+                )?;
+                tx.execute(
+                    "DELETE FROM blob WHERE tag = ?1 AND seq <= ?2 AND NOT EXISTS
+                       (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)",
+                    params![tag, floor],
+                )?;
+                tx.execute(
+                    "INSERT INTO evicted_total (tag, n) VALUES (?1, ?2)
+                     ON CONFLICT(tag) DO UPDATE SET n = n + excluded.n",
+                    params![tag, over.len() as i64],
+                )?;
+                evicted = Evicted { count: over.len() as u64, bytes: over.iter().map(|o| o.2 as u64).sum() };
+                bodies = over.into_iter().map(|o| o.1).collect();
+            }
+        }
         tx.commit()?;
-        Ok(Appended::Stored)
+        Ok((Appended::Stored, evicted, bodies))
+    }
+
+    /// [`Store::append`], holding `tag` at `cap` rows (see [`Store::append_capped_row`]).
+    pub fn append_capped(&self, tag: &str, seq: u64, body: &str, cap: u64) -> rusqlite::Result<(Appended, Evicted)> {
+        let (a, e, _) = self.append_capped_row(tag, seq, body, &blob_digest(body), body.len() as u64, false, cap)?;
+        Ok((a, e))
+    }
+
+    /// How many blobs each of `tags` has lost to its cap, ever; tags that never have are absent.
+    pub fn evicted_totals(&self, tags: &[String]) -> rusqlite::Result<HashMap<String, u64>> {
+        let conn = self.conn.lock().expect("store mutex");
+        let mut stmt = conn.prepare("SELECT n FROM evicted_total WHERE tag = ?1")?;
+        let mut out = HashMap::new();
+        for t in tags {
+            if let Some(n) = stmt.query_row([t], |r| r.get::<_, i64>(0)).optional()? {
+                out.insert(t.clone(), n as u64);
+            }
+        }
+        Ok(out)
     }
 
     /// The seq this exact blob is already stored at under `tag`, if it is. Lets the
@@ -316,7 +407,19 @@ impl Store {
     /// The floor is raised to the highest seq REMOVED, never to a surviving one —
     /// a subscriber whose cursor sits exactly at the floor has missed nothing.
     pub fn evict(&self, now_us: u64, window_us: u64, max_per_tag: u64) -> rusqlite::Result<u64> {
-        Ok(self.sweep(now_us, window_us, max_per_tag, false)?.0)
+        Ok(self.sweep(now_us, window_us, max_per_tag, false, None)?.0)
+    }
+
+    /// The age half of the same sweep, over only the tags that begin `prefix` (a door's,
+    /// `mls.door.relay`'s TTL). The relay names the prefix; this store knows nothing of
+    /// what it means.
+    pub fn expire(&self, prefix: &str, now_us: u64, window_us: u64) -> rusqlite::Result<u64> {
+        Ok(self.sweep(now_us, window_us, 0, false, Some(prefix))?.0)
+    }
+
+    /// [`Store::expire`], returning the removed rows' body column (see [`Store::evict_keys`]).
+    pub fn expire_keys(&self, prefix: &str, now_us: u64, window_us: u64) -> rusqlite::Result<Vec<String>> {
+        Ok(self.sweep(now_us, window_us, 0, true, Some(prefix))?.1)
     }
 
     /// The same sweep, returning the `body` COLUMN of every row it removed.
@@ -333,20 +436,36 @@ impl Store {
         window_us: u64,
         max_per_tag: u64,
     ) -> rusqlite::Result<Vec<String>> {
-        Ok(self.sweep(now_us, window_us, max_per_tag, true)?.1)
+        Ok(self.sweep(now_us, window_us, max_per_tag, true, None)?.1)
     }
 
     /// `collect` decides only whether the removed bodies are read back; the floors,
-    /// the deletes and the transaction are identical either way.
+    /// the deletes and the transaction are identical either way. `scope`, when given,
+    /// limits every clause to tags beginning with it.
     fn sweep(
         &self,
         now_us: u64,
         window_us: u64,
         max_per_tag: u64,
         collect: bool,
+        scope: Option<&str>,
     ) -> rusqlite::Result<(u64, Vec<String>)> {
         let mut conn = self.conn.lock().expect("store mutex");
         let tx = conn.transaction()?;
+        // A scope is a RANGE on the primary key (tag, seq), so a door's expiry walks the
+        // door tags, not every row older than the window (ARC_NETWORK, C3).
+        let (scope_sql, bounds) = match scope {
+            Some(p) => ("blob.tag >= ?2 AND blob.tag < ?3", Some((p.to_string(), past(p)))),
+            None => ("1", None),
+        };
+        let args = |first: i64| -> Vec<rusqlite::types::Value> {
+            let mut v = vec![rusqlite::types::Value::Integer(first)];
+            if let Some((lo, hi)) = &bounds {
+                v.push(rusqlite::types::Value::Text(lo.clone()));
+                v.push(rusqlite::types::Value::Text(hi.clone()));
+            }
+            v
+        };
         let mut removed = 0u64;
         let mut bodies: Vec<String> = Vec::new();
 
@@ -355,64 +474,65 @@ impl Store {
             // Record the floor BEFORE deleting: once the rows are gone we cannot
             // know what the highest removed seq was.
             tx.execute(
-                "INSERT INTO retention_floor (tag, floor)
-                 SELECT tag, MAX(seq) FROM blob WHERE seq <= ?1 AND NOT (EXISTS (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)) GROUP BY tag
-                 ON CONFLICT(tag) DO UPDATE SET floor = MAX(floor, excluded.floor)",
-                params![cutoff],
+                &format!("INSERT INTO retention_floor (tag, floor)
+                 SELECT tag, MAX(seq) FROM blob WHERE seq <= ?1 AND {scope}
+                   AND NOT (EXISTS (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)) GROUP BY tag
+                 ON CONFLICT(tag) DO UPDATE SET floor = MAX(floor, excluded.floor)", scope = scope_sql),
+                params_from_iter(args(cutoff)),
             )?;
             if collect {
                 // Inside the transaction, so what is collected is exactly what the
                 // DELETE on the next line removes.
                 let mut stmt = tx.prepare(
-                    "SELECT body FROM blob WHERE seq <= ?1 AND NOT EXISTS
-                       (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)",
+                    &format!("SELECT body FROM blob WHERE seq <= ?1 AND {scope}
+                       AND NOT EXISTS (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)", scope = scope_sql),
                 )?;
-                let rows = stmt.query_map(params![cutoff], |r| r.get::<_, String>(0))?;
+                let rows = stmt.query_map(params_from_iter(args(cutoff)), |r| r.get::<_, String>(0))?;
                 for b in rows {
                     bodies.push(b?);
                 }
             }
             removed += tx.execute(
-                "DELETE FROM blob WHERE seq <= ?1 AND NOT EXISTS
-                   (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)",
-                params![cutoff],
+                &format!("DELETE FROM blob WHERE seq <= ?1 AND {scope}
+                   AND NOT EXISTS (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)", scope = scope_sql),
+                params_from_iter(args(cutoff)),
             )? as u64;
         }
 
         if max_per_tag > 0 {
             // Per tag, everything below the newest `max_per_tag` rows goes.
             tx.execute(
-                "INSERT INTO retention_floor (tag, floor)
+                &format!("INSERT INTO retention_floor (tag, floor)
                  SELECT tag, MAX(seq) FROM (
                    SELECT tag, seq, ROW_NUMBER() OVER (PARTITION BY tag ORDER BY seq DESC) AS rn
-                   FROM blob WHERE NOT EXISTS
+                   FROM blob WHERE {scope} AND NOT EXISTS
                      (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)
                  ) WHERE rn > ?1 GROUP BY tag
-                 ON CONFLICT(tag) DO UPDATE SET floor = MAX(floor, excluded.floor)",
-                params![max_per_tag as i64],
+                 ON CONFLICT(tag) DO UPDATE SET floor = MAX(floor, excluded.floor)", scope = scope_sql),
+                params_from_iter(args(max_per_tag as i64)),
             )?;
             if collect {
                 let mut stmt = tx.prepare(
-                    "SELECT body FROM (
+                    &format!("SELECT body FROM (
                        SELECT body, ROW_NUMBER() OVER (PARTITION BY tag ORDER BY seq DESC) AS rn
-                       FROM blob WHERE NOT EXISTS
+                       FROM blob WHERE {scope} AND NOT EXISTS
                          (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)
-                     ) WHERE rn > ?1",
+                     ) WHERE rn > ?1", scope = scope_sql),
                 )?;
-                let rows = stmt.query_map(params![max_per_tag as i64], |r| r.get::<_, String>(0))?;
+                let rows = stmt.query_map(params_from_iter(args(max_per_tag as i64)), |r| r.get::<_, String>(0))?;
                 for b in rows {
                     bodies.push(b?);
                 }
             }
             removed += tx.execute(
-                "DELETE FROM blob WHERE (tag, seq) IN (
+                &format!("DELETE FROM blob WHERE (tag, seq) IN (
                    SELECT tag, seq FROM (
                      SELECT tag, seq, ROW_NUMBER() OVER (PARTITION BY tag ORDER BY seq DESC) AS rn
-                     FROM blob WHERE NOT EXISTS
+                     FROM blob WHERE {scope} AND NOT EXISTS
                        (SELECT 1 FROM commit_slot c WHERE c.tag = blob.tag AND c.seq = blob.seq)
                    ) WHERE rn > ?1
-                 )",
-                params![max_per_tag as i64],
+                 )", scope = scope_sql),
+                params_from_iter(args(max_per_tag as i64)),
             )? as u64;
         }
 
@@ -489,6 +609,18 @@ impl Mailbox for Store {
 
     async fn evict(&self, now_us: u64, window_us: u64, max_per_tag: u64) -> Result<u64> {
         Ok(Store::evict(self, now_us, window_us, max_per_tag)?)
+    }
+
+    async fn append_capped(&self, tag: &str, seq: u64, body: &str, cap: u64) -> Result<(Appended, Evicted)> {
+        Ok(Store::append_capped(self, tag, seq, body, cap)?)
+    }
+
+    async fn evicted_totals(&self, tags: &[String]) -> Result<HashMap<String, u64>> {
+        Ok(Store::evicted_totals(self, tags)?)
+    }
+
+    async fn expire(&self, prefix: &str, now_us: u64, window_us: u64) -> Result<u64> {
+        Ok(Store::expire(self, prefix, now_us, window_us)?)
     }
 
     async fn counts(&self) -> Result<(u64, u64)> {

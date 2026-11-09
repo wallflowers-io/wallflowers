@@ -136,6 +136,27 @@ impl Mailbox {
         }
     }
 
+    /// PUB one knock to `door` as a door's tag (`mls.door.relay`). The bound is the relay's, so
+    /// the mesh, which has none, does not carry knocks: refused out loud, as a mesh commit is.
+    pub async fn publish_door(&mut self, door: &Address, blob_b64: String) -> Result<u64, CoreError> {
+        match self {
+            Self::Relay(s) => s.publish_door(door, blob_b64).await,
+            Self::Mesh => Err(CoreError::Transport("the mesh does not carry knocks — a door's bound is the relay's".into())),
+        }
+    }
+
+    /// Each door tag drained from its own `since`, with what the relay's cap has evicted from
+    /// it, ever (`RelaySession::drain_doors`). The mesh holds no doors: nothing, per tag.
+    pub async fn drain_doors(
+        &mut self,
+        subs: &[(String, u64)],
+    ) -> Result<(Vec<Vec<(String, u64, String)>>, std::collections::BTreeMap<String, u64>), CoreError> {
+        match self {
+            Self::Relay(s) => s.drain_doors(subs).await,
+            Self::Mesh => Ok((subs.iter().map(|_| Vec::new()).collect(), Default::default())),
+        }
+    }
+
     /// Which cursor space this mailbox's `seq` values live in. A drain position is meaningless
     /// outside it, so the Directory keys `inbox_cursor_v2` on exactly this.
     pub fn source(&self) -> &'static str {

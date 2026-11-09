@@ -44,8 +44,11 @@
 //!    enum here it is that enum the fixture measures.
 
 pub use pacific_wire::{
-    blob_b64, blob_unb64, tag_hex, tag_unhex, Dir, Frame, V_BASE, V_GAP, V_MAX, V_MEDIA,
+    blob_b64, blob_unb64, tag_hex, tag_unhex, Dir, Frame, V_BASE, V_DOOR, V_GAP, V_MAX, V_MEDIA,
 };
+
+/// The door's bound (`mls.door.relay`), read from the ICD once, in pacific-wire.
+pub use pacific_wire::{DOOR_CAP, DOOR_MAX_BYTES, DOOR_PER_CONN_PER_HOUR, DOOR_PREFIX, DOOR_TTL_DAYS};
 
 /// The one write rule — a tag is a key, a `Pub` is its signature — re-exported, not
 /// restated: the relay calls the same `verify_pub` the client's own tests call.
@@ -182,7 +185,7 @@ mod wire_spec {
             n.join(",")
         };
         assert_eq!(names(&to_relay), "media_get,media_put,pub,sub");
-        assert_eq!(names(&to_client), "ack,eose,gap,media_err,media_url,msg");
+        assert_eq!(names(&to_client), "ack,eose,evicted,gap,media_err,media_url,msg");
     }
 }
 
