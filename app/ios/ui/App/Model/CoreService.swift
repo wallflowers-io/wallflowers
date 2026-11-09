@@ -1922,8 +1922,11 @@ final class CoreService: ObservableObject {
         let c = core
         let args = changes.map { OpArg(key: $0.key, value: $0.value) }
         do {
-            _ = try await Task.detached { try c.objectEdit(objectId: objectId, op: op, changes: args) }.value
-            refreshAfterEdit(op)
+            let sent = try await Task.detached { try c.objectEdit(objectId: objectId, op: op, changes: args) }.value
+            // Every edit is traced: "sent" is a write — a kept slot claim and publish for a
+            // sequenced op — and "unchanged" sent nothing.
+            Trace.shared.log("edit", object: objectId, "\(op) \(sent.isEmpty ? "unchanged" : "sent")")
+            await refreshAfterEdit(op)
             return true
         } catch { fail("save your change", error, object: objectId); return false }
     }
@@ -1935,7 +1938,7 @@ final class CoreService: ObservableObject {
         let list = args.map { OpArg(key: $0.key, value: $0.value) }
         do {
             _ = try await Task.detached { try c.objectApply(objectId: objectId, op: op, args: list) }.value
-            refreshAfterEdit(op)
+            await refreshAfterEdit(op)
             return true
         } catch { fail("save your change", error, object: objectId); return false }
     }
@@ -1958,12 +1961,14 @@ final class CoreService: ObservableObject {
         return await apply(objectId, op: op, args)
     }
 
-    /// The lists a kind's edit moves, re-read so the card shows what the detail does.
-    private func refreshAfterEdit(_ op: String) {
+    /// The lists a kind's edit moves, re-read so the card shows what the detail does —
+    /// and AWAITED, so a page re-reading the object after its edit reads the new value,
+    /// not the list as it was before the write.
+    private func refreshAfterEdit(_ op: String) async {
         switch op.split(separator: ".").first {
-        case "event": refreshEvents()
-        case "thing": refreshThings()
-        case "post":  refreshPosts()
+        case "event": await refreshEvents().value
+        case "thing": await refreshThings().value
+        case "post":  await refreshPosts().value
         default: break
         }
     }

@@ -510,6 +510,7 @@ private struct DetailEditRow: View {
                         .submitLabel(.done)
                         .onSubmit { send(text) }
                         .onChange(of: focused) { _, now in if !now { send(text) } }
+                        .accessibilityIdentifier(id)
                 case .choice(let words):
                     Menu {
                         ForEach(words, id: \.self) { w in Button(w) { send(w) } }
@@ -519,15 +520,17 @@ private struct DetailEditRow: View {
                             .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
                             .contentShape(Rectangle())
                     }
+                    .accessibilityIdentifier(id)
                 case .toggle:
                     Toggle("", isOn: Binding(get: { edit.current == "1" },
                                              set: { send($0 ? "1" : "") }))
                         .labelsHidden()
+                        .accessibilityIdentifier(id)
                 case .date:
                     if dated {
                         // The wheel only moves `date`; SET sends it, once.
                         HStack {
-                            DatePicker("", selection: $date).labelsHidden()
+                            DatePicker("", selection: $date).labelsHidden().accessibilityIdentifier(id)
                             Spacer(minLength: 8)
                             if dateValue != edit.current {
                                 Button { send(dateValue) } label: {
@@ -541,19 +544,24 @@ private struct DetailEditRow: View {
                         Button { dated = true } label: {
                             Image(systemName: "plus").foregroundStyle(Theme.textSecondary)
                         }
+                        .accessibilityIdentifier(id)
                     }
                 }
             }
             .font(.system(size: 15))
             .foregroundStyle(Theme.textPrimary)
             .disabled(busy)
-            .accessibilityIdentifier("detail-edit-\(row.id)")
         }
         .onAppear(perform: seed)
         .onChange(of: edit.current) { _, _ in seed() }
     }
 
-    private var dateValue: String { String(Int64(date.timeIntervalSince1970 * 1000)) }
+    /// Each control carries it, not their container: a container's identifier would
+    /// override the SET button's own.
+    private var id: String { "detail-edit-\(row.id)" }
+
+    /// Rounded, not truncated: ms → Date → ms through a Double can land 1 ms short.
+    private var dateValue: String { String(Int64((date.timeIntervalSince1970 * 1000).rounded())) }
 
     /// A value that did not land clears `sent`, so sending it again is a retry.
     private func send(_ value: String) {

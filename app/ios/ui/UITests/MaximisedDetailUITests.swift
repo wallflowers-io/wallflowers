@@ -87,6 +87,52 @@ final class MaximisedDetailUITests: XCTestCase {
                        "https://meet.example/a", "the online link, read back")
     }
 
+    /// A date is SET, once: moving the wheel through several days sends nothing, and SET
+    /// sends one write (`event.setProfile` is sequenced — each write is a kept claim and
+    /// publish). Counted in TRACE, where every edit is logged as sent or unchanged.
+    func test_aDateChangeThroughSetSendsOnce() {
+        launch()
+        toLife()
+        let title = "MaxDate\(Int(Date().timeIntervalSince1970))"
+        app.buttons["tab-new"].tap()
+        let name = element("new-field-name")
+        XCTAssertTrue(name.waitForExistence(timeout: 10), "the event's NAME field")
+        name.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.typeText(title)
+        app.buttons["shell-life"].tap()
+        app.buttons["feed-orb"].tap()
+        let page = open(title)
+
+        let starts = element("detail-edit-event.setProfile.startMs")
+        XCTAssertTrue(starts.waitForExistence(timeout: 5), "the owner's start row")
+        starts.buttons.firstMatch.tap()                       // the compact picker's date
+        // A calendar day's label names its month ("Tuesday 10 November").
+        let month = DateFormatter().monthSymbols[Calendar.current.component(.month, from: Date()) - 1]
+        let days = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", month))
+        XCTAssertTrue(days.firstMatch.waitForExistence(timeout: 5), "the calendar")
+        let picks = days.allElementsBoundByIndex.filter(\.isHittable).suffix(3)
+        XCTAssertEqual(picks.count, 3, "three days to move through")
+        for day in picks { day.tap() }                        // three changes of the wheel
+        let set = element("detail-set-event.setProfile.startMs")
+        XCTAssertTrue(set.waitForExistence(timeout: 5), "SET, once the date differs")
+        // The calendar stays open over the page: the first touch outside it closes it,
+        // as a person's would, and SET is then theirs to tap.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: set)
+        waitForExpectations(timeout: 5)
+        set.tap()
+        XCTAssertTrue(set.waitForNonExistence(timeout: 10), "the date lands and SET goes")
+        close(page)
+
+        app.buttons["account-button"].tap()
+        app.buttons["account-settings"].firstMatch.tap()
+        app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'TRACE'")).firstMatch.tap()
+        let sent = app.staticTexts.matching(NSPredicate(format: "label == 'event.setProfile sent'"))
+        XCTAssertTrue(sent.firstMatch.waitForExistence(timeout: 5), "the edit is traced")
+        shoot("trace")
+        XCTAssertEqual(sent.count, 1, "one write for one SET, however far the wheel moved")
+    }
+
     // MARK: the grow
 
     /// Tap the card titled `title` and hold the page to the grow: it starts at the
