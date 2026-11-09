@@ -317,10 +317,13 @@ fn fold<T: ObjectType>(ctx: &Ctx) -> Coordinator<T> {
     // this fold reports is SHORT: the next sequenced op then claims a position
     // already taken and the object forks. Caught by m11/m12 the day `apply` began
     // building every sequenced delta through here.
+    // And the SAME order and tie-break as the read fold (`fold::spine_order`,
+    // `deliver_resolving`): a writer whose head differed from its readers' is how a
+    // fork was extended for a week (8 Nov).
     let mut rows: Vec<&(Delta, MemberId)> = ctx.log.iter().collect();
-    rows.sort_by_key(|(d, _)| (d.seq.is_none(), d.epoch, d.seq.unwrap_or(0)));
+    rows.sort_by_cached_key(|(d, _)| crate::fold::spine_order(d));
     for (d, author) in rows {
-        let _ = c.deliver(d.clone(), *author);
+        let _ = c.deliver_resolving(d.clone(), *author);
     }
     c
 }

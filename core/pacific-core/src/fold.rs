@@ -28,6 +28,17 @@ pub fn fold_entries<T: ObjectType>(
     fold_entries_owned::<T>(members, vec![(0, owner)], log)
 }
 
+/// THE ORDER A LOG IS DELIVERED IN: the sequenced spine first, by epoch and seq, then
+/// the commutative rows by epoch, in log order. At a slot held twice the lowest DeltaId
+/// comes first, so it is the one that stands (ICD `mls.sequencing.tiebreak`). The
+/// authoring fold sorts by this too, so a writer's head is the head every reader folds.
+pub fn spine_order(d: &Delta) -> (bool, u64, u64, [u8; 32]) {
+    match d.seq {
+        Some(seq) => (false, d.epoch, seq, d.id()),
+        None => (true, d.epoch, 0, [0u8; 32]),
+    }
+}
+
 /// [`fold_entries`] for an object whose owner changed with the epoch (§10.2): the one
 /// fold path the phone, the browser and the archive all run.
 pub fn fold_entries_owned<T: ObjectType>(
@@ -43,7 +54,7 @@ pub fn fold_entries_owned<T: ObjectType>(
             entries.push((d, author));
         }
     }
-    entries.sort_by_key(|(d, _)| (d.seq.is_none(), d.epoch, d.seq.unwrap_or(0)));
+    entries.sort_by_cached_key(|(d, _)| spine_order(d));
     let mut coord = Coordinator::<T>::with_owners(members, owners);
     for (delta, author) in entries {
         // WHICH DELTA, NOT JUST WHICH REJECTION. `DeltaRejection` is a closed
@@ -56,7 +67,7 @@ pub fn fold_entries_owned<T: ObjectType>(
         // the delta and the message is only built on the failing path, so a fold
         // that succeeds pays nothing for this.
         let (type_id, op_id, epoch, seq) = (delta.type_id, delta.op_id, delta.epoch, delta.seq);
-        coord.deliver(delta, author).map_err(|r| {
+        coord.deliver_resolving(delta, author).map_err(|r| {
             CoreError::Coordinator(format!(
                 "delta rejected: {r:?} — type {type_id}, op {op_id}, epoch {epoch}, \
                  seq {seq:?}, under the {} lens",

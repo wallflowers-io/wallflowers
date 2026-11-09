@@ -350,7 +350,7 @@ pub enum ObjectKind {
     /// Prose with its own roster. A private notebook is a Note whose
     /// roster is one: roster size is not a kind (ruled 25 Sep 2026).
     Note,
-    /// A Site's public copy, and the only object an Arc joins. Its roster is
+    /// A Site's public copy, and the only object an Arc serves from. Its roster is
     /// the owner's devices and the Arc; the group's members are not on it.
     Host,
     /// ONE SALE, record only (W-98 Trade; see `transaction.rs`): the buyer, the seller and

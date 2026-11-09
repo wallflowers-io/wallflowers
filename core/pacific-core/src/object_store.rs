@@ -130,7 +130,18 @@ impl<'a> GroupObjectStore<'a> {
         }
         let members = self.dir.group_members(id)?;
         let log = self.dir.load_log(id)?;
-        crate::fold::fold_entries_owned::<T>(members, owners, log)
+        let coord = crate::fold::fold_entries_owned::<T>(members, owners, log)?;
+        // A FORK RESOLVED IS NAMED: the branch that lost stays in the log, and here.
+        let superseded = coord.superseded();
+        if let Some(first) = superseded.first() {
+            tracing::warn!(
+                group = %hex::encode(&id[..id.len().min(6)]),
+                superseded = superseded.len(),
+                first = %hex::encode(&first[..8]),
+                "a forked spine resolved: the lowest DeltaId stands, the rest are superseded (mls.sequencing.tiebreak)"
+            );
+        }
+        Ok(coord)
     }
 
     /// [`folded`] plus the roster and the fold digest — what a projection needs in
