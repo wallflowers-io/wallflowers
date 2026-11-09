@@ -330,9 +330,11 @@ CREATE TABLE IF NOT EXISTS groups (
   group_id  BLOB PRIMARY KEY,
   kind      TEXT NOT NULL,
   owner_pk  BLOB,             -- the creator's identity pubkey (owner-as-sequencer)
-  arc_url   TEXT              -- the Arc that governs this object (moderation/reports/
+  arc_url   TEXT,             -- the Arc that governs this object (moderation/reports/
                               -- safety) and whose Semaphore relay its traffic routes
                               -- through. Set by the creator; swapped by supermajority.
+  created_at INTEGER          -- cache of the GroupContext's createdAt (unix ms); NULL
+                              -- for a group made before it existed
 );
 
 -- Projection of the MLS ratchet-tree roster: (group_id, member_pk). The MLS group
@@ -824,6 +826,7 @@ impl Directory {
         // the MLS state is deleted, and sync, the doors and rekey skip the group.
         let _ = conn.execute("ALTER TABLE groups ADD COLUMN departed_at INTEGER", []);
         let _ = conn.execute("ALTER TABLE groups ADD COLUMN departed_by BLOB", []);
+        let _ = conn.execute("ALTER TABLE groups ADD COLUMN created_at INTEGER", []);
         // MY OWN profile beyond the bare display name: the vCard-shaped ContactCard
         // (org/title/emails/phones/urls/photo/clip/note/tags) + its shape. Before
         // this, the app's avatar lived in iOS UserDefaults and never crossed the FFI,
@@ -1368,16 +1371,30 @@ impl Directory {
         kind: &str,
         owner_pk: &[u8],
         arc_url: Option<&str>,
+        created_at: Option<u64>,
     ) -> Result<(), CoreError> {
         self.conn.execute(
-            "INSERT INTO groups (group_id, kind, owner_pk, arc_url) VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO groups (group_id, kind, owner_pk, arc_url, created_at) VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(group_id) DO UPDATE SET
                kind=excluded.kind,
                owner_pk=excluded.owner_pk,
-               arc_url=COALESCE(excluded.arc_url, groups.arc_url)",
-            params![group_id, kind, owner_pk, arc_url],
+               arc_url=COALESCE(excluded.arc_url, groups.arc_url),
+               created_at=COALESCE(groups.created_at, excluded.created_at)",
+            params![group_id, kind, owner_pk, arc_url, created_at.map(|t| t as i64)],
         )?;
         Ok(())
+    }
+
+    /// When the group was made, as its GroupContext says (`mls::group_created_at`), cached
+    /// when the group was stored. `None` for a group made before `createdAt` existed.
+    pub fn group_created_at(&self, group_id: &[u8]) -> Result<Option<i64>, CoreError> {
+        Ok(self
+            .conn
+            .query_row("SELECT created_at FROM groups WHERE group_id=?1", params![group_id], |r| {
+                r.get::<_, Option<i64>>(0)
+            })
+            .optional()?
+            .flatten())
     }
 
     /// The Arc that governs this object (moderation/reports/safety + routing), if
@@ -2657,7 +2674,7 @@ mod tests {
         let (a, b) = ([1u8; 32], [2u8; 32]);
         let gen = |d: &Directory| d.fold_gen(&g).unwrap();
         assert_eq!(gen(&dir), 0, "never written");
-        dir.put_group(&g, "forum", &a, None).unwrap();
+        dir.put_group(&g, "forum", &a, None, None).unwrap();
         let mut last = gen(&dir);
         let mut moved = |d: &Directory, why: &str| {
             let now = gen(d);
@@ -2681,7 +2698,7 @@ mod tests {
         let before = gen(&dir);
         dir.mark_delivered(&g, &[8; 32]).unwrap();
         assert_eq!(gen(&dir), before, "the relay's acknowledgement is not a fold input");
-        dir.put_group(&other, "forum", &a, None).unwrap();
+        dir.put_group(&other, "forum", &a, None, None).unwrap();
         dir.append_delta(&other, &[7; 32], &a, b"env-3", 0).unwrap();
         assert_eq!(gen(&dir), before, "another object's writes");
     }
@@ -2703,7 +2720,7 @@ mod tests {
             }
             last = now;
         };
-        dir.put_group(&g, "forum", &a, None).unwrap();
+        dir.put_group(&g, "forum", &a, None, None).unwrap();
         moved(&dir, "an object in the list", true);
         dir.append_delta(&g, &[9; 32], &a, b"env-1", 0).unwrap();
         moved(&dir, "a fold generation, first", true);
@@ -2845,14 +2862,14 @@ mod tests {
         let g = [5u8; 8];
         let owner = [1u8; 32];
         // the creator stamps the governing Arc at mint.
-        dir.put_group(&g, "forum", &owner, Some("wss://uk.arc.example"))
+        dir.put_group(&g, "forum", &owner, Some("wss://uk.arc.example"), None)
             .unwrap();
         assert_eq!(
             dir.group_arc(&g).unwrap().as_deref(),
             Some("wss://uk.arc.example")
         );
         // an idempotent re-put WITHOUT an arc must never drop the configured one (COALESCE).
-        dir.put_group(&g, "forum", &owner, None).unwrap();
+        dir.put_group(&g, "forum", &owner, None, None).unwrap();
         assert_eq!(
             dir.group_arc(&g).unwrap().as_deref(),
             Some("wss://uk.arc.example"),
@@ -2866,7 +2883,7 @@ mod tests {
         );
         // an object joined before we learned its Arc reports None (routing falls back).
         let h = [6u8; 8];
-        dir.put_group(&h, "forum", &owner, None).unwrap();
+        dir.put_group(&h, "forum", &owner, None, None).unwrap();
         assert_eq!(dir.group_arc(&h).unwrap(), None);
         // swapping a group we don't hold is loud, never a silent no-op.
         assert!(dir.set_group_arc(&[0xFFu8; 8], "wss://x.example").is_err());

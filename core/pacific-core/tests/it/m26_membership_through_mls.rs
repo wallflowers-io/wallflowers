@@ -46,7 +46,7 @@ macro_rules! rogue_group {
             .group_state_storage(pacific_core::mls_store::SqliteGroupStateStorage::open(&db).unwrap())
             .key_package_repo(pacific_core::mls_store::SqliteKeyPackageStorage::open(&db).unwrap())
             .mls_rules(DefaultMlsRules::new().with_encryption_options(enc))
-            .extension_types([mls::GROUP_NAME_EXT, mls::OWNER_EXT, mls::MIN_VERSION_EXT])
+            .extension_types(mls::CONTEXT_EXTENSIONS)
             .signing_identity(
                 mls::signing_identity(&node.id.identity_pk(), &pk),
                 mls::SecretKey::new(sk),

@@ -35,6 +35,12 @@
         "type": 61443,
         "bytes": "u16-be",
         "setBy": "creation; raised only, by the owner"
+      },
+      "createdAt": {
+        "type": 61444,
+        "bytes": "u64-be unix ms",
+        "setBy": "creation; never changed",
+        "summary": "When the object was made, by its creator's own clock: MLS authenticates who set it, not that it is true. In the context rather than a delta because a joiner holds no log from before it joined (RFC 9750 §6.7) and does hold the context (RFC 9420 §12.4.3, §13.4). Absent on a group made before it existed, and never added later."
       }
     },
     "legacyOwner": "leaf 0 while the owner extension is absent; remove and handover refused until it is set",
@@ -1712,13 +1718,17 @@
             "photoMime": {
               "type": "string"
             },
+            "createdAt": {
+              "type": "integer",
+              "summary": "the Thing's mls.groupContextExtensions.createdAt, unix ms; absent when the Thing has none"
+            },
             "site": {
               "type": "integer",
               "summary": "1: the Site's own listing, the Site sells it (the owner or an admin only; a plain member's is refused at write and at fold); absent or 0: the member sells their own"
             }
           },
           "view": {
-            "listings": "[{author, thingId, posture, title, descriptor, price, deadline, area, photo, photoMime, gen}] live, not withdrawn or removed"
+            "listings": "[{author, thingId, posture, title, descriptor, price, deadline, area, photo, photoMime, createdAt, gen}] live, not withdrawn or removed"
           }
         },
         "group.removeListing": {
@@ -2583,6 +2593,10 @@
             },
             "photoMime": {
               "type": "string"
+            },
+            "createdAt": {
+              "type": "integer",
+              "summary": "the Thing's mls.groupContextExtensions.createdAt, unix ms; absent when the Thing has none"
             }
           }
         },

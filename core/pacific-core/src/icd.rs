@@ -344,12 +344,16 @@ mod tests {
         let x = &d["mls"];
         assert!(x.is_object(), "the model must carry an `mls` section");
 
-        let ext = |name: &str| x["groupContextExtensions"][name]["type"].as_u64().unwrap_or_else(|| {
-            panic!("mls.groupContextExtensions.{name}.type must be an integer")
-        }) as u16;
-        assert_eq!(ext("name"), mls::GROUP_NAME_EXT.raw_value(), "name extension id");
-        assert_eq!(ext("owner"), mls::OWNER_EXT.raw_value(), "owner extension id");
-        assert_eq!(ext("floor"), mls::MIN_VERSION_EXT.raw_value(), "floor extension id");
+        // The ids are read from the ICD at build; what is held here is the SET: every
+        // extension the document declares is one the code advertises and writes, and no other.
+        let declared: BTreeSet<u16> = x["groupContextExtensions"]
+            .as_object()
+            .expect("mls.groupContextExtensions")
+            .values()
+            .map(|e| e["type"].as_u64().expect("an extension's type is an integer") as u16)
+            .collect();
+        let written: BTreeSet<u16> = mls::CONTEXT_EXTENSIONS.iter().map(|t| t.raw_value()).collect();
+        assert_eq!(declared, written, "the GroupContext extensions, document against code");
 
         // THE PAYLOAD A DELTA TRAVELS IN (A-10 part 1): each key, as the code names it.
         let p = &x["applicationPayload"]["cbor"];
