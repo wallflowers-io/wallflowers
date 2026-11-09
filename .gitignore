@@ -14,3 +14,6 @@ arc/library/flower/
 
 # /map's tile archive: cut by play/scripts/cut-tiles.sh, checked by play/tests/test_vendor.js.
 /play/assets/map/tiles/
+
+# The partners' media for the DEBUG seeder: theirs, not ours to publish (app/ios/scripts/partner-pack.py).
+/app/ios/ui/SeedMedia/partners/

@@ -47,6 +47,10 @@ targets:
       # (EventSeeder.swift). Bundled as plain resources; tiny, and inert in Release.
       - path: SeedMedia
         buildPhase: resources
+        # The partners' pack is dropped into the sim's container by `just seed-partners`,
+        # never bundled: it is theirs, and a bundle reaches TestFlight.
+        excludes:
+          - "partners/**"
     dependencies:
       - package: PacificCore
         product: PacificCore

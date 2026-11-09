@@ -69,6 +69,13 @@ run: build                      # build, install & launch on the booted simulato
     xcrun simctl launch booted network.pacific
 
 [group('ios')]
+seed-partners:                  # build the partners' media pack and drop it into the booted simulator's app
+    scripts/partner-pack.py
+    c=$(xcrun simctl get_app_container booted network.pacific data) && \
+    d="$c/Library/Application Support/pacific/seed" && mkdir -p "$d" && \
+    rm -rf "$d/partners" && cp -R ui/SeedMedia/partners "$d/partners" && echo "→ $d/partners"
+
+[group('ios')]
 playground: ffi generate        # the design bench: build, install & launch Playground on the iPad simulator
     xcodebuild -project {{proj}} -scheme WallFlowersPlayground -sdk iphonesimulator -destination 'platform=iOS Simulator,name={{ipad}}' -derivedDataPath ui/build build
     xcrun simctl boot "{{ipad}}" 2>/dev/null || true
