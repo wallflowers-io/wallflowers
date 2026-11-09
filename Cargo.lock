@@ -5159,6 +5159,7 @@ dependencies = [
  "ed25519-dalek",
  "hex",
  "mls-rs",
+ "mls-rs-crypto-rustcrypto",
  "serde",
  "serde_bytes",
  "thiserror 2.0.20",
