@@ -90,9 +90,9 @@ struct PlaceDetailSource: DetailSource {
         DetailBind.author(of: objectId, core: core, tint: PlaceDetail.tint)
     }
 
-    func comments() async -> [DetailComment] {
-        DetailBind.comments(of: objectId, core: core, tint: PlaceDetail.tint)
-    }
+    func comments() async -> [DetailComment] { DetailBind.comments(of: objectId, core: core) }
+
+    func commentsHeld() async -> Bool { core.index.commentsForum(of: objectId) != nil }
 
     func post(_ text: String) async -> Bool { await DetailBind.post(text, on: objectId, core: core) }
 }

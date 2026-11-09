@@ -120,11 +120,14 @@ struct DetailAuthor {
 /// use it — a nested tree is a room's IA, and this is a detail with comments on it.
 struct DetailComment: Identifiable {
     let id: String
+    /// The author's identity hex — their profile's door.
+    let authorID: String
     let author: String
     let initials: String
     let body: String
     let whenMs: Int64
     var mine: Bool = false
+    var photo: Data? = nil
     var color: Color? = nil
 }
 
@@ -146,6 +149,9 @@ protocol DetailSource {
     func author() async -> DetailAuthor?
     /// What has been said, oldest first.
     func comments() async -> [DetailComment]
+    /// Whether this device holds the object's comments section — the section is on
+    /// the page exactly when it does, said-in or not.
+    func commentsHeld() async -> Bool
     /// Say something. false = it did not land, and the surface keeps the text.
     func post(_ text: String) async -> Bool
     /// Hand this object outward — GOLD. Absent (the default) means this object has
@@ -168,6 +174,7 @@ struct DetailShareTarget: Identifiable, Hashable {
 extension DetailSource {
     func shareTargets() async -> [DetailShareTarget] { [] }
     func share(to target: DetailShareTarget) async -> Bool { false }
+    func commentsHeld() async -> Bool { false }
     func edit(_ edit: DetailEdit, to value: String) async -> Bool { false }
     func addPicture(_ data: Data) async -> Bool { false }
     func setDocument(_ data: Data, name: String) async -> Bool { false }

@@ -166,18 +166,9 @@ struct EventDetailSource: DetailSource {
 
     /// The event's comments section: the Forum minted with it in the comments role
     /// (ICD `kinds.event.parts`), read flat. None until the device holds it.
-    func comments() async -> [DetailComment] {
-        guard let forum = core.index.commentsForum(of: objectId) else { return [] }
-        return core.objectThread(forum).map { row in
-            DetailComment(id: "\(row.post.author):\(row.post.gen)",
-                          author: name(of: row.post),
-                          initials: Avatar.initials(name(of: row.post)),
-                          body: row.post.text,
-                          whenMs: Int64(row.post.ts),
-                          mine: row.post.mine,
-                          color: EventDetail.tint)
-        }
-    }
+    func comments() async -> [DetailComment] { DetailBind.comments(of: objectId, core: core) }
+
+    func commentsHeld() async -> Bool { core.index.commentsForum(of: objectId) != nil }
 
     func post(_ text: String) async -> Bool {
         await DetailBind.post(text, on: objectId, core: core)
@@ -220,12 +211,6 @@ struct EventDetailSource: DetailSource {
         }
         if !row.venuePlaceName.isEmpty { return row.venuePlaceName }
         return row.venue.isEmpty ? nil : row.venue
-    }
-
-    private func name(of post: ChatMsg) -> String {
-        if post.mine { return core.displayName.isEmpty ? "You" : core.displayName }
-        let names = core.index.names
-        return names[post.author] ?? String(post.author.prefix(8))
     }
 }
 

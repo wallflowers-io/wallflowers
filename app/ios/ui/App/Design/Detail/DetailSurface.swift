@@ -65,15 +65,11 @@ struct DetailSurface: View {
                     .scaleEffect(grown ? 1 : scale(width), anchor: .topLeading)
                     .offset(grown ? .zero : offset(in: page))
                     .opacity(grown || session.origin != nil ? 1 : 0)
-                    .accessibilityIdentifier("detail-page")
-                    // The card's square it grew from, "x,y,w,h" in points — what a test
-                    // holds the grow to.
-                    .accessibilityValue(session.origin.map {
-                        "\(Int($0.minX)),\(Int($0.minY)),\(Int($0.width)),\(Int($0.height))"
-                    } ?? "")
             }
         }
-        .ignoresSafeArea()
+        // The screen's edges, not the keyboard's: the field you are typing in, and
+        // what you just said above it, stay above the keyboard.
+        .ignoresSafeArea(.container)
         .allowsHitTesting(exit == nil)
         .task { await session.load() }
         .onAppear { withAnimation(Self.grow) { grown = true } }
@@ -98,7 +94,6 @@ struct DetailSurface: View {
             guard let data = try? Data(contentsOf: url) else { return }
             Task { await session.setDocument(data, name: url.lastPathComponent) }
         }
-        .accessibilityIdentifier("detail-surface")
     }
 
     /// Inside the shell's departure window (`Motion.noteExit`), so the square is home
@@ -118,6 +113,7 @@ struct DetailSurface: View {
     // MARK: The page
 
     private func content(width: CGFloat) -> some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 media(width: width)
@@ -137,16 +133,25 @@ struct DetailSurface: View {
                 .opacity(grown ? 1 : 0)
                 .animation(grown ? Motion.screenIn.delay(0.08) : Motion.noteGroundOut, value: grown)
             }
-            // Clear of the composer and the disc row, which float over the page's foot.
-            .padding(.bottom, ShellMetrics.bottomBarHeight + 72)
+            // Clear of the disc row, which floats over the page's foot.
+            .padding(.bottom, ShellMetrics.bottomBarHeight + 24)
+            .overlay(alignment: .bottom) { Color.clear.frame(height: 1).id(Self.composerID) }
         }
         .scrollIndicators(.hidden)
         .scrollDisabled(!grown)
+        .scrollDismissesKeyboard(.interactively)
         .background(Theme.bg.opacity(grown ? 1 : 0))
-        .safeAreaInset(edge: .bottom) {
-            if session.takesComment && !session.sharing { composer.opacity(grown ? 1 : 0) }
+        // What you just said is on screen, above the field you said it in.
+        .onChange(of: session.comments.count) { before, after in
+            guard after > before else { return }
+            withAnimation(Motion.screenIn) { proxy.scrollTo(Self.composerID, anchor: .bottom) }
+        }
         }
     }
+
+    /// The page's foot, below the disc row's clearance: scrolled to, the field and
+    /// the comment above it sit clear of the row.
+    private static let composerID = "detail-foot"
 
     /// MEDIA — the square the card showed, at the screen's width: the picture, a
     /// Place's area, or the stripes, which say THERE IS NO PICTURE rather than
@@ -166,6 +171,14 @@ struct DetailSurface: View {
                 }
             }
             .clipped()
+            // One element: the square, valued with the card's square it grew from,
+            // "x,y,w,h" in points — what a test holds the grow to. A container's
+            // identifier would override its children's.
+            .accessibilityElement()
+            .accessibilityLabel(session.headline?.title ?? "")
+            .accessibilityValue(session.origin.map {
+                "\(Int($0.minX)),\(Int($0.minY)),\(Int($0.width)),\(Int($0.height))"
+            } ?? "")
             .accessibilityIdentifier("detail-media")
     }
 
@@ -173,7 +186,7 @@ struct DetailSurface: View {
         Group {
             if let edit = session.headline?.titleEdit {
                 DetailTitleField(edit: edit, busy: session.saving == edit.op + "." + edit.arg) { value in
-                    Task { await session.edit(edit, to: value) }
+                    await session.edit(edit, to: value)
                 }
             } else {
                 Text(session.headline?.title ?? "")
@@ -196,7 +209,7 @@ struct DetailSurface: View {
             ForEach(session.headline?.rows ?? []) { row in
                 if let edit = row.edit {
                     DetailEditRow(row: row, edit: edit, busy: session.saving == row.id) { value in
-                        Task { await session.edit(edit, to: value) }
+                        await session.edit(edit, to: value)
                     }
                 } else if !row.value.isEmpty {
                     valueRow(row)
@@ -346,53 +359,84 @@ struct DetailSurface: View {
         }
     }
 
-    /// COMMENTS — flat, oldest first. An object nobody has spoken about shows
-    /// nothing at all rather than an empty-state telling you to be the first.
+    /// COMMENTS — a section of its own, on the page whenever the device holds the
+    /// object's comments section, said-in or not: its heading and count, what was
+    /// said (flat, oldest first, each in its author's own face, their name a door),
+    /// and the field to say something in. BLUE sends it.
     @ViewBuilder private var comments: some View {
-        if !session.comments.isEmpty {
+        if session.commentsHeld || !session.comments.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
-                ForEach(session.comments) { comment in
-                    HStack(alignment: .top, spacing: 10) {
-                        Avatar(initials: comment.initials,
-                               tint: comment.color ?? tint,
-                               size: 28,
-                               color: comment.color ?? tint)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(comment.author)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Theme.textSecondary)
-                            Text(comment.body)
-                                .font(.system(size: 14.5))
-                                .foregroundStyle(Theme.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 0)
-                    }
+                HStack(spacing: 8) {
+                    Text("COMMENTS")
+                    if !session.comments.isEmpty { Text("\(session.comments.count)") }
                 }
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .kerning(1.4)
+                .foregroundStyle(Theme.textTertiary)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("detail-comments-heading")
+
+                ForEach(session.comments) { comment in
+                    commentRow(comment)
+                }
+                if session.takesComment && session.commentsHeld { composer }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18)
-            .padding(.top, 18)
-            .accessibilityIdentifier("detail-comments")
+            .padding(.vertical, 18)
+            .background(Theme.surface)
+            .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+            .padding(.top, 22)
         }
     }
 
-    /// The one free field on the page. BLUE sends it — there is no send button
-    /// here, because the disc IS the send button.
+    private func commentRow(_ comment: DetailComment) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Avatar(initials: comment.initials, tint: Theme.fill, size: 32,
+                   photo: comment.photo, color: comment.color)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Button { openPerson(comment.authorID) } label: {
+                        Text(comment.author)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(comment.mine)
+                    Text(Date(timeIntervalSince1970: Double(comment.whenMs) / 1000),
+                         format: .relative(presentation: .named))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                Text(comment.body)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("detail-comment")
+    }
+
+    private func openPerson(_ id: String) {
+        onClose()
+        DispatchQueue.main.asyncAfter(deadline: .now() + Motion.noteExit) {
+            NotificationCenter.default.post(name: .pacificOpenPerson, object: nil, userInfo: ["object": id])
+        }
+    }
+
+    /// The field the section ends on. BLUE sends it — there is no send button here,
+    /// because the disc IS the send button.
     private var composer: some View {
-        TextField("", text: $session.draft, axis: .vertical)
+        TextField("Say something", text: $session.draft, axis: .vertical)
             .lineLimit(1...4)
             .font(.system(size: 15))
             .foregroundStyle(Theme.textPrimary)
             .focused($typing)
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Theme.fill))
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
-            // Above the disc row, which is this page's buttons.
-            .padding(.bottom, ShellMetrics.bottomBarHeight + 6)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.fill))
             .accessibilityIdentifier("detail-comment-field")
     }
 
@@ -445,7 +489,8 @@ private struct DetailEditRow: View {
     let row: DetailRow
     let edit: DetailEdit
     let busy: Bool
-    var commit: (String) -> Void
+    /// Whether it landed.
+    var commit: (String) async -> Bool
 
     @State private var text = ""
     @State private var date = Date()
@@ -510,10 +555,11 @@ private struct DetailEditRow: View {
 
     private var dateValue: String { String(Int64(date.timeIntervalSince1970 * 1000)) }
 
+    /// A value that did not land clears `sent`, so sending it again is a retry.
     private func send(_ value: String) {
         guard value != (sent ?? edit.current) else { return }
         sent = value
-        commit(value)
+        Task { if !(await commit(value)) { sent = nil } }
     }
 
     private func seed() {
@@ -530,7 +576,8 @@ private struct DetailEditRow: View {
 private struct DetailTitleField: View {
     let edit: DetailEdit
     let busy: Bool
-    var commit: (String) -> Void
+    /// Whether it landed.
+    var commit: (String) async -> Bool
 
     @State private var text = ""
     @State private var sent: String?
@@ -554,7 +601,7 @@ private struct DetailTitleField: View {
         if t.isEmpty { text = edit.current; return }
         guard t != (sent ?? edit.current) else { return }
         sent = t
-        commit(t)
+        Task { if !(await commit(t)) { sent = nil } }
     }
 }
 

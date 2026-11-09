@@ -68,9 +68,9 @@ struct ListingObjectDetailSource: DetailSource {
         DetailBind.author(of: objectId, core: core, tint: ListingDetail.tint)
     }
 
-    func comments() async -> [DetailComment] {
-        DetailBind.comments(of: objectId, core: core, tint: ListingDetail.tint)
-    }
+    func comments() async -> [DetailComment] { DetailBind.comments(of: objectId, core: core) }
+
+    func commentsHeld() async -> Bool { core.index.commentsForum(of: objectId) != nil }
 
     func post(_ text: String) async -> Bool { await DetailBind.post(text, on: objectId, core: core) }
 
@@ -118,20 +118,25 @@ enum DetailBind {
     }
 
     /// The object's comments section: the Forum minted with it in the comments
-    /// role (ICD `kinds.*.parts`), read flat. None until the device holds it.
-    static func comments(of objectId: String, core: CoreService, tint: Color) -> [DetailComment] {
+    /// role (ICD `kinds.*.parts`), read flat. None until the device holds it. Each
+    /// comment wears its author's own face from the index — their photo, else their
+    /// colour, else the colour their key derives — never the kind's.
+    static func comments(of objectId: String, core: CoreService) -> [DetailComment] {
         guard let forum = core.index.commentsForum(of: objectId) else { return [] }
-        let names = core.index.names
         let me = core.displayName.isEmpty ? "You" : core.displayName
         return core.objectThread(forum).map { row in
-            let who = row.post.mine ? me : (names[row.post.author] ?? String(row.post.author.prefix(8)))
+            let id = row.post.mine ? core.myIdentityHex : row.post.author
+            let who = row.post.mine ? me : (core.index.name(id) ?? String(id.prefix(8)))
             return DetailComment(id: "\(row.post.author):\(row.post.gen)",
+                                 authorID: id,
                                  author: who,
                                  initials: Avatar.initials(who),
                                  body: row.post.text,
                                  whenMs: Int64(row.post.ts),
                                  mine: row.post.mine,
-                                 color: tint)
+                                 photo: core.index.photo(id),
+                                 color: core.index.color(id)
+                                     ?? Color(hex: CoreService.derivedAvatarColorHex(forIdentityKey: id)))
         }
     }
 

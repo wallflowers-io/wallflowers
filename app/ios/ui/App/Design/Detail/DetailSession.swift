@@ -53,6 +53,8 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
     @Published private(set) var headline: DetailHeadline?
     @Published private(set) var author: DetailAuthor?
     @Published private(set) var comments: [DetailComment] = []
+    /// The device holds the comments section, so the page has one.
+    @Published private(set) var commentsHeld = false
     @Published private(set) var targets: [DetailShareTarget] = []
 
     /// The comment being typed. This is the only thing on the surface a person can
@@ -84,11 +86,15 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
 
     /// Each lands through its op and is READ BACK from the fold, never mirrored, so
     /// the page cannot show a value the log does not hold.
-    func edit(_ edit: DetailEdit, to value: String) async {
-        guard saving == nil, value != edit.current else { return }
+    /// false = it did not land, so the row may send the same value again.
+    @discardableResult
+    func edit(_ edit: DetailEdit, to value: String) async -> Bool {
+        guard saving == nil, value != edit.current else { return false }
         saving = edit.op + "." + edit.arg
-        if await source.edit(edit, to: value) { headline = await source.headline() }
+        let landed = await source.edit(edit, to: value)
+        if landed { headline = await source.headline() }
         saving = nil
+        return landed
     }
 
     func addPicture(_ data: Data) async {
@@ -114,6 +120,7 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
         headline = await source.headline()
         author = await source.author()
         comments = await source.comments()
+        commentsHeld = await source.commentsHeld()
         targets = await source.shareTargets()
     }
 
