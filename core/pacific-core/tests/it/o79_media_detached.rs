@@ -128,6 +128,13 @@ async fn sealed_bytes_go_up_and_come_back_to_anyone_holding_the_reference() {
     std::fs::write(kept.path().join(key), b"not the object").unwrap();
     assert_eq!(media_store::get(&relay, Some(kept.path()), &r).await.unwrap(), photo);
 
+    // A reference built by hand with a key that is not a name is refused before any file is read.
+    let mut stray = r.clone();
+    if let Delivery::Sealed { ref mut key, .. } = stray.delivery {
+        *key = "../../etc/passwd".into();
+    }
+    assert!(media_store::get(&relay, Some(kept.path()), &stray).await.is_err());
+
     // Its uploader keeps it from the start.
     let made = tempfile::tempdir().unwrap();
     let mine = media_store::put(&relay, Some(made.path()), b"mine", "image/jpeg").await.unwrap();

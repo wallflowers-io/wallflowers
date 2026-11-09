@@ -97,6 +97,11 @@ pub async fn get(relay: &str, kept: Option<&Path>, r: &MediaRef) -> Result<Vec<u
         .ok()
         .and_then(|v| v.try_into().ok())
         .ok_or_else(|| CoreError::Coordinator("media: the content key is not 32 bytes".into()))?;
+    // The key names a file in `kept`: 64 lowercase hex and nothing else, checked here as well as
+    // where a reference is parsed, since a MediaRef can be built by hand.
+    if key.len() != 64 || !key.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return Err(CoreError::Coordinator("media: the object key is not 64 lowercase hex".into()));
+    }
     let checks = |o: &[u8]| o.len() as u64 == *bytes && <[u8; 32]>::from(Sha256::digest(o)) == *digest;
     if let Some(o) = kept.and_then(|d| std::fs::read(d.join(key)).ok()).filter(|o| checks(o)) {
         return seal::open_with_key(&o, &k, key.as_bytes());
