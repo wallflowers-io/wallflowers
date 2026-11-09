@@ -2564,24 +2564,43 @@ impl Directory {
         Ok(())
     }
 
-    /// Take every UNDELIVERED entry of `gen` at or after `from` out of the queue, in
-    /// index order — for re-placing them past an index another device won.
-    /// Each with the index it was sealed at: walked entries from another device can
-    /// sit between them, so the queue is not contiguous.
-    pub fn take_pending_spine_from(&self, gen: u32, from: u64) -> Result<Vec<(u64, Vec<u8>)>, CoreError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT idx, blob FROM spine_outbox WHERE gen=?1 AND idx>=?2 AND delivered=0 ORDER BY idx",
-        )?;
-        let blobs: Vec<(u64, Vec<u8>)> = stmt
+    /// Move every UNDELIVERED entry of `gen` at or after `from` past an index another device
+    /// won, in index order: each re-sealed by `place(old index, blob, new index)` at the next
+    /// index from `floor`. A delivered entry is never touched. Walked entries from another
+    /// device can sit between them, so the queue is not contiguous. `walked` is what the
+    /// relay holds (`Walk::found`): an entry the walk could not record over an undelivered
+    /// one here is recorded once that one is moved. One transaction: an error in any
+    /// `place` or insert leaves the queue as it was.
+    pub fn requeue_spine_from(
+        &self,
+        gen: u32,
+        from: u64,
+        walked: &[(u64, [u8; 32], Vec<u8>)],
+        floor: u64,
+        mut place: impl FnMut(u64, &[u8], u64) -> Result<([u8; 32], Vec<u8>), CoreError>,
+    ) -> Result<(), CoreError> {
+        let tx = self.conn.unchecked_transaction()?;
+        let blobs: Vec<(u64, Vec<u8>)> = tx
+            .prepare("SELECT idx, blob FROM spine_outbox WHERE gen=?1 AND idx>=?2 AND delivered=0 ORDER BY idx")?
             .query_map(params![gen as i64, from as i64], |r| {
                 Ok((r.get::<_, i64>(0)? as u64, r.get::<_, Vec<u8>>(1)?))
             })?
             .collect::<Result<_, _>>()?;
-        self.conn.execute(
+        tx.execute(
             "DELETE FROM spine_outbox WHERE gen=?1 AND idx>=?2 AND delivered=0",
             params![gen as i64, from as i64],
         )?;
-        Ok(blobs)
+        for (index, address, blob) in walked.iter().filter(|(i, _, _)| *i >= from) {
+            self.record_walked_spine_entry(gen, *index, address, blob)?;
+        }
+        let mut next = floor.max(self.next_spine_index(gen)?);
+        for (index, blob) in &blobs {
+            let (address, blob) = place(*index, blob, next)?;
+            self.queue_spine_entry(gen, next, &address, &blob)?;
+            next += 1;
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     /// The next index to mint into for `gen` — one past the highest taken.

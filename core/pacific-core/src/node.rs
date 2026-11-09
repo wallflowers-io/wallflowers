@@ -3108,7 +3108,7 @@ impl Node {
                             "spine index {index}: lost the slot eight times"
                         )));
                     }
-                    self.replace_pending_spine_from(sess, index).await?;
+                    self.append_queued_after_lost_index(sess, index).await?;
                     continue 'outer;
                 }
                 // Marked only after the relay acked it. The reverse order would let a
@@ -3123,20 +3123,18 @@ impl Node {
     }
 
     /// Another device won index `from`: learn the chain's end from the relay, then
-    /// re-seal every queued entry from `from` onward at the indices after it.
-    async fn replace_pending_spine_from(&self, sess: &mut Router, from: u64) -> Result<(), CoreError> {
+    /// re-seal every queued entry from `from` onward at the indices after it. The spine
+    /// stays append-only: only this device's undelivered entries move, never a delivered
+    /// one. The walk comes first and the move is one transaction, so a relay or seal
+    /// failure leaves the queue whole for the next pass.
+    async fn append_queued_after_lost_index(&self, sess: &mut Router, from: u64) -> Result<(), CoreError> {
         let root = crate::locator::storage_root(&*self.seed_or_refuse()?);
         let key = crate::spine::entry_key(&root);
-        let queued = self.dir.take_pending_spine_from(SPINE_GEN, from)?;
         let walk = self.chain_walk_over(sess, SPINE_GEN).await?;
-        let mut next = walk.position.max(self.dir.next_spine_index(SPINE_GEN)?);
-        for (index, blob) in &queued {
-            let body = crate::spine::open_entry(blob, &key, *index)?.body;
-            let (address, blob) = crate::spine::place(&root, SPINE_GEN, next, body)?;
-            self.dir.queue_spine_entry(SPINE_GEN, next, &address, &blob)?;
-            next += 1;
-        }
-        Ok(())
+        self.dir.requeue_spine_from(SPINE_GEN, from, &walk.found, walk.position, |index, blob, next| {
+            let body = crate::spine::open_entry(blob, &key, index)?.body;
+            crate::spine::place(&root, SPINE_GEN, next, body)
+        })
     }
 
     /// Read generation `gen` of this account's chain from the relay: index 0, 1, 2 …
@@ -3154,6 +3152,7 @@ impl Node {
         let root = crate::locator::storage_root(&*self.seed_or_refuse()?);
         let key = crate::spine::entry_key(&root);
         let mut entries = Vec::new();
+        let mut walked = Vec::new();
         let mut tail = crate::head::NO_TAIL;
         let mut index = 0u64;
         loop {
@@ -3178,6 +3177,7 @@ impl Node {
                         if gen == SPINE_GEN {
                             self.dir.record_walked_spine_entry(gen, i, &addrs[k], &blob)?;
                         }
+                        walked.push((i, addrs[k], blob));
                         entries.push((i, e));
                     }
                     None => {
@@ -3192,7 +3192,7 @@ impl Node {
             index += BATCH;
         }
         let position = entries.len() as u64;
-        Ok(crate::spine::Walk { entries, position, tail })
+        Ok(crate::spine::Walk { entries, found: walked, position, tail })
     }
 
     /// Append `bodies` to generation 0, each at the next free index through its slot,

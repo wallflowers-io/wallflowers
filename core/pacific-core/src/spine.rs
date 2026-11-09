@@ -287,6 +287,8 @@ pub fn tail_hash(blob: &[u8]) -> [u8; 32] {
 #[derive(Debug, Clone)]
 pub struct Walk {
     pub entries: Vec<(u64, Entry)>,
+    /// Each entry found as the relay holds it: its index, address and sealed blob.
+    pub found: Vec<(u64, [u8; 32], Vec<u8>)>,
     pub position: u64,
     pub tail: [u8; 32],
 }
