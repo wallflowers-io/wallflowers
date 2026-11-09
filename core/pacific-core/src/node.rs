@@ -188,6 +188,11 @@ pub struct Node {
     live_state: std::sync::Mutex<LiveState>,
 }
 
+/// How long a queue that could not take its slot waits before it is claimed again, and the
+/// most that wait doubles to: a sync tick is seconds, and a failed claim is a relay write.
+const SLOT_BACKOFF_FIRST: std::time::Duration = std::time::Duration::from_secs(30);
+const SLOT_BACKOFF_MOST: std::time::Duration = std::time::Duration::from_secs(3600);
+
 /// How long a drain waits for a held connection dialled beside it to be confirmed.
 const LIVE_CONFIRM: std::time::Duration = std::time::Duration::from_secs(3);
 
@@ -210,6 +215,9 @@ struct LiveState {
     joined: bool,
     /// Tags drained from the relay, each a round trip (FC-15).
     tag_drains: u64,
+    /// Objects whose queued sequenced writes could not take a slot: not claimed again
+    /// before the instant, and the wait doubles while they keep failing (`flush_sequenced`).
+    slot_backoff: std::collections::HashMap<Vec<u8>, (std::time::Instant, std::time::Duration)>,
 }
 
 /// What [`Node::ingest_delivered`] and [`Node::catch_up`] did.
@@ -2094,11 +2102,13 @@ impl Node {
         Ok((delta_id, envelope))
     }
 
-    /// Encrypt + seal + PUB one Delta to the shared group tag, marking it delivered on
-    /// the relay Ack. Shared by the post path, the outbox resend and re-emission. A
-    /// sequenced one still in the outbox goes with every other queued on its object, each
-    /// through its slot; one already sent (a re-emission to a joiner) took its place when
-    /// it first went, and goes again as it is.
+    /// Encrypt + seal + PUB one queued Delta to the shared group tag, marking it
+    /// delivered on the relay Ack. Shared by the post path and the outbox resend, which
+    /// walk a snapshot of the outbox. A SEQUENCED one is never sent on its own: if it is
+    /// still queued, the whole queue on its object goes, each through its slot; if it is
+    /// not (sent by an earlier step of the same walk, or replaced after a lost slot), it is
+    /// done — publishing the snapshot's copy would send it twice, or send a dropped one and
+    /// fork. Re-emission of sent deltas calls [`Self::publish_one`] itself.
     async fn flush_one(
         &self,
         sess: &mut Router,
@@ -2107,10 +2117,11 @@ impl Node {
         delta_id: &[u8; 32],
         envelope: &[u8],
     ) -> Result<(), CoreError> {
-        if coordinator::decode_delta(envelope)?.seq.is_some()
-            && self.dir.pending_outbox(group_id, &self.id.identity_pk())?.iter().any(|(d, _)| d == delta_id)
-        {
-            return self.flush_sequenced(sess, group, group_id).await;
+        if coordinator::decode_delta(envelope)?.seq.is_some() {
+            if self.dir.pending_outbox(group_id, &self.id.identity_pk())?.iter().any(|(d, _)| d == delta_id) {
+                return self.flush_sequenced(sess, group, group_id).await;
+            }
+            return Ok(());
         }
         self.publish_one(sess, group, group_id, delta_id, envelope).await
     }
@@ -2125,6 +2136,26 @@ impl Node {
     /// every one queued after it again from the new head. An op the new head refuses is
     /// said, not sent.
     async fn flush_sequenced(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8]) -> Result<(), CoreError> {
+        // A queue that could not take its slot waits before it is claimed again: one
+        // failure costs one pass, not a pass per queued delta or per sync tick.
+        if matches!(self.live_state().slot_backoff.get(group_id), Some((until, _)) if std::time::Instant::now() < *until) {
+            return Ok(());
+        }
+        let out = self.claim_and_send(sess, group, group_id).await;
+        let mut live = self.live_state();
+        match &out {
+            Ok(()) => {
+                live.slot_backoff.remove(group_id);
+            }
+            Err(_) => {
+                let wait = live.slot_backoff.get(group_id).map_or(SLOT_BACKOFF_FIRST, |(_, w)| (*w * 2).min(SLOT_BACKOFF_MOST));
+                live.slot_backoff.insert(group_id.to_vec(), (std::time::Instant::now() + wait, wait));
+            }
+        }
+        out
+    }
+
+    async fn claim_and_send(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8]) -> Result<(), CoreError> {
         let root = crate::locator::storage_root(&*self.seed_or_refuse()?);
         for round in 0..crate::icd_consts::SEQ_SLOT_ROUNDS {
             let mut lost = false;
@@ -2140,7 +2171,15 @@ impl Node {
                             self.dir.append_delta_received(group_id, &held, &author, &env, &sig, unix_now())?;
                             false
                         }
-                        None => false,
+                        // Held by a claim this device cannot read: authoring again finds
+                        // the same predecessor and the same slot, so stop; the backoff
+                        // waits for the head to move.
+                        None => {
+                            return Err(CoreError::CommitRace(format!(
+                                "the place after {} is held by a claim this device cannot read",
+                                hex::encode(&prev[..6])
+                            )));
+                        }
                     },
                 };
                 if !won {
@@ -8861,7 +8900,7 @@ impl Node {
         let mut n = 0usize;
         for (did, env) in mine {
             if self
-                .flush_one(&mut sess, &mut group, &group_id, &did, &env)
+                .publish_one(&mut sess, &mut group, &group_id, &did, &env)
                 .await
                 .is_ok()
             {

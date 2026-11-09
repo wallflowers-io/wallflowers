@@ -563,3 +563,60 @@ async fn a_fork_already_written_folds_the_same_everywhere_and_is_written_past() 
         assert_eq!(h.node(u).event_state(&feast).unwrap().title, "Feast", "{}", h.device_name(u));
     }
 }
+
+/// THE OUTBOX WALK SENDS EACH QUEUED SEQUENCED DELTA ONCE (#72 review, B1). The walk goes
+/// over a snapshot of the outbox; the first sequenced delta sends its whole queue through
+/// the slots, and the later ones in the snapshot are done, not published again. Two
+/// writes: two claims and two publishes, exactly.
+#[tokio::test]
+async fn a_queue_of_sequenced_writes_costs_one_claim_and_one_publish_each() {
+    let h = Harness::people(&[("axel", &["phone", "laptop"])]).await;
+    let phone = h.device("axel", "phone");
+    let laptop = h.device("axel", "laptop");
+    let feast = h.form_object(phone, "event", &[]).await;
+    h.add_to_forum(phone, laptop, &feast).await;
+    let rename = |title: &str| event::set_profile_args(title, None, START_MS, None, None, None, None);
+    h.node(phone).apply(&feast, OP_SET_PROFILE, rename("Feast")).await.unwrap();
+    h.settle().await;
+
+    h.node(phone).apply_local(&feast, OP_SET_PROFILE, rename("Feast Xalapa")).await.unwrap();
+    h.node(phone).apply_local(&feast, OP_SET_PROFILE, rename("Feast Cádiz")).await.unwrap();
+    let before = pacific_core::router::published();
+    h.node(phone).publish_pending(&feast).await.expect("the queue goes");
+    assert_eq!(pacific_core::router::published() - before, 4, "a claim and a publish for each of the two");
+    h.settle().await;
+    assert_eq!(h.node(laptop).event_state(&feast).unwrap().title, "Feast Cádiz");
+}
+
+/// AFTER A LOST SEAT, ONLY THE RE-AUTHORED QUEUE GOES (#72 review, B1). Two renames queued
+/// on the laptop while it slept; the phone took the seat after their predecessor. The
+/// laptop's queue is authored again from the phone's rename and sent; the snapshot's
+/// first copies, dropped, are never published, so nothing forks and nothing is set aside.
+#[tokio::test]
+async fn after_a_lost_seat_the_dropped_copies_are_never_published() {
+    let h = Harness::people(&[("axel", &["phone", "laptop"]), ("szonja", &["phone"])]).await;
+    let phone = h.device("axel", "phone");
+    let laptop = h.device("axel", "laptop");
+    let szonja = h.device("szonja", "phone");
+    h.pair(phone, szonja).await;
+    let feast = h.form_object(phone, "event", &[szonja]).await;
+    h.add_to_forum(phone, laptop, &feast).await;
+    let rename = |title: &str| event::set_profile_args(title, None, START_MS, None, None, None, None);
+    h.node(phone).apply(&feast, OP_SET_PROFILE, rename("Feast")).await.unwrap();
+    h.settle().await;
+
+    h.partition(laptop);
+    h.node(phone).apply(&feast, OP_SET_PROFILE, rename("Feast Xalapa")).await.unwrap();
+    h.node(laptop).apply(&feast, OP_SET_PROFILE, rename("Feast Cádiz")).await.unwrap();
+    h.node(laptop).apply(&feast, OP_SET_PROFILE, rename("Feast Cádiz, again")).await.unwrap();
+    h.rejoin(laptop);
+    h.settle().await;
+    h.settle().await;
+
+    for u in [phone, laptop, szonja] {
+        let st = h.node(u).event_state(&feast).unwrap_or_else(|e| panic!("{}: {e}", h.device_name(u)));
+        assert_eq!(st.title, "Feast Cádiz, again", "{}", h.device_name(u));
+        let renames = h.node(u).object_log(&feast).unwrap().iter().filter(|(op, ..)| *op == OP_SET_PROFILE).count();
+        assert_eq!(renames, 4, "{}: one of each, and no dropped copy", h.device_name(u));
+    }
+}
