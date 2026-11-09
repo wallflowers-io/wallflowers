@@ -1340,6 +1340,7 @@
           "ego": "owner|role:admin",
           "fold": "commutative",
           "summary": "The object's icon, one still, as its own Delta: one register, LWW by (gen, author); an empty ref clears it. Counts from the owner, or from a roster member holding admin in this object's own roles.",
+          "description": "Where written, this is the object's icon and wins over the kind's own: group.setProfile's card photo on a Group; none on an Event, Thing or Post until now. The kind's slot stays readable for an object made before this facet, and is not written for a new one: the mint writes here (#112). Considered and ruled out: a MediaRef added to each kind's own op (five shapes, four readers); host.setMedia (a Host's named slots); base.setExterior's photo (what a non-member holds, replaced wholesale with the exterior, by the owner alone).",
           "args": {
             "icon": {
               "type": "string",
@@ -1406,7 +1407,7 @@
             "gen": {
               "type": "integer",
               "required": true,
-              "summary": "per this event's log, the Lamport generation; the highest (gen, author) that counts wins"
+              "summary": "per this object's log, the Lamport generation; the highest (gen, author) that counts wins"
             }
           }
         },
@@ -1415,6 +1416,7 @@
           "ego": "owner|role:admin",
           "fold": "commutative",
           "summary": "The object's banner, one still, as its own Delta: one register, LWW by (gen, author); an empty ref clears it. Counts from the owner, or from a roster member holding admin in this object's own roles.",
+          "description": "Where written, this is the object's banner and wins over the kind's own: event.setBanner and event.setMedia's banner on an Event, group.setCover on a Group, thing.setPhoto on a Thing, post.setMedia's banner on a Post. Those slots stay readable for an object made before this facet, and are not written for a new one: the mint writes here (#112). event.setBanner already carried a detached ref and was considered for every kind, and ruled out: one kind's op, with an Event's authority. Also ruled out: a MediaRef added to each kind's own op (five shapes, four readers); host.setMedia (a Host's named slots); base.setExterior's photo (what a non-member holds).",
           "args": {
             "banner": {
               "type": "string",
@@ -1481,7 +1483,7 @@
             "gen": {
               "type": "integer",
               "required": true,
-              "summary": "per this event's log, the Lamport generation; the highest (gen, author) that counts wins"
+              "summary": "per this object's log, the Lamport generation; the highest (gen, author) that counts wins"
             }
           }
         }
