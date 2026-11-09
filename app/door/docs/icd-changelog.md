@@ -11,7 +11,7 @@ Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on 
 ## 2.6.0
 
 <!-- generated 2.6.0: icd-changelog.mjs --write; do not edit between the markers -->
-- Draft (the exterior and the door, #76), from `a5b4bb2`; its ICD `2c1067380ed4d2e2ab6f7b2350994c5957f47ef745b4c866cfb154df0ad7bc85`, not a release until its icd/* tag
+- Release: `icd/2.6.0`, 2026-11-09; the pin `2c1067380ed4d2e2ab6f7b2350994c5957f47ef745b4c866cfb154df0ad7bc85`
 - Against 2.5.0 (`5e51f052ad216850…`):
   - added: base.decideRequest (facet exterior, op 4027449346, owner|role:admitter, commutative)
   - added: base.setDoor (facet exterior, op 4027449345, owner, sequenced)
