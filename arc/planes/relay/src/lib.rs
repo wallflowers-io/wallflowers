@@ -62,7 +62,8 @@ pub mod sigv4;
 use crate::mailbox::{Appended, Mailbox};
 use crate::media::{Media, MediaError};
 use crate::store::Store;
-use crate::wire::{may_send_to, may_service, Dir, Frame, V_BASE, V_GAP};
+use crate::wire::address::is_door;
+use crate::wire::{may_send_to, may_service, Dir, Frame, V_BASE, V_DOOR, V_GAP};
 
 type ConnId = u64;
 
@@ -154,6 +155,9 @@ struct Metrics {
     /// stored and fanned out never. Persistently high is a client retry loop or
     /// someone replaying captured publishes, which this is what makes harmless.
     duplicate_publishes: AtomicU64,
+    /// Knocks evicted from door tags by their cap (`mls.door.relay`). Persistently high
+    /// is a door being flooded. A count, never a tag.
+    evicted_knocks: AtomicU64,
 }
 
 /// How long the mailbox keeps a blob, and how much of it.
@@ -264,6 +268,8 @@ struct Conn {
     out: mpsc::UnboundedSender<Frame>,
     /// This connection's pace: publishes, bytes and NEW addresses.
     pace: limits::ConnLimiter,
+    /// Its knocks per door tag (`mls.door.relay.perConnectionPerHour`).
+    doors: HashMap<String, limits::Bucket>,
 }
 
 /// What one publish came to. `reason` is the refusal token sent on `Ack`, and is
@@ -379,6 +385,15 @@ impl Hub {
                 self.metrics.refused_publishes.fetch_add(1, Ordering::Relaxed);
                 return Published::refused("rate_limited");
             }
+            // A DOOR'S OWN PACE per connection: a few knocks an hour, not 50 a second.
+            if is_door(&tag) {
+                let per_hour = crate::wire::DOOR_PER_CONN_PER_HOUR as f64;
+                let knocks = c.doors.entry(tag.clone()).or_insert_with(|| limits::Bucket::new(per_hour / 3600.0, per_hour));
+                if !knocks.take(1.0) {
+                    self.metrics.refused_publishes.fetch_add(1, Ordering::Relaxed);
+                    return Published::refused("rate_limited");
+                }
+            }
         }
         // THE WHOLE RELAY'S INGEST — the line a thousand paced connections still meet.
         if !self.ingest.take(len as f64) {
@@ -424,7 +439,19 @@ impl Hub {
         }
 
         let seq = self.next_seq();
-        match self.store.append(&tag, seq, &blob, commit).await {
+        // A DOOR'S TAG is held at its cap, the oldest evicted as the newest lands
+        // (`mls.door.relay`, B3): anyone holding the exterior may knock, so nothing else
+        // bounds it.
+        let appended = if is_door(&tag) && !commit {
+            self.store.append_capped(&tag, seq, &blob, crate::wire::DOOR_CAP).await.map(|(a, e)| {
+                self.stored_bytes = self.stored_bytes.saturating_sub(e.bytes);
+                self.metrics.evicted_knocks.fetch_add(e.count, Ordering::Relaxed);
+                a
+            })
+        } else {
+            self.store.append(&tag, seq, &blob, commit).await
+        };
+        match appended {
             Ok(Appended::Stored) => {}
             Ok(Appended::Duplicate { seq: prior }) => {
                 // Already here: acked as the publish it was, sent to nobody twice.
@@ -498,6 +525,12 @@ impl Hub {
             }
         }
         backlog.sort_by_key(|(seq, _, _)| *seq);
+        let doors: Vec<String> = tags.iter().filter(|t| is_door(t)).cloned().collect();
+        let evicted = if v >= V_DOOR && !doors.is_empty() {
+            self.store.evicted_totals(&doors).await.unwrap_or_default()
+        } else {
+            HashMap::new()
+        };
         let replayed = backlog.len() as u64;
         let mut gaps = 0u64;
         if let Some(conn) = self.conns.get_mut(&id) {
@@ -515,6 +548,14 @@ impl Hub {
             conn.tags = tags.into_iter().collect();
             for (seq, tag, blob) in backlog {
                 let _ = conn.out.send(Frame::Msg { tag, seq, blob });
+            }
+            for tag in doors {
+                if let Some(&total) = evicted.get(&tag) {
+                    let f = Frame::Evicted { tag, total };
+                    if may_send_to(&f, v) {
+                        let _ = conn.out.send(f);
+                    }
+                }
             }
             let _ = conn.out.send(Frame::Eose);
         }
@@ -539,6 +580,26 @@ impl Hub {
             }
             Err(e) => {
                 error!(error = %e, "eviction sweep failed");
+                self.metrics.store_errors.fetch_add(1, Ordering::Relaxed);
+                0
+            }
+        }
+    }
+
+    /// Expire door knocks past `mls.door.relay.ttlDays`. Returns blobs removed.
+    async fn expire_doors(&mut self) -> u64 {
+        let ttl_us = crate::wire::DOOR_TTL_DAYS.saturating_mul(86_400_000_000);
+        match self.store.expire(crate::wire::DOOR_PREFIX, now_micros(), ttl_us).await {
+            Ok(n) => {
+                if n > 0 {
+                    if let Ok(b) = self.store.stored_bytes().await {
+                        self.stored_bytes = b;
+                    }
+                }
+                n
+            }
+            Err(e) => {
+                error!(error = %e, "door expiry failed");
                 self.metrics.store_errors.fetch_add(1, Ordering::Relaxed);
                 0
             }
@@ -907,6 +968,7 @@ async fn stats_loop(hub: Arc<Mutex<Hub>>, metrics: Arc<Metrics>, obs: Option<Obs
             gated_requests = metrics.gated_requests.load(Ordering::Relaxed),
             refused_publishes = metrics.refused_publishes.load(Ordering::Relaxed),
             duplicate_publishes = metrics.duplicate_publishes.load(Ordering::Relaxed),
+            evicted_knocks = metrics.evicted_knocks.load(Ordering::Relaxed),
             store_tags = tag_count,
             store_blobs = blob_count,
             "stats"
@@ -921,17 +983,20 @@ async fn stats_loop(hub: Arc<Mutex<Hub>>, metrics: Arc<Metrics>, obs: Option<Obs
 async fn evict_loop(hub: Arc<Mutex<Hub>>, retention: Retention) {
     // The DEFAULT, not a misconfiguration — so this is an ops fact, not a warning.
     // Said once at boot, in the same log as the stats line, so a store that grows
-    // has its explanation next to it.
-    if retention.window_us == 0 && retention.max_per_tag == 0 {
-        info!("no retention limits — the mailbox keeps everything until told otherwise");
-        return;
+    // has its explanation next to it. Doors are the exception (`mls.door.relay`), so
+    // the sweep runs for them alone.
+    let limited = retention.window_us != 0 || retention.max_per_tag != 0;
+    if !limited {
+        info!(door_ttl_days = crate::wire::DOOR_TTL_DAYS, "no retention limits but a door's — the mailbox keeps everything else");
     }
     let mut ticker = tokio::time::interval(retention.sweep);
     ticker.tick().await; // the immediate first tick has nothing to do
     loop {
         ticker.tick().await;
         let started = Instant::now();
-        let removed = hub.lock().await.evict().await;
+        let mut h = hub.lock().await;
+        let removed = if limited { h.evict().await } else { 0 } + h.expire_doors().await;
+        drop(h);
         if removed > 0 {
             info!(
                 removed,
@@ -981,6 +1046,7 @@ async fn handle(
             tags: HashSet::new(),
             out: tx,
             pace: limits.conn_limiter(),
+            doors: HashMap::new(),
         },
     );
 
@@ -1051,15 +1117,16 @@ async fn handle(
             continue;
         }
         match frame {
-            // `sig` is carried and not yet checked: the check lands with the client that
-            // signs every publish (pacific_wire::address). Until then it is ignored.
             Frame::Pub { tag, blob, commit, sig } => {
                 let started = Instant::now();
                 let blob_len = blob.len();
                 // WHAT CAN BE REFUSED WITHOUT THE HUB: size, and whether this
                 // connection holds the key the tag IS (pacific_wire::address — the
                 // one check the client runs too). Only a key holder reaches the hub.
-                let early = if blob_len > limits.max_blob_bytes {
+                // A door's knock has its own, smaller cap (`mls.door.relay.maxBytes`).
+                let early = if blob_len > limits.max_blob_bytes
+                    || (is_door(&tag) && blob_len as u64 > crate::wire::DOOR_MAX_BYTES)
+                {
                     Some("too_large")
                 } else {
                     crate::wire::address::verify_pub(&tag, &blob, &sig).err().map(|r| r.as_str())
@@ -1176,6 +1243,7 @@ async fn handle(
             | Frame::Gap { .. }
             | Frame::MediaUrl { .. }
             | Frame::MediaErr { .. }
+            | Frame::Evicted { .. }
             | Frame::Eose => {}
         }
     }
