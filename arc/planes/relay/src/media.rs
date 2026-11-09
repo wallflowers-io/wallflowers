@@ -43,7 +43,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::budget::{self, Budget, Verdict};
 use crate::sigv4::{presign, Credentials, Presign};
@@ -145,16 +145,14 @@ impl Media {
         // a stray scheme or trailing slash folded into it is an unsigned-request bug
         // that only shows up as a 403 from R2.
         let raw = endpoint.as_deref().unwrap().trim();
-        let host = raw
-            .trim_start_matches("https://")
-            .trim_start_matches("http://")
-            .trim_end_matches('/')
-            .to_string();
+        let (host, plain) = match endpoint_host(raw) {
+            Ok(v) => v,
+            Err(why) => {
+                error!(why, "media offload DISABLED: RELAY_R2_ENDPOINT is not usable");
+                return None;
+            }
+        };
 
-        // The storage safety net. `RELAY_R2_BUDGET_BYTES=0` disables the cap, using
-        // the same "0 means off" idiom as `RELAY_RETENTION_SECS` — and gets the same
-        // loud warning, because an uncapped bucket bills without limit.
-        let plain = raw.starts_with("http://") && is_loopback(&host);
         let bucket_name = bucket.unwrap();
         let budget_bytes = env_str("RELAY_R2_BUDGET_BYTES")
             .and_then(|v| v.parse().ok())
@@ -297,7 +295,10 @@ impl Media {
                 Verdict::Stale => return Err(MediaError::BudgetStale),
             }
         }
-        Ok(self.sign("PUT", key, &[("content-length".into(), len.to_string())]))
+        // `if-none-match: *` too: the upload only creates. A key is readable by whoever holds
+        // its reference (a carried exterior's, by design), and with nothing ever deleted an
+        // overwrite would be a deletion anyone could make (SECURITY, #56).
+        Ok(self.sign("PUT", key, &[("content-length".into(), len.to_string()), ("if-none-match".into(), "*".into())]))
     }
 
     /// Presign a download. The relay does not check that the object exists — that
@@ -334,13 +335,30 @@ impl Media {
     }
 }
 
-/// `127.0.0.1`, `localhost` or `[::1]`, with or without a port.
+/// `127.0.0.1`, `localhost` or `[::1]`, with or without a port, and nothing else: parsed as a
+/// URL, so userinfo (`127.0.0.1:9000@evil.example`) is a remote host, not a loopback one.
 fn is_loopback(host: &str) -> bool {
-    let name = match host.strip_prefix('[') {
-        Some(v6) => v6.split(']').next().unwrap_or(""),
-        None => host.split(':').next().unwrap_or(""),
-    };
-    matches!(name, "127.0.0.1" | "localhost" | "::1")
+    url::Url::parse(&format!("http://{host}/")).is_ok_and(|u| {
+        u.username().is_empty()
+            && u.password().is_none()
+            && u.path() == "/"
+            && matches!(u.host_str(), Some("127.0.0.1" | "localhost" | "[::1]"))
+    })
+}
+
+/// `RELAY_R2_ENDPOINT` as the host the presigner signs, and whether its URLs are plain http.
+/// A bare host or an `https://` URL is https; `http://` is allowed for a loopback stand-in
+/// only, and anything else is refused out loud rather than quietly made https.
+fn endpoint_host(raw: &str) -> Result<(String, bool), &'static str> {
+    let plain = raw.starts_with("http://");
+    let host = raw.trim_start_matches("https://").trim_start_matches("http://").trim_end_matches('/').to_string();
+    if host.is_empty() || host.contains(['/', '?', '#', '@']) {
+        return Err("it must be a host, with an optional port: no path, query, fragment or userinfo");
+    }
+    if plain && !is_loopback(&host) {
+        return Err("plain http is for a loopback stand-in only; use https for a remote endpoint");
+    }
+    Ok((host, plain))
 }
 
 /// Keys are opaque 32-byte identifiers rendered as lowercase hex — the same shape
@@ -397,6 +415,20 @@ mod tests {
         assert!(at("[::1]:9000").presign_get(&key()).unwrap().starts_with("http://[::1]:9000/"));
         assert!(at("acct.r2.cloudflarestorage.com").presign_get(&key()).unwrap().starts_with("https://"));
         assert!(at("127.0.0.1.evil.example").presign_get(&key()).unwrap().starts_with("https://"));
+        assert!(at("127.0.0.1:9000@evil.example").presign_get(&key()).unwrap().starts_with("https://"), "userinfo is not loopback");
+        assert_eq!(endpoint_host("http://127.0.0.1:9000/"), Ok(("127.0.0.1:9000".into(), true)));
+        assert_eq!(endpoint_host("https://acct.r2.cloudflarestorage.com"), Ok(("acct.r2.cloudflarestorage.com".into(), false)));
+        assert!(endpoint_host("http://127.0.0.1:9000@evil.example").is_err());
+        assert!(endpoint_host("http://acct.r2.cloudflarestorage.com").is_err(), "plain http to a remote host is refused, not quietly https");
+        assert!(endpoint_host("https://acct.example/path").is_err());
+    }
+
+    /// An upload only creates: the PUT is signed with `if-none-match: *`, so a second upload to
+    /// a key already stored is refused by the object store (SECURITY, #56).
+    #[test]
+    fn an_upload_cannot_overwrite() {
+        let put = media().presign_put(&key(), 512).unwrap();
+        assert!(put.contains("X-Amz-SignedHeaders=content-length%3Bhost%3Bif-none-match"), "{put}");
     }
 
     #[test]
