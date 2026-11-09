@@ -82,6 +82,27 @@ final class MaximisedDetailUITests: XCTestCase {
                        "https://meet.example/a", "the online link, read back")
     }
 
+    /// A Listing made on RED is the owner's own: it reaches the feed and TRADE, and
+    /// its card maximises from either.
+    func test_aListingMadeOnRedReachesTheFeedAndTrade_andMaximises() {
+        launch()
+        toLife()
+        let title = "MaxListing\(Int(Date().timeIntervalSince1970))"
+        mint("thing", title)
+        XCTAssertTrue(app.scrollViews["life-feed"].waitForExistence(timeout: 10), "the feed")
+
+        let page = open(title)
+        XCTAssertTrue(element("detail-edit-thing.setProfile.description").waitForExistence(timeout: 5),
+                      "the owner's description row")
+        shoot("listing-feed")
+        close(page)
+
+        app.openLifeSearch()
+        app.buttons["jewel-trade"].tap()
+        XCTAssertTrue(element("typed-list-trade").waitForExistence(timeout: 10), "TRADE")
+        close(open(title))
+    }
+
     /// A date is SET, once: moving the wheel through several days sends nothing, and SET
     /// sends one write (`event.setProfile` is sequenced — each write is a kept claim and
     /// publish). Counted in TRACE, where every edit is logged as sent or unchanged.
@@ -170,12 +191,13 @@ final class MaximisedDetailUITests: XCTestCase {
         XCTAssertTrue(creator("post").waitForNonExistence(timeout: 10), "the creator closes on save")
     }
 
-    /// The feed card whose label carries `title`, scrolled until it is ON SCREEN — a
+    /// The card, on the feed or a typed list, whose label carries `title`, scrolled until it is ON SCREEN — a
     /// lazy feed reports cards below the fold as existing, and a tap there lands on
     /// whatever is on screen instead.
     private func row(titled title: String) -> XCUIElement {
         let card = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "identifier BEGINSWITH 'feed-row-' AND label CONTAINS %@", title)).firstMatch
+            .matching(NSPredicate(format: "(identifier BEGINSWITH 'feed-row-' OR identifier BEGINSWITH 'list-row-') AND label CONTAINS %@",
+                                  title)).firstMatch
         // On screen and above the disc row, which floats over the feed's foot: a tap
         // below its top lands on a disc.
         var clear = app.windows.firstMatch.frame
