@@ -891,7 +891,8 @@ struct GroupDetailView: View {
     /// events that Space carries, and a night that already happened still happened.
     private func eventCard(_ row: AffiliationRow) -> FeedItem? {
         guard let event = core.events.first(where: { $0.id == row.peer }) else { return nil }
-        return FeedAssembler.item(for: event, maker: core.index.maker(of: event.id))
+        return FeedAssembler.item(for: event, maker: core.index.maker(of: event.id),
+                                  createdAt: core.index.createdAt(of: event.id))
     }
 
     private func createdBar(_ row: AffiliationRow, width: CGFloat) -> some View {

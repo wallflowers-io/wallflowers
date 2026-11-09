@@ -4,7 +4,8 @@
 //  author's avatar, ringed by provenance, their name and the place leading; the
 //  kind's glyph trailing),
 //  the SQUARE (media when the item carries it, dark ground otherwise, the title
-//  as caption), and the footer line BELOW, leading. Cards breathe — spacing lives
+//  as caption), and the footer line BELOW: the footer leading, how long ago the
+//  object was made trailing. Cards breathe — spacing lives
 //  in the owning stack.
 //
 //  The model is `FeedItem`, which carries its `category` — so a card always knows
@@ -82,11 +83,20 @@ struct ObjectCard: View {
             .overlay(square.strokeBorder(Theme.edge, lineWidth: DesignTokens.Card.hairline))
             .background(square.fill(Theme.edge).offset(x: DesignTokens.Skin.shadow, y: DesignTokens.Skin.shadow))
 
-            if !row.footer.isEmpty {
-                Text(row.footer)
-                    .font(.system(size: DesignTokens.Card.footerSize))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, DesignTokens.Card.lineInset)
+            // BELOW: the footer leading (an event's date, a listing's posture), and how
+            // long ago the object was made trailing.
+            if !row.footer.isEmpty || row.createdAt != nil {
+                HStack {
+                    Text(row.footer)
+                    Spacer(minLength: 12)
+                    if let made = row.createdAt {
+                        Text(FeedAssembler.recency(made, nowMs: Int64(Date().timeIntervalSince1970 * 1000)))
+                            .accessibilityIdentifier("card-recency")
+                    }
+                }
+                .font(.system(size: DesignTokens.Card.footerSize))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, DesignTokens.Card.lineInset)
             }
         }
         .padding(.horizontal, DesignTokens.Life.gutter)

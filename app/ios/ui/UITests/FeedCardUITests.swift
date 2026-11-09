@@ -1,7 +1,8 @@
 //  FeedCardUITests.swift
 //  A Feed card names who made it, above its top left (avatar and name, from the
 //  object index: the group's first owner), and what it is, above its top right (the
-//  kind's glyph alone). Never "me".
+//  kind's glyph alone). Never "me". Below it, trailing, how long ago it was made
+//  (the GroupContext's `createdAt`): "now" for one made a moment ago.
 //
 //  The relay is pinned to a port nothing listens on: an object of one is local, and a
 //  test identity must not reach the Global Arc.
@@ -18,7 +19,7 @@ final class FeedCardUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    func test_eachCardNamesItsMakerAndShowsItsKind() {
+    func test_eachCardNamesItsMakerShowsItsKindAndWhenItWasMade() {
         launch()
         let stamp = Int(Date().timeIntervalSince1970)
         let event = "Card event \(stamp)"
@@ -60,6 +61,8 @@ final class FeedCardUITests: XCTestCase {
             XCTAssertTrue(card.label.contains("QA"), "the maker's name: \(card.label)")
             XCTAssertTrue(card.label.contains(kind), "the kind's glyph, labelled: \(card.label)")
             XCTAssertFalse(card.label.hasPrefix("me"), "never 'me': \(card.label)")
+            // The recency is the card's last text (`card-recency`, trailing the footer).
+            XCTAssertTrue(card.label.hasSuffix("now"), "made a moment ago: \(card.label)")
         }
         shoot("feed")
     }
