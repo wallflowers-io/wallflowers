@@ -228,6 +228,17 @@ pub enum CoreError {
     Io(#[from] std::io::Error),
 }
 
+/// A trust refusal, as the engine has always classified it: a bad bundle is the
+/// handshake's, a bad key or signature the identity's.
+impl From<trust::Error> for CoreError {
+    fn from(e: trust::Error) -> Self {
+        match e {
+            trust::Error::Bundle(m) => CoreError::Handshake(m),
+            trust::Error::Signature(m) => CoreError::Identity(m),
+        }
+    }
+}
+
 impl CoreError {
     /// Retryable = the failure concerns THIS DEVICE (storage/io), not the blob —
     /// abort the drain WITHOUT advancing the cursor so nothing is skipped by a

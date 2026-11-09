@@ -19,7 +19,7 @@ use std::os::unix::fs::OpenOptionsExt;
 #[cfg(feature = "storage")]
 use std::path::Path;
 
-use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+use ed25519_dalek::{Signer, SigningKey};
 #[cfg(feature = "storage")]
 use rand_core::OsRng;
 use sha2::{Digest, Sha256};
@@ -298,13 +298,8 @@ pub const AUTH_DOMAIN: &str = "pacific-auth:v1";
 
 /// Verify a signature against a claimed identity pubkey. Loud on failure.
 pub fn verify_sig(identity_pk: &[u8; 32], msg: &[u8], sig: &[u8; 64]) -> Result<(), CoreError> {
-    let vk = VerifyingKey::from_bytes(identity_pk)
-        .map_err(|e| CoreError::Identity(format!("bad pubkey: {e}")))?;
-    let s = ed25519_dalek::Signature::from_bytes(sig);
-    // Strict: a small-order key or R is refused. The identity point with R = identity,
-    // s = 0 otherwise verifies over every message (NC-46).
-    vk.verify_strict(msg, &s)
-        .map_err(|_| CoreError::Identity("signature verify failed".into()))
+    // Strict (NC-46): trust::sig is the one Ed25519 verify.
+    Ok(trust::sig::verify_strict(identity_pk, msg, sig)?)
 }
 
 /// Parse any rendering of an IdentityKey — `ed25519:<hex>`, legacy
