@@ -14,8 +14,9 @@ use tokio::net::TcpListener;
 
 type Objects = Arc<Mutex<HashMap<String, Vec<u8>>>>;
 
-/// PUT stores the body at the path, GET returns it, nothing is checked: the relay's presign
-/// is what the test is about, not the stand-in's.
+/// PUT stores the body at the path, GET returns it. Signatures are not checked: the relay's
+/// presign is what the test is about. A PUT must be conditional (`If-None-Match: *`) and is
+/// refused 412 over an object already there, as R2 refuses it.
 async fn object_store() -> (String, Objects) {
     let l = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let at = l.local_addr().unwrap().to_string();
@@ -33,22 +34,32 @@ async fn object_store() -> (String, Objects) {
                 let (method, target) = (parts.next().unwrap_or("").to_string(), parts.next().unwrap_or("").to_string());
                 let path = target.split('?').next().unwrap().to_string();
                 let mut len = 0usize;
+                let mut only_create = false;
                 loop {
                     let mut h = String::new();
                     r.read_line(&mut h).await.unwrap();
                     if h == "\r\n" || h.is_empty() {
                         break;
                     }
-                    if let Some(v) = h.to_ascii_lowercase().strip_prefix("content-length:") {
+                    let h = h.to_ascii_lowercase();
+                    if let Some(v) = h.strip_prefix("content-length:") {
                         len = v.trim().parse().unwrap();
                     }
+                    only_create |= h.strip_prefix("if-none-match:").is_some_and(|v| v.trim() == "*");
                 }
                 let (status, body) = match method.as_str() {
                     "PUT" => {
                         let mut b = vec![0u8; len];
                         r.read_exact(&mut b).await.unwrap();
-                        held.lock().unwrap().insert(path, b);
-                        ("200 OK", Vec::new())
+                        let mut held = held.lock().unwrap();
+                        if !only_create {
+                            ("400 Bad Request", Vec::new())
+                        } else if held.contains_key(&path) {
+                            ("412 Precondition Failed", Vec::new())
+                        } else {
+                            held.insert(path, b);
+                            ("200 OK", Vec::new())
+                        }
                     }
                     "GET" => match held.lock().unwrap().get(&path) {
                         Some(b) => ("200 OK", b.clone()),
@@ -96,6 +107,18 @@ async fn sealed_bytes_go_up_and_come_back_to_anyone_holding_the_reference() {
 
     // Read by a reader with nothing but the reference: no Node, no group.
     assert_eq!(media_store::get(&relay, &r).await.unwrap(), photo);
+
+    // An upload only creates: a second presigned PUT to the same key is refused.
+    let mut s = pacific_core::transport::RelaySession::connect(&relay).await.unwrap();
+    let again = s.media_url(key, Some(4)).await.unwrap();
+    let res = reqwest::Client::new().put(again).header("If-None-Match", "*").body("junk").send().await.unwrap();
+    assert_eq!(res.status(), 412);
+    assert_eq!(media_store::get(&relay, &r).await.unwrap(), photo, "still the referenced object");
+
+    // A longer object is refused by its length, before it is held.
+    objects.lock().unwrap().get_mut(&format!("/pacific-media/{key}")).unwrap().push(0);
+    assert!(media_store::get(&relay, &r).await.is_err());
+    objects.lock().unwrap().get_mut(&format!("/pacific-media/{key}")).unwrap().pop();
 
     // A changed object is not the one referenced.
     objects.lock().unwrap().get_mut(&format!("/pacific-media/{key}")).unwrap()[30] ^= 1;

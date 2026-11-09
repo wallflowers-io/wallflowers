@@ -4705,7 +4705,7 @@ mod media_tests {
                     let body = if method == "PUT" {
                         let mut b = vec![0u8; len];
                         r.read_exact(&mut b).await.unwrap();
-                        held.lock().unwrap().insert(path, b);
+                        held.lock().unwrap().entry(path).or_insert(b);
                         Vec::new()
                     } else {
                         held.lock().unwrap().get(&path).cloned().unwrap_or_default()
