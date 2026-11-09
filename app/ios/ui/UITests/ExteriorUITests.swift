@@ -140,13 +140,14 @@ final class ExteriorUITests: XCTestCase {
         if want == "asker" { app.buttons["shell-life"].tap() }
     }
 
-    /// The feed's exterior card, as whichever element the OS exposes it as (FeedUITests'
-    /// note); nil if none shows within `timeout`.
+    /// The feed's exterior card, as whichever element the OS exposes it as: its children are
+    /// combined, and the author's name among them is a button (FeedUITests' note); nil if none
+    /// shows within `timeout`.
     private func waitForExteriorCard(timeout: TimeInterval) -> XCUIElement? {
         let match = NSPredicate(format: "identifier BEGINSWITH 'feed-row-exterior:'")
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            for q in [app.otherElements, app.staticTexts] where q.matching(match).firstMatch.exists {
+            for q in [app.buttons, app.otherElements, app.staticTexts] where q.matching(match).firstMatch.exists {
                 return q.matching(match).firstMatch
             }
             RunLoop.current.run(until: Date().addingTimeInterval(1))

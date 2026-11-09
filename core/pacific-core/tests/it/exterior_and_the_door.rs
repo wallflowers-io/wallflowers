@@ -149,3 +149,16 @@ async fn the_ask_and_the_answer_are_not_kept_on_one_device() {
     assert!(decided.values().any(|d| d.asker == h.id(SAM) && !d.admit), "the laptop folds the decline");
     assert!(h.node(laptop).pending_requests().await.unwrap().is_empty());
 }
+
+/// THE iOS CREATOR'S ORDER: a project made by the unified mint (with its comments part),
+/// then the dial, then the exterior — as `CoreService.setOutside` writes them.
+#[tokio::test]
+async fn a_project_from_the_creator_reaches_a_connection() {
+    let h = three().await;
+    let draft = pacific_core::mint::MintDraft { name: "Allotment".into(), ..Default::default() };
+    let obj = h.node(OWNER).mint(pacific_core::object::ObjectKind::Project, &draft).await.expect("mint");
+    h.node(OWNER).set_visibility(&obj, Visibility::Network).await.unwrap();
+    h.node(OWNER).set_exterior(&obj, "Allotment", "Plots by the river", None, Some(DoorMode::Review)).await.unwrap();
+    h.settle().await;
+    assert_eq!((holds(&h, CLEO, &obj), holds(&h, SAM, &obj)), (Some(1), Some(2)));
+}
