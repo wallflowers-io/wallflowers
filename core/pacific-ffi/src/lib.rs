@@ -1068,6 +1068,126 @@ pub struct EventMediaRow {
     pub clip_mime: String,
 }
 
+/// One arg of `Core::object_apply`, keyed by its ICD name.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct OpArg {
+    pub key: String,
+    pub value: OpValue,
+}
+
+/// The wire's two arg types (`pacific_media::ArgVal`).
+#[derive(Clone, Debug, uniffi::Enum)]
+pub enum OpValue {
+    Text { v: String },
+    Int { v: i64 },
+}
+
+/// One picture, clip or document on a maximised detail. INLINE ONLY: a detached or
+/// sealed ref (O-79) has no fetch path at this boundary yet (#56), so it does not cross —
+/// a row with no bytes would render as a promise the reader cannot keep.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct MediaRow {
+    pub mime: String,
+    /// base64.
+    pub data: String,
+    /// Pixels, 0 when unknown.
+    pub width: u32,
+    pub height: u32,
+    /// The author's words for it, "" when none.
+    pub alt: String,
+}
+
+fn media_row(m: &pacific_media::MediaRef, alt: &str) -> Option<MediaRow> {
+    match &m.delivery {
+        pacific_media::Delivery::Inline { data } if !data.is_empty() => Some(MediaRow {
+            mime: m.mime.clone(),
+            data: data.clone(),
+            width: m.width,
+            height: m.height,
+            alt: alt.to_string(),
+        }),
+        _ => None,
+    }
+}
+
+fn inline_row(mime: &str, data: &str) -> Option<MediaRow> {
+    (!data.is_empty()).then(|| MediaRow {
+        mime: mime.to_string(),
+        data: data.to_string(),
+        width: 0,
+        height: 0,
+        alt: String::new(),
+    })
+}
+
+/// One act of the lineup register (`event.setLineup`): the performer's member key or
+/// object id, hex — never a name; the reader names it from the performer's own card.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct ActRow {
+    pub performer: String,
+    pub role: String,
+    /// Epoch ms, 0 = not said.
+    pub start: i64,
+    pub end: i64,
+}
+
+/// What `EventRow` leaves out — the rest of an Event's ops, for its maximised detail.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct EventDetailRow {
+    /// IANA zone, "" = the device's.
+    pub tz: String,
+    pub all_day: bool,
+    /// "" = scheduled.
+    pub status: String,
+    /// The online venue, "" = none.
+    pub online: String,
+    pub video_url: String,
+    pub ticket_url: String,
+    /// How `descriptor` is written ("" = plain).
+    pub descriptor_format: String,
+    /// `event.setBanner`, else the media facet's still.
+    pub banner: Option<MediaRow>,
+    /// `event.setClip`, else the media facet's motion.
+    pub clip: Option<MediaRow>,
+    /// The media facet's strip, then the `event.addPhoto` set in `at` order.
+    pub photos: Vec<MediaRow>,
+    /// The co-hosts' lineup register; empty = the profile's `lineup` stands.
+    pub acts: Vec<ActRow>,
+}
+
+/// What `ThingRow` leaves out — the rest of a Thing's ops, for its maximised detail.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct ThingDetailRow {
+    /// "" = not said.
+    pub condition: String,
+    pub description: String,
+    /// The `thing.addPhoto` set in `at` order; the face (`thing.setPhoto`) rides `ThingRow`.
+    pub photos: Vec<MediaRow>,
+    /// "" = no disposition stated.
+    pub disposition: String,
+    /// Whom it is held for, member key hex, "" = nobody named.
+    pub disposition_for: String,
+    /// Epoch ms, 0 = open-ended.
+    pub disposition_until: i64,
+}
+
+/// What `PostRow` leaves out — the rest of a Post's ops, for its maximised detail.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct PostDetailRow {
+    /// article | link | image | pdf
+    pub form: String,
+    pub link: String,
+    /// How `body` is written ("" = plain).
+    pub body_format: String,
+    pub excerpt: String,
+    pub banner_alt: String,
+    pub banner_mime: String,
+    /// `post.setDocument`; its alt is the document's name.
+    pub document: Option<MediaRow>,
+    /// The `post.addAsset` set in `at` order.
+    pub assets: Vec<MediaRow>,
+}
+
 /// One delivered ticket in the buyer's wallet, ready to present: the verbatim signed
 /// core + sig, the QR payload to render, display fields parsed from the core, and
 /// whether the signature verifies against the delivering peer's identity.
@@ -2125,6 +2245,29 @@ impl Core {
         Ok(block_on(self.write()?.mint(k, &draft.into()))?)
     }
 
+    /// Apply one op to an object, BY ITS ICD NAME (`"event.editProfile"`), with its ICD
+    /// arg names — the Door's `apply` step (`authoring::op_on`), so an edit has one path
+    /// and no per-op writer to drift from the catalogue. Refused when the object's kind
+    /// has no such op; the fold judges authority and args. Reaches the relay → call OFF
+    /// the main thread.
+    pub fn object_apply(&self, object_id: String, op: String, args: Vec<OpArg>) -> Result<String, FfiError> {
+        let node = self.write()?;
+        let kind = node.object_kind(&object_id)?;
+        let d = pacific_core::authoring::op_on(&kind, &op)
+            .ok_or_else(|| FfiError::Core(format!("a {kind} has no op '{op}'")))?;
+        let args = args
+            .into_iter()
+            .map(|a| {
+                let v = match a.value {
+                    OpValue::Text { v } => pacific_media::ArgVal::Text(v),
+                    OpValue::Int { v } => pacific_media::ArgVal::Int(v),
+                };
+                (a.key, v)
+            })
+            .collect::<pacific_media::Args>();
+        Ok(block_on(node.apply(&object_id, d.op_id, args))?)
+    }
+
     /// Mint a THING and give it a name in one call — what the swipe deck does on ACCEPT.
     /// Local: a group of 1, no relay. Returns the new object id.
     /// `category` is the market-face axis: "artifact" | "skill" | "job" ("" = artifact).
@@ -2526,6 +2669,95 @@ impl Core {
                 .collect(),
             clip: st.media.clip,
             clip_mime: st.media.clip_mime,
+        })
+    }
+
+    /// The rest of one Event — its maximised detail's read, beside its `EventRow`.
+    pub fn event_detail(&self, object_id: String) -> Result<EventDetailRow, FfiError> {
+        let st = self.read()?.event_state(&object_id)?;
+        let mut set: Vec<&pacific_core::event::SetPhoto> =
+            st.photo_set.iter().flat_map(|s| s.values()).collect();
+        set.sort_by_key(|p| p.at);
+        Ok(EventDetailRow {
+            banner: st
+                .banner
+                .as_ref()
+                .and_then(|m| media_row(m, ""))
+                .or_else(|| inline_row(&st.media.banner_mime, &st.media.banner)),
+            clip: st
+                .clip
+                .as_ref()
+                .and_then(|m| media_row(m, ""))
+                .or_else(|| inline_row(&st.media.clip_mime, &st.media.clip)),
+            photos: st
+                .media
+                .photos
+                .iter()
+                .filter_map(|p| inline_row(&p.mime, &p.data))
+                .chain(set.into_iter().filter_map(|p| media_row(&p.media, "")))
+                .collect(),
+            acts: st
+                .acts
+                .unwrap_or_default()
+                .into_iter()
+                .map(|a| ActRow {
+                    performer: a.performer.id(),
+                    role: a.role,
+                    start: a.start.unwrap_or(0),
+                    end: a.end.unwrap_or(0),
+                })
+                .collect(),
+            tz: st.tz,
+            all_day: st.all_day,
+            status: st.status,
+            online: st.online,
+            video_url: st.video_url,
+            ticket_url: st.ticket_url,
+            descriptor_format: st.descriptor_format,
+        })
+    }
+
+    /// The rest of one Thing — its maximised detail's read, beside its `ThingRow`.
+    pub fn thing_detail(&self, object_id: String) -> Result<ThingDetailRow, FfiError> {
+        let st = self.read()?.thing_state(&object_id)?;
+        let mut photos: Vec<_> = st.photos.into_values().collect();
+        photos.sort_by_key(|p| p.at);
+        let d = st.disposition;
+        Ok(ThingDetailRow {
+            condition: st.condition.unwrap_or_default(),
+            description: st.description,
+            photos: photos
+                .iter()
+                .filter_map(|p| {
+                    inline_row(&p.mime, &p.data).map(|r| MediaRow { width: p.width, height: p.height, ..r })
+                })
+                .collect(),
+            disposition: d.as_ref().map(|d| d.state.clone()).unwrap_or_default(),
+            disposition_for: d.as_ref().and_then(|d| d.for_member.clone()).unwrap_or_default(),
+            disposition_until: d.as_ref().and_then(|d| d.until).unwrap_or(0),
+        })
+    }
+
+    /// The rest of one Post — its maximised detail's read, beside its `PostRow`.
+    pub fn post_detail(&self, object_id: String) -> Result<PostDetailRow, FfiError> {
+        let st = self
+            .read()?
+            .posts()?
+            .into_iter()
+            .find(|(id, _)| *id == object_id)
+            .map(|(_, st)| st)
+            .ok_or_else(|| FfiError::Core(format!("no post {object_id}")))?;
+        let mut assets: Vec<_> = st.assets.values().collect();
+        assets.sort_by_key(|a| a.at);
+        Ok(PostDetailRow {
+            form: st.form.as_str().to_string(),
+            link: st.link.clone(),
+            body_format: st.body_format.clone(),
+            excerpt: st.excerpt.clone(),
+            banner_alt: st.banner_alt.clone(),
+            banner_mime: st.banner_mime.clone(),
+            document: st.document.as_ref().and_then(|(m, name)| media_row(m, name)),
+            assets: assets.into_iter().filter_map(|a| media_row(&a.media, &a.alt)).collect(),
         })
     }
 
@@ -4616,5 +4848,135 @@ mod held_node_tests {
         assert!(counts(&core).0 > h1, "and both share one fold cache");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod detail_tests {
+    use super::*;
+
+    fn t(v: &str) -> OpArg {
+        OpArg { key: String::new(), value: OpValue::Text { v: v.into() } }
+    }
+    fn i(v: i64) -> OpArg {
+        OpArg { key: String::new(), value: OpValue::Int { v } }
+    }
+    fn args(kv: &[(&str, OpArg)]) -> Vec<OpArg> {
+        kv.iter().map(|(k, a)| OpArg { key: (*k).into(), ..a.clone() }).collect()
+    }
+
+    const PNG: &str = "QUJDRA==";
+
+    fn core(tag: &str) -> (Arc<Core>, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("pacific-detail-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temp state dir");
+        let core = Core::new(dir.to_string_lossy().to_string());
+        pacific_core::node::set_default_arc("ws://127.0.0.1:1").expect("the device's Arc");
+        core.init_identity("Ada".into()).expect("mint identity");
+        (core, dir)
+    }
+
+    fn mint(core: &Core, kind: &str, name: &str) -> String {
+        let draft = MintDraft { name: name.into(), start_ms: 1_790_000_000_000, ..Default::default() };
+        core.object_mint(kind.into(), draft).expect("a mint")
+    }
+
+    /// Every field a detail row adds is written by its ICD op, through `object_apply`
+    /// by name, and read back by the detail read.
+    #[test]
+    fn each_detail_read_returns_what_its_ops_wrote() {
+        let _held = STATE_DIR.lock().unwrap_or_else(|e| e.into_inner());
+        let (core, dir) = core("rt");
+
+        let ev = mint(&core, "event", "Night");
+        let profile = args(&[
+            ("title", t("Night")),
+            ("startMs", i(1_790_000_000_000)),
+            ("status", t("cancelled")),
+            ("online", t("https://meet.example/a")),
+            ("videoUrl", t("https://video.example/a")),
+            ("ticketUrl", t("https://tix.example/a")),
+            ("tz", t("Europe/London")),
+            ("allDay", i(1)),
+            ("descriptorFormat", t("markdown")),
+            ("gen", i(1)),
+        ]);
+        core.object_apply(ev.clone(), "event.editProfile".into(), profile).expect("editProfile");
+        let photo = args(&[("id", t("0000000000000001")), ("photo", t(PNG)), ("photoMime", t("image/png")), ("at", i(5)), ("gen", i(2))]);
+        core.object_apply(ev.clone(), "event.addPhoto".into(), photo).expect("addPhoto");
+        let banner = args(&[("banner", t(PNG)), ("bannerMime", t("image/png")), ("gen", i(3))]);
+        core.object_apply(ev.clone(), "event.setBanner".into(), banner).expect("setBanner");
+        let d = core.event_detail(ev.clone()).expect("event_detail");
+        assert_eq!(
+            (d.status.as_str(), d.online.as_str(), d.video_url.as_str(), d.ticket_url.as_str(), d.tz.as_str(), d.all_day, d.descriptor_format.as_str()),
+            ("cancelled", "https://meet.example/a", "https://video.example/a", "https://tix.example/a", "Europe/London", true, "markdown")
+        );
+        assert_eq!(d.photos.len(), 1, "the added photo");
+        assert_eq!(d.banner.as_ref().map(|b| b.data.as_str()), Some(PNG), "setBanner's still");
+
+        let th = mint(&core, "thing", "Chair");
+        let profile = args(&[("name", t("Chair")), ("condition", t("good")), ("description", t("Oak, one leg mended."))]);
+        core.object_apply(th.clone(), "thing.setProfile".into(), profile).expect("thing.setProfile");
+        let photo = args(&[("id", t("0000000000000001")), ("photo", t(PNG)), ("photoMime", t("image/png")), ("at", i(5))]);
+        core.object_apply(th.clone(), "thing.addPhoto".into(), photo).expect("thing.addPhoto");
+        core.object_apply(th.clone(), "thing.setDisposition".into(), args(&[("state", t("sold")), ("at", i(6))]))
+            .expect("setDisposition");
+        let d = core.thing_detail(th).expect("thing_detail");
+        assert_eq!((d.condition.as_str(), d.description.as_str(), d.disposition.as_str()), ("good", "Oak, one leg mended.", "sold"));
+        assert_eq!(d.photos.len(), 1, "the added photo");
+
+        let po = mint(&core, "post", "Zine");
+        let profile = args(&[("title", t("Zine")), ("form", t("pdf")), ("link", t("https://zine.example/a.pdf")), ("bodyFormat", t("markdown")), ("excerpt", t("Issue one."))]);
+        core.object_apply(po.clone(), "post.setProfile".into(), profile).expect("post.setProfile");
+        let doc = args(&[("document", t(PNG)), ("documentMime", t("application/pdf")), ("name", t("zine.pdf"))]);
+        core.object_apply(po.clone(), "post.setDocument".into(), doc).expect("setDocument");
+        let asset = args(&[("id", t("0000000000000001")), ("asset", t(PNG)), ("assetMime", t("image/png")), ("alt", t("a still")), ("at", i(5))]);
+        core.object_apply(po.clone(), "post.addAsset".into(), asset).expect("addAsset");
+        let d = core.post_detail(po).expect("post_detail");
+        assert_eq!((d.form.as_str(), d.body_format.as_str(), d.excerpt.as_str()), ("pdf", "markdown", "Issue one."));
+        assert_eq!(d.document.as_ref().map(|m| m.alt.as_str()), Some("zine.pdf"), "the document, named");
+        assert_eq!(d.assets.iter().map(|a| a.alt.as_str()).collect::<Vec<_>>(), ["a still"]);
+
+        assert!(
+            core.object_apply(ev, "thing.setProfile".into(), vec![]).is_err(),
+            "an op the kind does not carry is refused by name"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// AC 9: each field a detail row adds is an arg of an op on that kind in the ICD —
+    /// read from the document, so a renamed or dropped arg breaks here, not on a screen.
+    #[test]
+    fn every_detail_field_is_an_icd_arg_of_its_kind() {
+        let icd: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../coordination/delta-graph.icd.json"))
+                .expect("the ICD"),
+        )
+        .expect("the ICD parses");
+        let rows: &[(&str, &[(&str, &str)])] = &[
+            ("event", &[
+                ("tz", "tz"), ("all_day", "allDay"), ("status", "status"), ("online", "online"),
+                ("video_url", "videoUrl"), ("ticket_url", "ticketUrl"), ("descriptor_format", "descriptorFormat"),
+                ("banner", "banner"), ("clip", "clip"), ("photos", "photo"), ("acts", "acts"),
+            ]),
+            ("thing", &[
+                ("condition", "condition"), ("description", "description"), ("photos", "photo"),
+                ("disposition", "state"), ("disposition_for", "for"), ("disposition_until", "until"),
+            ]),
+            ("post", &[
+                ("form", "form"), ("link", "link"), ("body_format", "bodyFormat"), ("excerpt", "excerpt"),
+                ("banner_alt", "bannerAlt"), ("banner_mime", "bannerMime"), ("document", "document"), ("assets", "asset"),
+            ]),
+        ];
+        for (kind, fields) in rows {
+            let ops = icd["kinds"][kind]["ops"].as_object().expect("the kind's ops");
+            for (field, arg) in *fields {
+                assert!(
+                    ops.values().any(|o| o["args"].get(*arg).is_some()),
+                    "{kind}: detail field `{field}` reads `{arg}`, which no {kind} op carries"
+                );
+            }
+        }
     }
 }
