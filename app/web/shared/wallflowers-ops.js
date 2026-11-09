@@ -10,7 +10,7 @@
  * it. That is the whole reason this file is generated — the audit found four
  * hand-maintained layers between the model and a screen and no two agreed.
  *
- * 143 ops · 140 reachable · 3 not, each with its reason.
+ * 148 ops · 145 reachable · 3 not, each with its reason.
  *
  * AN UNREACHABLE OP IS STILL LISTED. It has no author function, and asking for
  * one throws with the reason. A client that cannot see what it cannot do will
@@ -31,6 +31,7 @@
     "base.clearParent": {name:"base.clearParent", prefix:"base", opId:4027056129, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"parent",type:"string",required:true}]},
     "base.clearPart": {name:"base.clearPart", prefix:"base", opId:4026925057, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"part",type:"string",required:true}]},
     "base.clearRole": {name:"base.clearRole", prefix:"base", opId:4026990593, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"member",type:"string",required:true}]},
+    "base.decideRequest": {name:"base.decideRequest", prefix:"base", opId:4027449346, authority:"owner|role:admitter", fold:"commutative", reachable:true, why:null, fields:[{name:"asker",type:"string",required:true}, {name:"decision",type:"string",required:true}, {name:"request",type:"string",required:true}]},
     "base.defineQuestion": {name:"base.defineQuestion", prefix:"base", opId:4027318272, authority:"owner|role:admin", fold:"commutative", reachable:true, why:null, fields:[{name:"free",type:"integer",required:false}, {name:"hint",type:"string",required:false}, {name:"max",type:"integer",required:false}, {name:"multi",type:"integer",required:false}, {name:"options",type:"string",required:false}, {name:"text",type:"string",required:true}, {name:"textMax",type:"integer",required:false}]},
     "base.memberJoined": {name:"base.memberJoined", prefix:"base", opId:4026597376, authority:"anyMember", fold:"commutative", reachable:false, why:"recorded by the MLS doors, never authored as a delta", fields:[{name:"at",type:"integer",required:true}, {name:"member",type:"string",required:true}]},
     "base.memberLeft": {name:"base.memberLeft", prefix:"base", opId:4026597377, authority:"anyMember", fold:"commutative", reachable:false, why:"recorded by the MLS doors, never authored as a delta", fields:[{name:"at",type:"integer",required:true}, {name:"member",type:"string",required:true}, {name:"reason",type:"string",required:false}]},
@@ -41,6 +42,8 @@
     "base.publishProfile": {name:"base.publishProfile", prefix:"base", opId:4027187200, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"card",type:"string",required:true}]},
     "base.retireQuestion": {name:"base.retireQuestion", prefix:"base", opId:4027318273, authority:"owner|role:admin", fold:"commutative", reachable:true, why:null, fields:[{name:"target_author",type:"string",required:true}, {name:"target_gen",type:"integer",required:true}]},
     "base.setBacklink": {name:"base.setBacklink", prefix:"base", opId:4027121664, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"object",type:"string",required:true}, {name:"rel",type:"string",required:true}]},
+    "base.setDoor": {name:"base.setDoor", prefix:"base", opId:4027449345, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"key",type:"string",required:true}, {name:"mode",type:"string",required:true}]},
+    "base.setExterior": {name:"base.setExterior", prefix:"base", opId:4027449344, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"description",type:"string",required:false}, {name:"door",type:"string",required:false}, {name:"name",type:"string",required:true}, {name:"photo",type:"string",required:false}, {name:"photoBytes",type:"integer",required:false}, {name:"photoDigest",type:"string",required:false}, {name:"photoH",type:"integer",required:false}, {name:"photoKey",type:"string",required:false}, {name:"photoKind",type:"string",required:false}, {name:"photoMime",type:"string",required:false}, {name:"photoMs",type:"integer",required:false}, {name:"photoSecret",type:"string",required:false}, {name:"photoSession",type:"string",required:false}, {name:"photoVia",type:"string",required:false}, {name:"photoW",type:"integer",required:false}]},
     "base.setLocation": {name:"base.setLocation", prefix:"base", opId:4026531840, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"source",type:"string",required:true}]},
     "base.setParent": {name:"base.setParent", prefix:"base", opId:4027056128, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"parent",type:"string",required:true}, {name:"role",type:"string",required:true}]},
     "base.setPart": {name:"base.setPart", prefix:"base", opId:4026925056, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"choice",type:"string",required:false}, {name:"part",type:"string",required:true}, {name:"role",type:"string",required:true}]},
@@ -57,6 +60,7 @@
     "contact.prekeyConsume": {name:"contact.prekeyConsume", prefix:"contact", opId:1, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"kp_id",type:"string",required:true}, {name:"prekeyId",type:"string",required:true}]},
     "contact.prekeyRevoke": {name:"contact.prekeyRevoke", prefix:"contact", opId:2, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"kp_id",type:"string",required:true}, {name:"prekeyId",type:"string",required:true}]},
     "contact.prekeySupply": {name:"contact.prekeySupply", prefix:"contact", opId:0, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"bundle",type:"string",required:true}, {name:"intro_tag",type:"string",required:true}, {name:"kp",type:"string",required:true}, {name:"kp_id",type:"string",required:true}, {name:"not_after",type:"integer",required:false}]},
+    "contact.publishExterior": {name:"contact.publishExterior", prefix:"contact", opId:13, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"exterior",type:"string",required:true}, {name:"hops",type:"integer",required:true}, {name:"kind",type:"string",required:true}, {name:"object",type:"string",required:true}, {name:"owner",type:"string",required:true}, {name:"visibility",type:"string",required:false}]},
     "contact.publishListing": {name:"contact.publishListing", prefix:"contact", opId:4, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"area",type:"string",required:false}, {name:"deadline",type:"integer",required:false}, {name:"descriptor",type:"string",required:false}, {name:"hops",type:"integer",required:true}, {name:"listing",type:"string",required:true}, {name:"origin",type:"string",required:true}, {name:"photo",type:"string",required:false}, {name:"photoMime",type:"string",required:false}, {name:"posture",type:"string",required:true}, {name:"price",type:"string",required:false}, {name:"reach",type:"string",required:true}, {name:"rev",type:"integer",required:true}, {name:"thingId",type:"string",required:true}, {name:"title",type:"string",required:true}, {name:"withdrawn",type:"integer",required:false}]},
     "contact.publishProfile": {name:"contact.publishProfile", prefix:"contact", opId:3, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"card",type:"string",required:true}, {name:"displayName",type:"string",required:true}, {name:"shape",type:"string",required:true}]},
     "contact.requestTicket": {name:"contact.requestTicket", prefix:"contact", opId:5, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"eventId",type:"string",required:true}, {name:"listing",type:"string",required:true}, {name:"pi",type:"string",required:true}, {name:"qty",type:"integer",required:true}]},
@@ -98,6 +102,7 @@
     "group.setPresence": {name:"group.setPresence", prefix:"group", opId:1, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"identityKey",type:"string",required:false}, {name:"inviteHint",type:"string",required:false}, {name:"kind",type:"string",required:true}, {name:"spaceId",type:"string",required:false}]},
     "group.setProfile": {name:"group.setProfile", prefix:"group", opId:0, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"card",type:"string",required:false}, {name:"displayName",type:"string",required:true}, {name:"shape",type:"string",required:true}]},
     "group.setRegistration": {name:"group.setRegistration", prefix:"group", opId:19, authority:"owner|role:admin", fold:"commutative", reachable:true, why:null, fields:[{name:"approval",type:"integer",required:false}, {name:"capacity",type:"integer",required:false}, {name:"closesMs",type:"integer",required:false}, {name:"event",type:"string",required:true}, {name:"guestsMax",type:"integer",required:false}, {name:"location",type:"string",required:false}, {name:"maybe",type:"integer",required:false}, {name:"waitlist",type:"integer",required:false}]},
+    "group.setRequest": {name:"group.setRequest", prefix:"group", opId:23, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"kind",type:"string",required:true}, {name:"object",type:"string",required:true}, {name:"owner",type:"string",required:true}, {name:"request",type:"string",required:true}, {name:"withdrawn",type:"string",required:false}]},
     "group.storeCredential": {name:"group.storeCredential", prefix:"group", opId:2, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"id",type:"string",required:true}, {name:"kind",type:"string",required:true}, {name:"label",type:"string",required:true}]},
     "host.define": {name:"host.define", prefix:"host", opId:0, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"name",type:"string",required:true}]},
     "host.editMedia": {name:"host.editMedia", prefix:"host", opId:3, authority:"owner|role:admin", fold:"commutative", reachable:true, why:null, fields:[{name:"media",type:"string",required:true}, {name:"mediaMime",type:"string",required:false}, {name:"slot",type:"string",required:true}]},
@@ -223,6 +228,7 @@
   api.baseClearParent = function (a) { return draft("base.clearParent", a); };
   api.baseClearPart = function (a) { return draft("base.clearPart", a); };
   api.baseClearRole = function (a) { return draft("base.clearRole", a); };
+  api.baseDecideRequest = function (a) { return draft("base.decideRequest", a); };
   api.baseDefineQuestion = function (a) { return draft("base.defineQuestion", a); };
   api.baseMemberJoined = function (a) { return draft("base.memberJoined", a); };
   api.baseMemberLeft = function (a) { return draft("base.memberLeft", a); };
@@ -233,6 +239,8 @@
   api.basePublishProfile = function (a) { return draft("base.publishProfile", a); };
   api.baseRetireQuestion = function (a) { return draft("base.retireQuestion", a); };
   api.baseSetBacklink = function (a) { return draft("base.setBacklink", a); };
+  api.baseSetDoor = function (a) { return draft("base.setDoor", a); };
+  api.baseSetExterior = function (a) { return draft("base.setExterior", a); };
   api.baseSetLocation = function (a) { return draft("base.setLocation", a); };
   api.baseSetParent = function (a) { return draft("base.setParent", a); };
   api.baseSetPart = function (a) { return draft("base.setPart", a); };
@@ -249,6 +257,7 @@
   api.contactPrekeyConsume = function (a) { return draft("contact.prekeyConsume", a); };
   api.contactPrekeyRevoke = function (a) { return draft("contact.prekeyRevoke", a); };
   api.contactPrekeySupply = function (a) { return draft("contact.prekeySupply", a); };
+  api.contactPublishExterior = function (a) { return draft("contact.publishExterior", a); };
   api.contactPublishListing = function (a) { return draft("contact.publishListing", a); };
   api.contactPublishProfile = function (a) { return draft("contact.publishProfile", a); };
   api.contactRequestTicket = function (a) { return draft("contact.requestTicket", a); };
@@ -290,6 +299,7 @@
   api.groupSetPresence = function (a) { return draft("group.setPresence", a); };
   api.groupSetProfile = function (a) { return draft("group.setProfile", a); };
   api.groupSetRegistration = function (a) { return draft("group.setRegistration", a); };
+  api.groupSetRequest = function (a) { return draft("group.setRequest", a); };
   api.groupStoreCredential = function (a) { return draft("group.storeCredential", a); };
   api.hostDefine = function (a) { return draft("host.define", a); };
   api.hostEditMedia = function (a) { return draft("host.editMedia", a); };

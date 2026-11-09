@@ -419,6 +419,11 @@ NOT_OPEN['2.4.0'] = {
 };
 /* 2.5.0 says how an owner's devices keep one order (mls.sequencing); it opens nothing new. */
 NOT_OPEN['2.5.0'] = { ...NOT_OPEN['2.4.0'] };
+/* 2.6.0 adds the exterior (#76): what a non-member holds of an object, and its door. */
+NOT_OPEN['2.6.0'] = {
+  ...NOT_OPEN['2.5.0'],
+  'facet:exterior': 'WallFlowers\' iOS app writes an object\'s exterior, carries it to connections and answers its door. The web cannot yet knock at a door or answer a request (<code>mls.door</code>).',
+};
 const notOpen = (version, key) => (NOT_OPEN[version] || {})[key];
 const notOpenNote = (html) => (html ? `<p style="border-left:3px solid #b8860b;padding:2px 0 2px 12px"><strong>In this release:</strong> ${html}</p>` : '');
 

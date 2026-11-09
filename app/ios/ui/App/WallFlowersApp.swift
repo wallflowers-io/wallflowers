@@ -28,6 +28,7 @@ struct WallFlowersApp: App {
     @StateObject private var enrich = EnrichmentService()
     @StateObject private var notes: NotesStore        // WS-F: backed by the union store
     @StateObject private var proposals: ProposalStore       // graph entities awaiting a swipe
+    @StateObject private var requests = RequestStore()      // asks to join, at my doors (#76)
     @StateObject private var convos = ConversationStore()
     @StateObject private var chatIndex: ChatIndex          // chats/forums vectorised into the union store
     @StateObject private var resolution: ResolutionService
@@ -194,6 +195,7 @@ struct WallFlowersApp: App {
                 .environmentObject(enrich)
                 .environmentObject(notes)
                 .environmentObject(proposals)
+                .environmentObject(requests)
                 .environmentObject(convos)
                 .environmentObject(chatIndex)
                 .environmentObject(resolution)

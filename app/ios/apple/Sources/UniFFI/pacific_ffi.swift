@@ -657,6 +657,11 @@ public protocol CoreProtocol : AnyObject {
     func contactBundle() throws  -> String
     
     /**
+     * Admit, or decline, one request. A decline is not told to the asker.
+     */
+    func decideRequest(objectId: String, request: String, admit: Bool) throws 
+    
+    /**
      * Everything of `kind` within `hops` handshakes: what I hold (hops 0) merged
      * with every live answer to my questions — shortest-path deduped, and a row I
      * already ADOPTED locally wins over its remote reference. Pure read.
@@ -796,6 +801,12 @@ public protocol CoreProtocol : AnyObject {
      * it carries the seed and nothing else. Loud on an identity that has none.
      */
     func exportWrap(prfSecret: Data, host: String) throws  -> Data
+    
+    /**
+     * The exteriors that reached me through my connections: objects I am not in, each with
+     * whether I have asked to join.
+     */
+    func exteriors() throws  -> [ExteriorRow]
     
     /**
      * Every forum→host edge this device can fold — the whole map in one call,
@@ -1033,6 +1044,11 @@ public protocol CoreProtocol : AnyObject {
     func myProfile() throws  -> ProfileRow
     
     /**
+     * One object of mine's exterior, as its owner wrote it; None until one is written.
+     */
+    func objectExterior(objectId: String) throws  -> MyExterior?
+    
+    /**
      * Mark every message WE hold from another member of this (forum) object READ —
      * authors the ✓✓-blue receipts the senders see. Emitted when the user opens the
      * conversation; idempotent (only un-acknowledged messages produce a receipt).
@@ -1176,6 +1192,12 @@ public protocol CoreProtocol : AnyObject {
      * rather than rendering a blank card. Synchronous read (a fold, no relay).
      */
     func peerProfile(peerId: String) throws  -> ProfileRow?
+    
+    /**
+     * The requests waiting for me: at the review doors of objects I own or admit to, from what
+     * this device's syncs have drained. No relay round trip.
+     */
+    func pendingRequests() throws  -> [RequestRow]
     
     /**
      * Every person: this device's identity first, then each connection, with the
@@ -1451,6 +1473,11 @@ public protocol CoreProtocol : AnyObject {
     func replyInvite(peer: String, event: String, going: Bool, at: Int64) throws  -> String
     
     /**
+     * Ask to join an object whose exterior reached me. Returns the request's id.
+     */
+    func requestJoin(objectId: String, note: String) throws  -> String
+    
+    /**
      * Every room→host edge this device can fold — the whole map in one call,
      * so the CHAT list never does a per-row fold. Synchronous read.
      */
@@ -1506,6 +1533,15 @@ public protocol CoreProtocol : AnyObject {
      * sync", never to "lost". Reaches the relay — call OFF the Swift main thread.
      */
     func setMyProfile(displayName: String, shape: String, card: ProfileCard) throws  -> UInt32
+    
+    /**
+     * ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
+     * "connections" | "network") and, when `name` is not empty, the exterior: a description
+     * and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+     * once. Returns how many ops were written. The exterior's still is by reference only
+     * (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
+     */
+    func setOutside(objectId: String, visibility: String, name: String, description: String, door: String) throws  -> UInt32
     
     /**
      * Point this device's messaging at a transport set — a comma-separated spec such as
@@ -1696,6 +1732,11 @@ public protocol CoreProtocol : AnyObject {
      */
     func warmCaches() throws  -> [String]
     
+    /**
+     * Withdraw my ask to join.
+     */
+    func withdrawRequest(objectId: String) throws 
+    
 }
 
 /**
@@ -1848,6 +1889,18 @@ open func contactBundle()throws  -> String {
     uniffi_pacific_ffi_fn_method_core_contact_bundle(self.uniffiClonePointer(),$0
     )
 })
+}
+    
+    /**
+     * Admit, or decline, one request. A decline is not told to the asker.
+     */
+open func decideRequest(objectId: String, request: String, admit: Bool)throws  {try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_decide_request(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(request),
+        FfiConverterBool.lower(admit),$0
+    )
+}
 }
     
     /**
@@ -2142,6 +2195,17 @@ open func exportWrap(prfSecret: Data, host: String)throws  -> Data {
     uniffi_pacific_ffi_fn_method_core_export_wrap(self.uniffiClonePointer(),
         FfiConverterData.lower(prfSecret),
         FfiConverterString.lower(host),$0
+    )
+})
+}
+    
+    /**
+     * The exteriors that reached me through my connections: objects I am not in, each with
+     * whether I have asked to join.
+     */
+open func exteriors()throws  -> [ExteriorRow] {
+    return try  FfiConverterSequenceTypeExteriorRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_exteriors(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -2617,6 +2681,17 @@ open func myProfile()throws  -> ProfileRow {
 }
     
     /**
+     * One object of mine's exterior, as its owner wrote it; None until one is written.
+     */
+open func objectExterior(objectId: String)throws  -> MyExterior? {
+    return try  FfiConverterOptionTypeMyExterior.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_object_exterior(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+})
+}
+    
+    /**
      * Mark every message WE hold from another member of this (forum) object READ —
      * authors the ✓✓-blue receipts the senders see. Emitted when the user opens the
      * conversation; idempotent (only un-acknowledged messages produce a receipt).
@@ -2884,6 +2959,17 @@ open func peerProfile(peerId: String)throws  -> ProfileRow? {
     return try  FfiConverterOptionTypeProfileRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_peer_profile(self.uniffiClonePointer(),
         FfiConverterString.lower(peerId),$0
+    )
+})
+}
+    
+    /**
+     * The requests waiting for me: at the review doors of objects I own or admit to, from what
+     * this device's syncs have drained. No relay round trip.
+     */
+open func pendingRequests()throws  -> [RequestRow] {
+    return try  FfiConverterSequenceTypeRequestRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_pending_requests(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -3404,6 +3490,18 @@ open func replyInvite(peer: String, event: String, going: Bool, at: Int64)throws
 }
     
     /**
+     * Ask to join an object whose exterior reached me. Returns the request's id.
+     */
+open func requestJoin(objectId: String, note: String)throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_request_join(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(note),$0
+    )
+})
+}
+    
+    /**
      * Every room→host edge this device can fold — the whole map in one call,
      * so the CHAT list never does a per-row fold. Synchronous read.
      */
@@ -3508,6 +3606,25 @@ open func setMyProfile(displayName: String, shape: String, card: ProfileCard)thr
         FfiConverterString.lower(displayName),
         FfiConverterString.lower(shape),
         FfiConverterTypeProfileCard.lower(card),$0
+    )
+})
+}
+    
+    /**
+     * ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
+     * "connections" | "network") and, when `name` is not empty, the exterior: a description
+     * and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+     * once. Returns how many ops were written. The exterior's still is by reference only
+     * (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
+     */
+open func setOutside(objectId: String, visibility: String, name: String, description: String, door: String)throws  -> UInt32 {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_set_outside(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(visibility),
+        FfiConverterString.lower(name),
+        FfiConverterString.lower(description),
+        FfiConverterString.lower(door),$0
     )
 })
 }
@@ -3873,6 +3990,16 @@ open func warmCaches()throws  -> [String] {
     uniffi_pacific_ffi_fn_method_core_warm_caches(self.uniffiClonePointer(),$0
     )
 })
+}
+    
+    /**
+     * Withdraw my ask to join.
+     */
+open func withdrawRequest(objectId: String)throws  {try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_withdraw_request(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+}
 }
     
 
@@ -6230,6 +6357,167 @@ public func FfiConverterTypeEventRow_lift(_ buf: RustBuffer) throws -> EventRow 
 #endif
 public func FfiConverterTypeEventRow_lower(_ value: EventRow) -> RustBuffer {
     return FfiConverterTypeEventRow.lower(value)
+}
+
+
+/**
+ * An object's exterior as it reached me (`contact.publishExterior`): an object I am not in.
+ */
+public struct ExteriorRow {
+    public var object: String
+    /**
+     * The ICD kind name.
+     */
+    public var kind: String
+    public var name: String
+    public var description: String
+    /**
+     * The owner's identity key, hex.
+     */
+    public var owner: String
+    /**
+     * Who carried it to me, hex.
+     */
+    public var via: String
+    /**
+     * My distance from its roster: 1, a connection is inside.
+     */
+    public var hops: UInt32
+    /**
+     * Whether it has a door to knock at.
+     */
+    public var door: Bool
+    /**
+     * Whether I have asked to join and not withdrawn.
+     */
+    public var requested: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(object: String, 
+        /**
+         * The ICD kind name.
+         */kind: String, name: String, description: String, 
+        /**
+         * The owner's identity key, hex.
+         */owner: String, 
+        /**
+         * Who carried it to me, hex.
+         */via: String, 
+        /**
+         * My distance from its roster: 1, a connection is inside.
+         */hops: UInt32, 
+        /**
+         * Whether it has a door to knock at.
+         */door: Bool, 
+        /**
+         * Whether I have asked to join and not withdrawn.
+         */requested: Bool) {
+        self.object = object
+        self.kind = kind
+        self.name = name
+        self.description = description
+        self.owner = owner
+        self.via = via
+        self.hops = hops
+        self.door = door
+        self.requested = requested
+    }
+}
+
+
+
+extension ExteriorRow: Equatable, Hashable {
+    public static func ==(lhs: ExteriorRow, rhs: ExteriorRow) -> Bool {
+        if lhs.object != rhs.object {
+            return false
+        }
+        if lhs.kind != rhs.kind {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.owner != rhs.owner {
+            return false
+        }
+        if lhs.via != rhs.via {
+            return false
+        }
+        if lhs.hops != rhs.hops {
+            return false
+        }
+        if lhs.door != rhs.door {
+            return false
+        }
+        if lhs.requested != rhs.requested {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(object)
+        hasher.combine(kind)
+        hasher.combine(name)
+        hasher.combine(description)
+        hasher.combine(owner)
+        hasher.combine(via)
+        hasher.combine(hops)
+        hasher.combine(door)
+        hasher.combine(requested)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExteriorRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExteriorRow {
+        return
+            try ExteriorRow(
+                object: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                description: FfiConverterString.read(from: &buf), 
+                owner: FfiConverterString.read(from: &buf), 
+                via: FfiConverterString.read(from: &buf), 
+                hops: FfiConverterUInt32.read(from: &buf), 
+                door: FfiConverterBool.read(from: &buf), 
+                requested: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ExteriorRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.object, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.description, into: &buf)
+        FfiConverterString.write(value.owner, into: &buf)
+        FfiConverterString.write(value.via, into: &buf)
+        FfiConverterUInt32.write(value.hops, into: &buf)
+        FfiConverterBool.write(value.door, into: &buf)
+        FfiConverterBool.write(value.requested, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExteriorRow_lift(_ buf: RustBuffer) throws -> ExteriorRow {
+    return try FfiConverterTypeExteriorRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExteriorRow_lower(_ value: ExteriorRow) -> RustBuffer {
+    return FfiConverterTypeExteriorRow.lower(value)
 }
 
 
@@ -8770,6 +9058,103 @@ public func FfiConverterTypeMintFieldRow_lower(_ value: MintFieldRow) -> RustBuf
 
 
 /**
+ * One of my objects' exteriors, as I wrote it.
+ */
+public struct MyExterior {
+    public var name: String
+    public var description: String
+    /**
+     * "" no door, "review" or "auto".
+     */
+    public var door: String
+    /**
+     * "private" | "connections" | "network".
+     */
+    public var visibility: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, description: String, 
+        /**
+         * "" no door, "review" or "auto".
+         */door: String, 
+        /**
+         * "private" | "connections" | "network".
+         */visibility: String) {
+        self.name = name
+        self.description = description
+        self.door = door
+        self.visibility = visibility
+    }
+}
+
+
+
+extension MyExterior: Equatable, Hashable {
+    public static func ==(lhs: MyExterior, rhs: MyExterior) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.door != rhs.door {
+            return false
+        }
+        if lhs.visibility != rhs.visibility {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(description)
+        hasher.combine(door)
+        hasher.combine(visibility)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMyExterior: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MyExterior {
+        return
+            try MyExterior(
+                name: FfiConverterString.read(from: &buf), 
+                description: FfiConverterString.read(from: &buf), 
+                door: FfiConverterString.read(from: &buf), 
+                visibility: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MyExterior, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.description, into: &buf)
+        FfiConverterString.write(value.door, into: &buf)
+        FfiConverterString.write(value.visibility, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMyExterior_lift(_ buf: RustBuffer) throws -> MyExterior {
+    return try FfiConverterTypeMyExterior.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMyExterior_lower(_ value: MyExterior) -> RustBuffer {
+    return FfiConverterTypeMyExterior.lower(value)
+}
+
+
+/**
  * One object from the core's one sweep (`Node::object_rows`). Identities are 64-char
  * hex; "" where there is none.
  */
@@ -10561,6 +10946,133 @@ public func FfiConverterTypeProjectItemRow_lift(_ buf: RustBuffer) throws -> Pro
 #endif
 public func FfiConverterTypeProjectItemRow_lower(_ value: ProjectItemRow) -> RustBuffer {
     return FfiConverterTypeProjectItemRow.lower(value)
+}
+
+
+/**
+ * A request waiting at one of my doors.
+ */
+public struct RequestRow {
+    public var object: String
+    public var kind: String
+    /**
+     * The request's id, hex.
+     */
+    public var request: String
+    /**
+     * The asker's identity key, hex.
+     */
+    public var asker: String
+    public var askerName: String
+    public var note: String
+    /**
+     * Unix ms.
+     */
+    public var at: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(object: String, kind: String, 
+        /**
+         * The request's id, hex.
+         */request: String, 
+        /**
+         * The asker's identity key, hex.
+         */asker: String, askerName: String, note: String, 
+        /**
+         * Unix ms.
+         */at: Int64) {
+        self.object = object
+        self.kind = kind
+        self.request = request
+        self.asker = asker
+        self.askerName = askerName
+        self.note = note
+        self.at = at
+    }
+}
+
+
+
+extension RequestRow: Equatable, Hashable {
+    public static func ==(lhs: RequestRow, rhs: RequestRow) -> Bool {
+        if lhs.object != rhs.object {
+            return false
+        }
+        if lhs.kind != rhs.kind {
+            return false
+        }
+        if lhs.request != rhs.request {
+            return false
+        }
+        if lhs.asker != rhs.asker {
+            return false
+        }
+        if lhs.askerName != rhs.askerName {
+            return false
+        }
+        if lhs.note != rhs.note {
+            return false
+        }
+        if lhs.at != rhs.at {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(object)
+        hasher.combine(kind)
+        hasher.combine(request)
+        hasher.combine(asker)
+        hasher.combine(askerName)
+        hasher.combine(note)
+        hasher.combine(at)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRequestRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RequestRow {
+        return
+            try RequestRow(
+                object: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterString.read(from: &buf), 
+                request: FfiConverterString.read(from: &buf), 
+                asker: FfiConverterString.read(from: &buf), 
+                askerName: FfiConverterString.read(from: &buf), 
+                note: FfiConverterString.read(from: &buf), 
+                at: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RequestRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.object, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterString.write(value.request, into: &buf)
+        FfiConverterString.write(value.asker, into: &buf)
+        FfiConverterString.write(value.askerName, into: &buf)
+        FfiConverterString.write(value.note, into: &buf)
+        FfiConverterInt64.write(value.at, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRequestRow_lift(_ buf: RustBuffer) throws -> RequestRow {
+    return try FfiConverterTypeRequestRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRequestRow_lower(_ value: RequestRow) -> RustBuffer {
+    return FfiConverterTypeRequestRow.lower(value)
 }
 
 
@@ -12573,6 +13085,30 @@ fileprivate struct FfiConverterOptionTypeMembershipDivergence: FfiConverterRustB
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeMyExterior: FfiConverterRustBuffer {
+    typealias SwiftType = MyExterior?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMyExterior.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMyExterior.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypePersonPhoto: FfiConverterRustBuffer {
     typealias SwiftType = PersonPhoto?
 
@@ -12987,6 +13523,31 @@ fileprivate struct FfiConverterSequenceTypeEventRow: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeEventRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeExteriorRow: FfiConverterRustBuffer {
+    typealias SwiftType = [ExteriorRow]
+
+    public static func write(_ value: [ExteriorRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeExteriorRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ExteriorRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ExteriorRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeExteriorRow.read(from: &buf))
         }
         return seq
     }
@@ -13562,6 +14123,31 @@ fileprivate struct FfiConverterSequenceTypeProjectItemRow: FfiConverterRustBuffe
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeProjectItemRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeRequestRow: FfiConverterRustBuffer {
+    typealias SwiftType = [RequestRow]
+
+    public static func write(_ value: [RequestRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRequestRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RequestRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RequestRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRequestRow.read(from: &buf))
         }
         return seq
     }
@@ -14988,6 +15574,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_contact_bundle() != 37304) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_decide_request() != 29978) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_discover_results() != 59442) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15046,6 +15635,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_export_wrap() != 27591) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_exteriors() != 19829) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_forum_hosts() != 12944) {
@@ -15156,6 +15748,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_my_profile() != 42179) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_object_exterior() != 52822) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_object_mark_read() != 14131) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15211,6 +15806,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_peer_profile() != 23024) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_pending_requests() != 22902) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_people() != 36751) {
@@ -15321,6 +15919,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_reply_invite() != 44186) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_request_join() != 44723) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_room_hosts() != 12006) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15343,6 +15944,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_set_my_profile() != 52976) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_set_outside() != 144) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_set_routes() != 3390) {
@@ -15415,6 +16019,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_warm_caches() != 32747) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_withdraw_request() != 31694) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_logsink_line() != 36302) {

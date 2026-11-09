@@ -27,7 +27,7 @@ final class FeedStore: ObservableObject {
         let index = core.index
         let names = index.names
         let assembled = FeedAssembler.rows(events: core.events, listings: core.listings,
-                                           posts: core.posts, nowMs: now,
+                                           posts: core.posts, exteriors: core.exteriors, nowMs: now,
                                            makerOf: index.maker(of:),
                                            nameFor: { names[$0] ?? String($0.prefix(8)) })
         let filtered = FeedAssembler.filter(assembled, locked: query.locked)

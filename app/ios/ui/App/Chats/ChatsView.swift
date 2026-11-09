@@ -169,6 +169,7 @@ struct ChatsView: View {
             else { return nil }          // core surfaced the failure; the surface stays up
             made = id
             if !added {
+                await core.setOutside(id, from: draft)
                 for peer in peers { _ = await core.addContact(id, peerId: peer) }
                 added = true
             }

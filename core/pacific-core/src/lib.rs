@@ -33,6 +33,8 @@ pub mod directory;
 /// invariants, and the signed door credential. The two pairwise ticket legs are
 /// spliced into Contact's op table from here.
 pub mod event;
+/// The exterior facet: what a non-member holds of an object (ICD 2.6.0).
+pub mod exterior;
 /// A Site's own events and posts, as its Host's live items for the public Face (O-48).
 pub mod face_items;
 /// The face document's one specification (`face.schema.json`), checked before a Site write.
@@ -89,6 +91,8 @@ pub mod fold;
 pub mod fold_cache;
 /// Per-delta authorship signatures — who wrote this, provable by anyone, forever.
 pub mod delta_sig;
+/// A request to join, sealed to an object's door (ICD 2.6.0 `mls.door`).
+pub mod door;
 /// The kiosk's claim token: one visitor's single-use admission to a Site (A-3, SEC-A1).
 pub mod claim;
 /// The wrap: the identity seed sealed under the passkey, and the one account
