@@ -2287,39 +2287,8 @@ impl Core {
     /// empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
     /// the answer is "". Any other op is refused: it is `object_apply`'s.
     pub fn object_edit(&self, object_id: String, op: String, changes: Vec<OpArg>) -> Result<String, FfiError> {
-        let node = self.write()?;
-        let held = match op.as_str() {
-            "event.setProfile" => node.event_state(&object_id)?.profile_args(),
-            "thing.setProfile" => node.thing_state(&object_id)?.profile_args(),
-            "post.setProfile" => {
-                let st = node
-                    .posts()?
-                    .into_iter()
-                    .find(|(id, _)| *id == object_id)
-                    .map(|(_, st)| st)
-                    .ok_or_else(|| FfiError::Core(format!("no post {object_id}")))?;
-                st.profile_args()
-            }
-            _ => return Err(FfiError::Core(format!("'{op}' is not an edit; apply it"))),
-        };
-        let mut args = held.clone();
-        for c in changes {
-            match c.value.into() {
-                pacific_media::ArgVal::Text(t) if t.is_empty() => {
-                    args.remove(&c.key);
-                }
-                v => {
-                    args.insert(c.key, v);
-                }
-            }
-        }
-        if args == held {
-            return Ok(String::new());
-        }
-        let kind = node.object_kind(&object_id)?;
-        let d = pacific_core::authoring::op_on(&kind, &op)
-            .ok_or_else(|| FfiError::Core(format!("a {kind} has no op '{op}'")))?;
-        Ok(block_on(node.apply(&object_id, d.op_id, args))?)
+        let changes = changes.into_iter().map(|a| (a.key, a.value.into())).collect::<pacific_media::Args>();
+        Ok(block_on(self.write()?.edit(&object_id, &op, changes))?.unwrap_or_default())
     }
 
     /// Mint a THING and give it a name in one call — what the swipe deck does on ACCEPT.

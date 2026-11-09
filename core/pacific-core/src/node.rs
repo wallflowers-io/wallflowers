@@ -9404,6 +9404,48 @@ impl Node {
         self.apply_with(object_id_hex, op_id, args, true).await
     }
 
+    /// AN OWNER'S EDIT to an op that replaces whole — `event.setProfile`, `thing.setProfile`,
+    /// `post.setProfile`: the held args with `changes` laid over them (an empty text clears
+    /// its arg), applied by ICD name. `None` when nothing changed, and then nothing is sent:
+    /// a sequenced write is a slot claim and a publish, kept for good (#72), so restating
+    /// what the fold already holds must cost nothing.
+    pub async fn edit(
+        &self,
+        object_id_hex: &str,
+        op: &str,
+        changes: coordinator::Args,
+    ) -> Result<Option<String>, CoreError> {
+        let held = match op {
+            "event.setProfile" => self.event_state(object_id_hex)?.profile_args(),
+            "thing.setProfile" => self.thing_state(object_id_hex)?.profile_args(),
+            "post.setProfile" => self
+                .posts()?
+                .into_iter()
+                .find(|(id, _)| id == object_id_hex)
+                .map(|(_, st)| st.profile_args())
+                .ok_or_else(|| CoreError::Directory(format!("no post {object_id_hex}")))?,
+            _ => return Err(CoreError::Coordinator(format!("'{op}' is not an edit; apply it"))),
+        };
+        let mut args = held.clone();
+        for (k, v) in changes {
+            match v {
+                coordinator::ArgVal::Text(t) if t.is_empty() => {
+                    args.remove(&k);
+                }
+                v => {
+                    args.insert(k, v);
+                }
+            }
+        }
+        if args == held {
+            return Ok(None);
+        }
+        let kind = self.object_kind(object_id_hex)?;
+        let d = crate::authoring::op_on(&kind, op)
+            .ok_or_else(|| CoreError::Coordinator(format!("a {kind} has no op '{op}'")))?;
+        Ok(Some(self.apply(object_id_hex, d.op_id, args).await?))
+    }
+
     /// THE LOCAL COMMIT of one op (O-69, the Door's write path): authored as `apply`
     /// authors it and stored, and nothing sent; `publish_pending` sends it after the
     /// answer, or the next sync does, as a write made offline. A sequenced op is authored

@@ -68,6 +68,7 @@ mod m6_contact_prekeys;
 mod m7_profile_fanout;
 mod m8_thing_market;
 mod m9_place_location;
+mod maximised_detail_edit;
 mod nc111_a_room_as_its_reader_sees_it;
 mod nc135_claim_spent_authority;
 mod nc140_a_claim_before_the_arc_has_synced;
