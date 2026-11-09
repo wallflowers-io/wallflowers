@@ -77,3 +77,12 @@ fn core_publishes_a_face_as_the_editor_does() {
         assert_eq!(b["profile"]["displayName"], "Riverside");
     }
 }
+
+/// The face a new Site opens with is face.js's own (`x-wf-opening`), and it is a face.
+#[test]
+fn a_new_site_opens_with_the_editors_own_face() {
+    let schema = pacific_core::face_spec::schema();
+    let (_, default) = fixtures().into_iter().find(|(n, _)| n == "default.json").unwrap();
+    assert_eq!(schema["x-wf-opening"], serde_json::from_str::<serde_json::Value>(&default).unwrap());
+    assert_eq!(refusal(&schema["x-wf-opening"].to_string()), None);
+}
