@@ -1,14 +1,16 @@
 //  EventSeeder.swift
-//  DEBUG-only: seed the two real launch events through the REAL pipe — mintEvent +
-//  setEventTickets + setEventMedia, the exact calls the composer makes — so a headless
-//  drive (UI tests, simctl screenshots) has true GroupObjects to stand in front of,
-//  never fixture rows. The bundled posters are the banners (SeedMedia/*.jpg).
+//  DEBUG-only: seed the two real launch events through the REAL pipe — THE mint, with the
+//  poster in the draft, then setEventTickets — so a headless drive (UI tests, simctl
+//  screenshots) has true GroupObjects to stand in front of, never fixture rows. The bundled
+//  posters are the banners (SeedMedia/*.jpg); the mint carries them detached (#112, #56),
+//  since a poster inline is over the Delta ceiling.
 //
 //  Idempotent by title: a relaunch with the flag re-seeds nothing that already exists.
 //  Compiles to nothing in Release, like DevLinks — the seam this follows.
 
 #if DEBUG
 import Foundation
+import PacificCore
 
 @MainActor
 enum EventSeeder {
@@ -38,18 +40,16 @@ enum EventSeeder {
 
         let beach = "BEACHCRIMES — Rooftop Day Party"
         if !existing.contains(beach) {
-            if let id = core.mintEvent(title: beach,
-                                       descriptor: "City Graffiti · Truthlive · All Day All Night",
-                                       startMs: hour(13), endMs: hour(18),
-                                       venue: "Hotel VIA Rooftop, SF") {
+            if let id = core.mint(kind: "event", draft: draft(
+                    beach, descriptor: "City Graffiti · Truthlive · All Day All Night",
+                    startMs: hour(13), endMs: hour(18), venue: "Hotel VIA Rooftop, SF",
+                    banner: poster("beachcrimes"))) {
                 // PRICED through the real pipe: the fold requires acct + delegate iff
                 // priced, so the seed names THIS device's own identity as its fulfilment
                 // delegate — a real pk, not a stub that would be refused.
                 _ = core.setEventTickets(id, priceCents: 2000, currency: "usd",
                                          capacity: 150, acct: "acct_seed_beachcrimes",
                                          delegate: core.myIdentityHex)
-                _ = core.setEventMedia(objectId: id, bannerJPEG: poster("beachcrimes"),
-                                       photos: [], clipMP4: nil)
                 NSLog("[seed-events] %@ id=%@ err=%@", beach, id, core.error ?? "none")
             } else {
                 NSLog("[seed-events] %@ MINT FAILED: %@", beach, core.error ?? "no error set")
@@ -86,13 +86,11 @@ enum EventSeeder {
 
         let upward = "Monroe presents UPWARD"
         if !existing.contains(upward) {
-            if let id = core.mintEvent(title: upward,
-                                       descriptor: "Apex Martin · Cloopez · Joey Trip · 21+",
-                                       startMs: hour(6), endMs: hour(11),
-                                       venue: "Monroe, 473 Broadway, SF") {
+            if let id = core.mint(kind: "event", draft: draft(
+                    upward, descriptor: "Apex Martin · Cloopez · Joey Trip · 21+",
+                    startMs: hour(6), endMs: hour(11), venue: "Monroe, 473 Broadway, SF",
+                    banner: poster("upward"))) {
                 _ = core.setEventTickets(id, priceCents: 0, currency: "usd", capacity: 120)
-                _ = core.setEventMedia(objectId: id, bannerJPEG: poster("upward"),
-                                       photos: [], clipMP4: nil)
                 NSLog("[seed-events] %@ id=%@ err=%@", upward, id, core.error ?? "none")
             } else {
                 NSLog("[seed-events] %@ MINT FAILED: %@", upward, core.error ?? "no error set")
@@ -149,6 +147,14 @@ enum EventSeeder {
                 _ = await core.newGroupForum(space, name: "general")
             }
         }
+    }
+
+    private static func draft(_ title: String, descriptor: String, startMs: Int64, endMs: Int64,
+                              venue: String, banner: Data?) -> MintDraft {
+        MintDraft(name: title, descriptor: descriptor, shape: "", card: "", category: "",
+                  startMs: startMs, endMs: endMs, venue: venue, recurrence: "", lineup: "",
+                  form: "", link: "", placed: false, lat: 0, lng: 0, status: "",
+                  icon: Data(), banner: banner ?? Data(), price: "", stance: "", place: "")
     }
 
     private static func poster(_ name: String) -> Data? {
