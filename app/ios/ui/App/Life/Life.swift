@@ -573,9 +573,15 @@ struct LifeView: View {
             shell.suppressPageSwipe = on || showingMap
             shell.showCompass = showingMap
         }
-        .onChange(of: lifeQuery.maximised) { _, _ in
+        .onChange(of: lifeQuery.maximised) { _, m in
             shell.suppressPageSwipe = jiggle || showingMap
             shell.showCompass = showingMap
+            // A jewel picked while searching is browsing, not typing: the keyboard gives
+            // the ground back (it covered the map's lower half, where its sheet rises).
+            if m != nil {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                to: nil, from: nil, for: nil)
+            }
         }
         // Opening or closing search starts from the feed, every jewel minimised.
         .onChange(of: searchOpen) { _, _ in

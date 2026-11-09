@@ -48,6 +48,7 @@ final class LifeSearchUITests: XCTestCase {
 
         // A seeded title matches in the list.
         app.buttons["search-clear"].tap()
+        field.tap()   // the jewel put the keyboard away
         field.typeText("QA Fixture")
         XCTAssertTrue(waitListRows(timeout: 6), "the list keeps what the text matches")
         shoot("search-list-filtered")
