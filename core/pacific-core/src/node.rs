@@ -430,10 +430,14 @@ pub struct HistorySent {
 type HistoryPlan = (Option<crate::history::Bundle>, Vec<crate::history::Bundle>, HistorySent);
 
 /// How long an admitter waits for a Site not yet on its Node (NC-140), inside the Door's 20 s
-/// call to the Arc, and the pause between its checks ([`Node::site_ready`]). The wait holds no
-/// lock: each check takes the Node alone, and the admission after it.
+/// call to the Arc, and the pause between its checks ([`Node::intro_fetch`], with no lock, then
+/// [`Node::site_take`] under it). The wait holds no lock: each check's ingest takes the Node
+/// alone, and the admission after it.
 pub const SITE_WAIT: std::time::Duration = std::time::Duration::from_millis(2500);
 pub const SITE_WAIT_PAUSE: std::time::Duration = std::time::Duration::from_millis(400);
+/// An intro mailbox fetched outside the node lock ([`Node::intro_fetch`]), for [`Node::site_take`].
+pub struct IntroFetched(Vec<crate::router::Drained>);
+
 /// A Site not on this Node after the wait: `NotReady`'s words, which the Arc answers 503.
 pub const SITE_NOT_HERE: &str = "the Site is not on this Arc yet; try again";
 
@@ -4889,6 +4893,35 @@ impl Node {
                 Err(e)
             }
         }
+    }
+
+    /// #79: AN ADMITTER'S CHECK, SPLIT AT THE NODE LOCK. For a Site not on this Node, the
+    /// intro mailbox fetched on the held session, writing nothing, so the caller makes it
+    /// outside its lock; then, under it, [`Node::site_take`].
+    pub async fn intro_fetch(&self, site_hex: &str) -> Result<IntroFetched, CoreError> {
+        if self.holds(site_hex) {
+            return Ok(IntroFetched(Vec::new()));
+        }
+        let mut sess = self.home_session().await?;
+        match self.fetch_intro(&mut sess).await {
+            Ok(msgs) => {
+                self.keep_session(sess);
+                Ok(IntroFetched(msgs))
+            }
+            Err(e) => {
+                sess.close().await;
+                Err(e)
+            }
+        }
+    }
+
+    /// What [`Node::intro_fetch`] brought, ingested as a drain's (each Welcome joined, past
+    /// what a sync took since), then whether the Site is on this Node.
+    pub fn site_take(&self, site_hex: &str, fetched: IntroFetched) -> Result<bool, CoreError> {
+        if self.ingest_intro(fetched.0)? > 0 {
+            self.live_state().joined = true;
+        }
+        Ok(self.holds(site_hex))
     }
 
     /// Drain a Site and the parts it names over the home session: one pipelined round, and a
@@ -11066,14 +11099,29 @@ impl Node {
         }
         let confirmed = self.live_since(&intro_hex);
         self.live_state().tag_drains += 1;
+        let intro_msgs = self.fetch_intro(sess).await?;
+        let joined = self.ingest_intro(intro_msgs)?;
+        self.live_drained(intro_hex, confirmed);
+        Ok(joined)
+    }
+
+    /// The intro mailbox past its cursors, on `sess`: relay I/O and cursor reads, no write.
+    async fn fetch_intro(&self, sess: &mut Router) -> Result<Vec<crate::router::Drained>, CoreError> {
+        let (intro_tag, intro_hex) = self.intro_wire()?;
         let dir = &self.dir;
-        let intro_msgs = sess
-            .drain(&[intro_hex.clone()], |source| {
-                dir.cursor(&intro_tag, source)
-            })
-            .await?;
+        sess.drain(&[intro_hex], |source| dir.cursor(&intro_tag, source)).await
+    }
+
+    /// Ingest what `fetch_intro` brought, in its order: each Welcome joined or quarantined, its
+    /// cursor advanced. One at or below its cursor was taken since the fetch (#79: an admitter
+    /// fetches outside the node lock, and the sync loop may take it first) and is passed by.
+    fn ingest_intro(&self, intro_msgs: Vec<crate::router::Drained>) -> Result<usize, CoreError> {
+        let (intro_tag, _) = self.intro_wire()?;
         let mut joined = 0;
         for m in intro_msgs {
+            if m.seq <= self.dir.cursor(&intro_tag, m.source)? {
+                continue;
+            }
             let (seq, blob_b64) = (m.seq, m.blob);
             match self.process_intro_blob(&intro_tag, &blob_b64) {
                 Ok(()) => joined += 1,
@@ -11093,7 +11141,6 @@ impl Node {
             }
             self.dir.advance_cursor(&intro_tag, m.source, seq)?;
         }
-        self.live_drained(intro_hex, confirmed);
         Ok(joined)
     }
 
