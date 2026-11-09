@@ -667,6 +667,22 @@ final class CoreService: ObservableObject {
             NSLog("[account] enrol: %@ — the ceremony is not run, the identity stands",
                   Self.noPasskeyArg)
             passkeyEnrolment = .failed("Passkey enrolment was skipped by a test seam.")
+            #if DEBUG
+            // A suite that publishes a Site needs the account at its Arc: the wrap, under
+            // the suite's own PRF (SignInService.registerWithTestPRF).
+            let hex = UserDefaults.standard.string(forKey: "pacificTestPRF") ?? ""
+            let prf = Data(stride(from: 0, to: hex.count - 1, by: 2).compactMap {
+                UInt8(hex.dropFirst($0).prefix(2), radix: 16)
+            })
+            if prf.count == 32 {
+                let pk = identityKeyBytes, service = makeSignIn()
+                passkeyTask = Task { @MainActor [weak self] in
+                    defer { self?.passkeyTask = nil }
+                    do { try await service.registerWithTestPRF(pk: pk, prf: prf) }
+                    catch { NSLog("[account] test PRF: FAILED — %@", error.localizedDescription) }
+                }
+            }
+            #endif
             return
         }
         let pk = identityKeyBytes
@@ -2960,6 +2976,9 @@ final class CoreService: ObservableObject {
             return nil
         }
     }
+
+    /// Whether the Arc holds this account, which a Site's address is claimed by.
+    func arcHoldsAccount() async -> Bool { await makeSignIn().arcHoldsAccount() }
 
     /// Whether `slug` can be had at the Arc.
     func checkAddress(_ slug: String) async -> AddressCheck {

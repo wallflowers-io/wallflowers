@@ -64,6 +64,9 @@ struct SitePanel: View {
 
     @State private var copied = false
     @State private var publishing = false
+    /// The Arc holds no account for this key, so no address can be claimed: said, and
+    /// Publish off, before BLUE rather than at it.
+    @State private var noAccount = false
     @State private var checking: Task<Void, Never>?
 
     var body: some View {
@@ -73,6 +76,7 @@ struct SitePanel: View {
             linkRow
         }
         .onChange(of: site.slug) { _, s in check(s) }
+        .task { noAccount = await !core.arcHoldsAccount() }
     }
 
     // MARK: Publish
@@ -111,14 +115,18 @@ struct SitePanel: View {
             }
             .padding(.horizontal, 20)
             .frame(minHeight: CircleButton.discSize)
-            if case .refused(let why) = site.address {
+            if noAccount {
+                Text("Publishing needs your account kept at the Arc, which a passkey does. This device has no passkey.")
+                    .font(.footnote).foregroundStyle(Theme.textSecondary).padding(.horizontal, 20)
+                    .accessibilityIdentifier("site-no-account")
+            } else if case .refused(let why) = site.address {
                 Text(why).font(.footnote).foregroundStyle(Theme.danger).padding(.horizontal, 20)
                     .accessibilityIdentifier("site-slug-why")
             }
         }
     }
 
-    private var canPublish: Bool { site.address == .free || site.slug == site.claimed }
+    private var canPublish: Bool { !noAccount && (site.address == .free || site.slug == site.claimed) }
 
     private func check(_ slug: String) {
         checking?.cancel()

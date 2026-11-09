@@ -502,6 +502,27 @@ final class SignInService: NSObject, ObservableObject {
     // bind_host): the address claimed for this account, then bound to the Host it is
     // served from. The publication itself is a delta (`base.publish`), the core's.
 
+    /// Whether the Arc holds this account (its wrap). An address is claimed by an account,
+    /// so none means no Publish. Only the Arc's own "no account" says no: a link that is
+    /// down is BLUE's to report.
+    func arcHoldsAccount() async -> Bool {
+        do { _ = try await account(try core.identityKey()); return true }
+        catch SignInError.noAccount { return false }
+        catch { return true }
+    }
+
+    #if DEBUG
+    /// THE TEST PRF (Ralph, 9 Nov; DEBUG builds only): the wrap a passkey would store,
+    /// made under a fixed PRF a UI suite passes (`-pacificTestPRF <64 hex>`), so a suite
+    /// can keep the account at a local Arc without the system sheet it cannot reach.
+    /// face-smoke.sh's SMOKE_PRF, on the phone. A Release build has no such path.
+    func registerWithTestPRF(pk: Data, prf: Data) async throws {
+        let wrap = try core.exportWrap(prfSecret: prf, host: AuthHost.arcHost)
+        try await put("/auth/users/\(Self.hex(pk))", body: wrap)
+        log("registered under the test PRF")
+    }
+    #endif
+
     /// `/auth/site/check`: whether an address is free, and why not.
     func checkAddress(_ slug: String) async throws -> AddressCheck {
         var q = URLComponents(url: AuthHost.base.appendingPathComponent("/auth/site/check"), resolvingAgainstBaseURL: false)!
