@@ -393,6 +393,7 @@
 		E16DCDD92EBB1635D7CDFC38 /* GraphService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14BF9F203B6B13C1D708305 /* GraphService.swift */; };
 		E221ABDF6B2AB8FE938E4DB8 /* ArcCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6832FF60A25B85AF7960F9E5 /* ArcCatalog.swift */; };
 		E48245BC2B0B4D6B6F2EA999 /* MusicService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19C830EEA1791CF83AD1FE50 /* MusicService.swift */; };
+		E51317A375280200DF68A257 /* PlaceProfileUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D29468EE6A1B38334C2C4B03 /* PlaceProfileUITests.swift */; };
 		E541F9A614B1F001E3E2A2C1 /* ResolutionOrchestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8A370FEC2403B273DBC8D60 /* ResolutionOrchestrator.swift */; };
 		E5F320FF2C4D7F15F66E0EC8 /* ProfileBindingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 687B7B84FD9404D7A2ACCF7D /* ProfileBindingTests.swift */; };
 		E6D94265BA76A567F91D95E2 /* Trace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 914D9017B6FC54381EAB8B1F /* Trace.swift */; };
@@ -696,6 +697,7 @@
 		D0EEDB766C5A34FD5CB5E60D /* ChatKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatKit.swift; sourceTree = "<group>"; };
 		D115C2A4AA94D4D23FCD8301 /* EntityInfoPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityInfoPanel.swift; sourceTree = "<group>"; };
 		D15A524A7A296E1093C17ADE /* DeviceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceKey.swift; sourceTree = "<group>"; };
+		D29468EE6A1B38334C2C4B03 /* PlaceProfileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceProfileUITests.swift; sourceTree = "<group>"; };
 		D459D90A7CD5C6EF6CDDEF19 /* GroupsRoutes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupsRoutes.swift; sourceTree = "<group>"; };
 		D6C8319461A6860F6B991EED /* RedCreatorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedCreatorUITests.swift; sourceTree = "<group>"; };
 		DB38BFD19598A02B353482C4 /* ContactExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactExport.swift; sourceTree = "<group>"; };
@@ -924,6 +926,7 @@
 				113E04F94032A058A853B69B /* NewItemBloomUITests.swift */,
 				9C0A33199E9A986EBE5985BE /* OnePagerJourneyUITests.swift */,
 				096ACAEB6D6189F75B13DEDF /* PersonProfileUITests.swift */,
+				D29468EE6A1B38334C2C4B03 /* PlaceProfileUITests.swift */,
 				2C540A904E91AFF13C7134E4 /* ProfileEditorUITests.swift */,
 				D6C8319461A6860F6B991EED /* RedCreatorUITests.swift */,
 				5E57B840611739FBF1053F95 /* ShellChromeUITests.swift */,
@@ -1724,6 +1727,7 @@
 				DA57BAABD35851F1B239F490 /* NewItemBloomUITests.swift in Sources */,
 				0AFB41BFCC58B78E2CAFBD5B /* OnePagerJourneyUITests.swift in Sources */,
 				C83959A2B90888B16E047C24 /* PersonProfileUITests.swift in Sources */,
+				E51317A375280200DF68A257 /* PlaceProfileUITests.swift in Sources */,
 				96E3E30ECE8F41F5A12C680A /* ProfileEditorUITests.swift in Sources */,
 				722A0CC4B91F1667D04EBD64 /* RedCreatorUITests.swift in Sources */,
 				066BCB160EB05FEF36B62A8A /* ShellChromeUITests.swift in Sources */,

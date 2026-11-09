@@ -48,6 +48,16 @@ struct DetailHeadline {
     var rows: [DetailRow] = []
     /// What the owner can add here. Empty for everyone else.
     var adds: [DetailAdd] = []
+    /// A way INTO the object, past its page — a Place's POV.
+    var inside: DetailInside? = nil
+}
+
+/// A screen the page opens over itself; `view` is handed the close.
+struct DetailInside {
+    let label: String
+    let glyph: String
+    let id: String
+    let view: (@escaping () -> Void) -> AnyView
 }
 
 struct DetailPicture: Identifiable {

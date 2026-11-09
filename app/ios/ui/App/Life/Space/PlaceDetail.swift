@@ -83,7 +83,24 @@ struct PlaceDetailSource: DetailSource {
         }
         return DetailHeadline(title: row.name,
                               area: PlaceDetail.areaCells(lat: row.lat, lng: row.lng, placed: row.placed),
-                              rows: rows)
+                              rows: rows,
+                              inside: row.placed ? walkUp(row) : nil)
+    }
+
+    /// The POV — the pin hand-off's second door, from the page.
+    private func walkUp(_ row: PlaceRow) -> DetailInside {
+        let focus = annotation(row)
+        let neighbours = core.places.filter { $0.placed && $0.id != row.id }.map(annotation)
+        let color = core.avatarColor
+        return DetailInside(label: "Walk up", glyph: "figure.walk", id: "place-walk-up") { close in
+            AnyView(PlacePOVView(focus: focus, neighbours: neighbours, avatarColor: color, onExit: close))
+        }
+    }
+
+    private func annotation(_ row: PlaceRow) -> PlaceAnnotation {
+        PlaceAnnotation(id: row.id, name: row.name,
+                        coordinate: .init(latitude: row.lat, longitude: row.lng),
+                        category: row.descriptor.isEmpty ? nil : row.descriptor)
     }
 
     func author() async -> DetailAuthor? {

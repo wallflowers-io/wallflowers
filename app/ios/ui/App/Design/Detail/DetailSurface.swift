@@ -38,6 +38,7 @@ struct DetailSurface: View {
     @State private var grown = false
     @State private var picked: PhotosPickerItem?
     @State private var importing = false
+    @State private var inside = false
 
     private var exit: NewExit? { session.exit }
 
@@ -94,6 +95,9 @@ struct DetailSurface: View {
             guard let data = try? Data(contentsOf: url) else { return }
             Task { await session.setDocument(data, name: url.lastPathComponent) }
         }
+        .fullScreenCover(isPresented: $inside) {
+            session.headline?.inside?.view { inside = false }
+        }
     }
 
     /// Inside the shell's departure window (`Motion.noteExit`), so the square is home
@@ -123,6 +127,7 @@ struct DetailSurface: View {
                     } else {
                         title
                         rows
+                        if let way = session.headline?.inside { insideBar(way) }
                         adds
                         gallery
                         document(width: width)
@@ -175,11 +180,17 @@ struct DetailSurface: View {
             // "x,y,w,h" in points — what a test holds the grow to. A container's
             // identifier would override its children's.
             .accessibilityElement()
-            .accessibilityLabel(session.headline?.title ?? "")
+            .accessibilityLabel(mediaLabel)
             .accessibilityValue(session.origin.map {
                 "\(Int($0.minX)),\(Int($0.minY)),\(Int($0.width)),\(Int($0.height))"
             } ?? "")
             .accessibilityIdentifier("detail-media")
+    }
+
+    /// The title, and what the square shows when it is not a picture of it.
+    private var mediaLabel: String {
+        let title = session.headline?.title ?? ""
+        return session.headline?.area.isEmpty == false ? "\(title), map of its area" : title
     }
 
     @ViewBuilder private var title: some View {
@@ -245,6 +256,30 @@ struct DetailSurface: View {
             }
         }
         .accessibilityIdentifier("detail-row-\(row.id)")
+    }
+
+    private func insideBar(_ way: DetailInside) -> some View {
+        Button { inside = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: way.glyph)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tint)
+                Text(way.label.uppercased())
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .kerning(1.2)
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 18)
+            .frame(height: ProfileGeometry.bar)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 14)
+        .accessibilityIdentifier(way.id)
     }
 
     /// The owner's adds — a picture into the kind's set, a document onto a Post.
