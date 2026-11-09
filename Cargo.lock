@@ -3326,6 +3326,7 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+ "x25519-dalek",
  "zeroize",
 ]
 

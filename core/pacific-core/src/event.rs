@@ -339,6 +339,8 @@ pub struct EventState {
     pub photo_set: Option<BTreeMap<String, SetPhoto>>,
     /// Ids removed from the set: grow-only, so a removal is final whichever arrives first.
     pub photos_removed: BTreeSet<String>,
+    /// The exterior facet (`crate::exterior`; ICD 2.6.0): what a non-member holds of it.
+    pub exterior: crate::exterior::ExteriorState,
 }
 
 impl EventState {
@@ -578,6 +580,10 @@ const OPS: &[OpDecl] = &[
         authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
         commutativity: Commutativity::Commutative,
     },
+    // The base EXTERIOR ops (`crate::exterior`; ICD 2.6.0).
+    crate::exterior::SET_EXTERIOR,
+    crate::exterior::SET_DOOR,
+    crate::exterior::DECIDE_REQUEST,
 ];
 
 impl ObjectType for EventType {
@@ -593,6 +599,10 @@ impl ObjectType for EventType {
     }
 
     fn reduce(state: &mut Self::State, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::exterior::is_exterior_op(op.op_id) {
+            let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
+            return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }

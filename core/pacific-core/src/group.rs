@@ -99,6 +99,8 @@ pub const OP_CLEAR_OFFICE: u32 = 11; // owner / sequenced
 // behalf, and nobody may erase one.
 pub const OP_JOINED_OBJECT: u32 = 12; // owner / sequenced
 pub const OP_LEFT_OBJECT: u32 = 13; // owner / sequenced
+/// I asked to join an object, or withdrew the ask (#76, ICD 2.6.0): the sibling of joinedObject.
+pub const OP_SET_REQUEST: u32 = crate::exterior::icd::OP_SET_REQUEST; // owner / sequenced
 // THE FACE: the site's public page as presentation (core/docs/the-face-on-the-wire.md).
 pub const OP_SET_FACE: u32 = 14; // owner / sequenced
 /// The face, edited by the owner or an admin (ICD 2.1.0 row 10). owner|role:admin / commutative.
@@ -550,6 +552,20 @@ pub struct Affiliation {
 /// The record is KEPT when you leave, dated rather than removed, so the fold
 /// answers both "am I in X" and "was I ever". Re-joining is a later
 /// `joinedObject` and the sequenced order resolves it with no tombstone.
+/// One ask to join, on the asker's own record (`group.setRequest`). Answered when the object's
+/// Welcome arrives and `joined` names it; a decline is silent, so an unanswered ask stands until
+/// it is withdrawn.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Asked {
+    pub kind: String,
+    /// The owner the exterior named; a Welcome naming another is refused.
+    pub owner: MemberId,
+    /// The request's id (`mls.door`).
+    pub request: [u8; 32],
+    pub at: i64,
+    pub withdrawn: bool,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Joined {
     /// The directory kind — "forum", "place", "project", … — which decides the lens.
@@ -615,6 +631,8 @@ pub struct GroupState {
     /// tenure others held on THIS group — this is the opposite direction, and it is
     /// what makes the spine the entry point to the rest of the graph.
     pub joined: BTreeMap<String, Joined>,
+    /// The objects this record's owner asked to join, by object id (hex): the latest ask each.
+    pub asked: BTreeMap<String, Asked>,
     /// THE FACE — this group's public page as a JSON document, and the WORKING COPY:
     /// members see it, it is never served. Publishing copies it across the seam onto
     /// the group's Host, where the Arc can read it and the group cannot be read.
@@ -660,6 +678,17 @@ pub struct GroupState {
     pub listings: BTreeMap<(MemberId, String), SiteListing>,
     /// Listings the owner or an admin took off, for good (`group.removeListing`).
     pub listings_removed: std::collections::BTreeSet<(MemberId, String)>,
+    /// The exterior facet (`crate::exterior`; ICD 2.6.0): what a non-member holds of it.
+    pub exterior: crate::exterior::ExteriorState,
+    /// The visibility facet; `None` is the kind's default (`visibility::default_for`).
+    pub visibility: Option<crate::visibility::Visibility>,
+}
+
+impl GroupState {
+    /// The visibility in force: the written one, else the kind's default from the ICD.
+    pub fn visibility(&self) -> crate::visibility::Visibility {
+        self.visibility.unwrap_or_else(|| crate::visibility::default_for(crate::object::ObjectKind::Group.name()))
+    }
 }
 
 /// One listing on a Site's Trade board: a snapshot of the lister's Thing, as
@@ -935,6 +964,12 @@ static GROUP_OPS: &[OpDecl] = &[
         commutativity: Commutativity::Sequenced,
     },
     OpDecl {
+        op_id: OP_SET_REQUEST,
+        name: "group.setRequest",
+        authority: Authority::Owner,
+        commutativity: Commutativity::Sequenced,
+    },
+    OpDecl {
         op_id: OP_SET_COVER,
         name: "group.setCover",
         authority: Authority::Owner,
@@ -1129,6 +1164,18 @@ static GROUP_OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base VISIBILITY op, spliced (`crate::visibility`): since ICD 2.6.0 it bounds how far
+    // this kind's exterior is carried.
+    OpDecl {
+        op_id: crate::visibility::OP_SET_VISIBILITY,
+        name: "base.setVisibility",
+        authority: Authority::Owner,
+        commutativity: Commutativity::Sequenced,
+    },
+    // The base EXTERIOR ops (`crate::exterior`; ICD 2.6.0).
+    crate::exterior::SET_EXTERIOR,
+    crate::exterior::SET_DOOR,
+    crate::exterior::DECIDE_REQUEST,
 ];
 
 /// A face document as group.setFace and group.editFace both take it. ONE document,
@@ -1170,6 +1217,16 @@ impl ObjectType for GroupType {
     }
 
     fn reduce(state: &mut GroupState, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::exterior::is_exterior_op(op.op_id) {
+            let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
+            return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);
+        }
+        if crate::visibility::is_visibility_op(op.op_id) {
+            let mut v = state.visibility();
+            crate::visibility::reduce_visibility(&mut v, op)?;
+            state.visibility = Some(v);
+            return Ok(());
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }
@@ -1365,6 +1422,20 @@ impl ObjectType for GroupType {
                     .ok_or(DeltaRejection::PreconditionFailed)?;
                 rec.left_at = Some(at);
                 rec.reason = reason;
+                Ok(())
+            }
+            OP_SET_REQUEST => {
+                let object = req_hex_id(args, "object")?;
+                let kind = req_text(args, "kind")?.to_string();
+                let owner = crate::object_args::arg_hex32(args, "owner")?;
+                let request = crate::object_args::arg_hex32(args, "request")?;
+                let at = req_int(args, "at")?;
+                let withdrawn = match opt_text(args, "withdrawn").as_deref() {
+                    None => false,
+                    Some("1") => true,
+                    Some(_) => return Err(DeltaRejection::MalformedArgs),
+                };
+                state.asked.insert(object, Asked { kind, owner, request, at, withdrawn });
                 Ok(())
             }
             OP_SET_OFFICE => {
@@ -2529,4 +2600,18 @@ mod tests {
         );
         assert_eq!(c.state().shape, GroupShape::Community);
     }
+}
+
+/// `group.setRequest`'s args: I asked to join `object`, or withdrew the ask.
+pub fn set_request_args(object: &str, kind: &str, owner: &MemberId, request: &[u8; 32], at: i64, withdrawn: bool) -> crate::coordinator::Args {
+    let mut a = crate::coordinator::Args::new();
+    a.insert("object".into(), crate::coordinator::ArgVal::Text(object.into()));
+    a.insert("kind".into(), crate::coordinator::ArgVal::Text(kind.into()));
+    a.insert("owner".into(), crate::coordinator::ArgVal::Text(hex::encode(owner)));
+    a.insert("request".into(), crate::coordinator::ArgVal::Text(hex::encode(request)));
+    a.insert("at".into(), crate::coordinator::ArgVal::Int(at));
+    if withdrawn {
+        a.insert("withdrawn".into(), crate::coordinator::ArgVal::Text("1".into()));
+    }
+    a
 }

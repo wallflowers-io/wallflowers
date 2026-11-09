@@ -81,6 +81,9 @@ mod icd {
 /// outrun the trust that carried it.
 pub const MAX_LISTING_HOPS: u32 = 3;
 
+/// An object's exterior, carried to a non-member (#76, ICD 2.6.0; `crate::exterior`).
+pub const OP_PUBLISH_EXTERIOR: u32 = crate::exterior::icd::OP_PUBLISH_EXTERIOR;
+
 /// How far a discovery request (and its answers) may travel from the asker. Two is
 /// "my peers, and their peers": far enough to find the café your friend's friend
 /// holds, short enough that the asker still has a human path to every answer.
@@ -339,6 +342,8 @@ pub struct ContactState {
     /// member -> their own wish for the link (`contact.setLink`). Per-author, so each side
     /// states only its own.
     pub links: BTreeMap<MemberId, LinkWish>,
+    /// object id (hex) -> its exterior, as it reached me here (`contact.publishExterior`).
+    pub exteriors: BTreeMap<String, crate::exterior::Carried>,
 }
 
 /// One side's wish for the link (`contact.setLink`), the highest gen that side wrote.
@@ -770,6 +775,12 @@ static CONTACT_OPS: &[OpDecl] = &[
         authority: Authority::AnyMember,
         commutativity: Commutativity::Commutative,
     },
+    OpDecl {
+        op_id: OP_PUBLISH_EXTERIOR,
+        name: "contact.publishExterior",
+        authority: Authority::AnyMember,
+        commutativity: Commutativity::Commutative,
+    },
     // The base PARENT ops: any kind can be a part (ICD `facets.parent`), and the
     // part names what it is part of so `part_of` walks from this end too.
     OpDecl {
@@ -947,6 +958,11 @@ impl ObjectType for ContactType {
                     },
                 );
                 Ok(())
+            }
+            OP_PUBLISH_EXTERIOR => {
+                // Every row checked against the owner key before anything held changes.
+                let c = crate::exterior::carried(op.args, op.author)?;
+                crate::exterior::fold_carried(&mut state.exteriors, c)
             }
             OP_PUBLISH_LISTING => {
                 // VALIDATE EVERYTHING, THEN COMMIT — same atomicity contract as the two ops

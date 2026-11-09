@@ -189,6 +189,9 @@ pub struct PostState {
     /// The visibility facet; `None` is the kind's default (`visibility::default_for`).
     #[serde(skip)]
     pub visibility: Option<crate::visibility::Visibility>,
+    /// The exterior facet (`crate::exterior`; ICD 2.6.0): what a non-member holds of it.
+    #[serde(skip)]
+    pub exterior: crate::exterior::ExteriorState,
 }
 
 /// One image a post's body shows as `asset:<id>`.
@@ -302,6 +305,10 @@ static OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base EXTERIOR ops (`crate::exterior`; ICD 2.6.0).
+    crate::exterior::SET_EXTERIOR,
+    crate::exterior::SET_DOOR,
+    crate::exterior::DECIDE_REQUEST,
 ];
 
 impl ObjectType for PostType {
@@ -313,6 +320,10 @@ impl ObjectType for PostType {
     }
 
     fn reduce(state: &mut Self::State, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::exterior::is_exterior_op(op.op_id) {
+            let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
+            return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }

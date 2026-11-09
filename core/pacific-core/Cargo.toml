@@ -70,6 +70,8 @@ base64.workspace = true
 hex.workspace = true
 chacha20poly1305.workspace = true
 hkdf.workspace = true
+# mls.door: a request sealed TO a door's public key (ICD 2.6.0). Already in the graph through mls-rs.
+x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 # The backup seal needs a nonce on every target; getrandom is already in the graph
 # everywhere (OS natively, the host's `pacific_fill_random` on wasm32 via `custom`).
 getrandom = "0.2"

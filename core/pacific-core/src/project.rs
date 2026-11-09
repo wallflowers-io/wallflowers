@@ -312,6 +312,17 @@ pub struct ProjectState {
     /// What this object is a part of, and in what role (`base.setParent`). `None`
     /// until a parent names it as a part.
     pub parent: Option<crate::parent::ParentRef>,
+    /// The exterior facet (`crate::exterior`; ICD 2.6.0): what a non-member holds of it.
+    pub exterior: crate::exterior::ExteriorState,
+    /// The visibility facet; `None` is the kind's default (`visibility::default_for`).
+    pub visibility: Option<crate::visibility::Visibility>,
+}
+
+impl ProjectState {
+    /// The visibility in force: the written one, else the kind's default from the ICD.
+    pub fn visibility(&self) -> crate::visibility::Visibility {
+        self.visibility.unwrap_or_else(|| crate::visibility::default_for(crate::object::ObjectKind::Project.name()))
+    }
 }
 
 // ---- derived-never-stored projections ----------------------------------------
@@ -636,6 +647,18 @@ static PROJECT_OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base VISIBILITY op, spliced (`crate::visibility`): since ICD 2.6.0 it bounds how far
+    // this kind's exterior is carried.
+    OpDecl {
+        op_id: crate::visibility::OP_SET_VISIBILITY,
+        name: "base.setVisibility",
+        authority: Authority::Owner,
+        commutativity: Commutativity::Sequenced,
+    },
+    // The base EXTERIOR ops (`crate::exterior`; ICD 2.6.0).
+    crate::exterior::SET_EXTERIOR,
+    crate::exterior::SET_DOOR,
+    crate::exterior::DECIDE_REQUEST,
 ];
 
 /// The Project object type (#22) — the Work-tab model folded through the trait.
@@ -650,6 +673,16 @@ impl ObjectType for ProjectType {
     }
 
     fn reduce(state: &mut ProjectState, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::exterior::is_exterior_op(op.op_id) {
+            let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
+            return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);
+        }
+        if crate::visibility::is_visibility_op(op.op_id) {
+            let mut v = state.visibility();
+            crate::visibility::reduce_visibility(&mut v, op)?;
+            state.visibility = Some(v);
+            return Ok(());
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }
