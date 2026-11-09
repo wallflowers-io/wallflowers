@@ -884,7 +884,7 @@ struct LifeView: View {
         // type's own declaration. That is what closes the 1970 bug — a required field is
         // never unanswered behind a control that looks filled in.
         return NewSession(kind: kind) { draft in
-            guard let id = core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
+            guard let id = await core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
             else { return nil }          // core surfaced the error; the surface stays up
             await afterMint(kind, id: id, draft: draft)
             return .saved

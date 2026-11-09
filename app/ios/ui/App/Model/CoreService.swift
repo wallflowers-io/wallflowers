@@ -422,6 +422,8 @@ final class CoreService: ObservableObject {
             keyFailure = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
         }
         core = Core(stateDir: base.path)
+        // Detached pictures are fetched through this Core (#112).
+        MediaCache.shared.fetch = { [core] r in try core.mediaGet(r: r) }
         setLogSink(sink: CoreLog())
         if let keyFailure { self.error = keyFailure }
         // PERSIST the relay: env wins at launch but doesn't survive a home-screen
@@ -1376,16 +1378,18 @@ final class CoreService: ObservableObject {
     /// `displayName` on a Group and `title` on an Event — so this layer never restates
     /// arg names, which is what `mintOrg` used to do by hand.
     ///
-    /// Mints the object and its profile delta, nothing else. Posture, tickets, media and
-    /// venue are separate ops the caller authors after, so a failure is reportable
-    /// against the step that failed.
+    /// Mints the object, its profile delta and the draft's media and venue (#112): the media
+    /// is uploaded first, so it runs off the main thread, and a failed upload creates nothing.
+    /// Posture and tickets are separate ops the caller authors after.
     @discardableResult
-    func mint(kind: String, draft: MintDraft) -> String? {
-        do {
-            let id = try core.objectMint(kind: kind, draft: draft)
+    func mint(kind: String, draft: MintDraft) async -> String? {
+        let c = core
+        let r = await Task.detached(priority: .userInitiated) { Result { try c.objectMint(kind: kind, draft: draft) } }.value
+        switch r {
+        case .success(let id):
             NSLog("[mint] \(kind) → \(id)")
             return id
-        } catch {
+        case .failure(let error):
             self.error = String(describing: error)
             NSLog("[mint] \(kind) FAILED: \(self.error ?? "?")")
             return nil

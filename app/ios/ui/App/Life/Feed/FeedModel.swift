@@ -51,6 +51,8 @@ struct FeedItem: Identifiable, Equatable {
     /// The card's media, straight off the fold (EventRow.banner / ListingRow.photo).
     /// "" = dark ground. Decoded once per card by BannerCache.
     var bannerB64: String = ""
+    /// The media facet's detached banner (#112), drawn in place of `bannerB64` where set.
+    var bannerRef: MediaRefRow? = nil
     /// The author's DOOR: who the header name routes to when tapped. nil = the
     /// row cannot honestly answer (no identity crosses the read model for it) —
     /// the name renders as plain text, never a dead button.
@@ -66,6 +68,7 @@ struct FeedItem: Identifiable, Equatable {
             && a.author == b.author && a.location == b.location && a.footer == b.footer
             && a.whenMs == b.whenMs && a.provenance == b.provenance
             && a.objectID == b.objectID && a.bannerB64.count == b.bannerB64.count
+            && a.bannerRef?.digest == b.bannerRef?.digest
             && a.authorRoute == b.authorRoute && a.authorID == b.authorID
     }
 }
@@ -98,6 +101,7 @@ enum FeedAssembler {
             provenance: .member,
             objectID: e.id,
             bannerB64: e.banner,
+            bannerRef: e.bannerRef,
             authorRoute: maker?.id.map(AuthorRoute.person),
             authorID: maker?.id)
     }
@@ -139,6 +143,7 @@ enum FeedAssembler {
                 provenance: .member,
                 objectID: p.id,
                 bannerB64: p.retracted ? "" : p.banner,
+                bannerRef: p.retracted ? nil : p.bannerRef,
                 authorRoute: maker?.id.map(AuthorRoute.person),
                 authorID: maker?.id))
         }

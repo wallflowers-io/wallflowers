@@ -709,7 +709,7 @@ struct GroupDetailView: View {
             // into one call would make a failure to attach indistinguishable from a
             // failure to mint. An object that exists but did not attach is visible and
             // recoverable; a silent half-mint is not.
-            guard let id = core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
+            guard let id = await core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
             else { return nil }
             attach(id, name: draft.name)
             return .saved
