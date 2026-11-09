@@ -245,3 +245,40 @@ async fn a_picture_too_big_for_the_card_is_left_out_and_said() {
     h.settle().await;
     assert_eq!(card_in(&h, ada, &site, eve), Some(serde_json::json!({ "name": "Eve", "icon": null })), "name-only, as ada reads it");
 }
+
+/// AN OBJECT THAT WILL NOT FOLD DOES NOT SAY MY CARD IS MISSING. Read that way, the Arc
+/// published its card into one Site on every 3 s sync tick (8 Nov, 3,905 times). Eve's copy
+/// of the Site stops folding (a link no fork explains); a new name moves her card, and her
+/// walk publishes nothing into the Site it cannot read.
+#[tokio::test]
+async fn a_card_is_not_published_into_an_object_that_will_not_fold() {
+    let h = Harness::new(&["ada", "eve"]).await;
+    let (ada, eve) = (0, 1);
+    let site = h.mint_object(ada, ObjectKind::Group, "Egregore", &[eve]).await;
+    name_myself(&h, eve, "Eve").await;
+    h.settle().await;
+    assert!(card_in(&h, ada, &site, eve).is_some(), "eve's card is in the Site");
+
+    let n = h.node(eve);
+    let gid = hex::decode(&site).unwrap();
+    let orphan = pacific_core::coordinator::sequenced_delta(
+        ObjectKind::Group.type_id() as u32,
+        pacific_core::group::OP_SET_PROFILE,
+        text(&[("displayName", "from nowhere"), ("shape", "community")]),
+        0,
+        999,
+        [0xEE; 32],
+    );
+    n.dir.append_delta(&gid, &orphan.id(), &h.id(ada), &orphan.canonical_bytes(), 0).unwrap();
+    n.dir.mark_delivered(&gid, &orphan.id()).unwrap();
+    assert!(n.object_view(&site).is_err(), "eve's copy of the Site no longer folds");
+
+    let cards = || n.object_log(&site).unwrap().iter().filter(|(op, ..)| *op == pacific_core::profiles::OP_PUBLISH_PROFILE).count();
+    let before = cards();
+    name_myself(&h, eve, "Eve R.").await;
+    for _ in 0..3 {
+        let s = n.reconcile_profiles().await.expect("the walk itself succeeds");
+        assert_eq!(s.published, 0, "nothing is published into an object that will not fold");
+    }
+    assert_eq!(cards(), before, "and the Site's log takes no card");
+}
