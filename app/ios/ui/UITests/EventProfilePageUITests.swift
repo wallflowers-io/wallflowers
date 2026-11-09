@@ -113,6 +113,7 @@ final class EventProfilePageUITests: XCTestCase {
         // lands on the feed and the jewels animate in with it.
         XCTAssertTrue(ground("life-feed", timeout: 15), "the feed ground")
 
+        app.openLifeSearch()
         let jewel = app.buttons["jewel-events"]
         XCTAssertTrue(jewel.waitForExistence(timeout: 10), "EVENT jewel")
         jewel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
