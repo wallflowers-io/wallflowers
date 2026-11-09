@@ -238,7 +238,11 @@ struct ProfileStack: View {
         if let id = pin.destinationID {
             switch pin.kind {
             case .person:       NavigationLink(value: PersonLink(id: id)) { bar }.buttonStyle(.plain)
-            case .place:        NavigationLink(value: PlaceLink(id: id)) { bar }.buttonStyle(.plain)
+            case .place:
+                Button {
+                    NotificationCenter.default.post(name: .pacificOpenPlace, object: nil, userInfo: ["object": id])
+                } label: { bar }
+                .buttonStyle(.plain)
             case .space:        NavigationLink(value: GroupLink(id: id)) { bar }.buttonStyle(.plain)
             // Event/listing/post pages route through sheet/feed surfaces the
             // stack doesn't own yet — inert until their tracks wire them.

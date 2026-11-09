@@ -8,8 +8,8 @@
 //      never a generic dot.
 //    • Tap a pin → the bottom detail sheet — the QUICK resolution. From it,
 //      "Walk up →" hands off to the POV (the pin's old direct door), and the
-//      identity row taps THROUGH to the Place Profile page (`PlaceLink` — the
-//      deep resolution, T4 of the Profile build).
+//      identity row taps THROUGH to the Place's maximised detail (`PlaceDetail`,
+//      the deep resolution).
 //    • Honest-absent: places with no plottable coordinate are simply not pinned. An
 //      empty map is an empty map — it carries no caption explaining itself.
 //
@@ -179,10 +179,9 @@ private struct PlacePin: View {
 // MARK: - The bottom detail sheet
 
 /// A place's card, anchored to the bottom (thumb zone) — the pin's QUICK
-/// resolution. The identity row taps THROUGH to the Place Profile page
-/// (`PlaceLink`, the deep resolution — the map sits inside LIFE's
-/// NavigationStack, whose destinations Life.swift registers); "Walk up"
-/// hands off to the POV, the door the pin used to open directly.
+/// resolution. The identity row taps THROUGH to the Place's maximised detail
+/// (`.pacificOpenPlace`, the deep resolution); "Walk up" hands off to the POV,
+/// the door the pin used to open directly.
 private struct PlaceDetailSheet: View {
     let place: PlaceAnnotation
     let tint: Color
@@ -192,7 +191,10 @@ private struct PlaceDetailSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                NavigationLink(value: PlaceLink(id: place.id)) {
+                Button {
+                    NotificationCenter.default.post(name: .pacificOpenPlace, object: nil,
+                                                    userInfo: ["object": place.id])
+                } label: {
                     HStack(spacing: 10) {
                         Circle().fill(tint).frame(width: 34, height: 34)
                             .overlay(Image(systemName: place.glyph).font(.system(size: 15, weight: .bold)).foregroundStyle(.white))
@@ -241,6 +243,8 @@ private struct PlaceDetailSheet: View {
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Theme.hairline, lineWidth: 1))
         .padding(.horizontal, 12)
         .padding(.bottom, ShellMetrics.bottomBarHeight + 12)   // sit ABOVE the NOTE·CHAT·LIFE bar
+        // Its own element, so its id does not overwrite the buttons' ids inside it.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("place-sheet")
     }
 }

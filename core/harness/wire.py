@@ -66,6 +66,10 @@ def media_err(key: str, reason: str) -> Frame:
     return {"t": "media_err", "key": key, "reason": reason}
 
 
+def evicted(tag: str, total: int) -> Frame:
+    return {"t": "evicted", "tag": tag, "total": int(total)}
+
+
 # ── codec ───────────────────────────────────────────────────────────────────
 
 #: serde's `skip_serializing_if` set, per frame tag: (field, value-that-is-omitted).
@@ -94,6 +98,7 @@ _ORDER = {
     "media_get": ["key"],
     "media_url": ["key", "method", "url", "expires_in"],
     "media_err": ["key", "reason"],
+    "evicted": ["tag", "total"],
     "eose": [],
 }
 

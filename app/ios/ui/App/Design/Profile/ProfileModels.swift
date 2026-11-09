@@ -137,11 +137,6 @@ struct PersonLink: Hashable {
     let id: String
 }
 
-/// Value-based route to a place's profile page.
-struct PlaceLink: Hashable {
-    let id: String
-}
-
 // MARK: - Person pair state (T1 additive)
 
 /// The pair flow's state for a PERSON profile's subject — the core's own

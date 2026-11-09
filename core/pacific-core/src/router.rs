@@ -350,6 +350,69 @@ impl Router {
         Ok(out)
     }
 
+    /// PUB one knock to `door` as a door's tag (`mls.door.relay`), to the relays only (the mesh
+    /// holds no doors). Counted with every other publish, so a settled node that knocks shows.
+    pub async fn publish_door(&mut self, door: &Address, blob_b64: &str) -> Result<u64, CoreError> {
+        PUBLISHED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        #[cfg(feature = "storage")]
+        crate::directory::record_sent(blob_b64)?;
+        let mut first = None;
+        let mut errors = Vec::new();
+        for m in self.open.iter_mut().filter(|m| m.can_sequence()) {
+            match m.publish_door(door, blob_b64.to_string()).await {
+                Ok(seq) => {
+                    first.get_or_insert(seq);
+                }
+                Err(e) => errors.push(format!("{}: {e}", m.source())),
+            }
+        }
+        first.ok_or_else(|| CoreError::Transport(format!("a knock reached no relay — {}", errors.join("; "))))
+    }
+
+    /// [`Router::drain_many`] for door tags, with what each relay's cap has evicted from each
+    /// door, ever: the highest total any relay reports, per tag.
+    pub async fn drain_doors<F>(
+        &mut self,
+        tags_hex: &[String],
+        mut since_for: F,
+    ) -> Result<(Vec<Vec<Drained>>, std::collections::BTreeMap<String, u64>), CoreError>
+    where
+        F: FnMut(&str, &str) -> Result<u64, CoreError>,
+    {
+        let mut out: Vec<Vec<Drained>> = tags_hex.iter().map(|_| Vec::new()).collect();
+        let mut evicted = std::collections::BTreeMap::<String, u64>::new();
+        if tags_hex.is_empty() {
+            return Ok((out, evicted));
+        }
+        let mut down = Vec::new();
+        for m in &mut self.open {
+            let source = m.source();
+            let mut subs = Vec::with_capacity(tags_hex.len());
+            for t in tags_hex {
+                subs.push((t.clone(), since_for(t, source)?));
+            }
+            match m.drain_doors(&subs).await {
+                Ok((per_tag, totals)) => {
+                    for (i, msgs) in per_tag.into_iter().enumerate() {
+                        out[i].extend(msgs.into_iter().map(|(tag, seq, blob)| Drained { source, tag, seq, blob }));
+                    }
+                    for (tag, n) in totals {
+                        let e = evicted.entry(tag).or_default();
+                        *e = (*e).max(n);
+                    }
+                }
+                Err(e) => down.push((source.to_string(), e.to_string())),
+            }
+        }
+        if !down.is_empty() && down.len() == self.open.len() {
+            let why = down.iter().map(|(u, e)| format!("{u}: {e}")).collect::<Vec<_>>().join("; ");
+            self.failed.extend(down);
+            return Err(CoreError::Transport(format!("drain reached no transport — {why}")));
+        }
+        self.failed.extend(down);
+        Ok((out, evicted))
+    }
+
     pub async fn close(self) {
         for m in self.open {
             m.close().await;

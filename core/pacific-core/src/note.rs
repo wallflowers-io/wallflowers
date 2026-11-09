@@ -151,6 +151,17 @@ pub struct NoteBook {
     /// What this object is a part of, and in what role (`base.setParent`). `None`
     /// until a parent names it as a part.
     pub parent: Option<crate::parent::ParentRef>,
+    /// The exterior facet (`crate::exterior`; ICD 2.6.0): what a non-member holds of it.
+    pub exterior: crate::exterior::ExteriorState,
+    /// The visibility facet; `None` is the kind's default (`visibility::default_for`).
+    pub visibility: Option<crate::visibility::Visibility>,
+}
+
+impl NoteBook {
+    /// The visibility in force: the written one, else the kind's default from the ICD.
+    pub fn visibility(&self) -> crate::visibility::Visibility {
+        self.visibility.unwrap_or_else(|| crate::visibility::default_for(crate::object::ObjectKind::Note.name()))
+    }
 }
 
 impl NoteBook {
@@ -774,6 +785,18 @@ pub static OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base VISIBILITY op, spliced (`crate::visibility`): since ICD 2.6.0 it bounds how far
+    // this kind's exterior is carried.
+    OpDecl {
+        op_id: crate::visibility::OP_SET_VISIBILITY,
+        name: "base.setVisibility",
+        authority: Authority::Owner,
+        commutativity: Commutativity::Sequenced,
+    },
+    // The base EXTERIOR ops (`crate::exterior`; ICD 2.6.0).
+    crate::exterior::SET_EXTERIOR,
+    crate::exterior::SET_DOOR,
+    crate::exterior::DECIDE_REQUEST,
 ];
 
 /// This kind's op id → the facet id `reduce_note` still matches on. Arithmetic, not
@@ -797,6 +820,16 @@ impl ObjectType for NoteType {
     }
 
     fn reduce(state: &mut Self::State, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::exterior::is_exterior_op(op.op_id) {
+            let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
+            return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);
+        }
+        if crate::visibility::is_visibility_op(op.op_id) {
+            let mut v = state.visibility();
+            crate::visibility::reduce_visibility(&mut v, op)?;
+            state.visibility = Some(v);
+            return Ok(());
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }
@@ -818,15 +851,17 @@ mod kind_tests {
 
     #[test]
     fn the_table_is_contiguous_from_zero_and_maps_onto_the_facet() {
-        // The kind's OWN ops, below the base band; the rest are the parent facet's.
-        let own: Vec<_> = OPS.iter().filter(|d| !crate::parent::is_parent_op(d.op_id)).collect();
+        // The kind's OWN ops, below the base band; the rest are the parent, visibility and
+        // exterior facets'.
+        let base = |id: u32| crate::parent::is_parent_op(id) || crate::visibility::is_visibility_op(id) || crate::exterior::is_exterior_op(id);
+        let own: Vec<_> = OPS.iter().filter(|d| !base(d.op_id)).collect();
         for (i, decl) in own.iter().enumerate() {
             assert_eq!(decl.op_id, i as u32, "{} is out of place", decl.name);
             let facet = to_facet_op(decl.op_id).expect("mapped");
             assert_eq!(facet, OP_NOTE_WRITE + i as u32, "{} maps wrong", decl.name);
             assert!(is_note_op(facet), "{} maps to an id reduce_note refuses", decl.name);
         }
-        assert_eq!(OPS.len(), own.len() + crate::parent::PARENT_OPS.len(), "an op is neither the kind's nor the parent facet's");
+        assert_eq!(OPS.len(), own.len() + crate::parent::PARENT_OPS.len() + crate::visibility::VISIBILITY_OPS.len() + crate::exterior::EXTERIOR_OPS.len(), "an op is neither the kind's nor a base facet's");
         assert_eq!(to_facet_op(own.len() as u32), None, "the map must not run past the table");
     }
 

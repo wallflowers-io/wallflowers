@@ -35,6 +35,7 @@ final class FeedUITests: XCTestCase {
         // where the filter puts one kind on top deterministically.
         XCTAssertTrue(waitAnyFeedRows(timeout: 8), "the feed carries rows (seeds guarantee it)")
         shoot("feed-ground")
+        app.openLifeSearch()
 
         // Maximise EVENT: the typed list takes the ground, the feed leaves.
         app.buttons["jewel-events"].tap()
@@ -59,6 +60,7 @@ final class FeedUITests: XCTestCase {
         launchToLife()
         XCTAssertTrue(waitGround("life-feed", timeout: 10), "the feed ground")
         XCTAssertTrue(waitAnyFeedRows(timeout: 8), "rows before any lock")
+        app.openLifeSearch()
 
         // LOCK POSTS: drag the jewel a short way DOWN (threshold 9pt, S33). POSTS
         // has no delta source yet (JOB left the rail 11 Aug), so a POSTS-only
@@ -81,6 +83,7 @@ final class FeedUITests: XCTestCase {
         launchToLife()
         XCTAssertTrue(waitGround("life-feed", timeout: 10), "the feed ground")
         XCTAssertTrue(waitAnyFeedRows(timeout: 8), "rows before the lock")
+        app.openLifeSearch()
 
         // LOCK EVENT: event rows stay; the feed never shows the empty marker.
         lock("jewel-events")
