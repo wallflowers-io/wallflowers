@@ -2498,15 +2498,17 @@ mod tests {
     #[test]
     fn a_door_keeps_its_bound() {
         let dir = mem();
-        let (door, cap, ttl) = ([7u8; 32], 256usize, 30 * 86_400);
-        for i in 0..300u32 {
+        // The ICD's bound, so the test moves when the ICD does.
+        let (door, cap, ttl) = ([7u8; 32], crate::exterior::icd::DOOR_CAP, crate::exterior::icd::DOOR_TTL_DAYS * 86_400);
+        let flood = cap as u32 + 44;
+        for i in 0..flood {
             let mut id = [0u8; 32];
             id[..4].copy_from_slice(&i.to_be_bytes());
             dir.put_knock(&door, &id, &[1; 64], 1_000 + i as i64, cap, ttl).unwrap();
         }
         let waiting = dir.waiting_knocks(&door).unwrap();
         assert_eq!(waiting.len(), cap, "a flood leaves the store at the cap");
-        assert_eq!(&waiting[0].0[..4], &44u32.to_be_bytes(), "the oldest went");
+        assert_eq!(&waiting[0].0[..4], &(flood - cap as u32).to_be_bytes(), "the oldest went");
         let first = waiting[0].0;
         dir.settle_knock(&door, &first, "decided").unwrap();
         let bytes: Vec<u8> = dir.conn.query_row("SELECT blob FROM door_knock WHERE id=?1", params![&first[..]], |r| r.get(0)).unwrap();
