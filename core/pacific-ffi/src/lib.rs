@@ -1824,6 +1824,11 @@ impl Core {
         Ok(Reading { core: self, node: Some(node), gen })
     }
 
+    /// Where this device keeps the media objects it has fetched or made (`media_store`).
+    fn media_kept(&self) -> std::path::PathBuf {
+        std::path::Path::new(&self.state_dir).join("media")
+    }
+
     /// This device's relay, for a call that dials a session of its own (media): its first
     /// ws/wss route.
     fn relay_url(&self) -> Result<String, FfiError> {
@@ -2535,7 +2540,7 @@ impl Core {
     /// reference a Delta carries (O-79, #56). Nothing is written to any object here.
     pub fn media_put(&self, bytes: Vec<u8>, mime: String) -> Result<MediaRefRow, FfiError> {
         let relay = self.relay_url()?;
-        let r = block_on(pacific_core::media_store::put(&relay, &bytes, &mime))?;
+        let r = block_on(pacific_core::media_store::put(&relay, Some(&self.media_kept()), &bytes, &mime))?;
         match r.delivery {
             pacific_core::media::Delivery::Sealed { digest, bytes, key, secret } => {
                 Ok(MediaRefRow { mime: r.mime, digest: hex::encode(digest), bytes, key, secret })
@@ -2554,7 +2559,7 @@ impl Core {
         let reference = pacific_core::media::MediaRef::sealed(&r.mime, digest, r.bytes, r.key, r.secret)
             .map_err(|e| FfiError::Core(format!("media: {e}")))?;
         let relay = self.relay_url()?;
-        Ok(block_on(pacific_core::media_store::get(&relay, &reference))?)
+        Ok(block_on(pacific_core::media_store::get(&relay, Some(&self.media_kept()), &reference))?)
     }
 
     /// The full media facet of one event — the detail page's read.

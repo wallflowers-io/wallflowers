@@ -14,6 +14,9 @@ use tokio::net::TcpListener;
 
 type Objects = Arc<Mutex<HashMap<String, Vec<u8>>>>;
 
+/// GETs the stand-in has answered.
+static FETCHES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// PUT stores the body at the path, GET returns it. Signatures are not checked: the relay's
 /// presign is what the test is about. A PUT must be conditional (`If-None-Match: *`) and is
 /// refused 412 over an object already there, as R2 refuses it.
@@ -61,10 +64,13 @@ async fn object_store() -> (String, Objects) {
                             ("200 OK", Vec::new())
                         }
                     }
-                    "GET" => match held.lock().unwrap().get(&path) {
-                        Some(b) => ("200 OK", b.clone()),
-                        None => ("404 Not Found", Vec::new()),
-                    },
+                    "GET" => {
+                        FETCHES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        match held.lock().unwrap().get(&path) {
+                            Some(b) => ("200 OK", b.clone()),
+                            None => ("404 Not Found", Vec::new()),
+                        }
+                    }
                     _ => ("405 Method Not Allowed", Vec::new()),
                 };
                 let mut sock = r.into_inner();
@@ -100,7 +106,7 @@ async fn sealed_bytes_go_up_and_come_back_to_anyone_holding_the_reference() {
     let photo = b"\xff\xd8\xff\xe0 a jpeg's bytes, as far as anyone storing them can tell".repeat(1000);
 
     let before = media_store::presigned();
-    let r = media_store::put(&relay, &photo, "image/jpeg").await.unwrap();
+    let r = media_store::put(&relay, None, &photo, "image/jpeg").await.unwrap();
     assert!(media_store::presigned() > before, "a presign is counted");
     let Delivery::Sealed { ref key, bytes, .. } = r.delivery else { panic!("a sealed reference: {r:?}") };
     let held = objects.lock().unwrap().get(&format!("/pacific-media/{key}")).cloned().expect("the object is stored under its key");
@@ -108,21 +114,40 @@ async fn sealed_bytes_go_up_and_come_back_to_anyone_holding_the_reference() {
     assert!(!held.windows(16).any(|w| photo.windows(16).next() == Some(w)), "what is stored is sealed");
 
     // Read by a reader with nothing but the reference: no Node, no group.
-    assert_eq!(media_store::get(&relay, &r).await.unwrap(), photo);
+    assert_eq!(media_store::get(&relay, None, &r).await.unwrap(), photo);
+
+    // A device that has the object never fetches it again.
+    let kept = tempfile::tempdir().unwrap();
+    let (presigns, fetches) = (media_store::presigned(), FETCHES.load(std::sync::atomic::Ordering::SeqCst));
+    for _ in 0..2 {
+        assert_eq!(media_store::get(&relay, Some(kept.path()), &r).await.unwrap(), photo);
+    }
+    assert_eq!(media_store::presigned() - presigns, 1, "one presign for two reads");
+    assert_eq!(FETCHES.load(std::sync::atomic::Ordering::SeqCst) - fetches, 1, "one fetch for two reads");
+    // What is kept is checked as it is read back: a changed copy is fetched again, not opened.
+    std::fs::write(kept.path().join(key), b"not the object").unwrap();
+    assert_eq!(media_store::get(&relay, Some(kept.path()), &r).await.unwrap(), photo);
+
+    // Its uploader keeps it from the start.
+    let made = tempfile::tempdir().unwrap();
+    let mine = media_store::put(&relay, Some(made.path()), b"mine", "image/jpeg").await.unwrap();
+    let presigns = media_store::presigned();
+    assert_eq!(media_store::get(&relay, Some(made.path()), &mine).await.unwrap(), b"mine");
+    assert_eq!(media_store::presigned(), presigns, "the uploader reads its own without asking");
 
     // An upload only creates: a second presigned PUT to the same key is refused.
     let mut s = pacific_core::transport::RelaySession::connect(&relay).await.unwrap();
     let again = s.media_url(key, Some(4)).await.unwrap();
     let res = reqwest::Client::new().put(again).header("If-None-Match", "*").body("junk").send().await.unwrap();
     assert_eq!(res.status(), 412);
-    assert_eq!(media_store::get(&relay, &r).await.unwrap(), photo, "still the referenced object");
+    assert_eq!(media_store::get(&relay, None, &r).await.unwrap(), photo, "still the referenced object");
 
     // A longer object is refused by its length, before it is held.
     objects.lock().unwrap().get_mut(&format!("/pacific-media/{key}")).unwrap().push(0);
-    assert!(media_store::get(&relay, &r).await.is_err());
+    assert!(media_store::get(&relay, None, &r).await.is_err());
     objects.lock().unwrap().get_mut(&format!("/pacific-media/{key}")).unwrap().pop();
 
     // A changed object is not the one referenced.
     objects.lock().unwrap().get_mut(&format!("/pacific-media/{key}")).unwrap()[30] ^= 1;
-    assert!(media_store::get(&relay, &r).await.is_err());
+    assert!(media_store::get(&relay, None, &r).await.is_err());
 }

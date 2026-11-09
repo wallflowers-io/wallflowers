@@ -11,12 +11,18 @@
 //! Each call dials a session of its own: declaring the media level ends a session's
 //! subscriptions ([`RelaySession::media_url`]).
 //!
+//! An object never changes (it only creates, and is checked against its digest), so a device
+//! that has it never fetches it again: `kept`, a directory of objects as stored (sealed), named
+//! by key and checked against the digest each time they are read back (ARC_NETWORK).
+//!
 //! An upload only creates (`If-None-Match: *`, signed into the URL): with nothing ever deleted,
 //! an overwrite would be a deletion anyone holding a reference could make.
 //!
 //! XChaCha20-Poly1305 does not commit to its key: one object can be crafted to open to different
 //! bytes under different keys. A digest therefore names an object, never its content: nothing
 //! may dedupe, match or report media by digest without first adding a key commitment here.
+
+use std::path::Path;
 
 use base64::Engine as _;
 use sha2::{Digest, Sha256};
@@ -55,7 +61,8 @@ fn random32() -> Result<[u8; 32], CoreError> {
 }
 
 /// Seal `bytes`, upload them through `relay`'s presign, and return the reference a Delta carries.
-pub async fn put(relay: &str, bytes: &[u8], mime: &str) -> Result<MediaRef, CoreError> {
+/// The object is kept in `kept`, so its uploader never fetches it.
+pub async fn put(relay: &str, kept: Option<&Path>, bytes: &[u8], mime: &str) -> Result<MediaRef, CoreError> {
     let (k, key) = (random32()?, hex::encode(random32()?));
     let object = seal::seal_with_key(bytes, &k, key.as_bytes())?;
     let digest: [u8; 32] = Sha256::digest(&object).into();
@@ -65,19 +72,23 @@ pub async fn put(relay: &str, bytes: &[u8], mime: &str) -> Result<MediaRef, Core
     let res = http()?
         .put(url)
         .header(reqwest::header::IF_NONE_MATCH, "*")
-        .body(object)
+        .body(object.clone())
         .send()
         .await
         .map_err(|e| CoreError::Transport(format!("media upload: {e}")))?;
     if !res.status().is_success() {
         return Err(CoreError::Transport(format!("media upload: object storage answered {}", res.status())));
     }
+    if let Some(dir) = kept {
+        keep(dir, &key, &object);
+    }
     Ok(reference)
 }
 
-/// Fetch a sealed reference's object through `relay`'s presign, check it against its digest
-/// and length, and open it. Anything that does not check is an error, never partial bytes.
-pub async fn get(relay: &str, r: &MediaRef) -> Result<Vec<u8>, CoreError> {
+/// A sealed reference's bytes: from `kept` when the object is there and checks, else fetched
+/// through `relay`'s presign, checked against its digest and length, kept, and opened.
+/// Anything that does not check is an error, never partial bytes.
+pub async fn get(relay: &str, kept: Option<&Path>, r: &MediaRef) -> Result<Vec<u8>, CoreError> {
     let Delivery::Sealed { digest, bytes, key, secret } = &r.delivery else {
         return Err(CoreError::Coordinator("media: not a detached, sealed reference".into()));
     };
@@ -86,6 +97,10 @@ pub async fn get(relay: &str, r: &MediaRef) -> Result<Vec<u8>, CoreError> {
         .ok()
         .and_then(|v| v.try_into().ok())
         .ok_or_else(|| CoreError::Coordinator("media: the content key is not 32 bytes".into()))?;
+    let checks = |o: &[u8]| o.len() as u64 == *bytes && <[u8; 32]>::from(Sha256::digest(o)) == *digest;
+    if let Some(o) = kept.and_then(|d| std::fs::read(d.join(key)).ok()).filter(|o| checks(o)) {
+        return seal::open_with_key(&o, &k, key.as_bytes());
+    }
     let url = presign(relay, key, None).await?;
     let mut res = http()?.get(url).send().await.map_err(|e| CoreError::Transport(format!("media fetch: {e}")))?;
     if !res.status().is_success() {
@@ -104,11 +119,23 @@ pub async fn get(relay: &str, r: &MediaRef) -> Result<Vec<u8>, CoreError> {
         }
         object.extend_from_slice(&chunk);
     }
-    let got: [u8; 32] = Sha256::digest(&object).into();
-    if object.len() as u64 != *bytes || got != *digest {
+    if !checks(&object) {
         return Err(wrong());
     }
+    if let Some(dir) = kept {
+        keep(dir, key, &object);
+    }
     seal::open_with_key(&object, &k, key.as_bytes())
+}
+
+/// Keep an object under its key: written beside and renamed, so a reader never sees half of one.
+/// A failure costs a fetch next time, not the bytes now.
+fn keep(dir: &Path, key: &str, object: &[u8]) {
+    let tmp = dir.join(format!(".{key}.part"));
+    let kept = std::fs::create_dir_all(dir).and_then(|_| std::fs::write(&tmp, object)).and_then(|_| std::fs::rename(&tmp, dir.join(key)));
+    if let Err(e) = kept {
+        tracing::warn!(error = %e, "media: a fetched object could not be kept");
+    }
 }
 
 /// The relay's presigned URL, taken only as https, unless the relay itself is on this machine
