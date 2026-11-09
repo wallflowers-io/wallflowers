@@ -1,16 +1,16 @@
 //  ListingDetail.swift
-//  The LISTING's and the POST's detail modals — the other two non-egoic kinds.
+//  The LISTING's maximised detail — a Thing on the market — and the half every
+//  non-egoic binder shares (`DetailBind`).
 //
-//  Three kinds, one screen. An Event, a Thing on the market and a Post are all
-//  things that were MADE rather than things that ARE, so all three answer the same
-//  three questions (`Design/Detail`): what does it look like, whose is it, what
-//  did people say. What differs between them is only which facts print under the
-//  title, which is why this file is two small binders and not two screens.
+//  An Event, a Thing and a Post are things that were MADE rather than things that
+//  ARE, so all three answer the same questions (`Design/Detail`): what does it look
+//  like, what are its values, whose is it, what did people say. What differs is
+//  only which rows a binder answers.
 //
-//  POSTS GOT A PAGE OUT OF THIS. Before, `openObject` routed `.trade` at the EVENT
-//  page — a listing opened a night's page and rendered mostly empty — and `.posts`
-//  fell through the `default:` arm to nothing at all, so a post card was a card you
-//  could tap forever. Both now open the thing they are a card for.
+//  POSTURE LEADS, because "offers" and "wants" are opposite claims about the same
+//  object, and reading the price first tells you nothing about which one you are
+//  looking at. The posture is the market's to write (ListingEditor); this page
+//  writes the Thing's own profile, its pictures and whether it is still for sale.
 
 import SwiftUI
 import PacificCore
@@ -19,18 +19,18 @@ import PacificCore
 
 @MainActor
 enum ListingDetail {
-    /// The market's own colour — the TRADE slot, so a listing's modal and its jewel
+    /// The market's own colour — the TRADE slot, so a listing's page and its jewel
     /// cannot drift apart.
     static var tint: Color { PaletteStore.base(5) }
 
-    static func open(_ objectId: String, core: CoreService, shell: ShellState) {
+    static func open(_ objectId: String, core: CoreService, shell: ShellState, origin: CGRect? = nil) {
         shell.beginNew(DetailSession(noun: "listing",
-                                     source: ListingObjectDetailSource(core: core,
-                                                                       objectId: objectId)))
+                                     source: ListingObjectDetailSource(core: core, objectId: objectId),
+                                     origin: origin))
     }
 }
 
-/// The binder for a minted Thing — what somebody is offering, wanting or holding.
+/// The binder for a held Thing — what somebody is offering, wanting or holding.
 @MainActor
 struct ListingObjectDetailSource: DetailSource {
     let core: CoreService
@@ -38,23 +38,30 @@ struct ListingObjectDetailSource: DetailSource {
 
     private var row: ThingRow? { core.things.first { $0.id == objectId } }
 
-    /// The listing's face, and the few facts a listing actually has. POSTURE leads,
-    /// because "offers" and "wants" are opposite claims about the same object and
-    /// reading the price first tells you nothing about which one you are looking at.
     func headline() async -> DetailHeadline? {
         guard let row else { return nil }
-        var facts: [String] = []
-        if !row.posture.isEmpty { facts.append(row.posture.uppercased()) }
-        // Core only ever stores a price on an ACTIVE posture, so an empty string
-        // here is a genuine absence rather than a dropped field.
-        if !row.price.isEmpty { facts.append(row.price) }
-        if !row.category.isEmpty { facts.append(row.category) }
-        if row.deadline > 0 { facts.append(EventWhen.label(startMs: row.deadline, endMs: 0)) }
-        if !row.area.isEmpty { facts.append(row.area) }
-        if !row.descriptor.isEmpty { facts.append(row.descriptor) }
-        return DetailHeadline(title: row.name.isEmpty ? row.descriptor : row.name,
-                              photo: row.photo.isEmpty ? nil : Data(base64Encoded: row.photo),
-                              facts: facts)
+        let more = core.thingDetail(objectId)
+        let owner = core.isGroupOwner(objectId)
+        let profile = "thing.setProfile"
+        let r = DetailBind.rows(owner: owner, core: core)
+
+        var market = [row.posture.uppercased(), row.price].filter { !$0.isEmpty }
+        if row.deadline > 0 { market.append(EventWhen.label(startMs: row.deadline, endMs: 0)) }
+        var rows = [DetailRow(label: "Market", value: market.joined(separator: " · "))]
+        rows.append(r.choice("Disposition", more?.disposition ?? "", op: "thing.setDisposition", arg: "state"))
+        rows.append(r.choice("Kind", row.category, op: profile, arg: "category"))
+        rows.append(r.choice("Condition", more?.condition ?? "", op: profile, arg: "condition"))
+        rows.append(r.text("Describe", row.descriptor, op: profile, arg: "descriptor", input: .multiline))
+        rows.append(r.text("Description", more?.description ?? "", op: profile, arg: "description", input: .multiline))
+        rows.append(DetailRow(label: "Area", value: row.area))
+
+        return DetailHeadline(
+            title: row.name.isEmpty ? row.descriptor : row.name,
+            titleEdit: owner ? DetailEdit(op: profile, arg: "name", input: .line, current: row.name) : nil,
+            photo: row.photo.isEmpty ? nil : Data(base64Encoded: row.photo),
+            gallery: DetailBind.pictures(more?.photos ?? []),
+            rows: rows,
+            adds: owner ? [.picture] : [])
     }
 
     func author() async -> DetailAuthor? {
@@ -66,61 +73,32 @@ struct ListingObjectDetailSource: DetailSource {
     }
 
     func post(_ text: String) async -> Bool { await DetailBind.post(text, on: objectId, core: core) }
-}
 
-// MARK: - Posts
-
-@MainActor
-enum PostDetail {
-    /// POSTS' own slot.
-    static var tint: Color { PaletteStore.base(4) }
-
-    static func open(_ objectId: String, core: CoreService, shell: ShellState) {
-        shell.beginNew(DetailSession(noun: "post",
-                                     source: PostDetailSource(core: core, objectId: objectId)))
-    }
-}
-
-/// The binder for a Post — the simplest kind in the catalog, and the simplest
-/// binder: a picture, the prose, and the thread under it.
-@MainActor
-struct PostDetailSource: DetailSource {
-    let core: CoreService
-    let objectId: String
-
-    private var row: PostRow? { core.posts.first { $0.id == objectId } }
-
-    /// A RETRACTED post shows the tombstone and NOT the words. The words are still
-    /// in the log — retraction is a claim on the log, not an erasure of it — but a
-    /// surface that renders them anyway would make the author's take-down a lie.
-    func headline() async -> DetailHeadline? {
-        guard let row else { return nil }
-        if row.retracted {
-            return DetailHeadline(title: row.title, facts: ["RETRACTED"])
+    /// A disposition is its own op, stamped with when it was said; the profile's rows
+    /// restate the profile.
+    func edit(_ edit: DetailEdit, to value: String) async -> Bool {
+        guard edit.op == "thing.setDisposition" else {
+            return await DetailBind.edit(edit, to: value, on: objectId, core: core)
         }
-        return DetailHeadline(title: row.title,
-                              photo: row.banner.isEmpty ? nil : Data(base64Encoded: row.banner),
-                              facts: row.body.isEmpty ? [] : [row.body])
+        guard !value.isEmpty else { return false }
+        return await core.apply(objectId, op: edit.op,
+                                ["state": .text(v: value), "at": .int(v: DetailBind.nowMs)])
     }
 
-    func author() async -> DetailAuthor? {
-        DetailBind.author(of: objectId, core: core, tint: PostDetail.tint)
+    func addPicture(_ data: Data) async -> Bool {
+        await core.addPicture(objectId, op: "thing.addPhoto", arg: "photo", data, keyed: true)
     }
-
-    func comments() async -> [DetailComment] {
-        DetailBind.comments(of: objectId, core: core, tint: PostDetail.tint)
-    }
-
-    func post(_ text: String) async -> Bool { await DetailBind.post(text, on: objectId, core: core) }
 }
 
 // MARK: - The shared half
 
-/// What every non-egoic binder answers the same way. A GroupObject's author and
-/// its comment log do not vary by kind — only the facts above them do — so these
-/// live once rather than three times.
+/// What every non-egoic binder answers the same way. A GroupObject's author, its
+/// comment log and the way its owner writes a row do not vary by kind — only the
+/// rows do — so these live once rather than once per kind.
 @MainActor
 enum DetailBind {
+
+    static var nowMs: Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     /// A comment, written to the object's comments section. False when the device
     /// does not hold that section, or is not on its roster.
@@ -154,6 +132,53 @@ enum DetailBind {
                                  whenMs: Int64(row.post.ts),
                                  mine: row.post.mine,
                                  color: tint)
+        }
+    }
+
+    /// An owner's row, through its whole-replace op (`CoreService.edit`): the held
+    /// args restated with this one changed. A date and a switch cross as the integers
+    /// the ICD types them; an emptied value clears its arg.
+    static func edit(_ e: DetailEdit, to value: String, on objectId: String, core: CoreService) async -> Bool {
+        let v: OpValue
+        switch e.input {
+        case .date, .toggle:
+            v = value.isEmpty ? .text(v: "") : .int(v: Int64(value) ?? 0)
+        default:
+            v = .text(v: value)
+        }
+        return await core.edit(objectId, op: e.op, [e.arg: v])
+    }
+
+    static func pictures(_ media: [MediaRow]) -> [DetailPicture] {
+        media.enumerated().compactMap { i, m in
+            Data(base64Encoded: m.data).map { DetailPicture(id: i, data: $0, alt: m.alt) }
+        }
+    }
+
+    /// Builds rows that are writable for the owner and values for everyone else.
+    static func rows(owner: Bool, core: CoreService) -> RowMaker { RowMaker(owner: owner, core: core) }
+
+    @MainActor
+    struct RowMaker {
+        let owner: Bool
+        let core: CoreService
+
+        func text(_ label: String, _ value: String, op: String, arg: String,
+                  input: DetailInput = .line, link: URL? = nil, markdown: Bool = false) -> DetailRow {
+            DetailRow(label: label, value: value, link: link, markdown: markdown,
+                      edit: owner ? DetailEdit(op: op, arg: arg, input: input, current: value) : nil)
+        }
+
+        /// A closed vocabulary, offered in the ICD's words for this op's arg.
+        func choice(_ label: String, _ value: String, op: String, arg: String) -> DetailRow {
+            DetailRow(label: label, value: value,
+                      edit: owner ? DetailEdit(op: op, arg: arg, input: .choice(core.vocabulary(op, arg)),
+                                               current: value) : nil)
+        }
+
+        /// A web address the owner writes and a viewer opens.
+        func link(_ label: String, _ value: String, op: String, arg: String) -> DetailRow {
+            text(label, value, op: op, arg: arg, link: URL(string: value).flatMap { $0.scheme == nil ? nil : $0 })
         }
     }
 }

@@ -538,11 +538,6 @@ struct LifeView: View {
                                               source: RealProfileSource(core: core, subject: .peer(link.id)))
                                 .shellBottomBarClearance()
                         }
-                        .navigationDestination(for: PlaceLink.self) { link in
-                            PlaceProfilePage(placeID: link.id,
-                                             source: RealProfileSource(core: core, subject: .place(link.id)))
-                                .shellBottomBarClearance()
-                        }
                         // No `+` (9 Nov): RED's creator mints every kind it did.
                         .tabChrome("Life", showsTitle: false, showsNotifications: true,
                                    search: TabSearch(text: $lifeSearch, open: $searchOpen))
@@ -610,8 +605,8 @@ struct LifeView: View {
             ScanCodeSheet(onOpen: { _ in scanningPlace = false })
                 .environmentObject(core)
         }
-        // The POV cover: reached from the map sheet's WALK UP and from the
-        // Place Profile page (T4) — the place's interior is a property of the place.
+        // The POV cover: reached from the map's pin and its sheet's WALK UP — the
+        // place's interior is a property of the place.
         .fullScreenCover(item: $openedPlace) { place in
             PlacePOVView(focus: place,
                          neighbours: placeAnnotations,
@@ -662,6 +657,13 @@ struct LifeView: View {
             lifeQuery.select(.people)
             if let obj = note.userInfo?["object"] as? String {
                 path = NavigationPath([PersonLink(id: obj)])
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pacificOpenPlace)) { note in
+            // A Place's door — an event's venue, a map row, a profile's pin: its
+            // maximised detail, wherever the door was.
+            if let obj = note.userInfo?["object"] as? String {
+                PlaceDetail.open(obj, core: core, shell: shell)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .pacificOpenGroup)) { note in
@@ -810,18 +812,21 @@ struct LifeView: View {
     /// TAP = INSTANCE DETAIL, routed by the item's kind. Kinds without a detail page
     /// yet fall through silently — a card never navigates somewhere that isn't its
     /// object. Browsing a KIND stays on the rail (10 Aug order).
+    ///
+    /// The non-egoic kinds MAXIMISE: the card's square grows into the object's page
+    /// (`Design/Detail`). A Space and a person are profiles, pushed onto the stack.
+    /// A card with no object id is an exterior one — a copy of something this device
+    /// is not a member of — and opens nothing until the exterior is specified (#76).
     private func openObject(_ item: FeedItem) {
         guard let oid = item.objectID else { return }
+        let origin = CardFrames.shared.frames[item.id]
         switch item.category {
         case .groups: path.append(GroupLink(id: oid))
-        case .events: EventDetail.open(oid, core: core, graph: graph, shell: shell)
-        // TRADE used to open the EVENT page — a listing rendered as a night, mostly
-        // empty. POSTS fell through `default:` to nothing at all, so a post card was
-        // a card you could tap forever. Both open their own object now.
-        case .trade:  ListingDetail.open(oid, core: core, shell: shell)
-        case .posts:  PostDetail.open(oid, core: core, shell: shell)
+        case .events: EventDetail.open(oid, core: core, graph: graph, shell: shell, origin: origin)
+        case .trade:  ListingDetail.open(oid, core: core, shell: shell, origin: origin)
+        case .posts:  PostDetail.open(oid, core: core, shell: shell, origin: origin)
+        case .places: PlaceDetail.open(oid, core: core, shell: shell, origin: origin)
         case .people: path.append(PersonLink(id: oid))
-        case .places: path.append(PlaceLink(id: oid))
         default: break
         }
     }
