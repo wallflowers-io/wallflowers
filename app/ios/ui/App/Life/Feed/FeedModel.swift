@@ -70,6 +70,16 @@ struct FeedItem: Identifiable, Equatable {
     }
 }
 
+extension FeedItem {
+    /// LIFE's search, over what a card SHOWS — title, author, place — because that is
+    /// what a person is scanning for. An empty query matches everything.
+    func matches(_ query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        return q.isEmpty || title.lowercased().contains(q) || author.lowercased().contains(q)
+            || location.lowercased().contains(q)
+    }
+}
+
 enum FeedAssembler {
 
     /// Union the published reads into rows. Past events sit out unless something

@@ -12,19 +12,12 @@ struct FeedView: View {
     /// site — the uniform card contract (see ObjectCard). Kind-browsing is the rail's.
     var onOpen: (FeedItem) -> Void
     var onAuthor: ((AuthorRoute) -> Void)? = nil
-    /// The LIFE search text. Empty = the feed is itself; matching is over what a card
-    /// SHOWS — title, author, place — because that is what a person is scanning for
-    /// when they start typing at a list they can already see.
+    /// The LIFE search text (`FeedItem.matches`). Empty = the feed is itself.
     var query: String = ""
+    /// The jewel rail floats over the top edge — up only while LIFE is searching.
+    var railShown = true
 
-    private var shown: [FeedItem] {
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return store.rows }
-        return store.rows.filter {
-            $0.title.lowercased().contains(q) || $0.author.lowercased().contains(q)
-                || $0.location.lowercased().contains(q)
-        }
-    }
+    private var shown: [FeedItem] { store.rows.filter { $0.matches(query) } }
 
     var body: some View {
         ScrollView {
@@ -55,7 +48,7 @@ struct FeedView: View {
                         .accessibilityIdentifier("feed-empty")
                 }
             }
-            .padding(.top, RibbonWidth.contracted + DesignTokens.Feed.topGap)
+            .padding(.top, (railShown ? RibbonWidth.contracted : 0) + DesignTokens.Feed.topGap)
         }
         .accessibilityIdentifier("life-feed")
         .onDisappear { store.markVisited() }
