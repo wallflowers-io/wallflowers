@@ -620,3 +620,55 @@ async fn after_a_lost_seat_the_dropped_copies_are_never_published() {
         assert_eq!(renames, 4, "{}: one of each, and no dropped copy", h.device_name(u));
     }
 }
+
+/// A BACKED-OFF OBJECT STILL TAKES THE PERSON'S OWN WRITE (#75). A slot held by a claim this
+/// device cannot read fails the queue and backs the object off. A sweep (`publish_all_pending`,
+/// as the Door's tail and a sync tick do) then waits, sends nothing and counts nothing; the
+/// person's own `publish_pending` on that object claims on that call all the same, and its
+/// failure is an error — the Door answers a write as relayed on it (NC-93). RFC 9420 §14:
+/// back off the loser, not the person.
+#[tokio::test]
+async fn a_backed_off_object_still_takes_the_persons_own_write() {
+    let h = Harness::people(&[("axel", &["phone", "laptop"])]).await;
+    let phone = h.device("axel", "phone");
+    let laptop = h.device("axel", "laptop");
+    let feast = h.form_object(phone, "event", &[]).await;
+    h.add_to_forum(phone, laptop, &feast).await;
+    let rename = |title: &str| event::set_profile_args(title, None, START_MS, None, None, None, None);
+    h.node(phone).apply(&feast, OP_SET_PROFILE, rename("Feast")).await.unwrap();
+    h.settle().await;
+
+    let n = h.node(phone);
+    n.apply_local(&feast, OP_SET_PROFILE, rename("Feast Xalapa")).await.unwrap();
+    let gid = hex::decode(&feast).unwrap();
+    let queued = n.dir.pending_outbox(&gid, &n.id.identity_pk()).unwrap();
+    let (did, env) = queued.first().cloned().expect("the rename waits in the outbox");
+    let prev = pacific_core::coordinator::decode_delta(&env).unwrap().prev;
+
+    // Someone else's bytes in the place after the head: a claim this device cannot read.
+    let root = pacific_core::locator::storage_root(&n.id.seed_bytes().expect("a seed"));
+    let slot = pacific_core::node::sequenced_slot(&root, &gid, &prev);
+    let mut relay = pacific_core::transport::RelaySession::connect(&h.relay).await.unwrap();
+    assert!(relay.publish_commit(&slot, pacific_wire::blob_b64(b"not a claim")).await.unwrap().is_some());
+
+    let wire = || pacific_core::router::published();
+    let before = wire();
+    assert!(n.publish_pending(&feast).await.is_err(), "the person's write is not at the relay, and says so");
+    assert_eq!(wire() - before, 1, "it claimed, once");
+
+    let before = wire();
+    assert_eq!(n.publish_all_pending().await.unwrap(), 0, "a sweep inside the backoff counts nothing");
+    assert_eq!(wire() - before, 0, "and sends nothing");
+    assert!(n.dir.pending_outbox(&gid, &n.id.identity_pk()).unwrap().iter().any(|(d, _)| *d == did), "the rename still waits");
+
+    // A sync tick inside the backoff, on the same Node (the backoff is held in memory, as a
+    // Door session or the app holds one Node): the object's queue waits, and nothing goes out.
+    let before = wire();
+    n.sync_once().await.unwrap();
+    assert_eq!(wire() - before, 0, "a tick sends nothing for a backed-off object");
+    assert!(n.dir.pending_outbox(&gid, &n.id.identity_pk()).unwrap().iter().any(|(d, _)| *d == did), "the rename still waits");
+
+    let before = wire();
+    assert!(n.publish_pending(&feast).await.is_err(), "inside the backoff, the person's write is tried again");
+    assert_eq!(wire() - before, 1, "it claimed again on that call");
+}
