@@ -8,6 +8,21 @@ Method: deploy.md § 10.
 Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on an object that exists, or
 `POST /v2/mint` to make one. `GET /v2/icd` serves the model production runs; model.html lists every op and its args.
 
+## 2.8.0
+
+<!-- generated 2.8.0: icd-changelog.mjs --write; do not edit between the markers -->
+- Draft (the media facet, base.setIcon and base.setBanner, #112), from `59bf463`; its ICD `8573f9e783732328790d2c759c2c9a66ca63f8ec7a439c40d0aa9e471dac6ff1`, not a release until its icd/* tag
+- Against 2.7.0 (`a9eac5c92bf6f0a4…`):
+  - added: base.setBanner (facet media, op 4027514881, owner|role:admin, commutative)
+  - added: base.setIcon (facet media, op 4027514880, owner|role:admin, commutative)
+  - model sections changed besides ops: facets
+<!-- end generated 2.8.0 -->
+
+The media facet (#112): `base.setIcon` and `base.setBanner` give every group, event, thing and post an icon and a
+banner, each a detached media reference (`media.detached`). The owner or an admin writes them; the last writer by
+(gen, author) holds. Where written, they win over a kind's own picture, which stays readable for what was made
+before.
+
 ## 2.7.0
 
 <!-- generated 2.7.0: icd-changelog.mjs --write; do not edit between the markers -->
