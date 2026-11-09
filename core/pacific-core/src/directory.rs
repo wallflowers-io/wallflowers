@@ -59,6 +59,21 @@ impl PeerStatus {
 /// `delta_log`'s `delivered` flag is left out: the relay's acknowledgement changes nothing
 /// a fold reads. The triggers are dropped and made again at every open, so a changed body
 /// reaches a database made before it.
+/// `FOLD_GEN`'s triggers, as (name, the statement SQLite keeps for it: from CREATE to END,
+/// without the semicolon).
+fn fold_triggers() -> Vec<(&'static str, &'static str)> {
+    let mut out = Vec::new();
+    let mut rest = FOLD_GEN;
+    while let Some(at) = rest.find("CREATE TRIGGER ") {
+        let stmt = &rest[at..];
+        let end = stmt.find("\nEND;").map(|e| e + "\nEND".len()).unwrap_or(stmt.len());
+        let name = stmt["CREATE TRIGGER ".len()..].split_whitespace().next().unwrap_or_default();
+        out.push((name, &stmt[..end]));
+        rest = &stmt[end..];
+    }
+    out
+}
+
 /// THE FOLDS KEPT ON DISK (O-69 option B): one row per object, lens and product, keyed as
 /// the memory cache is less its nonce. Named by no trigger, so keeping a fold moves no
 /// generation.
@@ -839,20 +854,60 @@ impl Directory {
             [],
         );
         let _ = conn.execute("DROP TABLE IF EXISTS inbox_cursor", []);
-        // After the migrations: the triggers name columns some of them add.
-        let gens: i64 = conn.query_row(
-            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'fold_gen'",
+        // After the migrations: the triggers name columns some of them add. Triggers that
+        // already read as written are left alone, so an open of a current database writes
+        // nothing and waits on no one; otherwise ONE OPEN AT A TIME redoes them, in an
+        // immediate transaction: two opens of one database at once (the app's first, a
+        // test's relaunch beside it) interleaved their DROP and CREATE and failed with
+        // "trigger … already exists". A second waits its turn (busy_timeout).
+        if Self::fold_triggers_current(conn)? {
+            return Ok(());
+        }
+        conn.execute_batch("BEGIN IMMEDIATE")?;
+        let triggers = || -> Result<(), CoreError> {
+            let gens: i64 = conn.query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'fold_gen'",
+                [],
+                |r| r.get(0),
+            )?;
+            conn.execute_batch(FOLD_STORE)?;
+            conn.execute_batch(FOLD_GEN)?;
+            // Generations that start again from nothing could meet a kept fold of an
+            // earlier count: the kept folds go with them.
+            if gens == 0 {
+                conn.execute("DELETE FROM fold_store", [])?;
+            }
+            Ok(())
+        };
+        match triggers() {
+            Ok(()) => conn.execute_batch("COMMIT")?,
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(e);
+            }
+        }
+        Ok(())
+    }
+
+    /// Every fold trigger reads in the schema exactly as `FOLD_GEN` writes it, and the
+    /// tables they and the kept folds need are there: nothing for an open to redo.
+    fn fold_triggers_current(conn: &Connection) -> Result<bool, CoreError> {
+        let tables: i64 = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('fold_gen', 'store_gen', 'fold_store')",
             [],
             |r| r.get(0),
         )?;
-        conn.execute_batch(FOLD_STORE)?;
-        conn.execute_batch(FOLD_GEN)?;
-        // Generations that start again from nothing could meet a kept fold of an earlier
-        // count: the kept folds go with them.
-        if gens == 0 {
-            conn.execute("DELETE FROM fold_store", [])?;
+        if tables != 3 {
+            return Ok(false);
         }
-        Ok(())
+        let mut held = conn.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?1")?;
+        for (name, sql) in fold_triggers() {
+            let have: Option<String> = held.query_row(params![name], |r| r.get(0)).optional()?;
+            if have.as_deref() != Some(sql) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     // ---- me ----
@@ -2556,6 +2611,38 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         Directory::init(&conn).unwrap();
         Directory::with(conn)
+    }
+
+    /// `FOLD_GEN` is read as SQLite keeps it: a database just opened reads current, and one
+    /// missing a trigger does not.
+    #[test]
+    fn the_fold_triggers_read_as_written() {
+        let dir = mem();
+        assert_eq!(fold_triggers().len(), FOLD_GEN.matches("CREATE TRIGGER ").count());
+        assert!(Directory::fold_triggers_current(&dir.conn).unwrap(), "just written");
+        dir.conn.execute_batch("DROP TRIGGER fold_gen_log_ins").unwrap();
+        assert!(!Directory::fold_triggers_current(&dir.conn).unwrap(), "one dropped");
+        Directory::init(&dir.conn).unwrap();
+        assert!(Directory::fold_triggers_current(&dir.conn).unwrap(), "and an open puts it back");
+    }
+
+    /// Opens of one database at once all succeed. Each redid the fold triggers, and two
+    /// interleaving their DROP and CREATE failed on the first read ("trigger … already
+    /// exists"), as the app's first opens did at sign-up and a test's relaunch beside it;
+    /// under a loaded host, opens queued for the write lock ran past busy_timeout. Now an
+    /// open of a current database only reads.
+    #[test]
+    fn opens_at_once_all_succeed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pacific.db");
+        Directory::open_at(&path).unwrap();
+        let failed: Vec<String> = std::thread::scope(|s| {
+            let opens: Vec<_> = (0..8)
+                .map(|_| s.spawn(|| (0..25).filter_map(|_| Directory::open_at(&path).err().map(|e| e.to_string())).collect::<Vec<_>>()))
+                .collect();
+            opens.into_iter().flat_map(|t| t.join().unwrap()).collect()
+        });
+        assert!(failed.is_empty(), "{} of 200 opens failed: {:?}", failed.len(), failed.first());
     }
 
     /// O-69: the fold generation moves on every change to a row the fold reads (a Delta

@@ -588,9 +588,15 @@ struct LifeView: View {
                                    onNew: (filter.newKind == nil && filter != .people) ? nil : onNew)
                 }
         }
-        // The feed assembles once per sync tick and once per filter change — the
-        // equality gate inside the store makes redundant ticks free.
+        // The feed assembles once per sync tick, once per filter change, and whenever one of
+        // its inputs lands: they are read off the main thread, after the page has drawn, and
+        // a device that cannot reach the relay never ticks. (`onChange`, not the publishers:
+        // a @Published publisher fires before the property is set.) The equality gate inside
+        // the store makes redundant passes free.
         .onReceive(core.$syncTick) { _ in feedStore.refresh(core: core, query: lifeQuery) }
+        .onChange(of: core.events) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
+        .onChange(of: core.posts) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
+        .onChange(of: core.listings) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
         .onChange(of: lifeQuery.locked) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
         .onChange(of: lifeQuery.bound) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
         .task {
