@@ -241,6 +241,8 @@ private struct PlaceDetailSheet: View {
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Theme.hairline, lineWidth: 1))
         .padding(.horizontal, 12)
         .padding(.bottom, ShellMetrics.bottomBarHeight + 12)   // sit ABOVE the NOTE·CHAT·LIFE bar
+        // Its own element, so its id does not overwrite the buttons' ids inside it.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("place-sheet")
     }
 }
