@@ -316,6 +316,26 @@ mod tests {
         std::env::remove_var("PACIFIC_STATE_DIR");
     }
 
+    /// THE BUNDLE'S BYTES, pinned. Ed25519 signs deterministically, so a fixed seed and
+    /// fixed fields give one encoding; a change to it is a change to the QR every
+    /// installed build reads.
+    const GOLDEN: &str = "\
+        p2F2AWtpZGVudGl0eV9wa1ggk0FNc+VoSAhJZzqxKeLI19ziTuuQ3wH7tfIRyExhKzVra2V5X3BhY2th\
+        Z2VEAQIDBGlpbnRyb190YWdYIAkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJbGRpc3BsYXlf\
+        bmFtZWNhZGFvbmV4dF9rZXlfY29tbWl0WCB2PnsQl0+UYsXv3gw/mY25PAPy1ldGWDUvVbmZ0rcxtmNz\
+        aWdYQFaOWD2StkRhG6Ulau6mLHiHag7hlmXHF1FLgG9IcbZ6MxSsNSmw0d80RynyKI2+MjHkYSbbLoG4\
+        FigzuSFwDAg=";
+
+    #[test]
+    fn bundle_bytes_are_pinned() {
+        let id = Identity::in_memory([7u8; 32]);
+        let b = build_bundle(&id, vec![1, 2, 3, 4], [9u8; 32], "ada").unwrap();
+        assert_eq!(b.encode().unwrap(), GOLDEN);
+        let parsed = parse_and_verify(GOLDEN).unwrap();
+        assert_eq!(parsed.identity_pk, id.identity_pk());
+        assert_eq!(parsed.next_key_commit, id.next_key_commit());
+    }
+
     #[test]
     fn bundle_roundtrip_and_tamper_detection() {
         with_state_dir(|| {
