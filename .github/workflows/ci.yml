@@ -9,7 +9,9 @@
 name: CI
 
 on:
+  # Branches only: a release tag names a commit main's CI has already run.
   push:
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
