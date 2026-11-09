@@ -176,9 +176,10 @@ fn admit_request(mut req: tiny_http::Request, node_lock: &Mutex<()>, claim_keys:
 
 /// NC-140: AN ADMISSION NEVER WAITS HOLDING THE NODE LOCK. A claim that can be refused without
 /// its Site is refused first, with no wait. A Site not on this node yet is waited for, up to
-/// `SITE_WAIT`: the lock taken for each check (`site_ready`) and released before the pause.
-/// Then the lock is taken once for the admission, where the claim is verified whole and spent
-/// once.
+/// `SITE_WAIT`, on one Node and its held session: each check's intro mailbox fetched with no
+/// lock (`intro_fetch`), and the lock taken only to ingest it (`site_take`, #79). Then the lock
+/// is taken once for the admission, on a Node opened for it, where the claim is verified whole
+/// and spent once.
 fn admit(
     node_lock: &Mutex<()>,
     claim_keys: &std::collections::HashMap<String, [u8; 32]>,
@@ -189,10 +190,19 @@ fn admit(
     use pacific_core::node::{SITE_NOT_HERE, SITE_WAIT, SITE_WAIT_PAUSE};
     pacific_core::node::admission_precheck(claim, bundles, claim_keys)?;
     let until = std::time::Instant::now() + SITE_WAIT;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| CoreError::Transport(format!("runtime: {e}")))?;
+    let node = {
+        let _g = node_lock.lock().unwrap();
+        Node::open()?
+    };
     loop {
+        let fetched = rt.block_on(node.intro_fetch(site))?;
         let ready = {
             let _g = node_lock.lock().unwrap();
-            Node::open().and_then(|node| block_on(node.site_ready(site)))?
+            node.site_take(site, fetched)?
         };
         if ready {
             break;
@@ -202,6 +212,7 @@ fn admit(
         }
         std::thread::sleep(SITE_WAIT_PAUSE);
     }
+    drop(node);
     let _g = node_lock.lock().unwrap();
     Node::open().and_then(|node| block_on(node.admit_by_claim(site, claim, bundles, claim_keys)))
 }
