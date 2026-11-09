@@ -163,3 +163,19 @@ async fn a_knock_expires_after_the_door_ttl_and_nothing_else_does() {
     assert_eq!(store.floors(&[door.clone()]).unwrap().get(&door), Some(&t0), "the expiry is announced as a floor");
     assert!(store.evicted_totals(&[door.clone()]).unwrap().is_empty(), "expiry is not a flood");
 }
+
+#[tokio::test]
+async fn one_connection_paces_only_so_many_doors_at_once() {
+    let url = boot().await;
+    let (mut ws, _) = connect_async(&url).await.unwrap();
+    for i in 0..relay::limits::DOORS_PER_CONN {
+        send(&mut ws, addr(&format!("d{i}")).door_pub_frame(relay::wire::blob_b64(b"knock"))).await;
+        assert_eq!(ack(&mut ws).await, (true, None), "door {i}");
+    }
+    // Every bucket has just been used, so none is idle to drop.
+    send(&mut ws, addr("one more").door_pub_frame(relay::wire::blob_b64(b"knock"))).await;
+    assert_eq!(ack(&mut ws).await, (false, Some("rate_limited".into())));
+    // A door this connection already paces is not a new entry.
+    send(&mut ws, addr("d0").door_pub_frame(relay::wire::blob_b64(b"again"))).await;
+    assert_eq!(ack(&mut ws).await, (true, None));
+}

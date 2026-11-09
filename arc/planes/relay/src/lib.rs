@@ -387,6 +387,13 @@ impl Hub {
             }
             // A DOOR'S OWN PACE per connection: a few knocks an hour, not 50 a second.
             if is_door(&tag) {
+                if !c.doors.contains_key(&tag) && c.doors.len() >= limits::DOORS_PER_CONN {
+                    c.doors.retain(|_, b| !b.is_full());
+                    if c.doors.len() >= limits::DOORS_PER_CONN {
+                        self.metrics.refused_publishes.fetch_add(1, Ordering::Relaxed);
+                        return Published::refused("rate_limited");
+                    }
+                }
                 let per_hour = crate::wire::DOOR_PER_CONN_PER_HOUR as f64;
                 let knocks = c.doors.entry(tag.clone()).or_insert_with(|| limits::Bucket::new(per_hour / 3600.0, per_hour));
                 if !knocks.take(1.0) {
