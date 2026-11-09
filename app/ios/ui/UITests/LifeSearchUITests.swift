@@ -17,7 +17,9 @@ final class LifeSearchUITests: XCTestCase {
         super.setUp()
         continueAfterFailure = false
         addUIInterruptionMonitor(withDescription: "system-alert") { [weak self] _ in
-            self?.tapSpringboard(["Allow", "OK", "Don’t Allow", "Don't Allow"]) ?? false
+            // The map asks for location: allow it, as the map's own suites do.
+            self?.tapSpringboard(["Allow While Using App", "Allow Once", "Allow", "OK",
+                                  "Don’t Allow", "Don't Allow"]) ?? false
         }
     }
 
