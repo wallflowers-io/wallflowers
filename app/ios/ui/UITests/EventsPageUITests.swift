@@ -40,6 +40,7 @@ final class EventsPageUITests: XCTestCase {
 
     func test_eventJewel_maximisesToTypedList_andBack() {
         launchToLife(seeded: true)   // seeded events make the list's rows deterministic
+        app.openLifeSearch()
 
         XCTAssertTrue(waitGround("life-feed", timeout: 10), "the feed ground")
         app.buttons["jewel-events"].tap()
@@ -67,6 +68,7 @@ final class EventsPageUITests: XCTestCase {
     /// matching a tappable thing when that landed.
     func test_eventRow_opensDetailPage_andCloseReturnsToTheList() {
         launchToLife(seeded: true)
+        app.openLifeSearch()
 
         XCTAssertTrue(waitGround("life-feed", timeout: 10), "the feed ground")
         app.buttons["jewel-events"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()

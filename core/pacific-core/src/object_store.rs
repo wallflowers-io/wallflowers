@@ -409,6 +409,69 @@ impl<'a> GroupObjectStore<'a> {
         Ok(best.into_values().collect())
     }
 
+    /// One held object's exterior facet and its visibility in force, whatever its kind
+    /// (`facets.exterior.on`); `None` for a kind that has no exterior.
+    pub fn exterior_of(
+        &self,
+        id: &[u8],
+        kind: ObjectKind,
+    ) -> Result<Option<(crate::exterior::ExteriorState, crate::visibility::Visibility)>, CoreError> {
+        use ObjectKind as K;
+        Ok(Some(match kind {
+            K::Group => {
+                let c = self.folded::<crate::group::GroupType>(id)?;
+                (c.state().exterior.clone(), c.state().visibility())
+            }
+            K::Forum => {
+                let c = self.folded::<crate::coordinator::ForumType>(id)?;
+                (c.state().exterior.clone(), c.state().visibility())
+            }
+            K::Project => {
+                let c = self.folded::<crate::project::ProjectType>(id)?;
+                (c.state().exterior.clone(), c.state().visibility())
+            }
+            K::Thing => {
+                let c = self.folded::<crate::thing::ThingType>(id)?;
+                (c.state().exterior.clone(), c.state().visibility())
+            }
+            K::Place => {
+                let c = self.folded::<crate::place::PlaceType>(id)?;
+                (c.state().exterior.clone(), c.state().visibility)
+            }
+            K::Event => {
+                let c = self.folded::<crate::event::EventType>(id)?;
+                (c.state().exterior.clone(), c.state().visibility())
+            }
+            K::Post => {
+                let c = self.folded::<crate::post::PostType>(id)?;
+                (c.state().exterior.clone(), c.state().visibility())
+            }
+            K::Note => {
+                let c = self.folded::<crate::note::NoteType>(id)?;
+                (c.state().exterior.clone(), c.state().visibility())
+            }
+            _ => return Ok(None),
+        }))
+    }
+
+    /// THE EXTERIORS THAT REACHED ME: every copy carried on any connection, merged by object
+    /// keeping the newest rows and the shortest path — tombstones included, so a withdrawal
+    /// is never shadowed by a stale copy in another channel. An object I hold is left out:
+    /// I am inside it.
+    pub fn merged_exteriors(&self) -> Result<BTreeMap<String, crate::exterior::Carried>, CoreError> {
+        let mut best: BTreeMap<String, crate::exterior::Carried> = BTreeMap::new();
+        for r in self.by_kind("connection")? {
+            let st = self.folded::<crate::contact::ContactType>(&r.id)?.state().clone();
+            for c in st.exteriors.into_values() {
+                if best.get(&c.object).is_none_or(|h| c.supersedes(h)) {
+                    best.insert(c.object.clone(), c);
+                }
+            }
+        }
+        best.retain(|object, _| hex::decode(object).ok().is_none_or(|g| !matches!(self.dir.group_kind(&g), Ok(Some(_)))));
+        Ok(best)
+    }
+
     /// Every object, newest ACTIVITY first (most recently received delta).
     pub fn by_recency(&self) -> Result<Vec<ObjectRef>, CoreError> {
         let mut all = self.refs(|_| true)?;
