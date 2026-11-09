@@ -61,6 +61,8 @@ extension Notification.Name {
     /// since rooms got deep links; the person half arrived with the detail modal,
     /// whose author bar is a door and can point at either.
     static let pacificOpenPerson = Notification.Name("pacificOpenPerson")
+    /// Open a PLACE's maximised detail. userInfo: ["object": the place's object id].
+    static let pacificOpenPlace = Notification.Name("pacificOpenPlace")
     /// Posted by the shell when the BLUE disc is pressed while LIFE is already up:
     /// LIFE returns to its ground state — every jewel minimised, the Feed.
     static let pacificLifeHome = Notification.Name("pacificLifeHome")

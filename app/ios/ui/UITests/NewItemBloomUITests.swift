@@ -24,11 +24,8 @@ final class NewItemBloomUITests: XCTestCase {
     func test_newItemModal_groundAnimates() {
         launchToLife()
 
-        // The LIFE `+` raises the newitem modal for the selected jewel. SPACES is the
-        // default landing jewel and its `+` is always live.
-        let plus = app.buttons.matching(identifier: "tab-new").firstMatch
-        XCTAssertTrue(plus.waitForExistence(timeout: 10), "LIFE's +")
-        plus.tap()
+        // RED's creator, turned to a Space, raises the newitem modal over LIFE.
+        app.beginCreating("group")
 
         // Do NOT assert on a container identifier — SwiftUI does not surface one on a
         // plain ZStack. The BLUE disc's label is the surface's own commit verb, so its
@@ -72,13 +69,12 @@ final class NewItemBloomUITests: XCTestCase {
     func test_newItemModal_opensWithKeyboardDown_andGroundFollowsTheCard() {
         launchToLife()
 
-        let plus = app.buttons.matching(identifier: "tab-new").firstMatch
-        XCTAssertTrue(plus.waitForExistence(timeout: 10), "LIFE's +")
-        plus.tap()
+        let card = app.beginCreating("group")
 
         // Query broadly: the identifier is set on the entry box, and SwiftUI decides for
-        // itself whether that surfaces as a text field or a container.
-        let name = app.descendants(matching: .any)
+        // itself whether that surfaces as a text field or a container. On the card in
+        // view: the creator lays out every kind's card.
+        let name = card.descendants(matching: .any)
             .matching(identifier: "new-field-name").firstMatch
         XCTAssertTrue(name.waitForExistence(timeout: 10), "the NAME field")
         let down = XCUIScreen.main.screenshot()

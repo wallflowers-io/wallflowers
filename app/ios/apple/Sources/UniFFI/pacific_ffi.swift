@@ -657,6 +657,11 @@ public protocol CoreProtocol : AnyObject {
     func contactBundle() throws  -> String
     
     /**
+     * Admit, or decline, one request. A decline is not told to the asker.
+     */
+    func decideRequest(objectId: String, request: String, admit: Bool) throws 
+    
+    /**
      * Everything of `kind` within `hops` handshakes: what I hold (hops 0) merged
      * with every live answer to my questions — shortest-path deduped, and a row I
      * already ADOPTED locally wins over its remote reference. Pure read.
@@ -709,6 +714,11 @@ public protocol CoreProtocol : AnyObject {
      * is no connection group for this peer.
      */
     func dmTranscript(peerId: String) throws  -> [String]
+    
+    /**
+     * The rest of one Event — its maximised detail's read, beside its `EventRow`.
+     */
+    func eventDetail(objectId: String) throws  -> EventDetailRow
     
     /**
      * DOOR: one scanned QR → one verdict, joined in core. Verifies the signature
@@ -796,6 +806,12 @@ public protocol CoreProtocol : AnyObject {
      * it carries the seed and nothing else. Loud on an identity that has none.
      */
     func exportWrap(prfSecret: Data, host: String) throws  -> Data
+    
+    /**
+     * The exteriors that reached me through my connections: objects I am not in, each with
+     * whether I have asked to join.
+     */
+    func exteriors() throws  -> [ExteriorRow]
     
     /**
      * Every forum→host edge this device can fold — the whole map in one call,
@@ -1033,6 +1049,28 @@ public protocol CoreProtocol : AnyObject {
     func myProfile() throws  -> ProfileRow
     
     /**
+     * Apply one op to an object, BY ITS ICD NAME (`"event.editProfile"`), with its ICD
+     * arg names — the Door's `apply` step (`authoring::op_on`), so an edit has one path
+     * and no per-op writer to drift from the catalogue. Refused when the object's kind
+     * has no such op; the fold judges authority and args. Reaches the relay → call OFF
+     * the main thread.
+     */
+    func objectApply(objectId: String, op: String, args: [OpArg]) throws  -> String
+    
+    /**
+     * An owner's edit to an op that REPLACES WHOLE — `event.setProfile`, `thing.setProfile`,
+     * `post.setProfile`: the held args, with `changes` laid over them (an
+     * empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
+     * the answer is "". Any other op is refused: it is `object_apply`'s.
+     */
+    func objectEdit(objectId: String, op: String, changes: [OpArg]) throws  -> String
+    
+    /**
+     * One object of mine's exterior, as its owner wrote it; None until one is written.
+     */
+    func objectExterior(objectId: String) throws  -> MyExterior?
+    
+    /**
      * Mark every message WE hold from another member of this (forum) object READ —
      * authors the ✓✓-blue receipts the senders see. Emitted when the user opens the
      * conversation; idempotent (only un-acknowledged messages produce a receipt).
@@ -1151,6 +1189,18 @@ public protocol CoreProtocol : AnyObject {
     func objects(kind: ObjectKind?) throws  -> [ObjectRow]
     
     /**
+     * The ICD's `maxLength` for `op`'s `arg` — characters for text, base64 characters for
+     * inline media. 0 when the ICD states none.
+     */
+    func opArgMax(op: String, arg: String)  -> UInt64
+    
+    /**
+     * The ICD's words for `op`'s `arg` — what a choice row offers. Empty when the arg is
+     * free text.
+     */
+    func opVocabulary(op: String, arg: String)  -> [String]
+    
+    /**
      * Accept a pending connection (double-opt-in): mark the peer Connected.
      * `peer` is the peer's space id (as returned by pair_scan / a pending intro).
      */
@@ -1176,6 +1226,12 @@ public protocol CoreProtocol : AnyObject {
      * rather than rendering a blank card. Synchronous read (a fold, no relay).
      */
     func peerProfile(peerId: String) throws  -> ProfileRow?
+    
+    /**
+     * The requests waiting for me: at the review doors of objects I own or admit to, from what
+     * this device's syncs have drained. No relay round trip.
+     */
+    func pendingRequests() throws  -> [RequestRow]
     
     /**
      * Every person: this device's identity first, then each connection, with the
@@ -1339,6 +1395,11 @@ public protocol CoreProtocol : AnyObject {
     func places() throws  -> [PlaceRow]
     
     /**
+     * The rest of one Post — its maximised detail's read, beside its `PostRow`.
+     */
+    func postDetail(objectId: String) throws  -> PostDetailRow
+    
+    /**
      * One Post, folded to display shape.
      *
      * `retracted` rides the row rather than filtering the list here: a retraction is a
@@ -1451,6 +1512,11 @@ public protocol CoreProtocol : AnyObject {
     func replyInvite(peer: String, event: String, going: Bool, at: Int64) throws  -> String
     
     /**
+     * Ask to join an object whose exterior reached me. Returns the request's id.
+     */
+    func requestJoin(objectId: String, note: String) throws  -> String
+    
+    /**
      * Every room→host edge this device can fold — the whole map in one call,
      * so the CHAT list never does a per-row fold. Synchronous read.
      */
@@ -1506,6 +1572,15 @@ public protocol CoreProtocol : AnyObject {
      * sync", never to "lost". Reaches the relay — call OFF the Swift main thread.
      */
     func setMyProfile(displayName: String, shape: String, card: ProfileCard) throws  -> UInt32
+    
+    /**
+     * ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
+     * "connections" | "network") and, when `name` is not empty, the exterior: a description
+     * and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+     * once. Returns how many ops were written. The exterior's still is by reference only
+     * (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
+     */
+    func setOutside(objectId: String, visibility: String, name: String, description: String, door: String) throws  -> UInt32
     
     /**
      * Point this device's messaging at a transport set — a comma-separated spec such as
@@ -1588,6 +1663,11 @@ public protocol CoreProtocol : AnyObject {
      * Drop a thing's posture (and with it any price/deadline, which only qualify one).
      */
     func thingClearPosture(objectId: String) throws  -> String
+    
+    /**
+     * The rest of one Thing — its maximised detail's read, beside its `ThingRow`.
+     */
+    func thingDetail(objectId: String) throws  -> ThingDetailRow
     
     /**
      * Mint a THING and give it a name in one call — what the swipe deck does on ACCEPT.
@@ -1673,6 +1753,11 @@ public protocol CoreProtocol : AnyObject {
      * reconciled by every sync). Returns the request ids in play.
      */
     func warmCaches() throws  -> [String]
+    
+    /**
+     * Withdraw my ask to join.
+     */
+    func withdrawRequest(objectId: String) throws 
     
 }
 
@@ -1829,6 +1914,18 @@ open func contactBundle()throws  -> String {
 }
     
     /**
+     * Admit, or decline, one request. A decline is not told to the asker.
+     */
+open func decideRequest(objectId: String, request: String, admit: Bool)throws  {try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_decide_request(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(request),
+        FfiConverterBool.lower(admit),$0
+    )
+}
+}
+    
+    /**
      * Everything of `kind` within `hops` handshakes: what I hold (hops 0) merged
      * with every live answer to my questions — shortest-path deduped, and a row I
      * already ADOPTED locally wins over its remote reference. Pure read.
@@ -1923,6 +2020,17 @@ open func dmTranscript(peerId: String)throws  -> [String] {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_dm_transcript(self.uniffiClonePointer(),
         FfiConverterString.lower(peerId),$0
+    )
+})
+}
+    
+    /**
+     * The rest of one Event — its maximised detail's read, beside its `EventRow`.
+     */
+open func eventDetail(objectId: String)throws  -> EventDetailRow {
+    return try  FfiConverterTypeEventDetailRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_event_detail(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
     )
 })
 }
@@ -2120,6 +2228,17 @@ open func exportWrap(prfSecret: Data, host: String)throws  -> Data {
     uniffi_pacific_ffi_fn_method_core_export_wrap(self.uniffiClonePointer(),
         FfiConverterData.lower(prfSecret),
         FfiConverterString.lower(host),$0
+    )
+})
+}
+    
+    /**
+     * The exteriors that reached me through my connections: objects I am not in, each with
+     * whether I have asked to join.
+     */
+open func exteriors()throws  -> [ExteriorRow] {
+    return try  FfiConverterSequenceTypeExteriorRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_exteriors(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -2595,6 +2714,50 @@ open func myProfile()throws  -> ProfileRow {
 }
     
     /**
+     * Apply one op to an object, BY ITS ICD NAME (`"event.editProfile"`), with its ICD
+     * arg names — the Door's `apply` step (`authoring::op_on`), so an edit has one path
+     * and no per-op writer to drift from the catalogue. Refused when the object's kind
+     * has no such op; the fold judges authority and args. Reaches the relay → call OFF
+     * the main thread.
+     */
+open func objectApply(objectId: String, op: String, args: [OpArg])throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_object_apply(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(op),
+        FfiConverterSequenceTypeOpArg.lower(args),$0
+    )
+})
+}
+    
+    /**
+     * An owner's edit to an op that REPLACES WHOLE — `event.setProfile`, `thing.setProfile`,
+     * `post.setProfile`: the held args, with `changes` laid over them (an
+     * empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
+     * the answer is "". Any other op is refused: it is `object_apply`'s.
+     */
+open func objectEdit(objectId: String, op: String, changes: [OpArg])throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_object_edit(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(op),
+        FfiConverterSequenceTypeOpArg.lower(changes),$0
+    )
+})
+}
+    
+    /**
+     * One object of mine's exterior, as its owner wrote it; None until one is written.
+     */
+open func objectExterior(objectId: String)throws  -> MyExterior? {
+    return try  FfiConverterOptionTypeMyExterior.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_object_exterior(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+})
+}
+    
+    /**
      * Mark every message WE hold from another member of this (forum) object READ —
      * authors the ✓✓-blue receipts the senders see. Emitted when the user opens the
      * conversation; idempotent (only un-acknowledged messages produce a receipt).
@@ -2816,6 +2979,32 @@ open func objects(kind: ObjectKind? = nil)throws  -> [ObjectRow] {
 }
     
     /**
+     * The ICD's `maxLength` for `op`'s `arg` — characters for text, base64 characters for
+     * inline media. 0 when the ICD states none.
+     */
+open func opArgMax(op: String, arg: String) -> UInt64 {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_pacific_ffi_fn_method_core_op_arg_max(self.uniffiClonePointer(),
+        FfiConverterString.lower(op),
+        FfiConverterString.lower(arg),$0
+    )
+})
+}
+    
+    /**
+     * The ICD's words for `op`'s `arg` — what a choice row offers. Empty when the arg is
+     * free text.
+     */
+open func opVocabulary(op: String, arg: String) -> [String] {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_pacific_ffi_fn_method_core_op_vocabulary(self.uniffiClonePointer(),
+        FfiConverterString.lower(op),
+        FfiConverterString.lower(arg),$0
+    )
+})
+}
+    
+    /**
      * Accept a pending connection (double-opt-in): mark the peer Connected.
      * `peer` is the peer's space id (as returned by pair_scan / a pending intro).
      */
@@ -2862,6 +3051,17 @@ open func peerProfile(peerId: String)throws  -> ProfileRow? {
     return try  FfiConverterOptionTypeProfileRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_peer_profile(self.uniffiClonePointer(),
         FfiConverterString.lower(peerId),$0
+    )
+})
+}
+    
+    /**
+     * The requests waiting for me: at the review doors of objects I own or admit to, from what
+     * this device's syncs have drained. No relay round trip.
+     */
+open func pendingRequests()throws  -> [RequestRow] {
+    return try  FfiConverterSequenceTypeRequestRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_pending_requests(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -3167,6 +3367,17 @@ open func places()throws  -> [PlaceRow] {
 }
     
     /**
+     * The rest of one Post — its maximised detail's read, beside its `PostRow`.
+     */
+open func postDetail(objectId: String)throws  -> PostDetailRow {
+    return try  FfiConverterTypePostDetailRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_post_detail(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+})
+}
+    
+    /**
      * One Post, folded to display shape.
      *
      * `retracted` rides the row rather than filtering the list here: a retraction is a
@@ -3382,6 +3593,18 @@ open func replyInvite(peer: String, event: String, going: Bool, at: Int64)throws
 }
     
     /**
+     * Ask to join an object whose exterior reached me. Returns the request's id.
+     */
+open func requestJoin(objectId: String, note: String)throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_request_join(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(note),$0
+    )
+})
+}
+    
+    /**
      * Every room→host edge this device can fold — the whole map in one call,
      * so the CHAT list never does a per-row fold. Synchronous read.
      */
@@ -3486,6 +3709,25 @@ open func setMyProfile(displayName: String, shape: String, card: ProfileCard)thr
         FfiConverterString.lower(displayName),
         FfiConverterString.lower(shape),
         FfiConverterTypeProfileCard.lower(card),$0
+    )
+})
+}
+    
+    /**
+     * ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
+     * "connections" | "network") and, when `name` is not empty, the exterior: a description
+     * and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+     * once. Returns how many ops were written. The exterior's still is by reference only
+     * (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
+     */
+open func setOutside(objectId: String, visibility: String, name: String, description: String, door: String)throws  -> UInt32 {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_set_outside(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(visibility),
+        FfiConverterString.lower(name),
+        FfiConverterString.lower(description),
+        FfiConverterString.lower(door),$0
     )
 })
 }
@@ -3634,6 +3876,17 @@ open func systems()throws  -> [SystemRow] {
 open func thingClearPosture(objectId: String)throws  -> String {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_thing_clear_posture(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+})
+}
+    
+    /**
+     * The rest of one Thing — its maximised detail's read, beside its `ThingRow`.
+     */
+open func thingDetail(objectId: String)throws  -> ThingDetailRow {
+    return try  FfiConverterTypeThingDetailRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_thing_detail(self.uniffiClonePointer(),
         FfiConverterString.lower(objectId),$0
     )
 })
@@ -3802,6 +4055,16 @@ open func warmCaches()throws  -> [String] {
     uniffi_pacific_ffi_fn_method_core_warm_caches(self.uniffiClonePointer(),$0
     )
 })
+}
+    
+    /**
+     * Withdraw my ask to join.
+     */
+open func withdrawRequest(objectId: String)throws  {try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_withdraw_request(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+}
 }
     
 
@@ -4502,6 +4765,98 @@ public func FfiConverterTypeMeshPolicyHandle_lift(_ pointer: UnsafeMutableRawPoi
 #endif
 public func FfiConverterTypeMeshPolicyHandle_lower(_ value: MeshPolicyHandle) -> UnsafeMutableRawPointer {
     return FfiConverterTypeMeshPolicyHandle.lower(value)
+}
+
+
+/**
+ * One act of the lineup register (`event.setLineup`): the performer's member key or
+ * object id, hex — never a name; the reader names it from the performer's own card.
+ */
+public struct ActRow {
+    public var performer: String
+    public var role: String
+    /**
+     * Epoch ms, 0 = not said.
+     */
+    public var start: Int64
+    public var end: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(performer: String, role: String, 
+        /**
+         * Epoch ms, 0 = not said.
+         */start: Int64, end: Int64) {
+        self.performer = performer
+        self.role = role
+        self.start = start
+        self.end = end
+    }
+}
+
+
+
+extension ActRow: Equatable, Hashable {
+    public static func ==(lhs: ActRow, rhs: ActRow) -> Bool {
+        if lhs.performer != rhs.performer {
+            return false
+        }
+        if lhs.role != rhs.role {
+            return false
+        }
+        if lhs.start != rhs.start {
+            return false
+        }
+        if lhs.end != rhs.end {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(performer)
+        hasher.combine(role)
+        hasher.combine(start)
+        hasher.combine(end)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeActRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ActRow {
+        return
+            try ActRow(
+                performer: FfiConverterString.read(from: &buf), 
+                role: FfiConverterString.read(from: &buf), 
+                start: FfiConverterInt64.read(from: &buf), 
+                end: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ActRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.performer, into: &buf)
+        FfiConverterString.write(value.role, into: &buf)
+        FfiConverterInt64.write(value.start, into: &buf)
+        FfiConverterInt64.write(value.end, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeActRow_lift(_ buf: RustBuffer) throws -> ActRow {
+    return try FfiConverterTypeActRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeActRow_lower(_ value: ActRow) -> RustBuffer {
+    return FfiConverterTypeActRow.lower(value)
 }
 
 
@@ -5685,6 +6040,195 @@ public func FfiConverterTypeEncodedDelta_lower(_ value: EncodedDelta) -> RustBuf
 
 
 /**
+ * What `EventRow` leaves out — the rest of an Event's ops, for its maximised detail.
+ */
+public struct EventDetailRow {
+    /**
+     * IANA zone, "" = the device's.
+     */
+    public var tz: String
+    public var allDay: Bool
+    /**
+     * "" = scheduled.
+     */
+    public var status: String
+    /**
+     * The online venue, "" = none.
+     */
+    public var online: String
+    public var videoUrl: String
+    public var ticketUrl: String
+    /**
+     * How `descriptor` is written ("" = plain).
+     */
+    public var descriptorFormat: String
+    /**
+     * `event.setBanner`, else the media facet's still.
+     */
+    public var banner: MediaRow?
+    /**
+     * `event.setClip`, else the media facet's motion.
+     */
+    public var clip: MediaRow?
+    /**
+     * The media facet's strip, then the `event.addPhoto` set in `at` order.
+     */
+    public var photos: [MediaRow]
+    /**
+     * The co-hosts' lineup register; empty = the profile's `lineup` stands.
+     */
+    public var acts: [ActRow]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * IANA zone, "" = the device's.
+         */tz: String, allDay: Bool, 
+        /**
+         * "" = scheduled.
+         */status: String, 
+        /**
+         * The online venue, "" = none.
+         */online: String, videoUrl: String, ticketUrl: String, 
+        /**
+         * How `descriptor` is written ("" = plain).
+         */descriptorFormat: String, 
+        /**
+         * `event.setBanner`, else the media facet's still.
+         */banner: MediaRow?, 
+        /**
+         * `event.setClip`, else the media facet's motion.
+         */clip: MediaRow?, 
+        /**
+         * The media facet's strip, then the `event.addPhoto` set in `at` order.
+         */photos: [MediaRow], 
+        /**
+         * The co-hosts' lineup register; empty = the profile's `lineup` stands.
+         */acts: [ActRow]) {
+        self.tz = tz
+        self.allDay = allDay
+        self.status = status
+        self.online = online
+        self.videoUrl = videoUrl
+        self.ticketUrl = ticketUrl
+        self.descriptorFormat = descriptorFormat
+        self.banner = banner
+        self.clip = clip
+        self.photos = photos
+        self.acts = acts
+    }
+}
+
+
+
+extension EventDetailRow: Equatable, Hashable {
+    public static func ==(lhs: EventDetailRow, rhs: EventDetailRow) -> Bool {
+        if lhs.tz != rhs.tz {
+            return false
+        }
+        if lhs.allDay != rhs.allDay {
+            return false
+        }
+        if lhs.status != rhs.status {
+            return false
+        }
+        if lhs.online != rhs.online {
+            return false
+        }
+        if lhs.videoUrl != rhs.videoUrl {
+            return false
+        }
+        if lhs.ticketUrl != rhs.ticketUrl {
+            return false
+        }
+        if lhs.descriptorFormat != rhs.descriptorFormat {
+            return false
+        }
+        if lhs.banner != rhs.banner {
+            return false
+        }
+        if lhs.clip != rhs.clip {
+            return false
+        }
+        if lhs.photos != rhs.photos {
+            return false
+        }
+        if lhs.acts != rhs.acts {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(tz)
+        hasher.combine(allDay)
+        hasher.combine(status)
+        hasher.combine(online)
+        hasher.combine(videoUrl)
+        hasher.combine(ticketUrl)
+        hasher.combine(descriptorFormat)
+        hasher.combine(banner)
+        hasher.combine(clip)
+        hasher.combine(photos)
+        hasher.combine(acts)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEventDetailRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EventDetailRow {
+        return
+            try EventDetailRow(
+                tz: FfiConverterString.read(from: &buf), 
+                allDay: FfiConverterBool.read(from: &buf), 
+                status: FfiConverterString.read(from: &buf), 
+                online: FfiConverterString.read(from: &buf), 
+                videoUrl: FfiConverterString.read(from: &buf), 
+                ticketUrl: FfiConverterString.read(from: &buf), 
+                descriptorFormat: FfiConverterString.read(from: &buf), 
+                banner: FfiConverterOptionTypeMediaRow.read(from: &buf), 
+                clip: FfiConverterOptionTypeMediaRow.read(from: &buf), 
+                photos: FfiConverterSequenceTypeMediaRow.read(from: &buf), 
+                acts: FfiConverterSequenceTypeActRow.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EventDetailRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.tz, into: &buf)
+        FfiConverterBool.write(value.allDay, into: &buf)
+        FfiConverterString.write(value.status, into: &buf)
+        FfiConverterString.write(value.online, into: &buf)
+        FfiConverterString.write(value.videoUrl, into: &buf)
+        FfiConverterString.write(value.ticketUrl, into: &buf)
+        FfiConverterString.write(value.descriptorFormat, into: &buf)
+        FfiConverterOptionTypeMediaRow.write(value.banner, into: &buf)
+        FfiConverterOptionTypeMediaRow.write(value.clip, into: &buf)
+        FfiConverterSequenceTypeMediaRow.write(value.photos, into: &buf)
+        FfiConverterSequenceTypeActRow.write(value.acts, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEventDetailRow_lift(_ buf: RustBuffer) throws -> EventDetailRow {
+    return try FfiConverterTypeEventDetailRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEventDetailRow_lower(_ value: EventDetailRow) -> RustBuffer {
+    return FfiConverterTypeEventDetailRow.lower(value)
+}
+
+
+/**
  * The full media facet of one event — the detail page's read.
  */
 public struct EventMediaRow {
@@ -6159,6 +6703,167 @@ public func FfiConverterTypeEventRow_lift(_ buf: RustBuffer) throws -> EventRow 
 #endif
 public func FfiConverterTypeEventRow_lower(_ value: EventRow) -> RustBuffer {
     return FfiConverterTypeEventRow.lower(value)
+}
+
+
+/**
+ * An object's exterior as it reached me (`contact.publishExterior`): an object I am not in.
+ */
+public struct ExteriorRow {
+    public var object: String
+    /**
+     * The ICD kind name.
+     */
+    public var kind: String
+    public var name: String
+    public var description: String
+    /**
+     * The owner's identity key, hex.
+     */
+    public var owner: String
+    /**
+     * Who carried it to me, hex.
+     */
+    public var via: String
+    /**
+     * My distance from its roster: 1, a connection is inside.
+     */
+    public var hops: UInt32
+    /**
+     * Whether it has a door to knock at.
+     */
+    public var door: Bool
+    /**
+     * Whether I have asked to join and not withdrawn.
+     */
+    public var requested: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(object: String, 
+        /**
+         * The ICD kind name.
+         */kind: String, name: String, description: String, 
+        /**
+         * The owner's identity key, hex.
+         */owner: String, 
+        /**
+         * Who carried it to me, hex.
+         */via: String, 
+        /**
+         * My distance from its roster: 1, a connection is inside.
+         */hops: UInt32, 
+        /**
+         * Whether it has a door to knock at.
+         */door: Bool, 
+        /**
+         * Whether I have asked to join and not withdrawn.
+         */requested: Bool) {
+        self.object = object
+        self.kind = kind
+        self.name = name
+        self.description = description
+        self.owner = owner
+        self.via = via
+        self.hops = hops
+        self.door = door
+        self.requested = requested
+    }
+}
+
+
+
+extension ExteriorRow: Equatable, Hashable {
+    public static func ==(lhs: ExteriorRow, rhs: ExteriorRow) -> Bool {
+        if lhs.object != rhs.object {
+            return false
+        }
+        if lhs.kind != rhs.kind {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.owner != rhs.owner {
+            return false
+        }
+        if lhs.via != rhs.via {
+            return false
+        }
+        if lhs.hops != rhs.hops {
+            return false
+        }
+        if lhs.door != rhs.door {
+            return false
+        }
+        if lhs.requested != rhs.requested {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(object)
+        hasher.combine(kind)
+        hasher.combine(name)
+        hasher.combine(description)
+        hasher.combine(owner)
+        hasher.combine(via)
+        hasher.combine(hops)
+        hasher.combine(door)
+        hasher.combine(requested)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExteriorRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExteriorRow {
+        return
+            try ExteriorRow(
+                object: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                description: FfiConverterString.read(from: &buf), 
+                owner: FfiConverterString.read(from: &buf), 
+                via: FfiConverterString.read(from: &buf), 
+                hops: FfiConverterUInt32.read(from: &buf), 
+                door: FfiConverterBool.read(from: &buf), 
+                requested: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ExteriorRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.object, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.description, into: &buf)
+        FfiConverterString.write(value.owner, into: &buf)
+        FfiConverterString.write(value.via, into: &buf)
+        FfiConverterUInt32.write(value.hops, into: &buf)
+        FfiConverterBool.write(value.door, into: &buf)
+        FfiConverterBool.write(value.requested, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExteriorRow_lift(_ buf: RustBuffer) throws -> ExteriorRow {
+    return try FfiConverterTypeExteriorRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExteriorRow_lower(_ value: ExteriorRow) -> RustBuffer {
+    return FfiConverterTypeExteriorRow.lower(value)
 }
 
 
@@ -8121,6 +8826,119 @@ public func FfiConverterTypeMediaInput_lower(_ value: MediaInput) -> RustBuffer 
 
 
 /**
+ * One picture, clip or document on a maximised detail. INLINE ONLY: a detached or
+ * sealed ref (O-79) has no fetch path at this boundary yet (#56), so it does not cross —
+ * a row with no bytes would render as a promise the reader cannot keep.
+ */
+public struct MediaRow {
+    public var mime: String
+    /**
+     * base64.
+     */
+    public var data: String
+    /**
+     * Pixels, 0 when unknown.
+     */
+    public var width: UInt32
+    public var height: UInt32
+    /**
+     * The author's words for it, "" when none.
+     */
+    public var alt: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(mime: String, 
+        /**
+         * base64.
+         */data: String, 
+        /**
+         * Pixels, 0 when unknown.
+         */width: UInt32, height: UInt32, 
+        /**
+         * The author's words for it, "" when none.
+         */alt: String) {
+        self.mime = mime
+        self.data = data
+        self.width = width
+        self.height = height
+        self.alt = alt
+    }
+}
+
+
+
+extension MediaRow: Equatable, Hashable {
+    public static func ==(lhs: MediaRow, rhs: MediaRow) -> Bool {
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.data != rhs.data {
+            return false
+        }
+        if lhs.width != rhs.width {
+            return false
+        }
+        if lhs.height != rhs.height {
+            return false
+        }
+        if lhs.alt != rhs.alt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(mime)
+        hasher.combine(data)
+        hasher.combine(width)
+        hasher.combine(height)
+        hasher.combine(alt)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaRow {
+        return
+            try MediaRow(
+                mime: FfiConverterString.read(from: &buf), 
+                data: FfiConverterString.read(from: &buf), 
+                width: FfiConverterUInt32.read(from: &buf), 
+                height: FfiConverterUInt32.read(from: &buf), 
+                alt: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MediaRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterString.write(value.data, into: &buf)
+        FfiConverterUInt32.write(value.width, into: &buf)
+        FfiConverterUInt32.write(value.height, into: &buf)
+        FfiConverterString.write(value.alt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRow_lift(_ buf: RustBuffer) throws -> MediaRow {
+    return try FfiConverterTypeMediaRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRow_lower(_ value: MediaRow) -> RustBuffer {
+    return FfiConverterTypeMediaRow.lower(value)
+}
+
+
+/**
  * One row of the local object list: the object id (hex MLS group id), kind, and
  * the group's display name ("" when unnamed — the UI derives a label from the
  * roster in that case, never from the id hex).
@@ -8699,6 +9517,103 @@ public func FfiConverterTypeMintFieldRow_lower(_ value: MintFieldRow) -> RustBuf
 
 
 /**
+ * One of my objects' exteriors, as I wrote it.
+ */
+public struct MyExterior {
+    public var name: String
+    public var description: String
+    /**
+     * "" no door, "review" or "auto".
+     */
+    public var door: String
+    /**
+     * "private" | "connections" | "network".
+     */
+    public var visibility: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, description: String, 
+        /**
+         * "" no door, "review" or "auto".
+         */door: String, 
+        /**
+         * "private" | "connections" | "network".
+         */visibility: String) {
+        self.name = name
+        self.description = description
+        self.door = door
+        self.visibility = visibility
+    }
+}
+
+
+
+extension MyExterior: Equatable, Hashable {
+    public static func ==(lhs: MyExterior, rhs: MyExterior) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.door != rhs.door {
+            return false
+        }
+        if lhs.visibility != rhs.visibility {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(description)
+        hasher.combine(door)
+        hasher.combine(visibility)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMyExterior: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MyExterior {
+        return
+            try MyExterior(
+                name: FfiConverterString.read(from: &buf), 
+                description: FfiConverterString.read(from: &buf), 
+                door: FfiConverterString.read(from: &buf), 
+                visibility: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MyExterior, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.description, into: &buf)
+        FfiConverterString.write(value.door, into: &buf)
+        FfiConverterString.write(value.visibility, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMyExterior_lift(_ buf: RustBuffer) throws -> MyExterior {
+    return try FfiConverterTypeMyExterior.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMyExterior_lower(_ value: MyExterior) -> RustBuffer {
+    return FfiConverterTypeMyExterior.lower(value)
+}
+
+
+/**
  * One object from the core's one sweep (`Node::object_rows`). Identities are 64-char
  * hex; "" where there is none.
  */
@@ -9040,6 +9955,75 @@ public func FfiConverterTypeOfficeRow_lift(_ buf: RustBuffer) throws -> OfficeRo
 #endif
 public func FfiConverterTypeOfficeRow_lower(_ value: OfficeRow) -> RustBuffer {
     return FfiConverterTypeOfficeRow.lower(value)
+}
+
+
+/**
+ * One arg of `Core::object_apply`, keyed by its ICD name.
+ */
+public struct OpArg {
+    public var key: String
+    public var value: OpValue
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(key: String, value: OpValue) {
+        self.key = key
+        self.value = value
+    }
+}
+
+
+
+extension OpArg: Equatable, Hashable {
+    public static func ==(lhs: OpArg, rhs: OpArg) -> Bool {
+        if lhs.key != rhs.key {
+            return false
+        }
+        if lhs.value != rhs.value {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(key)
+        hasher.combine(value)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOpArg: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OpArg {
+        return
+            try OpArg(
+                key: FfiConverterString.read(from: &buf), 
+                value: FfiConverterTypeOpValue.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OpArg, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterTypeOpValue.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpArg_lift(_ buf: RustBuffer) throws -> OpArg {
+    return try FfiConverterTypeOpArg.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpArg_lower(_ value: OpArg) -> RustBuffer {
+    return FfiConverterTypeOpArg.lower(value)
 }
 
 
@@ -9853,6 +10837,147 @@ public func FfiConverterTypePlaceRow_lower(_ value: PlaceRow) -> RustBuffer {
 
 
 /**
+ * What `PostRow` leaves out — the rest of a Post's ops, for its maximised detail.
+ */
+public struct PostDetailRow {
+    /**
+     * article | link | image | pdf
+     */
+    public var form: String
+    public var link: String
+    /**
+     * How `body` is written ("" = plain).
+     */
+    public var bodyFormat: String
+    public var excerpt: String
+    public var bannerAlt: String
+    public var bannerMime: String
+    /**
+     * `post.setDocument`; its alt is the document's name.
+     */
+    public var document: MediaRow?
+    /**
+     * The `post.addAsset` set in `at` order.
+     */
+    public var assets: [MediaRow]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * article | link | image | pdf
+         */form: String, link: String, 
+        /**
+         * How `body` is written ("" = plain).
+         */bodyFormat: String, excerpt: String, bannerAlt: String, bannerMime: String, 
+        /**
+         * `post.setDocument`; its alt is the document's name.
+         */document: MediaRow?, 
+        /**
+         * The `post.addAsset` set in `at` order.
+         */assets: [MediaRow]) {
+        self.form = form
+        self.link = link
+        self.bodyFormat = bodyFormat
+        self.excerpt = excerpt
+        self.bannerAlt = bannerAlt
+        self.bannerMime = bannerMime
+        self.document = document
+        self.assets = assets
+    }
+}
+
+
+
+extension PostDetailRow: Equatable, Hashable {
+    public static func ==(lhs: PostDetailRow, rhs: PostDetailRow) -> Bool {
+        if lhs.form != rhs.form {
+            return false
+        }
+        if lhs.link != rhs.link {
+            return false
+        }
+        if lhs.bodyFormat != rhs.bodyFormat {
+            return false
+        }
+        if lhs.excerpt != rhs.excerpt {
+            return false
+        }
+        if lhs.bannerAlt != rhs.bannerAlt {
+            return false
+        }
+        if lhs.bannerMime != rhs.bannerMime {
+            return false
+        }
+        if lhs.document != rhs.document {
+            return false
+        }
+        if lhs.assets != rhs.assets {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(form)
+        hasher.combine(link)
+        hasher.combine(bodyFormat)
+        hasher.combine(excerpt)
+        hasher.combine(bannerAlt)
+        hasher.combine(bannerMime)
+        hasher.combine(document)
+        hasher.combine(assets)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePostDetailRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PostDetailRow {
+        return
+            try PostDetailRow(
+                form: FfiConverterString.read(from: &buf), 
+                link: FfiConverterString.read(from: &buf), 
+                bodyFormat: FfiConverterString.read(from: &buf), 
+                excerpt: FfiConverterString.read(from: &buf), 
+                bannerAlt: FfiConverterString.read(from: &buf), 
+                bannerMime: FfiConverterString.read(from: &buf), 
+                document: FfiConverterOptionTypeMediaRow.read(from: &buf), 
+                assets: FfiConverterSequenceTypeMediaRow.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PostDetailRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.form, into: &buf)
+        FfiConverterString.write(value.link, into: &buf)
+        FfiConverterString.write(value.bodyFormat, into: &buf)
+        FfiConverterString.write(value.excerpt, into: &buf)
+        FfiConverterString.write(value.bannerAlt, into: &buf)
+        FfiConverterString.write(value.bannerMime, into: &buf)
+        FfiConverterOptionTypeMediaRow.write(value.document, into: &buf)
+        FfiConverterSequenceTypeMediaRow.write(value.assets, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePostDetailRow_lift(_ buf: RustBuffer) throws -> PostDetailRow {
+    return try FfiConverterTypePostDetailRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePostDetailRow_lower(_ value: PostDetailRow) -> RustBuffer {
+    return FfiConverterTypePostDetailRow.lower(value)
+}
+
+
+/**
  * One Post, folded. Counts rather than contents for the responses: a feed row needs to
  * know there ARE comments, not what they say, and shipping every comment through the
  * boundary to render a number is how a read model gets expensive.
@@ -10494,6 +11619,133 @@ public func FfiConverterTypeProjectItemRow_lower(_ value: ProjectItemRow) -> Rus
 
 
 /**
+ * A request waiting at one of my doors.
+ */
+public struct RequestRow {
+    public var object: String
+    public var kind: String
+    /**
+     * The request's id, hex.
+     */
+    public var request: String
+    /**
+     * The asker's identity key, hex.
+     */
+    public var asker: String
+    public var askerName: String
+    public var note: String
+    /**
+     * Unix ms.
+     */
+    public var at: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(object: String, kind: String, 
+        /**
+         * The request's id, hex.
+         */request: String, 
+        /**
+         * The asker's identity key, hex.
+         */asker: String, askerName: String, note: String, 
+        /**
+         * Unix ms.
+         */at: Int64) {
+        self.object = object
+        self.kind = kind
+        self.request = request
+        self.asker = asker
+        self.askerName = askerName
+        self.note = note
+        self.at = at
+    }
+}
+
+
+
+extension RequestRow: Equatable, Hashable {
+    public static func ==(lhs: RequestRow, rhs: RequestRow) -> Bool {
+        if lhs.object != rhs.object {
+            return false
+        }
+        if lhs.kind != rhs.kind {
+            return false
+        }
+        if lhs.request != rhs.request {
+            return false
+        }
+        if lhs.asker != rhs.asker {
+            return false
+        }
+        if lhs.askerName != rhs.askerName {
+            return false
+        }
+        if lhs.note != rhs.note {
+            return false
+        }
+        if lhs.at != rhs.at {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(object)
+        hasher.combine(kind)
+        hasher.combine(request)
+        hasher.combine(asker)
+        hasher.combine(askerName)
+        hasher.combine(note)
+        hasher.combine(at)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRequestRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RequestRow {
+        return
+            try RequestRow(
+                object: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterString.read(from: &buf), 
+                request: FfiConverterString.read(from: &buf), 
+                asker: FfiConverterString.read(from: &buf), 
+                askerName: FfiConverterString.read(from: &buf), 
+                note: FfiConverterString.read(from: &buf), 
+                at: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RequestRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.object, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterString.write(value.request, into: &buf)
+        FfiConverterString.write(value.asker, into: &buf)
+        FfiConverterString.write(value.askerName, into: &buf)
+        FfiConverterString.write(value.note, into: &buf)
+        FfiConverterInt64.write(value.at, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRequestRow_lift(_ buf: RustBuffer) throws -> RequestRow {
+    return try FfiConverterTypeRequestRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRequestRow_lower(_ value: RequestRow) -> RustBuffer {
+    return FfiConverterTypeRequestRow.lower(value)
+}
+
+
+/**
  * One object's `resumption::Outcome`, in the core's names: `Joined`, `AlreadyHeld`,
  * `PoolExhausted`, `WayInMissing`, `WayInUnreadable`, `JoinFailed`. `detail` is the
  * reason the last two carry, else empty.
@@ -10929,6 +12181,137 @@ public func FfiConverterTypeSystemRow_lift(_ buf: RustBuffer) throws -> SystemRo
 #endif
 public func FfiConverterTypeSystemRow_lower(_ value: SystemRow) -> RustBuffer {
     return FfiConverterTypeSystemRow.lower(value)
+}
+
+
+/**
+ * What `ThingRow` leaves out — the rest of a Thing's ops, for its maximised detail.
+ */
+public struct ThingDetailRow {
+    /**
+     * "" = not said.
+     */
+    public var condition: String
+    public var description: String
+    /**
+     * The `thing.addPhoto` set in `at` order; the face (`thing.setPhoto`) rides `ThingRow`.
+     */
+    public var photos: [MediaRow]
+    /**
+     * "" = no disposition stated.
+     */
+    public var disposition: String
+    /**
+     * Whom it is held for, member key hex, "" = nobody named.
+     */
+    public var dispositionFor: String
+    /**
+     * Epoch ms, 0 = open-ended.
+     */
+    public var dispositionUntil: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * "" = not said.
+         */condition: String, description: String, 
+        /**
+         * The `thing.addPhoto` set in `at` order; the face (`thing.setPhoto`) rides `ThingRow`.
+         */photos: [MediaRow], 
+        /**
+         * "" = no disposition stated.
+         */disposition: String, 
+        /**
+         * Whom it is held for, member key hex, "" = nobody named.
+         */dispositionFor: String, 
+        /**
+         * Epoch ms, 0 = open-ended.
+         */dispositionUntil: Int64) {
+        self.condition = condition
+        self.description = description
+        self.photos = photos
+        self.disposition = disposition
+        self.dispositionFor = dispositionFor
+        self.dispositionUntil = dispositionUntil
+    }
+}
+
+
+
+extension ThingDetailRow: Equatable, Hashable {
+    public static func ==(lhs: ThingDetailRow, rhs: ThingDetailRow) -> Bool {
+        if lhs.condition != rhs.condition {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.photos != rhs.photos {
+            return false
+        }
+        if lhs.disposition != rhs.disposition {
+            return false
+        }
+        if lhs.dispositionFor != rhs.dispositionFor {
+            return false
+        }
+        if lhs.dispositionUntil != rhs.dispositionUntil {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(condition)
+        hasher.combine(description)
+        hasher.combine(photos)
+        hasher.combine(disposition)
+        hasher.combine(dispositionFor)
+        hasher.combine(dispositionUntil)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeThingDetailRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ThingDetailRow {
+        return
+            try ThingDetailRow(
+                condition: FfiConverterString.read(from: &buf), 
+                description: FfiConverterString.read(from: &buf), 
+                photos: FfiConverterSequenceTypeMediaRow.read(from: &buf), 
+                disposition: FfiConverterString.read(from: &buf), 
+                dispositionFor: FfiConverterString.read(from: &buf), 
+                dispositionUntil: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ThingDetailRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.condition, into: &buf)
+        FfiConverterString.write(value.description, into: &buf)
+        FfiConverterSequenceTypeMediaRow.write(value.photos, into: &buf)
+        FfiConverterString.write(value.disposition, into: &buf)
+        FfiConverterString.write(value.dispositionFor, into: &buf)
+        FfiConverterInt64.write(value.dispositionUntil, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThingDetailRow_lift(_ buf: RustBuffer) throws -> ThingDetailRow {
+    return try FfiConverterTypeThingDetailRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThingDetailRow_lower(_ value: ThingDetailRow) -> RustBuffer {
+    return FfiConverterTypeThingDetailRow.lower(value)
 }
 
 
@@ -12173,6 +13556,79 @@ extension ObjectKind: Equatable, Hashable {}
 
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * The wire's two arg types (`pacific_media::ArgVal`).
+ */
+
+public enum OpValue {
+    
+    case text(v: String
+    )
+    case int(v: Int64
+    )
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOpValue: FfiConverterRustBuffer {
+    typealias SwiftType = OpValue
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OpValue {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .text(v: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .int(v: try FfiConverterInt64.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OpValue, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .text(v):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(v, into: &buf)
+            
+        
+        case let .int(v):
+            writeInt(&buf, Int32(2))
+            FfiConverterInt64.write(v, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpValue_lift(_ buf: RustBuffer) throws -> OpValue {
+    return try FfiConverterTypeOpValue.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpValue_lower(_ value: OpValue) -> RustBuffer {
+    return FfiConverterTypeOpValue.lower(value)
+}
+
+
+
+extension OpValue: Equatable, Hashable {}
+
+
+
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
@@ -12296,6 +13752,30 @@ fileprivate struct FfiConverterOptionTypeMediaInput: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeMediaRow: FfiConverterRustBuffer {
+    typealias SwiftType = MediaRow?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMediaRow.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMediaRow.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeMembershipDivergence: FfiConverterRustBuffer {
     typealias SwiftType = MembershipDivergence?
 
@@ -12312,6 +13792,30 @@ fileprivate struct FfiConverterOptionTypeMembershipDivergence: FfiConverterRustB
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeMembershipDivergence.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeMyExterior: FfiConverterRustBuffer {
+    typealias SwiftType = MyExterior?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMyExterior.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMyExterior.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -12459,6 +13963,31 @@ fileprivate struct FfiConverterSequenceData: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterData.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeActRow: FfiConverterRustBuffer {
+    typealias SwiftType = [ActRow]
+
+    public static func write(_ value: [ActRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeActRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ActRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ActRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeActRow.read(from: &buf))
         }
         return seq
     }
@@ -12734,6 +14263,31 @@ fileprivate struct FfiConverterSequenceTypeEventRow: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeEventRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeExteriorRow: FfiConverterRustBuffer {
+    typealias SwiftType = [ExteriorRow]
+
+    public static func write(_ value: [ExteriorRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeExteriorRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ExteriorRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ExteriorRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeExteriorRow.read(from: &buf))
         }
         return seq
     }
@@ -13067,6 +14621,31 @@ fileprivate struct FfiConverterSequenceTypeLocationRow: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeMediaRow: FfiConverterRustBuffer {
+    typealias SwiftType = [MediaRow]
+
+    public static func write(_ value: [MediaRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeMediaRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [MediaRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [MediaRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeMediaRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeMintFieldRow: FfiConverterRustBuffer {
     typealias SwiftType = [MintFieldRow]
 
@@ -13134,6 +14713,31 @@ fileprivate struct FfiConverterSequenceTypeOfficeRow: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeOfficeRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeOpArg: FfiConverterRustBuffer {
+    typealias SwiftType = [OpArg]
+
+    public static func write(_ value: [OpArg], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOpArg.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OpArg] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OpArg]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOpArg.read(from: &buf))
         }
         return seq
     }
@@ -13309,6 +14913,31 @@ fileprivate struct FfiConverterSequenceTypeProjectItemRow: FfiConverterRustBuffe
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeProjectItemRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeRequestRow: FfiConverterRustBuffer {
+    typealias SwiftType = [RequestRow]
+
+    public static func write(_ value: [RequestRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRequestRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RequestRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RequestRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRequestRow.read(from: &buf))
         }
         return seq
     }
@@ -14672,6 +16301,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_contact_bundle() != 37304) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_decide_request() != 29978) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_discover_results() != 59442) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14691,6 +16323,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_dm_transcript() != 7677) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_event_detail() != 51784) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_event_door_check() != 60366) {
@@ -14730,6 +16365,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_export_wrap() != 27591) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_exteriors() != 19829) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_forum_hosts() != 12944) {
@@ -14840,6 +16478,15 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_my_profile() != 42179) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_object_apply() != 28345) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_object_edit() != 376) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_object_exterior() != 52822) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_object_mark_read() != 14131) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14885,6 +16532,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_objects() != 55043) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_op_arg_max() != 18458) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_op_vocabulary() != 3899) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_pair_accept() != 18910) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14895,6 +16548,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_peer_profile() != 23024) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_pending_requests() != 22902) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_people() != 36751) {
@@ -14957,6 +16613,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_places() != 24947) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_post_detail() != 1004) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_posts() != 61003) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15005,6 +16664,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_reply_invite() != 44186) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_request_join() != 44723) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_room_hosts() != 12006) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15027,6 +16689,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_set_my_profile() != 52976) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_set_outside() != 144) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_set_routes() != 3390) {
@@ -15054,6 +16719,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_thing_clear_posture() != 36123) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_thing_detail() != 37180) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_thing_mint() != 445) {
@@ -15087,6 +16755,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_warm_caches() != 32747) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_withdraw_request() != 31694) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_logsink_line() != 36302) {

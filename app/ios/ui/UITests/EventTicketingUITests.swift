@@ -36,6 +36,7 @@ final class EventTicketingUITests: XCTestCase {
         XCTAssertTrue(life.waitForExistence(timeout: 20), "LIFE disc")
         life.tap()
         XCTAssertTrue(waitGround("life-feed", timeout: 15), "LIFE lands on the feed")
+        app.openLifeSearch()
         let jewel = app.buttons["jewel-events"]
         XCTAssertTrue(jewel.waitForExistence(timeout: 10), "EVENT jewel")
         // Coordinate tap: the rail sits beside a full-canvas sibling and the

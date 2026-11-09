@@ -17,7 +17,10 @@
 //!     No method takes a decoded anything; no implementation may look inside
 //!     either; no backend may derive a storage layout from what a tag MEANS. It is
 //!     the relay's entire contract, and a backend is the easiest place to lose it
-//!     by accident (a bucket prefix per group would do it).
+//!     by accident (a bucket prefix per group would do it). The one class the relay
+//!     itself draws is a door's tag (`mls.door.relay`, B3): it decides, and tells the
+//!     backend a cap ([`Mailbox::append_capped`]) or a prefix ([`Mailbox::expire`]),
+//!     never why.
 //!   * **ARBITRATION.** [`Mailbox::append`] with `commit = true` is
 //!     FIRST-WRITER-WINS per tag, and the claim is ATOMIC with storing the blob and
 //!     advancing the durable high-water. This is not tidiness. A second device
@@ -106,6 +109,15 @@ pub enum Appended {
     SlotTaken,
 }
 
+/// What a capped append removed to hold its tag at the cap.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Evicted {
+    /// Blobs removed.
+    pub count: u64,
+    /// Their bytes as published, which leave the store's byte ceiling.
+    pub bytes: u64,
+}
+
 /// The durable blind mailbox, whatever is underneath it.
 ///
 /// Implementors: `store::Store` (SQLite, index and bodies together) and
@@ -155,6 +167,18 @@ pub trait Mailbox: Send + Sync {
     /// (0 = uncapped), raising each affected tag's floor as it goes. Returns how
     /// many blobs were removed.
     async fn evict(&self, now_us: u64, window_us: u64, max_per_tag: u64) -> Result<u64>;
+
+    /// [`Mailbox::append`] of a plain blob to a tag held at `cap` blobs: past it the oldest
+    /// go in the SAME transaction as the insert, the tag's floor rises past them, and its
+    /// evicted total by their count. Never a commit.
+    async fn append_capped(&self, tag: &str, seq: u64, body: &str, cap: u64) -> Result<(Appended, Evicted)>;
+
+    /// How many blobs each of `tags` has lost to its cap, ever. A tag that never has is absent.
+    async fn evicted_totals(&self, tags: &[String]) -> Result<HashMap<String, u64>>;
+
+    /// Drop blobs older than `window_us` from the tags beginning `prefix`, raising their
+    /// floors as [`Mailbox::evict`] does. Returns how many were removed.
+    async fn expire(&self, prefix: &str, now_us: u64, window_us: u64) -> Result<u64>;
 
     /// Distinct tags and total stored blobs — two pure cardinalities for the ops
     /// stats line. No tag names, no bodies.

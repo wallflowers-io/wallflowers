@@ -320,6 +320,33 @@ pub struct ThingState {
     pub photos_removed: std::collections::BTreeSet<String>,
     /// Available, reserved or sold (N5); `None` is never set.
     pub disposition: Option<Disposition>,
+    /// The exterior facet (`crate::exterior`; ICD 2.6.0): what a non-member holds of it.
+    pub exterior: crate::exterior::ExteriorState,
+    /// The visibility facet; `None` is the kind's default (`visibility::default_for`).
+    pub visibility: Option<crate::visibility::Visibility>,
+}
+
+impl ThingState {
+    /// The visibility in force: the written one, else the kind's default from the ICD.
+    pub fn visibility(&self) -> crate::visibility::Visibility {
+        self.visibility.unwrap_or_else(|| crate::visibility::default_for(crate::object::ObjectKind::Thing.name()))
+    }
+}
+
+impl ThingState {
+    /// The held profile as `thing.setProfile` args — the whole profile, which the op
+    /// replaces, so an owner's edit changes one field instead of clearing the rest.
+    pub fn profile_args(&self) -> crate::coordinator::Args {
+        let mut a = crate::coordinator::Args::new();
+        a.insert("name".into(), ArgVal::Text(self.name.clone()));
+        a.insert("category".into(), ArgVal::Text(self.category.as_str().into()));
+        let condition = self.condition.clone().unwrap_or_default();
+        let text = [("descriptor", &self.descriptor), ("condition", &condition), ("description", &self.description)];
+        for (k, v) in text.into_iter().filter(|(_, v)| !v.is_empty()) {
+            a.insert(k.into(), ArgVal::Text(v.clone()));
+        }
+        a
+    }
 }
 
 pub struct ThingType;
@@ -411,6 +438,18 @@ const OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base VISIBILITY op, spliced (`crate::visibility`): since ICD 2.6.0 it bounds how far
+    // this kind's exterior is carried.
+    OpDecl {
+        op_id: crate::visibility::OP_SET_VISIBILITY,
+        name: "base.setVisibility",
+        authority: Authority::Owner,
+        commutativity: Commutativity::Sequenced,
+    },
+    // The base EXTERIOR ops (`crate::exterior`; ICD 2.6.0).
+    crate::exterior::SET_EXTERIOR,
+    crate::exterior::SET_DOOR,
+    crate::exterior::DECIDE_REQUEST,
 ];
 
 impl ObjectType for ThingType {
@@ -422,6 +461,16 @@ impl ObjectType for ThingType {
     }
 
     fn reduce(state: &mut Self::State, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::exterior::is_exterior_op(op.op_id) {
+            let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
+            return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);
+        }
+        if crate::visibility::is_visibility_op(op.op_id) {
+            let mut v = state.visibility();
+            crate::visibility::reduce_visibility(&mut v, op)?;
+            state.visibility = Some(v);
+            return Ok(());
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }

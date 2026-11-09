@@ -70,38 +70,34 @@ struct ComposeGround: View {
 // MARK: - Glass
 
 extension View {
-    /// The compose card, in the bedrock skin: a solid body with a faint cast of `tint`,
-    /// a band of `tint` along the top (the skin's pass header), the hard edge, and a hard
-    /// offset shadow in `glow`. No material: the card is paper, not glass. One clip and
-    /// one stroke, so the corners do not crawl (see the note at the top of this file).
+    /// The compose card, in the bedrock skin: a solid body with a faint cast of `tint` and
+    /// the hard edge. No material: the card is paper, not glass. One clip and one stroke,
+    /// so the corners do not crawl (see the note at the top of this file).
     ///
     /// `flash` replaces the resting edge with an outcome colour.
     /// `opaque` grounds the body in the screen's own colour instead of the card's — the
     /// LIFE newitem modals wear it (Ralph, 18 Aug): a mint is a surface you are working
-    /// ON. The band and the shadow are unchanged, so the surface still carries its colour.
-    func composeGlass(tint: Color, glow: Color? = nil, flash: Color? = nil,
-                      opaque: Bool = false) -> some View {
-        modifier(ComposeGlass(tint: tint, glow: glow ?? tint, flash: flash, opaque: opaque))
+    /// ON. The cast is unchanged, so the surface still carries its colour.
+    func composeGlass(tint: Color, flash: Color? = nil, opaque: Bool = false) -> some View {
+        modifier(ComposeGlass(tint: tint, flash: flash, opaque: opaque))
     }
 }
 
 struct ComposeGlass: ViewModifier {
     let tint: Color
-    let glow: Color
     var flash: Color? = nil
     var opaque: Bool = false
 
-    /// THE card skin — `PixelCard`'s, lit from the top-left like every other card, its
-    /// hard shadow cast in the kind's colour. The coloured band across the top is gone
-    /// (Ralph, 5 Nov): a lit top edge on a card whose shadow says the light is top-left
-    /// read as a glitch.
+    /// THE card skin — `PixelCard`'s, lit from the top-left like every other card. No hard
+    /// shadow (Ralph, 8 Nov): the kind's colour spilled past the border, right and down,
+    /// so the border is the card's edge. The coloured band across the top went before it
+    /// (5 Nov).
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: Sig.modalRadius, style: .continuous)
         return content
             .background(shape.fill(tint.opacity(0.05)))
             // Opaque: the ground at 0.94 (Ralph, 18 Aug), so the bloom behind is felt, not seen.
-            .pixelCard(opaque ? Theme.bg.opacity(0.94) : Theme.surface, in: shape,
-                       shadow: true, shadowColor: glow)
+            .pixelCard(opaque ? Theme.bg.opacity(0.94) : Theme.surface, in: shape)
             .overlay {
                 shape.strokeBorder(flash ?? .clear, lineWidth: DesignTokens.Skin.edge)
                     .animation(Motion.noteFlash, value: flash)

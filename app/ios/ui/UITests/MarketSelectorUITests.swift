@@ -24,6 +24,7 @@ final class MarketRailUITests: XCTestCase {
 
     func test_tradeIsARailJewel_andTheMarketFaceIsGone() {
         launchToLife(app, springboard: springboard, welcomeWalk: true)
+        app.openLifeSearch()
 
         XCTAssertTrue(app.buttons["jewel-trade"].waitForExistence(timeout: 10), "TRADE jewel")
         XCTAssertFalse(app.buttons["jewel-job"].exists, "JOB folded into LISTINGS (11 Aug) — no seat")
@@ -65,6 +66,7 @@ final class ListingEditorUITests: XCTestCase {
 
     func test_listingEditor_priceOnlyWhenActive_audienceClosed() throws {
         launchToLife(app, springboard: springboard, welcomeWalk: true)
+        app.openLifeSearch()
 
         // GROUP ▸ the typed list ▸ the first group's page. The card is ONE
         // combined element the OS may type as otherElement OR staticText —

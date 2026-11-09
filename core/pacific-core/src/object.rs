@@ -233,7 +233,7 @@ impl OpDecl {
 /// Total-order key for sequenced Deltas (`core.py::LogPosition`). `epoch` is the MLS
 /// epoch the Delta was sequenced in; `seq` is the gap-free, per-epoch, owner-assigned
 /// sequence number that resets to 0 each epoch.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct LogPosition {
     pub epoch: u64,
     pub seq: u64,
@@ -300,7 +300,7 @@ pub enum DeltaRejection {
 /// `type_id`s are WIRE values on an append-only log: they are assigned once and never
 /// reused. A new kind takes the next free id (see the RESERVED set below) — never a
 /// reclaimed one, or an old delta folds into the wrong type.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ObjectKind {
     Group,
     Forum,
