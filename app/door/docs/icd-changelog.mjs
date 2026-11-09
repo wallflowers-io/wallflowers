@@ -30,7 +30,7 @@ const ICD = 'core/coordination/delta-graph.icd.json';
 const DOOR = 'https://app.wallflowers.io';
 const DOCS = 'https://docs.wallflowers.io';
 // A draft stays here until its icd/* tag exists; then its tag is the release and the draft line goes.
-const DRAFTS = [];
+const DRAFTS = [{ version: '2.6.0', ref: 'e09c54c', note: 'the exterior and the door, #76' }];
 
 const git = (...a) => execFileSync('git', ['-C', PRODUCT, ...a], { encoding: 'utf8', maxBuffer: 64 << 20 });
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
