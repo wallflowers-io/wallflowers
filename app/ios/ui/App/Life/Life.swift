@@ -590,7 +590,9 @@ struct LifeView: View {
         }
         // The feed assembles once per sync tick, once per filter change, and whenever one
         // of its inputs changes: a mint lands with no sync, and a device that cannot reach
-        // the relay never ticks. The equality gate inside the store makes repeats free.
+        // the relay never ticks. (`feedInputsChanged` delivers on the next main-queue turn,
+        // after the @Published property is set.) The equality gate inside the store makes
+        // repeats free.
         .onReceive(core.$syncTick) { _ in feedStore.refresh(core: core, query: lifeQuery) }
         .onReceive(core.feedInputsChanged) { feedStore.refresh(core: core, query: lifeQuery) }
         .onChange(of: lifeQuery.locked) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
