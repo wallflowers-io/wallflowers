@@ -32,6 +32,11 @@ enum FeedProvenance: Equatable {
 /// Where a tapped author name lands: a person's profile or a Space's (a Space
 /// is a Group — GroupDetailView is its profile). Routed at the Life call site,
 /// same discipline as the card tap itself.
+/// An object this device is NOT in, whose exterior reached it (#76): what a tap opens.
+struct ExteriorRef: Equatable {
+    let object: String
+}
+
 enum AuthorRoute: Hashable {
     case person(String)
     case space(String)
@@ -55,6 +60,9 @@ struct FeedItem: Identifiable, Equatable {
     /// row cannot honestly answer (no identity crosses the read model for it) —
     /// the name renders as plain text, never a dead button.
     var authorRoute: AuthorRoute? = nil
+    /// Set on a card for an object I am not in that has an exterior: the tap opens it, and
+    /// "Ask to join" is its one act. nil with no `objectID` = a card with nothing behind it.
+    var exterior: ExteriorRef? = nil
 
     /// Equality is the per-tick republish gate — comparing full banners would run
     /// megabytes of string compare every 3s (the audit's 70MB landmine), so media
@@ -64,7 +72,7 @@ struct FeedItem: Identifiable, Equatable {
             && a.author == b.author && a.location == b.location && a.footer == b.footer
             && a.whenMs == b.whenMs && a.provenance == b.provenance
             && a.objectID == b.objectID && a.bannerB64.count == b.bannerB64.count
-            && a.authorRoute == b.authorRoute
+            && a.authorRoute == b.authorRoute && a.exterior == b.exterior
     }
 }
 
@@ -101,7 +109,7 @@ enum FeedAssembler {
     }
 
     static func rows(events: [PacificCore.EventRow], listings: [ListingRow],
-                     posts: [PostRow] = [], nowMs: Int64,
+                     posts: [PostRow] = [], exteriors: [ExteriorRow] = [], nowMs: Int64,
                      selfName: String = "me", selfID: String? = nil,
                      nameFor: (String) -> String = { String($0.prefix(8)) }) -> [FeedItem] {
         var out: [FeedItem] = []
@@ -136,7 +144,11 @@ enum FeedAssembler {
         for e in events where e.endMs >= nowMs || e.startMs >= nowMs {
             out.append(item(for: e, selfName: selfName, selfID: selfID))
         }
+        // A listing and an exterior of the same Thing are one thing: its card carries both.
+        let outside = Dictionary(exteriors.map { ($0.object, $0) }, uniquingKeysWith: { a, _ in a })
+        var shown = Set<String>()
         for l in listings {
+            if outside[l.thingId] != nil { shown.insert(l.thingId) }
             out.append(FeedItem(
                 id: "listing:\(l.origin):\(l.thingId)",
                 category: .trade,
@@ -153,9 +165,40 @@ enum FeedAssembler {
                 provenance: .hops(l.hops),
                 objectID: nil,
                 bannerB64: l.photo,
-                authorRoute: .person(l.origin)))
+                authorRoute: .person(l.origin),
+                exterior: outside[l.thingId].flatMap { $0.door ? ExteriorRef(object: $0.object) : nil }))
+        }
+        // EXTERIORS (#76): objects I am not in, carried to me by their members.
+        for e in exteriors where !shown.contains(e.object) {
+            out.append(FeedItem(
+                id: "exterior:\(e.object)",
+                category: Self.category(ofKind: e.kind),
+                title: e.name,
+                author: nameFor(e.owner),
+                location: "",
+                footer: e.requested ? "REQUESTED" : "",
+                whenMs: nowMs,
+                provenance: .hops(e.hops),
+                objectID: nil,
+                bannerB64: e.photo,
+                authorRoute: .person(e.owner),
+                // No door, nothing to ask: the card is seen and not opened.
+                exterior: e.door ? ExteriorRef(object: e.object) : nil))
         }
         return out.sorted { $0.whenMs == $1.whenMs ? $0.id < $1.id : $0.whenMs < $1.whenMs }
+    }
+
+    /// The lane an object of an ICD kind rides in.
+    static func category(ofKind kind: String) -> EventCategory {
+        switch kind {
+        case "group":   return .groups
+        case "event":   return .events
+        case "thing":   return .trade
+        case "place":   return .places
+        case "project": return .projects
+        case "forum":   return .channels
+        default:        return .posts      // post, note: words
+        }
     }
 
     /// The lock filter: locked categories are the ACTIVE kinds. Nothing locked = no

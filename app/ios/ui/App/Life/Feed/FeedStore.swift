@@ -27,7 +27,7 @@ final class FeedStore: ObservableObject {
         let names = core.peerNamesByIdentity()
         let me = core.displayName.isEmpty ? "me" : core.displayName
         let assembled = FeedAssembler.rows(events: core.events, listings: core.listings,
-                                           posts: core.posts,
+                                           posts: core.posts, exteriors: core.exteriors,
                                            nowMs: now, selfName: me, selfID: core.myIdentityHex,
                                            nameFor: { names[$0] ?? String($0.prefix(8)) })
         let filtered = FeedAssembler.filter(assembled, locked: query.locked)

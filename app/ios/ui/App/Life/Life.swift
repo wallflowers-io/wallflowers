@@ -831,7 +831,11 @@ struct LifeView: View {
     /// yet fall through silently — a card never navigates somewhere that isn't its
     /// object. Browsing a KIND stays on the rail (10 Aug order).
     private func openObject(_ item: FeedItem) {
-        guard let oid = item.objectID else { return }
+        // Not held: its exterior, if one reached me (#76). Otherwise nothing is behind it.
+        guard let oid = item.objectID else {
+            if let ext = item.exterior { ExteriorDetail.open(ext.object, core: core, shell: shell) }
+            return
+        }
         switch item.category {
         case .groups: path.append(GroupLink(id: oid))
         case .events: EventDetail.open(oid, core: core, graph: graph, shell: shell)
@@ -878,6 +882,7 @@ struct LifeView: View {
         return NewSession(kind: kind) { draft in
             guard let id = core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
             else { return nil }          // core surfaced the error; the surface stays up
+            await core.setOutside(id, from: draft)
             await afterMint(kind, id: id, draft: draft)
             return .saved
         }

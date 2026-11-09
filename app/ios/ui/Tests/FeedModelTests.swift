@@ -27,6 +27,31 @@ final class FeedModelTests: XCTestCase {
                    via: "", photo: "", photoMime: "")
     }
 
+    private func exterior(_ object: String, kind: String = "project", door: Bool = true) -> ExteriorRow {
+        ExteriorRow(object: object, kind: kind, name: object, description: "", photo: "", photoMime: "",
+                    owner: "o", via: "v", hops: 1, door: door, requested: false)
+    }
+
+    /// #76: an object I am not in is a card that opens to its exterior, when it has a door.
+    func testAnExteriorWithADoorIsACardThatOpens() {
+        let rows = FeedAssembler.rows(events: [], listings: [],
+                                      exteriors: [exterior("plots"), exterior("closed", door: false)], nowMs: now)
+        let open = rows.first { $0.title == "plots" }
+        XCTAssertEqual(open?.exterior, ExteriorRef(object: "plots"))
+        XCTAssertNil(open?.objectID, "not held")
+        XCTAssertEqual(open?.category, .projects)
+        XCTAssertEqual(open?.provenance, .hops(1))
+        XCTAssertNil(rows.first { $0.title == "closed" }?.exterior, "no door, nothing to open")
+    }
+
+    /// A Thing's listing and its exterior are one card.
+    func testAListingAndItsThingsExteriorAreOneCard() {
+        let rows = FeedAssembler.rows(events: [], listings: [listing("amp")],
+                                      exteriors: [exterior("amp", kind: "thing")], nowMs: now)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.exterior, ExteriorRef(object: "amp"))
+    }
+
     func testUnionDropsPastEventsAndInterleavesStandingListings() {
         let rows = FeedAssembler.rows(
             events: [event("past", start: now - 2 * hour),

@@ -338,6 +338,7 @@ struct TabChrome: ViewModifier {
     // core (what was minted) and the derived proposals between them.
     @EnvironmentObject private var graph: GraphService
     @EnvironmentObject private var proposals: ProposalStore
+    @EnvironmentObject private var requests: RequestStore
     @EnvironmentObject private var coreService: CoreService
     let title: String
     let newLabel: String
@@ -399,13 +400,21 @@ struct TabChrome: ViewModifier {
             // that you have not accepted yet. Accepting mints a Thing GroupObject, which is
             // what puts it in the LIFE market.
             .fullScreenCover(isPresented: $trayOpen) {
-                ConvergenceView(proposals.pending,
-                                onDecide: { p, d in proposals.decide(p, d, core: coreService, graph: graph) },
-                                onDone: { trayOpen = false })
+                // Asks to join come first (#76): a person is waiting on them.
+                if !requests.pending.isEmpty {
+                    JoinRequestsView(onDone: { trayOpen = false })
+                } else {
+                    ConvergenceView(proposals.pending,
+                                    onDecide: { p, d in proposals.decide(p, d, core: coreService, graph: graph) },
+                                    onDone: { trayOpen = false })
+                }
             }
             // Recompute on entry and after every graph change — proposals are DERIVED from
             // (graph entities ⊖ minted things), so there is nothing to keep in sync.
-            .onChange(of: trayOpen) { _, open in if open { rebuildProposals() } }
+            .onChange(of: trayOpen) { _, open in
+                if open { rebuildProposals(); Task { await requests.refresh(core: coreService, now: true) } }
+            }
+            .task(id: coreService.syncTick) { await requests.refresh(core: coreService) }
             // A decision taken from the notification banner, applied here because this is where
             // both stores live. The store re-checks that the proposal is still pending, so a
             // banner acted on twice (or after the deck already handled it) is a no-op.
@@ -519,8 +528,9 @@ extension View {
 /// OutputStore it used to read (which the deck never showed — the badge was dead).
 private struct BellButton: View {
     @EnvironmentObject private var proposals: ProposalStore
+    @EnvironmentObject private var requests: RequestStore
     let open: () -> Void
-    private var pending: Int { proposals.pending.count }
+    private var pending: Int { proposals.pending.count + requests.pending.count }
     var body: some View {
         Button(action: open) {
             // An accent circle (white on slate, ink on paper), the radius of the glyph

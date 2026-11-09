@@ -797,6 +797,19 @@ final class CoreService: ObservableObject {
         // The forum→host map rides every re-list: the CHAT list joins on it, and a
         // room minted or detached anywhere must re-dress its row on the next pass.
         refreshForumHosts()
+        // Exteriors arrive by sync from connections, so they are re-read on every pass.
+        refreshExteriors()
+    }
+
+    /// THE EXTERIORS THAT REACHED ME (#76): objects I am not in, carried by their members.
+    /// Equality-gated like every tick read.
+    @Published private(set) var exteriors: [ExteriorRow] = []
+
+    func refreshExteriors() {
+        do {
+            let fresh = try core.exteriors()
+            if fresh != exteriors { exteriors = fresh }
+        } catch { readFailed("re-read exteriors", error) }
     }
 
     /// forum object id → its hosting Group, the whole map in one FFI call. What
@@ -2806,5 +2819,83 @@ final class CoreService: ObservableObject {
             await syncNow(silent: true)
             try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
         }
+    }
+}
+
+// MARK: - The exterior (#76, ICD 2.6.0)
+// What a non-member holds of an object, and its door. Every write and every door read is a
+// relay round trip, so each runs off the main thread.
+
+extension CoreService {
+    /// The ICD's inline ceiling for an exterior's still, base64 characters.
+    var exteriorPhotoMax: Int { Int(core.exteriorPhotoMax()) }
+
+    /// Write an object's visibility and, when it reaches outward, its exterior. The name is the
+    /// object's own; the still is cut to the ICD's ceiling or refused.
+    @discardableResult
+    func setOutside(_ objectId: String, name: String, visibility: String,
+                    description: String, photo: Data, door: DoorChoice) async -> Bool {
+        let c = core
+        var photoB64 = ""
+        if !photo.isEmpty {
+            guard let jpeg = Self.jpegUnderCap(photo, capB64: exteriorPhotoMax) else {
+                self.error = "That picture is too large for what outsiders see."
+                return false
+            }
+            photoB64 = jpeg.base64EncodedString()
+        }
+        let outward = visibility != "private"
+        do {
+            try await Task.detached {
+                _ = try c.setVisibility(objectId: objectId, visibility: visibility)
+                guard outward else { return }
+                try c.setExterior(objectId: objectId, name: name, description: description,
+                                  photo: photoB64, photoMime: photoB64.isEmpty ? "" : "image/jpeg",
+                                  door: door.rawValue)
+            }.value
+            return true
+        } catch { fail("write what outsiders see", error, object: objectId); return false }
+    }
+
+    /// After a mint: what the creator's Visibility face said, written when the dial was moved
+    /// outward. Only Me is the mint's own state and writes nothing.
+    func setOutside(_ objectId: String, from draft: NewDraft) async {
+        guard draft.audience == .connections || draft.audience == .network else { return }
+        await setOutside(objectId, name: draft.name, visibility: draft.audience.rawValue,
+                         description: draft.outside, photo: draft.outsidePhoto, door: draft.door)
+    }
+
+    /// Ask to join an object whose exterior reached me.
+    func requestJoin(_ objectId: String) async -> Bool {
+        let c = core
+        do {
+            _ = try await Task.detached { try c.requestJoin(objectId: objectId, note: "") }.value
+            refreshExteriors()
+            return true
+        } catch { fail("ask to join", error, object: objectId); return false }
+    }
+
+    func withdrawRequest(_ objectId: String) async -> Bool {
+        let c = core
+        do {
+            try await Task.detached { try c.withdrawRequest(objectId: objectId) }.value
+            refreshExteriors()
+            return true
+        } catch { fail("withdraw your ask", error, object: objectId); return false }
+    }
+
+    /// The requests waiting for me, read from the doors on the relay.
+    func pendingRequests() async -> [RequestRow] {
+        let c = core
+        do { return try await Task.detached { try c.pendingRequests() }.value }
+        catch { readFailed("read who is asking to join", error); return [] }
+    }
+
+    func decideRequest(_ r: RequestRow, admit: Bool) async -> Bool {
+        let c = core
+        do {
+            try await Task.detached { try c.decideRequest(objectId: r.object, request: r.request, admit: admit) }.value
+            return true
+        } catch { fail(admit ? "admit" : "decline", error, object: r.object); return false }
     }
 }

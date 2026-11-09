@@ -40,6 +40,7 @@
 import SwiftUI
 import Combine      // ObservableObjectPublisher — the ShellSurface seam
 import PacificCore   // MintDraft — the core's own draft, crossed once in `NewDraft.mint(for:)`
+import PhotosUI     // the exterior's still
 
 // MARK: - Kind
 
@@ -247,6 +248,13 @@ struct NewDraft: Equatable {
     var form = ""                         // Post: article | link | image
     var link = ""                         // Post: a link post's destination
 
+    // WHO IT IS FOR, and what stands outside it (#76). Part of the draft, so an edit to
+    // either is an edit, and the commit reads them with the rest.
+    var audience: Audience = .onlyMe
+    var outside = ""                      // the exterior's description
+    var outsidePhoto = Data()             // the exterior's still
+    var door: DoorChoice = .review        // how an outsider gets in
+
     /// Read/write the slot a declared field binds to. One total switch, so a new
     /// `MintKey` cannot be half-wired.
     subscript(key: MintKey) -> String {
@@ -402,12 +410,11 @@ struct NewDraft: Equatable {
 /// The last two are `pacific_core::visibility::Visibility`, whose wire values these raw
 /// values match. The first three are the roster.
 ///
-/// NOTE ON PERSISTENCE: Ralph's ruling (18 Aug) is that visibility is a flag on EVERY
-/// DELTA, authorising relay on receipt — Pacific's core discoverability mechanism, not a
-/// per-object state field. That is the next piece of work. This dial is the surface for
-/// it; nothing here is authored yet, and `NewSession.audience` is deliberately inert
-/// until the delta flag exists. A control that looked live and dropped the choice is the
-/// exact bug the field declaration was built to prevent.
+/// PERSISTENCE: Only Me, Connections and Network are written at mint as the object's
+/// `base.setVisibility` (ICD 2.6.0 puts it on every kind with an exterior), and at
+/// Connections or Network its exterior and door with it (`CoreService.setOutside`). The
+/// per-delta flag (Ralph, 18 Aug) is separate and still to come. People and Spaces are the
+/// roster, and still need their selection step.
 enum Audience: String, CaseIterable, Identifiable {
     case onlyMe      = "private"
     case people      = "people"
@@ -481,8 +488,12 @@ final class NewSession: ObservableObject, Identifiable {
     @Published var face: NewFace = .fields
 
     /// WHO this is for. Universal across every kind (Ralph, 18 Aug), which settles the
-    /// open question about what GOLD means: it is privacy/sharing, everywhere.
-    @Published var audience: Audience = .onlyMe
+    /// open question about what GOLD means: it is privacy/sharing, everywhere. Held in the
+    /// draft, so it publishes with it.
+    var audience: Audience {
+        get { draft.audience }
+        set { draft.audience = newValue }
+    }
 
     /// The draft as it opened, seeded. What `edited` measures against.
     private var opening: NewDraft
@@ -497,7 +508,6 @@ final class NewSession: ObservableObject, Identifiable {
         var moved = zip(now, then).compactMap { a, b in
             String(describing: a.value) == String(describing: b.value) ? nil : a.label
         }
-        if audience != .onlyMe { moved.append("audience") }
         return moved
     }
 
@@ -718,6 +728,9 @@ struct NewCard: View {
     /// (`group.setCover` 9 · `event.setMedia` 4 · `thing.setPhoto` 3) are authored at mint.
     @State private var camera: MintKey? = nil
 
+    /// The exterior's still, as the library hands it over.
+    @State private var outsidePick: PhotosPickerItem? = nil
+
     private var exit: NewExit? { session.exit }
     private var kind: NewKind { session.kind }
     private var tint: Color { session.tint }
@@ -902,6 +915,75 @@ struct NewCard: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("visibility-\(option.rawValue)")
             .accessibilityAddTraits(session.audience == option ? .isSelected : [])
+        }
+        // WHAT STANDS OUTSIDE (#76). Once it reaches past you, an outsider holds a picture,
+        // a description and a way in, and nothing from inside: the owner writes it here.
+        if session.audience == .connections || session.audience == .network {
+            outsideFields
+        }
+    }
+
+    @ViewBuilder private var outsideFields: some View {
+        Text("OUTSIDE")
+            .font(.system(.footnote, design: .monospaced))
+            .tracking(2)
+            .foregroundStyle(Theme.textTertiary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .accessibilityAddTraits(.isHeader)
+        HStack(alignment: .top, spacing: 14) {
+            PhotosPicker(selection: $outsidePick, matching: .images) {
+                let r = RoundedRectangle(cornerRadius: 14, style: .continuous)
+                ZStack {
+                    r.fill(Theme.surface2).overlay(r.strokeBorder(Theme.hairline, lineWidth: 1))
+                    if let picture = UIImage(data: session.draft.outsidePhoto) {
+                        Image(uiImage: picture).resizable().scaledToFill().clipShape(r)
+                    } else {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                }
+                .frame(width: 64, height: 64)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Picture outsiders see")
+            .accessibilityIdentifier("outside-photo")
+            TextField("What outsiders see", text: $session.draft.outside, axis: .vertical)
+                .lineLimit(2...4)
+                .font(.body)
+                .accessibilityIdentifier("outside-description")
+        }
+        .padding(.horizontal, 20)
+        .onChange(of: outsidePick) { _, item in
+            Task {
+                if let data = try? await item?.loadTransferable(type: Data.self) {
+                    session.draft.outsidePhoto = data
+                }
+            }
+        }
+        ForEach(DoorChoice.allCases) { door in
+            Button {
+                session.draft.door = door
+            } label: {
+                HStack(spacing: 14) {
+                    Circle()
+                        .strokeBorder(session.draft.door == door ? tint : Theme.hairline,
+                                      lineWidth: session.draft.door == door ? 6 : 1)
+                        .frame(width: 20, height: 20)
+                    Text(door.title)
+                        .font(.body)
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 20)
+                .frame(height: CircleButton.discSize)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("door-\(door == .none ? "none" : door.rawValue)")
+            .accessibilityAddTraits(session.draft.door == door ? .isSelected : [])
         }
     }
 
@@ -1389,9 +1471,9 @@ final class NewCreator: ObservableObject {
         sessions = Dictionary(uniqueKeysWithValues: kinds.map { ($0, make($0)) })
         active = kinds.first ?? .note
         for (kind, s) in sessions {
-            // `$draft` and `$audience` publish the NEW value, before it is stored, so the
-            // edit is judged on what was sent rather than on `s.edited`.
-            sinks.append(s.$draft.combineLatest(s.$audience).sink { [weak self, weak s] _, _ in
+            // `$draft` publishes the NEW value (the audience with it), before it is stored, so
+            // the edit is judged on what was sent rather than on `s.edited`.
+            sinks.append(s.$draft.sink { [weak self, weak s] _ in
                 DispatchQueue.main.async {
                     guard let self, let s, !self.locked, kind == self.active, s.edited else { return }
                     NSLog("[creator] locked on %@ by %@", kind.rawValue, s.edits.joined(separator: ","))
