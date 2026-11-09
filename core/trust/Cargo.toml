@@ -1,0 +1,25 @@
+[package]
+name = "trust"
+description = "Whose key is whose: the checks that bind a public key to a person. Pure: no I/O, no state."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+# The key-package binding check reads a KeyPackage's leaf, so it needs mls-rs.
+mls = ["dep:mls-rs"]
+
+[dependencies]
+ed25519-dalek.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+ciborium.workspace = true
+base64.workspace = true
+hex.workspace = true
+thiserror.workspace = true
+mls-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+# A real key package for the binding check's own tests.
+mls-rs-crypto-rustcrypto.workspace = true

@@ -620,3 +620,107 @@ async fn after_a_lost_seat_the_dropped_copies_are_never_published() {
         assert_eq!(renames, 4, "{}: one of each, and no dropped copy", h.device_name(u));
     }
 }
+
+/// A BACKED-OFF OBJECT STILL TAKES THE PERSON'S OWN WRITE (#75). A slot held by a claim this
+/// device cannot read fails the queue and backs the object off. A sweep (`publish_all_pending`,
+/// as the Door's tail and a sync tick do) then waits, sends nothing and counts nothing; the
+/// person's own `publish_pending` on that object claims on that call all the same, and its
+/// failure is an error — the Door answers a write as relayed on it (NC-93). RFC 9420 §14:
+/// back off the loser, not the person.
+#[tokio::test]
+async fn a_backed_off_object_still_takes_the_persons_own_write() {
+    let h = Harness::people(&[("axel", &["phone", "laptop"])]).await;
+    let phone = h.device("axel", "phone");
+    let laptop = h.device("axel", "laptop");
+    let feast = h.form_object(phone, "event", &[]).await;
+    h.add_to_forum(phone, laptop, &feast).await;
+    let rename = |title: &str| event::set_profile_args(title, None, START_MS, None, None, None, None);
+    h.node(phone).apply(&feast, OP_SET_PROFILE, rename("Feast")).await.unwrap();
+    h.settle().await;
+
+    let n = h.node(phone);
+    n.apply_local(&feast, OP_SET_PROFILE, rename("Feast Xalapa")).await.unwrap();
+    let gid = hex::decode(&feast).unwrap();
+    let queued = n.dir.pending_outbox(&gid, &n.id.identity_pk()).unwrap();
+    let (did, env) = queued.first().cloned().expect("the rename waits in the outbox");
+    let prev = pacific_core::coordinator::decode_delta(&env).unwrap().prev;
+
+    // Someone else's bytes in the place after the head: a claim this device cannot read.
+    let root = pacific_core::locator::storage_root(&n.id.seed_bytes().expect("a seed"));
+    let slot = pacific_core::node::sequenced_slot(&root, &gid, &prev);
+    let mut relay = pacific_core::transport::RelaySession::connect(&h.relay).await.unwrap();
+    assert!(relay.publish_commit(&slot, pacific_wire::blob_b64(b"not a claim")).await.unwrap().is_some());
+
+    let wire = || pacific_core::router::published();
+    let before = wire();
+    assert!(n.publish_pending(&feast).await.is_err(), "the person's write is not at the relay, and says so");
+    assert_eq!(wire() - before, 1, "it claimed, once");
+
+    let before = wire();
+    assert_eq!(n.publish_all_pending().await.unwrap(), 0, "a sweep inside the backoff counts nothing");
+    assert_eq!(wire() - before, 0, "and sends nothing");
+    assert!(n.dir.pending_outbox(&gid, &n.id.identity_pk()).unwrap().iter().any(|(d, _)| *d == did), "the rename still waits");
+
+    // A sync tick inside the backoff, on the same Node (the backoff is held in memory, as a
+    // Door session or the app holds one Node): the object's queue waits, and nothing goes out.
+    let before = wire();
+    n.sync_once().await.unwrap();
+    assert_eq!(wire() - before, 0, "a tick sends nothing for a backed-off object");
+    assert!(n.dir.pending_outbox(&gid, &n.id.identity_pk()).unwrap().iter().any(|(d, _)| *d == did), "the rename still waits");
+
+    let before = wire();
+    assert!(n.publish_pending(&feast).await.is_err(), "inside the backoff, the person's write is tried again");
+    assert_eq!(wire() - before, 1, "it claimed again on that call");
+}
+
+/// A relay that paces each connection to `burst` publishes, refilling at `per_sec`: the real
+/// relay, its own limit (`RELAY_CONN_PUBS_PER_SEC`, limits.rs), as a fault.
+async fn paced_relay(per_sec: f64, burst: f64) -> String {
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = l.local_addr().unwrap();
+    let limits = relay::Limits { conn_pubs_per_sec: per_sec, conn_pub_burst: burst, ..relay::Limits::default() };
+    tokio::spawn(async move { relay::serve_with_policy(l, relay::mailbox_from_env(), relay::Retention::default(), limits, None).await });
+    format!("ws://{addr}")
+}
+
+/// THE PERSON'S WRITE GOES ON THAT CALL, INSIDE THE BACKOFF (#75). Two renames queued; a relay
+/// that paces this connection to two publishes takes the first claim and its publish and
+/// refuses the second claim: an error, and the feast backs off. A tick on the same Node then
+/// sends nothing. Once the pace refills, the person's own write claims and publishes the
+/// second rename on that call: two publishes, Ok, and the outbox empty.
+#[tokio::test]
+async fn inside_the_backoff_the_persons_write_is_sent_on_that_call() {
+    let h = Harness::people(&[("axel", &["phone", "laptop"])]).await;
+    let phone = h.device("axel", "phone");
+    let laptop = h.device("axel", "laptop");
+    let feast = h.form_object(phone, "event", &[]).await;
+    h.add_to_forum(phone, laptop, &feast).await;
+    let rename = |title: &str| event::set_profile_args(title, None, START_MS, None, None, None, None);
+    h.node(phone).apply(&feast, OP_SET_PROFILE, rename("Feast")).await.unwrap();
+    h.settle().await;
+
+    let mut n = h.node(phone);
+    n.set_routes(pacific_core::router::Routes::parse(&paced_relay(4.0, 2.0).await)).unwrap();
+    n.apply_local(&feast, OP_SET_PROFILE, rename("Feast Xalapa")).await.unwrap();
+    n.apply_local(&feast, OP_SET_PROFILE, rename("Feast Cádiz")).await.unwrap();
+    let gid = hex::decode(&feast).unwrap();
+    let waiting = || n.dir.pending_outbox(&gid, &n.id.identity_pk()).unwrap().len();
+
+    let wire = || pacific_core::router::published();
+    let before = wire();
+    let err = n.publish_pending(&feast).await.expect_err("the second claim is refused, and said");
+    assert!(format!("{err}").contains("rate_limited"), "{err}");
+    assert_eq!(wire() - before, 3, "claim and publish the first; the second's claim refused");
+    assert_eq!(waiting(), 1, "the second rename waits");
+
+    let before = wire();
+    n.sync_once().await.unwrap();
+    assert_eq!(wire() - before, 0, "a tick inside the backoff sends nothing");
+    assert_eq!(waiting(), 1);
+
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+    let before = wire();
+    assert_eq!(n.publish_pending(&feast).await.expect("the person's write goes"), 1, "one row left the outbox");
+    assert_eq!(wire() - before, 2, "its claim and its publish, on that call");
+    assert_eq!(waiting(), 0);
+}
