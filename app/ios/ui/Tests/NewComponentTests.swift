@@ -50,24 +50,21 @@ final class NewComponentTests: XCTestCase {
         XCTAssertTrue(s.cell.hasShare)
     }
 
-    // MARK: - What each LIFE jewel's `+` mints
+    // MARK: - What RED's creator mints
 
-    /// The rail routes to a KIND, and the kind is the core's own name. POSTS used to
-    /// collapse into `.media` — the photo-library import — which is why its `+` was
-    /// hidden: `.media` mints nothing, and before Post(30) existed there was nothing
-    /// for it to mint.
-    func testEachJewelRoutesToTheKindItMints() {
-        XCTAssertEqual(LifeFilter(.posts).newKind, .post)
-        XCTAssertEqual(LifeFilter(.events).newKind, .event)
-        XCTAssertEqual(LifeFilter(.groups).newKind, .space)
-        XCTAssertEqual(LifeFilter(.trade).newKind, .listing)
-    }
-
-    /// PEOPLE mints NOTHING, and that is not an oversight: a connection is a double
-    /// opt-in formed by pairing, so one side cannot author it. Its `+` opens the pair
-    /// QR instead — the absence of a kind here is what routes it there.
-    func testPeopleMintsNothingBecausePairingIsTwoSided() {
-        XCTAssertNil(LifeFilter(.people).newKind)
+    /// LIFE's `+` went on 9 Nov because RED's creator covers it: every kind the `+`
+    /// minted from a jewel is a card on RED's ring. PEOPLE was never a mint — a
+    /// connection is a double opt-in formed by pairing (Chats · Connect).
+    @MainActor
+    func testRedsCreatorOffersEveryKindLifesPlusMinted() {
+        let shell = ShellState()
+        shell.makeNoteSession = { NewSession(kind: .note) { _ in .saved } }
+        shell.makeMintSession = { k in NewSession(kind: k) { _ in .saved } }
+        shell.beginCreator()
+        let kinds = shell.creator?.kinds ?? []
+        for k in [NewKind.post, .event, .space, .listing, .place, .project] {
+            XCTAssertTrue(kinds.contains(k), "RED's ring carries \(k)")
+        }
     }
 
     /// A Post carries the universal rows and no switches — the simplest kind in the

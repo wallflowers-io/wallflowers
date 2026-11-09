@@ -73,7 +73,9 @@ final class LifeSearchUITests: XCTestCase {
         shoot("search-map")
 
         // BLUE is home: search closes with the map.
-        app.textFields["tab-search-field"].typeText("anything")
+        let field = app.textFields["tab-search-field"]
+        field.tap()
+        field.typeText("anything")
         app.buttons["shell-life"].tap()
         XCTAssertTrue(waitGround("life-feed"), "home to the feed")
         XCTAssertTrue(app.buttons["tab-search"].waitForExistence(timeout: 5), "search closed")
