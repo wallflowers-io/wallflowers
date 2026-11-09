@@ -143,7 +143,19 @@
       "sigDomain": "wallflowers/door/v1",
       "bundles": 4,
       "noteMax": 280,
-      "refused": "a blob that does not open, a request whose signature fails, a bundle that is not the asker's, or one naming another object, is set aside and named, never answered"
+      "refused": "a blob that does not open, a request whose signature fails, a bundle that is not the asker's, or one naming another object, is set aside and named, never answered",
+      "bound": {
+        "summary": "What bounds a door (B3; Ralph, 9 Nov: ruled for ARC_STORAGE's proposal). The relay, which cannot read a knock, keeps a door's tag under its own class, and a member's device keeps its knock store under the same numbers, so a flood fills neither",
+        "tagClass": "door: — a door's tag is published and drained as \"door:\" + the address's tag, the class the relay bounds",
+        "cap": 256,
+        "capSummary": "knocks kept per door, at most; past it the OLDEST is evicted, never the newest refused, so a flood cannot lock a door: the owner's remedy against a long one is a new door (a new base.setDoor key)",
+        "ttlDays": 30,
+        "ttlSummary": "a knock is kept this long, then let go: an ask unanswered for 30 days expires, and the asker may ask again",
+        "maxBytes": 8192,
+        "maxBytesSummary": "a knock's sealed bytes, at most; a request with every bundle and the longest note is 3,542 (4,724 published), so 1.7× headroom",
+        "perConnectionPerHour": 4,
+        "perConnectionPerHourSummary": "knocks one relay connection may publish to one door tag in an hour"
+      }
     }
   },
   "conformance": {
@@ -1166,8 +1178,8 @@
             },
             "photo": {
               "type": "string",
-              "summary": "a still (image mimes): a MediaRef flattened under the prefix `photo` (MediaRef::to_args); present and broken is refused; empty or absent is none. Inline data at most 64000 base64 characters, so the row still fits contact.publishExterior once carried there; detached (O-79) for more",
-              "maxLength": 64000,
+              "summary": "a still (image mimes), BY REFERENCE ONLY: a MediaRef flattened under the prefix `photo` (MediaRef::to_args), detached (O-79), so the Delta carries the digest and keys and never the bytes; an inline still is refused (maxLength 0). A carried copy is the owner's signed row, verbatim, so whatever the row holds goes to every hop; the bytes stay in the blob store (ARC_NETWORK B1(b); Ralph, 9 Nov: \"it should be by reference\"). Present and broken is refused; absent is none",
+              "maxLength": 0,
               "mediaRef": {
                 "prefix": "photo",
                 "suffixes": [

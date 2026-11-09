@@ -28,7 +28,7 @@ final class FeedModelTests: XCTestCase {
     }
 
     private func exterior(_ object: String, kind: String = "project", door: Bool = true) -> ExteriorRow {
-        ExteriorRow(object: object, kind: kind, name: object, description: "", photo: "", photoMime: "",
+        ExteriorRow(object: object, kind: kind, name: object, description: "",
                     owner: "o", via: "v", hops: 1, door: door, requested: false)
     }
 

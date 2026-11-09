@@ -716,9 +716,6 @@ pub struct ExteriorRow {
     pub kind: String,
     pub name: String,
     pub description: String,
-    /// Inline base64, "" for none.
-    pub photo: String,
-    pub photo_mime: String,
     /// The owner's identity key, hex.
     pub owner: String,
     /// Who carried it to me, hex.
@@ -734,17 +731,11 @@ pub struct ExteriorRow {
 impl ExteriorRow {
     fn of(e: pacific_core::node::HeldExterior) -> Self {
         let c = e.carried;
-        let (photo, photo_mime) = match c.exterior.photo.as_ref().map(|m| (&m.delivery, m.mime.clone())) {
-            Some((pacific_media::Delivery::Inline { data }, mime)) => (data.clone(), mime),
-            _ => (String::new(), String::new()),
-        };
         ExteriorRow {
             object: c.object,
             kind: c.kind.name().to_string(),
             name: c.exterior.name,
             description: c.exterior.description,
-            photo,
-            photo_mime,
             owner: hex::encode(c.owner),
             via: hex::encode(c.via),
             hops: c.hops,
@@ -3153,19 +3144,16 @@ impl Core {
     }
 
     /// ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
-    /// "connections" | "network") and, when `name` is not empty, the exterior: a description,
-    /// a still (inline base64, at most `exterior_photo_max()` characters; "" for none) and its
-    /// door ("" none, "review" or "auto"). Only what changed is written, and sent once.
-    /// Returns how many ops were written. Call OFF the Swift main thread.
-    #[allow(clippy::too_many_arguments)]
+    /// "connections" | "network") and, when `name` is not empty, the exterior: a description
+    /// and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+    /// once. Returns how many ops were written. The exterior's still is by reference only
+    /// (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
     pub fn set_outside(
         &self,
         object_id: String,
         visibility: String,
         name: String,
         description: String,
-        photo: String,
-        photo_mime: String,
         door: String,
     ) -> Result<u32, FfiError> {
         self.point();
@@ -3178,23 +3166,13 @@ impl Core {
         let draft = if name.is_empty() {
             None
         } else {
-            let photo = if photo.is_empty() {
-                None
-            } else {
-                Some(pacific_media::MediaRef::inline(&photo_mime, photo).map_err(|e| FfiError::Core(format!("the picture: {e}")))?)
-            };
             let door = match door.as_str() {
                 "" => None,
                 m => Some(pacific_core::exterior::DoorMode::parse(m).ok_or_else(|| FfiError::Core("door must be \"\" | \"review\" | \"auto\"".into()))?),
             };
-            Some(pacific_core::node::ExteriorDraft { name, description, photo, door })
+            Some(pacific_core::node::ExteriorDraft { name, description, photo: None, door })
         };
         Ok(block_on(Node::open()?.set_outside(&object_id, visibility, draft.as_ref()))? as u32)
-    }
-
-    /// The ICD's inline ceiling for an exterior's still, base64 characters.
-    pub fn exterior_photo_max(&self) -> u32 {
-        pacific_core::exterior::icd_photo_max() as u32
     }
 
     /// Ask to join an object whose exterior reached me. Returns the request's id.

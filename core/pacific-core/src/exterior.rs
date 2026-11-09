@@ -27,10 +27,6 @@ pub(crate) mod icd {
 }
 pub use icd::{OP_DECIDE_REQUEST, OP_SET_DOOR, OP_SET_EXTERIOR};
 
-/// `base.setExterior`'s inline ceiling for its still, base64 characters (the ICD's).
-pub const fn icd_photo_max() -> usize {
-    icd::PHOTO_MAX
-}
 
 pub const SET_EXTERIOR: OpDecl = OpDecl {
     op_id: OP_SET_EXTERIOR,

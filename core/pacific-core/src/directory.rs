@@ -439,7 +439,8 @@ CREATE TABLE IF NOT EXISTS inbox_cursor_v2 (
 CREATE TABLE IF NOT EXISTS door_knock (
   door      BLOB NOT NULL,              -- the door's address seed
   id        BLOB NOT NULL,              -- the knock's id: SHA-256 of its blob
-  blob      BLOB NOT NULL,
+  blob      BLOB NOT NULL,              -- emptied once settled: only the id is kept
+  at        INTEGER NOT NULL DEFAULT 0, -- unix s it was drained
   attempts  INTEGER NOT NULL DEFAULT 0, -- admissions tried and failed
   next_at   INTEGER NOT NULL DEFAULT 0, -- unix s: no admission is tried before
   outcome   TEXT,                       -- NULL while it waits; else why it no longer does
@@ -1931,11 +1932,18 @@ impl Directory {
 
     // ---- the knocks at a door (mls.door) ----
 
-    /// Keep a knock drained from a door. Idempotent by its id.
-    pub fn put_knock(&self, door: &[u8; 32], id: &[u8; 32], blob: &[u8]) -> Result<(), CoreError> {
+    /// Keep a knock drained from a door, within the door's bound (ICD `mls.door.bound`, as the
+    /// relay keeps it): at most `cap` per door, the oldest evicted, none older than `ttl_s`.
+    /// Idempotent by its id. A flood fills neither the relay nor a member's device.
+    pub fn put_knock(&self, door: &[u8; 32], id: &[u8; 32], blob: &[u8], now: i64, cap: usize, ttl_s: i64) -> Result<(), CoreError> {
         self.conn.execute(
-            "INSERT OR IGNORE INTO door_knock (door, id, blob) VALUES (?1, ?2, ?3)",
-            params![&door[..], &id[..], blob],
+            "INSERT OR IGNORE INTO door_knock (door, id, blob, at) VALUES (?1, ?2, ?3, ?4)",
+            params![&door[..], &id[..], blob, now],
+        )?;
+        self.conn.execute(
+            "DELETE FROM door_knock WHERE door=?1 AND (at < ?2 OR rowid NOT IN
+               (SELECT rowid FROM door_knock WHERE door=?1 ORDER BY at DESC, rowid DESC LIMIT ?3))",
+            params![&door[..], now - ttl_s, cap as i64],
         )?;
         Ok(())
     }
@@ -1957,10 +1965,10 @@ impl Directory {
         Ok(out)
     }
 
-    /// A knock no longer waits, and why.
+    /// A knock no longer waits, and why. Its bytes go; its id stays, so it is not kept again.
     pub fn settle_knock(&self, door: &[u8; 32], id: &[u8; 32], outcome: &str) -> Result<(), CoreError> {
         self.conn.execute(
-            "UPDATE door_knock SET outcome=?3 WHERE door=?1 AND id=?2",
+            "UPDATE door_knock SET outcome=?3, blob=x'' WHERE door=?1 AND id=?2",
             params![&door[..], &id[..], outcome],
         )?;
         Ok(())
@@ -2483,6 +2491,28 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         Directory::init(&conn).unwrap();
         Directory::with(conn)
+    }
+
+    /// A flood past a door's cap leaves the store at the cap, the newest kept; a settled knock
+    /// keeps its id and not its bytes; past the TTL a knock is let go.
+    #[test]
+    fn a_door_keeps_its_bound() {
+        let dir = mem();
+        let (door, cap, ttl) = ([7u8; 32], 256usize, 30 * 86_400);
+        for i in 0..300u32 {
+            let mut id = [0u8; 32];
+            id[..4].copy_from_slice(&i.to_be_bytes());
+            dir.put_knock(&door, &id, &[1; 64], 1_000 + i as i64, cap, ttl).unwrap();
+        }
+        let waiting = dir.waiting_knocks(&door).unwrap();
+        assert_eq!(waiting.len(), cap, "a flood leaves the store at the cap");
+        assert_eq!(&waiting[0].0[..4], &44u32.to_be_bytes(), "the oldest went");
+        let first = waiting[0].0;
+        dir.settle_knock(&door, &first, "decided").unwrap();
+        let bytes: Vec<u8> = dir.conn.query_row("SELECT blob FROM door_knock WHERE id=?1", params![&first[..]], |r| r.get(0)).unwrap();
+        assert!(bytes.is_empty(), "settled, only the id is kept");
+        dir.put_knock(&door, &[0xff; 32], &[1; 64], 1_000 + ttl + 500, cap, ttl).unwrap();
+        assert_eq!(dir.waiting_knocks(&door).unwrap().len(), 1, "past the TTL, the old ones go");
     }
 
     /// O-69: the fold generation moves on every change to a row the fold reads (a Delta

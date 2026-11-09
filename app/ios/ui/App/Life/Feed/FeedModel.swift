@@ -180,7 +180,6 @@ enum FeedAssembler {
                 whenMs: nowMs,
                 provenance: .hops(e.hops),
                 objectID: nil,
-                bannerB64: e.photo,
                 authorRoute: .person(e.owner),
                 // No door, nothing to ask: the card is seen and not opened.
                 exterior: e.door ? ExteriorRef(object: e.object) : nil))

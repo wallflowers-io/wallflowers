@@ -29,9 +29,7 @@ struct ExteriorDetailSource: DetailSource {
     let ownerName: String
 
     func headline() async -> DetailHeadline? {
-        DetailHeadline(title: row.name,
-                       photo: row.photo.isEmpty ? nil : Data(base64Encoded: row.photo),
-                       facts: row.description.isEmpty ? [] : [row.description])
+        DetailHeadline(title: row.name, facts: row.description.isEmpty ? [] : [row.description])
     }
 
     func author() async -> DetailAuthor? {

@@ -40,7 +40,6 @@
 import SwiftUI
 import Combine      // ObservableObjectPublisher — the ShellSurface seam
 import PacificCore   // MintDraft — the core's own draft, crossed once in `NewDraft.mint(for:)`
-import PhotosUI     // the exterior's still
 
 // MARK: - Kind
 
@@ -252,7 +251,6 @@ struct NewDraft: Equatable {
     // either is an edit, and the commit reads them with the rest.
     var audience: Audience = .onlyMe
     var outside = ""                      // the exterior's description
-    var outsidePhoto = Data()             // the exterior's still
     var door: DoorChoice = .review        // how an outsider gets in
 
     /// Read/write the slot a declared field binds to. One total switch, so a new
@@ -728,9 +726,6 @@ struct NewCard: View {
     /// (`group.setCover` 9 · `event.setMedia` 4 · `thing.setPhoto` 3) are authored at mint.
     @State private var camera: MintKey? = nil
 
-    /// The exterior's still, as the library hands it over.
-    @State private var outsidePick: PhotosPickerItem? = nil
-
     private var exit: NewExit? { session.exit }
     private var kind: NewKind { session.kind }
     private var tint: Color { session.tint }
@@ -916,8 +911,9 @@ struct NewCard: View {
             .accessibilityIdentifier("visibility-\(option.rawValue)")
             .accessibilityAddTraits(session.audience == option ? .isSelected : [])
         }
-        // WHAT STANDS OUTSIDE (#76). Once it reaches past you, an outsider holds a picture,
-        // a description and a way in, and nothing from inside: the owner writes it here.
+        // WHAT STANDS OUTSIDE (#76). Once it reaches past you, an outsider holds its name, a
+        // description and a way in, and nothing from inside: the owner writes it here. (Its
+        // picture is by reference, and comes with the blob store's client, #56.)
         if session.audience == .connections || session.audience == .network {
             outsideFields
         }
@@ -932,37 +928,11 @@ struct NewCard: View {
             .padding(.horizontal, 20)
             .padding(.top, 18)
             .accessibilityAddTraits(.isHeader)
-        HStack(alignment: .top, spacing: 14) {
-            PhotosPicker(selection: $outsidePick, matching: .images) {
-                let r = RoundedRectangle(cornerRadius: 14, style: .continuous)
-                ZStack {
-                    r.fill(Theme.surface2).overlay(r.strokeBorder(Theme.hairline, lineWidth: 1))
-                    if let picture = UIImage(data: session.draft.outsidePhoto) {
-                        Image(uiImage: picture).resizable().scaledToFill().clipShape(r)
-                    } else {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Theme.textTertiary)
-                    }
-                }
-                .frame(width: 64, height: 64)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Picture outsiders see")
-            .accessibilityIdentifier("outside-photo")
-            TextField("What outsiders see", text: $session.draft.outside, axis: .vertical)
-                .lineLimit(2...4)
-                .font(.body)
-                .accessibilityIdentifier("outside-description")
-        }
-        .padding(.horizontal, 20)
-        .onChange(of: outsidePick) { _, item in
-            Task {
-                if let data = try? await item?.loadTransferable(type: Data.self) {
-                    session.draft.outsidePhoto = data
-                }
-            }
-        }
+        TextField("What outsiders see", text: $session.draft.outside, axis: .vertical)
+            .lineLimit(2...4)
+            .font(.body)
+            .padding(.horizontal, 20)
+            .accessibilityIdentifier("outside-description")
         ForEach(DoorChoice.allCases) { door in
             Button {
                 session.draft.door = door

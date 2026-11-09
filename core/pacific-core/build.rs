@@ -156,7 +156,9 @@ fn exterior(icd: &serde_json::Value) {
              pub const DOOR_MODES: &[&str] = {};\npub const DECISIONS: &[&str] = {};\n\
              /// `mls.door`.\n\
              pub const DOOR_ADDRESS_DOMAIN: &str = {:?};\npub const DOOR_SEAL_DOMAIN: &str = {:?};\npub const DOOR_SIG_DOMAIN: &str = {:?};\n\
-             pub const DOOR_BUNDLES: usize = {};\npub const DOOR_NOTE_MAX: usize = {};\n",
+             pub const DOOR_BUNDLES: usize = {};\npub const DOOR_NOTE_MAX: usize = {};\n\
+             /// `mls.door.bound`: what a door keeps, at most.\n\
+             pub const DOOR_CAP: usize = {};\npub const DOOR_TTL_DAYS: i64 = {};\npub const DOOR_MAX_BYTES: usize = {};\npub const DOOR_TAG_CLASS: &str = {:?};\n",
             on.join(", "),
             op(&facet["base.setExterior"], "base.setExterior"),
             op(&facet["base.setDoor"], "base.setDoor"),
@@ -174,6 +176,10 @@ fn exterior(icd: &serde_json::Value) {
             text("sigDomain"),
             num("bundles"),
             num("noteMax"),
+            door["bound"]["cap"].as_u64().expect("the ICD states mls.door.bound.cap"),
+            door["bound"]["ttlDays"].as_u64().expect("the ICD states mls.door.bound.ttlDays"),
+            door["bound"]["maxBytes"].as_u64().expect("the ICD states mls.door.bound.maxBytes"),
+            door["bound"]["tagClass"].as_str().expect("the ICD states mls.door.bound.tagClass").split(' ').next().expect("a class"),
         ),
     )
     .expect("icd_exterior.rs");

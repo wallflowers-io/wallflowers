@@ -796,11 +796,6 @@ public protocol CoreProtocol : AnyObject {
     func exportWrap(prfSecret: Data, host: String) throws  -> Data
     
     /**
-     * The ICD's inline ceiling for an exterior's still, base64 characters.
-     */
-    func exteriorPhotoMax()  -> UInt32
-    
-    /**
      * The exteriors that reached me through my connections: objects I am not in, each with
      * whether I have asked to join.
      */
@@ -1528,12 +1523,12 @@ public protocol CoreProtocol : AnyObject {
     
     /**
      * ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
-     * "connections" | "network") and, when `name` is not empty, the exterior: a description,
-     * a still (inline base64, at most `exterior_photo_max()` characters; "" for none) and its
-     * door ("" none, "review" or "auto"). Only what changed is written, and sent once.
-     * Returns how many ops were written. Call OFF the Swift main thread.
+     * "connections" | "network") and, when `name` is not empty, the exterior: a description
+     * and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+     * once. Returns how many ops were written. The exterior's still is by reference only
+     * (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
      */
-    func setOutside(objectId: String, visibility: String, name: String, description: String, photo: String, photoMime: String, door: String) throws  -> UInt32
+    func setOutside(objectId: String, visibility: String, name: String, description: String, door: String) throws  -> UInt32
     
     /**
      * Point this device's messaging at a transport set — a comma-separated spec such as
@@ -2158,16 +2153,6 @@ open func exportWrap(prfSecret: Data, host: String)throws  -> Data {
     uniffi_pacific_ffi_fn_method_core_export_wrap(self.uniffiClonePointer(),
         FfiConverterData.lower(prfSecret),
         FfiConverterString.lower(host),$0
-    )
-})
-}
-    
-    /**
-     * The ICD's inline ceiling for an exterior's still, base64 characters.
-     */
-open func exteriorPhotoMax() -> UInt32 {
-    return try!  FfiConverterUInt32.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_method_core_exterior_photo_max(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -3572,20 +3557,18 @@ open func setMyProfile(displayName: String, shape: String, card: ProfileCard)thr
     
     /**
      * ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
-     * "connections" | "network") and, when `name` is not empty, the exterior: a description,
-     * a still (inline base64, at most `exterior_photo_max()` characters; "" for none) and its
-     * door ("" none, "review" or "auto"). Only what changed is written, and sent once.
-     * Returns how many ops were written. Call OFF the Swift main thread.
+     * "connections" | "network") and, when `name` is not empty, the exterior: a description
+     * and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+     * once. Returns how many ops were written. The exterior's still is by reference only
+     * (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
      */
-open func setOutside(objectId: String, visibility: String, name: String, description: String, photo: String, photoMime: String, door: String)throws  -> UInt32 {
+open func setOutside(objectId: String, visibility: String, name: String, description: String, door: String)throws  -> UInt32 {
     return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_set_outside(self.uniffiClonePointer(),
         FfiConverterString.lower(objectId),
         FfiConverterString.lower(visibility),
         FfiConverterString.lower(name),
         FfiConverterString.lower(description),
-        FfiConverterString.lower(photo),
-        FfiConverterString.lower(photoMime),
         FfiConverterString.lower(door),$0
     )
 })
@@ -6285,11 +6268,6 @@ public struct ExteriorRow {
     public var name: String
     public var description: String
     /**
-     * Inline base64, "" for none.
-     */
-    public var photo: String
-    public var photoMime: String
-    /**
      * The owner's identity key, hex.
      */
     public var owner: String
@@ -6317,9 +6295,6 @@ public struct ExteriorRow {
          * The ICD kind name.
          */kind: String, name: String, description: String, 
         /**
-         * Inline base64, "" for none.
-         */photo: String, photoMime: String, 
-        /**
          * The owner's identity key, hex.
          */owner: String, 
         /**
@@ -6338,8 +6313,6 @@ public struct ExteriorRow {
         self.kind = kind
         self.name = name
         self.description = description
-        self.photo = photo
-        self.photoMime = photoMime
         self.owner = owner
         self.via = via
         self.hops = hops
@@ -6362,12 +6335,6 @@ extension ExteriorRow: Equatable, Hashable {
             return false
         }
         if lhs.description != rhs.description {
-            return false
-        }
-        if lhs.photo != rhs.photo {
-            return false
-        }
-        if lhs.photoMime != rhs.photoMime {
             return false
         }
         if lhs.owner != rhs.owner {
@@ -6393,8 +6360,6 @@ extension ExteriorRow: Equatable, Hashable {
         hasher.combine(kind)
         hasher.combine(name)
         hasher.combine(description)
-        hasher.combine(photo)
-        hasher.combine(photoMime)
         hasher.combine(owner)
         hasher.combine(via)
         hasher.combine(hops)
@@ -6415,8 +6380,6 @@ public struct FfiConverterTypeExteriorRow: FfiConverterRustBuffer {
                 kind: FfiConverterString.read(from: &buf), 
                 name: FfiConverterString.read(from: &buf), 
                 description: FfiConverterString.read(from: &buf), 
-                photo: FfiConverterString.read(from: &buf), 
-                photoMime: FfiConverterString.read(from: &buf), 
                 owner: FfiConverterString.read(from: &buf), 
                 via: FfiConverterString.read(from: &buf), 
                 hops: FfiConverterUInt32.read(from: &buf), 
@@ -6430,8 +6393,6 @@ public struct FfiConverterTypeExteriorRow: FfiConverterRustBuffer {
         FfiConverterString.write(value.kind, into: &buf)
         FfiConverterString.write(value.name, into: &buf)
         FfiConverterString.write(value.description, into: &buf)
-        FfiConverterString.write(value.photo, into: &buf)
-        FfiConverterString.write(value.photoMime, into: &buf)
         FfiConverterString.write(value.owner, into: &buf)
         FfiConverterString.write(value.via, into: &buf)
         FfiConverterUInt32.write(value.hops, into: &buf)
@@ -14913,9 +14874,6 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_export_wrap() != 27591) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_exterior_photo_max() != 64934) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_pacific_ffi_checksum_method_core_exteriors() != 19829) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15222,7 +15180,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_set_my_profile() != 52976) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_set_outside() != 39536) {
+    if (uniffi_pacific_ffi_checksum_method_core_set_outside() != 144) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_set_routes() != 3390) {

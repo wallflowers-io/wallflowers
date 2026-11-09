@@ -255,6 +255,9 @@ impl Node {
 
     async fn knock(&self, door_pub: &[u8; 32], knock: &Knock) -> Result<[u8; 32], CoreError> {
         let blob = door::seal_to(door_pub, &door::encode(&self.id, knock));
+        if blob.len() > ext::icd::DOOR_MAX_BYTES {
+            return Err(CoreError::Coordinator(format!("a knock of {} bytes is over the door's {}", blob.len(), ext::icd::DOOR_MAX_BYTES)));
+        }
         let id = door::id_of(&blob);
         let mut sess = self.home_session().await?;
         let out = sess.publish(&Address::from_seed(&door::address_seed(door_pub)), &pacific_wire::blob_b64(&blob)).await;
@@ -338,14 +341,16 @@ impl Node {
             })
             .await;
         self.keep_session(sess);
+        let (now, ttl) = (unix_now(), ext::icd::DOOR_TTL_DAYS * 86_400);
         let mut new = 0;
         for (seed, msgs) in seeds.iter().zip(drained?) {
             for m in msgs {
                 match pacific_wire::blob_unb64(&m.blob) {
-                    Ok(blob) => {
-                        self.dir.put_knock(seed, &door::id_of(&blob), &blob)?;
+                    Ok(blob) if blob.len() <= ext::icd::DOOR_MAX_BYTES => {
+                        self.dir.put_knock(seed, &door::id_of(&blob), &blob, now, ext::icd::DOOR_CAP, ttl)?;
                         new += 1;
                     }
+                    Ok(blob) => tracing::debug!(bytes = blob.len(), "a door blob over the bound; set aside"),
                     Err(e) => tracing::debug!(error = %e, "a door blob that is not base64; set aside"),
                 }
                 self.dir.advance_cursor(seed, m.source, m.seq)?;

@@ -2827,31 +2827,20 @@ final class CoreService: ObservableObject {
 // relay round trip, so each runs off the main thread.
 
 extension CoreService {
-    /// The ICD's inline ceiling for an exterior's still, base64 characters.
-    var exteriorPhotoMax: Int { Int(core.exteriorPhotoMax()) }
-
     /// Write an object's visibility and, when it reaches outward, its exterior. The name is the
-    /// object's own; the still is cut to the ICD's ceiling or refused.
+    /// object's own. (The exterior's still is by reference only, and waits on the blob store's
+    /// client, #56.)
     @discardableResult
     func setOutside(_ objectId: String, name: String, visibility: String,
-                    description: String, photo: Data, door: DoorChoice) async -> Bool {
+                    description: String, door: DoorChoice) async -> Bool {
         let c = core
-        var photoB64 = ""
-        if !photo.isEmpty {
-            guard let jpeg = Self.jpegUnderCap(photo, capB64: exteriorPhotoMax) else {
-                self.error = "That picture is too large for what outsiders see."
-                return false
-            }
-            photoB64 = jpeg.base64EncodedString()
-        }
         // At Only Me there is no outside to write: the dial alone.
         let outsideName = visibility == "private" ? "" : name
         do {
             // One Save: only what changed is written, and sent once.
             _ = try await Task.detached {
                 try c.setOutside(objectId: objectId, visibility: visibility, name: outsideName,
-                                 description: description, photo: photoB64,
-                                 photoMime: photoB64.isEmpty ? "" : "image/jpeg", door: door.rawValue)
+                                 description: description, door: door.rawValue)
             }.value
             return true
         } catch { fail("write what outsiders see", error, object: objectId); return false }
@@ -2862,7 +2851,7 @@ extension CoreService {
     func setOutside(_ objectId: String, from draft: NewDraft) async {
         guard draft.audience == .connections || draft.audience == .network else { return }
         await setOutside(objectId, name: draft.name, visibility: draft.audience.rawValue,
-                         description: draft.outside, photo: draft.outsidePhoto, door: draft.door)
+                         description: draft.outside, door: draft.door)
     }
 
     /// Ask to join an object whose exterior reached me.
