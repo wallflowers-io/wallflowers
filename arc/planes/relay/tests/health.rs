@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-use relay::mailbox::{Appended, Mailbox, Result, StoreError};
+use relay::mailbox::{Appended, Evicted, Mailbox, Result, StoreError};
 use relay::store::Store;
 use relay::{Limits, Retention};
 
@@ -85,6 +85,15 @@ impl Mailbox for Unwritable {
     }
     async fn evict(&self, now_us: u64, window_us: u64, max_per_tag: u64) -> Result<u64> {
         Mailbox::evict(&self.0, now_us, window_us, max_per_tag).await
+    }
+    async fn append_capped(&self, _: &str, _: u64, _: &str, _: u64) -> Result<(Appended, Evicted)> {
+        Err(StoreError::Index("database or disk is full".into()))
+    }
+    async fn evicted_totals(&self, tags: &[String]) -> Result<HashMap<String, u64>> {
+        Mailbox::evicted_totals(&self.0, tags).await
+    }
+    async fn expire(&self, prefix: &str, now_us: u64, window_us: u64) -> Result<u64> {
+        Mailbox::expire(&self.0, prefix, now_us, window_us).await
     }
     async fn counts(&self) -> Result<(u64, u64)> {
         Mailbox::counts(&self.0).await

@@ -478,6 +478,26 @@ async fn eviction_removes_the_object_as_well_as_the_row() {
     cleanup(&path);
 }
 
+/// A door's cap evicts at append (`mls.door.relay`): the evicted knock's object goes with
+/// its row, in the same order as a sweep, so a flooded door does not grow the bucket.
+#[tokio::test]
+async fn a_capped_append_removes_the_evicted_object_as_well_as_the_row() {
+    let (objects, endpoint) = StandIn::start().await;
+    let path = scratch("offload-cap");
+    let index = Store::open(&path).unwrap();
+    let mailbox = OffloadMailbox::new(index, r2(&endpoint));
+
+    let door = "door:dd";
+    let (a, e) = mailbox.append_capped(door, 10, "first", 1).await.unwrap();
+    assert_eq!((a, e.count), (Appended::Stored, 0));
+    let (a, e) = mailbox.append_capped(door, 20, "second", 1).await.unwrap();
+    assert_eq!((a, e.count, e.bytes), (Appended::Stored, 1, "first".len() as u64));
+    assert_eq!(objects.keys(), vec![body_key(door, 20)], "the evicted knock's object is gone");
+    assert_eq!(mailbox.evicted_totals(&[door.to_string()]).await.unwrap()[door], 1);
+
+    cleanup(&path);
+}
+
 /// The leak, named rather than hidden. If the object store refuses the DELETE, the
 /// index row is ALREADY gone — that ordering is deliberate — so the object becomes
 /// unreferenced garbage. Eviction still reports the rows it removed, because it did

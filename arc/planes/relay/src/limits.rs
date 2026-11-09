@@ -170,7 +170,19 @@ impl Bucket {
     pub fn is_limited(&self) -> bool {
         self.rate > 0.0
     }
+
+    /// Refilled to its burst: the same as no bucket at all, so one that is can be dropped.
+    pub fn is_full(&mut self) -> bool {
+        self.take(0.0);
+        self.tokens >= self.capacity
+    }
 }
+
+/// Door tags one connection may be pacing at once (its knock buckets, `mls.door.relay`). The
+/// new-address limit covers only tags with nothing stored, so knocking once at many existing
+/// doors would grow the map without it. Past this, idle buckets go; if none is idle, the knock
+/// is refused `rate_limited`.
+pub const DOORS_PER_CONN: usize = 64;
 
 #[cfg(test)]
 mod tests {
@@ -181,6 +193,15 @@ mod tests {
         let mut b = Bucket::new(1.0, 3.0);
         assert!(b.take(1.0) && b.take(1.0) && b.take(1.0));
         assert!(!b.take(1.0), "the burst is spent and a second has not passed");
+    }
+
+    #[test]
+    fn a_bucket_refilled_to_its_burst_is_full() {
+        let mut b = Bucket::new(1000.0, 2.0);
+        assert!(b.is_full());
+        assert!(b.take(1.0) && !b.is_full());
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        assert!(b.is_full(), "refilled");
     }
 
     #[test]
