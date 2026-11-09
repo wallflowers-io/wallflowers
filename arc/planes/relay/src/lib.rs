@@ -774,7 +774,7 @@ pub async fn serve_with_policy(
         // The meter runs whether or not anyone uploads: the relay starts FAIL-CLOSED
         // (no measurement yet = no presigning), so this loop is what opens it.
         if m.budget().is_some() {
-            tokio::spawn(usage_loop(m.clone()));
+            tokio::spawn(usage_loop(m.clone(), health.clone()));
         }
     }
     let mut next_id: ConnId = 0;
@@ -1237,10 +1237,11 @@ fn bump(metrics: &Metrics, ok: bool) {
 /// place, and once readings stop for long enough the budget goes closed on its own
 /// — the failure mode of a cost guard should be "stop spending", not "assume the
 /// bucket is empty".
-async fn usage_loop(media: Arc<Media>) {
+async fn usage_loop(media: Arc<Media>, health: Arc<health::Health>) {
     let Some(budget) = media.budget().cloned() else {
         return;
     };
+    let mut said: Option<Instant> = None;
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -1260,16 +1261,9 @@ async fn usage_loop(media: Arc<Media>) {
         match measure_usage(&client, &media, max).await {
             Ok(bytes) => {
                 budget.record(bytes, budget::now_secs());
-                let pct = bytes.saturating_mul(100).checked_div(max).unwrap_or(0);
+                let pct = health.media_measured(bytes, max, &mut said, Instant::now());
                 // Byte totals and percentages only — never a key or an object.
                 info!(used_bytes = bytes, budget_bytes = max, used_pct = pct, "storage measured");
-                if pct >= 80 {
-                    warn!(
-                        used_bytes = bytes,
-                        budget_bytes = max,
-                        "storage budget above 80% — uploads will start being refused"
-                    );
-                }
             }
             // Terse by design: the request URL is presigned (it carries a signature)
             // and the body can name objects, so neither is ever logged.
