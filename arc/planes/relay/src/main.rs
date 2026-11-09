@@ -118,7 +118,8 @@ fn init_tracing() {
 
     tracing_subscriber::registry()
         .with(filter)
-        .with(fmt::layer().with_writer(std::io::stderr))
+        // Colour only on a terminal: under systemd the escapes land in syslog as text.
+        .with(fmt::layer().with_writer(std::io::stderr).with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr())))
         // When Sentry is uninitialised this layer is a harmless no-op.
         .with(sentry_tracing::layer())
         .init();

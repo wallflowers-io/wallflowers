@@ -250,6 +250,14 @@ impl Mailbox for OffloadMailbox {
         Ok(self.index.tag_counts()?)
     }
 
+    async fn probe(&self) -> Result<()> {
+        Ok(self.index.probe()?)
+    }
+
+    fn dir(&self) -> Option<std::path::PathBuf> {
+        self.index.dir()
+    }
+
     fn describe(&self) -> String {
         format!(
             "index in SQLite (commit slots, floors, seq high-water), bodies in {}",

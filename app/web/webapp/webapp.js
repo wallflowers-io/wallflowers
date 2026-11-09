@@ -532,9 +532,9 @@
       })
       .then(function () { busy($('sheetGo'), false); });
 
-    /* The Arc reads a Face off the Host, never off the Site (the Arc is in no group of the
-       Site's): so the public bundle is copied across, and the Arc is given a seat on the Host
-       alone. A bundle is used once, so it is fetched fresh here. */
+    /* The Arc serves a Face off the Host, never off the Site's log (it may sit in the Site to
+       admit, A-3, and serves none of it): so the public bundle is copied across, and the Arc
+       is given a seat on the Host. A bundle is used once, so it is fetched fresh here. */
     function live() {
       var now = Date.now();
       var body = JSON.stringify({

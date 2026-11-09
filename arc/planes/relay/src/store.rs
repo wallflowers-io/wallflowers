@@ -144,6 +144,27 @@ impl Store {
         Ok(Self { conn: std::sync::Mutex::new(conn) })
     }
 
+    /// Write and commit one row of `meta`: the store can take a write now.
+    pub fn probe(&self) -> rusqlite::Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let conn = self.conn.lock().expect("store mutex");
+        conn.execute(
+            "INSERT INTO meta (k, v) VALUES ('probe', ?1) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+            [now],
+        )?;
+        Ok(())
+    }
+
+    /// The directory holding the store's file; `None` in memory.
+    pub fn dir(&self) -> Option<std::path::PathBuf> {
+        let conn = self.conn.lock().expect("store mutex");
+        let path = conn.path().filter(|p| !p.is_empty())?;
+        std::path::Path::new(path).parent().map(|d| d.to_path_buf())
+    }
+
     /// The durable seq high-water, or 0 when this is a fresh store.
     ///
     /// SCALE-UNBLOCKS U1 TRAP 2: seeding `seq` from the wall clock alone is only
@@ -476,6 +497,14 @@ impl Mailbox for Store {
 
     async fn tag_counts(&self) -> Result<Vec<(String, u64)>> {
         Ok(Store::tag_counts(self)?)
+    }
+
+    async fn probe(&self) -> Result<()> {
+        Ok(Store::probe(self)?)
+    }
+
+    fn dir(&self) -> Option<std::path::PathBuf> {
+        Store::dir(self)
     }
 
     fn describe(&self) -> String {

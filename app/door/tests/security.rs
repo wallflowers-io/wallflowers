@@ -769,6 +769,8 @@ impl Relay {
             .env("RELAY_TUNNEL_BIND", format!("127.0.0.1:{tunnel}"))
             .env_remove("SENTRY_DSN")
             .env_remove("RELAY_STORE")
+            // A connection's life is DEBUG; FC-15 counts its opens and Subs in this log.
+            .env("RUST_LOG", "info,relay=debug")
             .stdout(out)
             .stderr(err)
             .process_group(0)

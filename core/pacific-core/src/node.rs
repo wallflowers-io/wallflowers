@@ -340,9 +340,9 @@ pub struct Noncompliance {
 }
 
 ///
-/// Everything here was put on the Host by the group's owner on purpose: the Arc is a
-/// member of the Host and never of the group (the-seam.html §03), so nothing in this
-/// struct can come from the group's own log. Pictures are listed by slot; their bytes
+/// Everything here was put on the Host by the group's owner on purpose: the Arc serves
+/// the Host and never the group's log, though it reads the Site for A-3 and O-75, so
+/// nothing in this struct comes from the group's own log. Pictures are listed by slot; their bytes
 /// come from [`Node::host_media`], so a directory of sites does not carry every image.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HostSite {
@@ -7421,7 +7421,7 @@ impl Node {
 
     // -- Host, the owner's side: over `mint` and `apply`, the one write path ------
 
-    /// A Host for this Site: its public copy, and the only object an Arc joins.
+    /// A Host for this Site: its public copy, and the only object an Arc serves from.
     /// `mint` names it (`host.define`), and both halves of `part_of` say whose it is:
     /// the Site's `base.setPart` and the Host's `base.setParent`, role `host`. Owner
     /// of the Site only. Returns the Host's id.

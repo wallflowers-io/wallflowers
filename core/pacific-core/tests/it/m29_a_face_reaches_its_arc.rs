@@ -1,7 +1,8 @@
 //! A GROUP'S PUBLIC FACE REACHES ITS ARC, AND NOTHING ELSE DOES.
 //!
-//! The seam's rule is that an Arc never joins a group (the-seam.html §03), so a face
-//! cannot be read off the group's log — it has to be put where the Arc can read it. That
+//! The seam's rule is that an Arc never serves a group's log (the-seam.html §03; since A-3
+//! it may sit in the Site to admit), so a face is not read off it — it has to be put where
+//! the Arc serves from. That
 //! place is the HOST (kind 33): a part of the Site, on whose roster the Arc sits and the
 //! group's members do not. The owner copies the face across (`host.hydrate` key `face`,
 //! pictures by `host.setMedia`) and names the Arc that serves it (`base.publish`). This

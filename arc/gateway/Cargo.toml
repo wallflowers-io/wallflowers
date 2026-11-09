@@ -26,3 +26,7 @@ serde_json = { workspace = true }
 base64 = "0.22"
 # The deploy stamp served at GET /v1/version — compiled in, not read from a file on the box.
 arc-build = { workspace = true }
+
+[dev-dependencies]
+# /v1/health is tested against a real relay.
+relay = { path = "../planes/relay" }
