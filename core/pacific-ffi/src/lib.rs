@@ -3152,37 +3152,44 @@ impl Core {
         }))
     }
 
-    /// Write an object's exterior: a name, a description, a still (inline base64, at most
-    /// `exterior_photo_max()` characters; "" for none) and its door: "" none, "review" or
-    /// "auto". The owner's alone. Call OFF the Swift main thread.
-    pub fn set_exterior(
+    /// ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
+    /// "connections" | "network") and, when `name` is not empty, the exterior: a description,
+    /// a still (inline base64, at most `exterior_photo_max()` characters; "" for none) and its
+    /// door ("" none, "review" or "auto"). Only what changed is written, and sent once.
+    /// Returns how many ops were written. Call OFF the Swift main thread.
+    #[allow(clippy::too_many_arguments)]
+    pub fn set_outside(
         &self,
         object_id: String,
+        visibility: String,
         name: String,
         description: String,
         photo: String,
         photo_mime: String,
         door: String,
-    ) -> Result<(), FfiError> {
+    ) -> Result<u32, FfiError> {
         self.point();
-        let photo = if photo.is_empty() {
+        let visibility = match visibility.as_str() {
+            "" => None,
+            v => Some(pacific_core::visibility::Visibility::parse(v).map_err(|_| {
+                FfiError::Core("visibility must be \"private\" | \"connections\" | \"network\"".into())
+            })?),
+        };
+        let draft = if name.is_empty() {
             None
         } else {
-            Some(pacific_media::MediaRef::inline(&photo_mime, photo).map_err(|e| FfiError::Core(format!("the picture: {e}")))?)
+            let photo = if photo.is_empty() {
+                None
+            } else {
+                Some(pacific_media::MediaRef::inline(&photo_mime, photo).map_err(|e| FfiError::Core(format!("the picture: {e}")))?)
+            };
+            let door = match door.as_str() {
+                "" => None,
+                m => Some(pacific_core::exterior::DoorMode::parse(m).ok_or_else(|| FfiError::Core("door must be \"\" | \"review\" | \"auto\"".into()))?),
+            };
+            Some(pacific_core::node::ExteriorDraft { name, description, photo, door })
         };
-        let door = match door.as_str() {
-            "" => None,
-            m => Some(pacific_core::exterior::DoorMode::parse(m).ok_or_else(|| FfiError::Core("door must be \"\" | \"review\" | \"auto\"".into()))?),
-        };
-        Ok(block_on(Node::open()?.set_exterior(&object_id, &name, &description, photo.as_ref(), door))?)
-    }
-
-    /// How far an object, and its exterior, may travel: "private" | "connections" | "network".
-    pub fn set_visibility(&self, object_id: String, visibility: String) -> Result<String, FfiError> {
-        self.point();
-        let v = pacific_core::visibility::Visibility::parse(&visibility)
-            .map_err(|_| FfiError::Core("visibility must be \"private\" | \"connections\" | \"network\"".into()))?;
-        Ok(block_on(Node::open()?.set_visibility(&object_id, v))?)
+        Ok(block_on(Node::open()?.set_outside(&object_id, visibility, draft.as_ref()))? as u32)
     }
 
     /// The ICD's inline ceiling for an exterior's still, base64 characters.
@@ -3202,10 +3209,12 @@ impl Core {
         Ok(block_on(Node::open()?.withdraw_request(&object_id))?)
     }
 
-    /// The requests waiting for me: at the review doors of objects I own or admit to.
+    /// The requests waiting for me: at the review doors of objects I own or admit to, from what
+    /// this device's syncs have drained. No relay round trip.
     pub fn pending_requests(&self) -> Result<Vec<RequestRow>, FfiError> {
         self.point();
-        Ok(block_on(Node::open()?.pending_requests())?
+        Ok(Node::open()?
+            .pending_requests()?
             .into_iter()
             .map(|r| RequestRow { object: r.object, kind: r.kind, request: r.request, asker: hex::encode(r.asker), asker_name: r.asker_name, note: r.note, at: r.at as i64 })
             .collect())

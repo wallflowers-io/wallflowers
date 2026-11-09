@@ -148,8 +148,8 @@ fn exterior(icd: &serde_json::Value) {
             "/// `facets.exterior.on`: the kinds that have an exterior.\npub const EXTERIOR_KINDS: &[&str] = &[{}];\n\
              /// `facets.exterior` op ids.\n\
              pub const OP_SET_EXTERIOR: u32 = {};\npub const OP_SET_DOOR: u32 = {};\npub const OP_DECIDE_REQUEST: u32 = {};\n\
-             /// `contact.publishExterior`'s and `group.setRequest`'s op ids.\n\
-             pub const OP_PUBLISH_EXTERIOR: u32 = {};\npub const OP_SET_REQUEST: u32 = {};\n\
+             /// `contact.publishExterior`'s and `group.setRequest`'s op ids, and the leg's `perSync`.\n\
+             pub const OP_PUBLISH_EXTERIOR: u32 = {};\npub const OP_SET_REQUEST: u32 = {};\npub const CARRIES_PER_SYNC: usize = {};\n\
              /// `base.setExterior` caps: each arg's `maxLength`.\n\
              pub const NAME_MAX: usize = {};\npub const DESCRIPTION_MAX: usize = {};\npub const PHOTO_MAX: usize = {};\n\
              /// Vocabularies, as the ICD names them.\n\
@@ -163,6 +163,7 @@ fn exterior(icd: &serde_json::Value) {
             op(&facet["base.decideRequest"], "base.decideRequest"),
             op(&icd["kinds"]["contact"]["ops"]["contact.publishExterior"], "contact.publishExterior"),
             op(&icd["kinds"]["group"]["ops"]["group.setRequest"], "group.setRequest"),
+            icd["kinds"]["contact"]["ops"]["contact.publishExterior"]["perSync"].as_u64().expect("the ICD states contact.publishExterior's perSync"),
             max("base.setExterior", "name"),
             max("base.setExterior", "description"),
             max("base.setExterior", "photo"),

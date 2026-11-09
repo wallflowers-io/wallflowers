@@ -2844,14 +2844,14 @@ extension CoreService {
             }
             photoB64 = jpeg.base64EncodedString()
         }
-        let outward = visibility != "private"
+        // At Only Me there is no outside to write: the dial alone.
+        let outsideName = visibility == "private" ? "" : name
         do {
-            try await Task.detached {
-                _ = try c.setVisibility(objectId: objectId, visibility: visibility)
-                guard outward else { return }
-                try c.setExterior(objectId: objectId, name: name, description: description,
-                                  photo: photoB64, photoMime: photoB64.isEmpty ? "" : "image/jpeg",
-                                  door: door.rawValue)
+            // One Save: only what changed is written, and sent once.
+            _ = try await Task.detached {
+                try c.setOutside(objectId: objectId, visibility: visibility, name: outsideName,
+                                 description: description, photo: photoB64,
+                                 photoMime: photoB64.isEmpty ? "" : "image/jpeg", door: door.rawValue)
             }.value
             return true
         } catch { fail("write what outsiders see", error, object: objectId); return false }
@@ -2884,7 +2884,7 @@ extension CoreService {
         } catch { fail("withdraw your ask", error, object: objectId); return false }
     }
 
-    /// The requests waiting for me, read from the doors on the relay.
+    /// The requests waiting for me, from what this device's syncs have drained from its doors.
     func pendingRequests() async -> [RequestRow] {
         let c = core
         do { return try await Task.detached { try c.pendingRequests() }.value }

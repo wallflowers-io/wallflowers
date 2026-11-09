@@ -1,7 +1,8 @@
 //  JoinRequests.swift
-//  Who is asking to join what I own or admit to (#76, ICD 2.6.0 mls.door). A request lives at
-//  the object's door on the relay; the store reads it from there, so a new device sees what the
-//  old one saw. Answered in the bell tray, ahead of the review deck.
+//  Who is asking to join what I own or admit to (#76, ICD 2.6.0 mls.door). Every sync drains
+//  each door this device holds into its knock store; the store here reads that, locally. A new
+//  device drains a door once from the start, so it sees what the old one saw. Answered in the
+//  bell tray, ahead of the review deck.
 
 import SwiftUI
 import UserNotifications
@@ -11,9 +12,8 @@ import PacificCore
 final class RequestStore: ObservableObject {
     @Published private(set) var pending: [RequestRow] = []
 
-    /// A door read is a relay round trip per object, so the tick reads at most this often;
-    /// opening the tray reads now.
-    private static let interval: TimeInterval = 30
+    /// The tick reads at most this often; opening the tray reads now.
+    private static let interval: TimeInterval = 10
     private var lastRead = Date.distantPast
     private var reading = false
 

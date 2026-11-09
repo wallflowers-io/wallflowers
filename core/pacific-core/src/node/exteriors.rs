@@ -2,15 +2,16 @@
 //! answering. The facet, the seal and the leg's fold are `crate::exterior` and `crate::door`;
 //! this is where they meet the relay, the connections and the MLS doors.
 //!
-//! - an owner writes the exterior and the door (`set_exterior`), and the dial
-//!   (`set_visibility`);
+//! - an owner writes the dial, the door and the exterior in one Save (`set_outside`): only
+//!   what changed, committed locally and sent once;
 //! - every member carries each object's exterior to its connections, and every receiver carries
-//!   a `network` one on (`publish_exteriors`, `relay_exteriors`): gated by what the target
-//!   channel's own fold already holds, so a settled mesh authors nothing;
+//!   a `network` one on (`carry_exteriors`): gated by what the target channel's own fold already
+//!   holds, so a settled mesh authors nothing, and at most `CARRIES_PER_SYNC` a pass;
 //! - a non-member asks (`request_join`), sealed to the door, and records the ask on their own
 //!   record; or withdraws it;
-//! - a member's device opens the door: an `auto` door admits on sight (`answer_exterior_doors`),
-//!   a `review` door waits for the owner or an admitter (`door_requests`, `decide_request`).
+//! - every member's sync drains each door it holds from its cursor into the knock store
+//!   (`drain_doors`); an `auto` door admits from there, a `review` door waits for the owner or
+//!   an admitter (`door_requests`, `decide_request`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -19,6 +20,14 @@ use crate::door::{self, Knock};
 use crate::exterior::{self as ext, Carried, DoorMode, ExteriorState};
 use crate::object_store::GroupObjectStore;
 use crate::visibility::Visibility;
+
+/// Carries at most this many copies a sync; the rest go on the next pass (the ICD's
+/// `contact.publishExterior.perSync`).
+const CARRIES_PER_SYNC: usize = ext::icd::CARRIES_PER_SYNC;
+
+/// A failed admission is tried again after a minute, doubling, at most a day apart; past this
+/// many it is settled as `unadmittable` on this device.
+const ADMIT_ATTEMPTS: u32 = 8;
 
 /// One request waiting at a door, as an admitter's device reads it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,6 +42,10 @@ pub struct DoorRequest {
     pub note: String,
     pub at: u64,
     bundles: Vec<String>,
+    door: [u8; 32],
+    id: [u8; 32],
+    attempts: u32,
+    next_at: i64,
 }
 
 /// An exterior that reached me, and whether I have asked to join.
@@ -40,6 +53,16 @@ pub struct DoorRequest {
 pub struct HeldExterior {
     pub carried: Carried,
     pub requested: bool,
+}
+
+/// What an owner's Save says of the outside: the exterior and its door.
+#[derive(Clone, Debug)]
+pub struct ExteriorDraft {
+    pub name: String,
+    pub description: String,
+    pub photo: Option<pacific_media::MediaRef>,
+    /// `None` closes the door.
+    pub door: Option<DoorMode>,
 }
 
 impl Node {
@@ -55,41 +78,49 @@ impl Node {
         Ok(GroupObjectStore::new(&self.dir).exterior_of(&gid, kind)?.map(|(e, v)| (kind, e, v)))
     }
 
-    /// The object's exterior and door, written by its owner. `door` None closes the door; a door
-    /// already open keeps its key, so requests sealed to it still open.
-    pub async fn set_exterior(
-        &self,
-        object_hex: &str,
-        name: &str,
-        description: &str,
-        photo: Option<&pacific_media::MediaRef>,
-        door: Option<DoorMode>,
-    ) -> Result<(), CoreError> {
-        let (_, state, _) = self
+    /// ONE SAVE OF THE OUTSIDE, by its owner: the dial, the door and the exterior. Only what
+    /// differs from the fold is written, each a local commit, and the object is sent once, so a
+    /// Save that changes nothing authors nothing and moves no copy. A door already open keeps
+    /// its key, so the requests sealed to it still open. Returns how many ops were written.
+    pub async fn set_outside(&self, object_hex: &str, visibility: Option<Visibility>, exterior: Option<&ExteriorDraft>) -> Result<usize, CoreError> {
+        let (_, state, now) = self
             .exterior_state(object_hex)?
             .ok_or_else(|| CoreError::Coordinator("this kind has no exterior".into()))?;
-        let public = match door {
-            None => {
-                if state.door.is_some() {
-                    self.apply(object_hex, ext::OP_SET_DOOR, ext::set_door_args(None, DoorMode::Review)).await?;
-                }
-                None
+        let mut wrote = 0;
+        if let Some(v) = visibility.filter(|v| *v != now) {
+            self.apply_local(object_hex, crate::visibility::OP_SET_VISIBILITY, crate::visibility::set_visibility_args(v)).await?;
+            wrote += 1;
+        }
+        if let Some(d) = exterior {
+            let key = d.door.map(|_| state.door.as_ref().map(|k| k.key).unwrap_or_else(|| door::mint().0));
+            let door_now = state.door.as_ref().map(|k| (k.key, k.mode));
+            let door_then = key.zip(d.door);
+            if door_now != door_then {
+                let args = ext::set_door_args(key.as_ref(), d.door.unwrap_or(DoorMode::Review));
+                self.apply_local(object_hex, ext::OP_SET_DOOR, args).await?;
+                wrote += 1;
             }
-            Some(mode) => {
-                let key = state.door.as_ref().map(|d| d.key).unwrap_or_else(|| door::mint().0);
-                if state.door.as_ref().map(|d| (d.key, d.mode)) != Some((key, mode)) {
-                    self.apply(object_hex, ext::OP_SET_DOOR, ext::set_door_args(Some(&key), mode)).await?;
-                }
-                Some(door::public_of(&key))
+            let args = ext::set_exterior_args(&d.name, &d.description, d.photo.as_ref(), key.map(|k| door::public_of(&k)).as_ref());
+            let then = ext::parse(&args).map_err(|e| CoreError::Coordinator(format!("the exterior: {e:?}")))?;
+            if state.exterior.as_ref() != Some(&then) {
+                self.apply_local(object_hex, ext::OP_SET_EXTERIOR, args).await?;
+                wrote += 1;
             }
-        };
-        self.apply(object_hex, ext::OP_SET_EXTERIOR, ext::set_exterior_args(name, description, photo, public.as_ref())).await?;
-        Ok(())
+        }
+        if wrote > 0 {
+            self.publish_pending(object_hex).await?;
+        }
+        Ok(wrote)
     }
 
-    /// How far an object's existence, and its exterior, may travel.
-    pub async fn set_visibility(&self, object_hex: &str, v: Visibility) -> Result<String, CoreError> {
-        self.apply(object_hex, crate::visibility::OP_SET_VISIBILITY, crate::visibility::set_visibility_args(v)).await
+    /// The exterior and its door alone.
+    pub async fn set_exterior(&self, object_hex: &str, draft: &ExteriorDraft) -> Result<usize, CoreError> {
+        self.set_outside(object_hex, None, Some(draft)).await
+    }
+
+    /// The dial alone: how far an object's existence, and its exterior, may travel.
+    pub async fn set_visibility(&self, object_hex: &str, v: Visibility) -> Result<usize, CoreError> {
+        self.set_outside(object_hex, Some(v), None).await
     }
 
     /// The owner's latest signed row of `op_id` on an object, as `mls.applicationPayload`.
@@ -138,33 +169,37 @@ impl Node {
         Ok(true)
     }
 
-    /// Every member carries the exteriors of its objects to its connections who are not inside
-    /// them. Returns how many copies were sent.
-    pub async fn publish_exteriors(&self) -> Result<usize, CoreError> {
+    /// THE CARRY, once a sync: every member carries each of its objects' exteriors to its
+    /// connections outside them; every receiver carries a `network` one, and each withdrawal,
+    /// one hop on — never back to whoever brought it, never to its owner. At most
+    /// `CARRIES_PER_SYNC` copies a pass, its own objects first; the rest go on the next.
+    pub async fn carry_exteriors(&self) -> Result<usize, CoreError> {
         let me = self.id.identity_pk();
         let connections = self.connection_channels()?;
         if connections.is_empty() {
             return Ok(0);
         }
         let mut sent = 0;
+        // MINE: one hop, to every connection that is not inside.
         for (gid, kind) in self.dir.list_objects()? {
             let Some(kind) = crate::fold::lens_for(&kind).filter(|k| ext::exterior_kind(k.name()).is_some()) else { continue };
             let Some(owner) = self.dir.group_owner(&gid)?.and_then(|o| <[u8; 32]>::try_from(o).ok()) else { continue };
             let Some(ext_row) = self.owner_row(&gid, kind, &owner, ext::OP_SET_EXTERIOR)? else { continue };
             let vis_row = self.owner_row(&gid, kind, &owner, crate::visibility::OP_SET_VISIBILITY)?;
             let object = hex::encode(&gid);
-            let mut args = ext::publish_exterior_args(&object, kind.name(), &owner, &ext_row, vis_row.as_deref(), 1);
-            args.insert("gen".into(), coordinator::ArgVal::Int(0));
-            let mine = match ext::carried(&args, &me) {
+            let args = ext::publish_exterior_args(&object, kind.name(), &owner, &ext_row, vis_row.as_deref(), 1);
+            let mine = match ext::carried(&with_gen(&args), &me) {
                 Ok(c) => c,
                 Err(e) => {
                     tracing::warn!(object = %object, error = ?e, "an exterior that would not carry; not sent");
                     continue;
                 }
             };
-            args.remove("gen");
             let inside = self.dir.group_members(&gid)?;
             for channel in &connections {
+                if sent >= CARRIES_PER_SYNC {
+                    return Ok(sent);
+                }
                 // A connection already inside the object holds the interior.
                 if self.dir.group_members(channel)?.iter().filter(|p| **p != me).all(|p| inside.contains(p)) {
                     continue;
@@ -176,24 +211,17 @@ impl Node {
                 }
             }
         }
-        Ok(sent)
-    }
-
-    /// A receiver carries each `network` exterior on, one hop further, and each withdrawal down
-    /// the paths its copy took: never back to whoever brought it, never to its owner.
-    pub async fn relay_exteriors(&self) -> Result<usize, CoreError> {
-        let me = self.id.identity_pk();
-        let connections = self.connection_channels()?;
-        let mut sent = 0;
+        // CARRIED ON: a `network` copy, or a withdrawal, one hop further.
         for c in GroupObjectStore::new(&self.dir).merged_exteriors()?.into_values() {
             if c.visibility != Visibility::Network && !c.withdrawn {
                 continue;
             }
-            let mut args = ext::publish_exterior_args(&c.object, c.kind.name(), &c.owner, &c.exterior_row, c.visibility_row.as_deref(), c.hops + 1);
-            args.insert("gen".into(), coordinator::ArgVal::Int(0));
-            let Ok(next) = ext::carried(&args, &me) else { continue };
-            args.remove("gen");
+            let args = ext::publish_exterior_args(&c.object, c.kind.name(), &c.owner, &c.exterior_row, c.visibility_row.as_deref(), c.hops + 1);
+            let Ok(next) = ext::carried(&with_gen(&args), &me) else { continue };
             for channel in &connections {
+                if sent >= CARRIES_PER_SYNC {
+                    return Ok(sent);
+                }
                 let peers = self.dir.group_members(channel)?;
                 if peers.contains(&c.via) || peers.contains(&c.owner) {
                     continue;
@@ -228,9 +256,9 @@ impl Node {
     async fn knock(&self, door_pub: &[u8; 32], knock: &Knock) -> Result<[u8; 32], CoreError> {
         let blob = door::seal_to(door_pub, &door::encode(&self.id, knock));
         let id = door::id_of(&blob);
-        let mut sess = Router::open(&self.routes).await?;
+        let mut sess = self.home_session().await?;
         let out = sess.publish(&Address::from_seed(&door::address_seed(door_pub)), &pacific_wire::blob_b64(&blob)).await;
-        sess.close().await;
+        self.keep_session(sess);
         out.map(|_| id)
     }
 
@@ -245,7 +273,7 @@ impl Node {
             .ok_or_else(|| CoreError::Coordinator("no exterior of this object has reached you".into()))?;
         let door_pub = c.exterior.door.ok_or_else(|| CoreError::Coordinator("this object has no door".into()))?;
         let object = hex::decode(object_hex).map_err(|e| CoreError::Directory(format!("object id hex: {e}")))?;
-        let bundles = (0..crate::exterior::icd::DOOR_BUNDLES).map(|_| self.build_contact_bundle()).collect::<Result<Vec<_>, _>>()?;
+        let bundles = (0..ext::icd::DOOR_BUNDLES).map(|_| self.build_contact_bundle()).collect::<Result<Vec<_>, _>>()?;
         let request = door::Request { object: object.clone(), asker: self.id.identity_pk(), bundles, note: note.to_string(), at: unix_now_ms() };
         if let Some(why) = request.refusal() {
             return Err(CoreError::Coordinator(why));
@@ -277,47 +305,117 @@ impl Node {
         Ok(())
     }
 
-    /// The requests waiting at one held object's door: opened with its key, signed by their
-    /// askers, every bundle the asker's; less those decided, withdrawn, or already in. The door
-    /// is read from the start each time: the relay is where a request lives, so a new device
-    /// sees what the old one saw.
-    pub async fn door_requests(&self, object_hex: &str) -> Result<Vec<DoorRequest>, CoreError> {
-        let Some((kind, state, _)) = self.exterior_state(object_hex)? else { return Ok(Vec::new()) };
-        let Some(d) = state.door.as_ref() else { return Ok(Vec::new()) };
-        let gid = self.object_group_id(object_hex)?;
-        let address = Address::from_seed(&door::address_seed(&door::public_of(&d.key)));
-        let mut sess = Router::open(&self.routes).await?;
-        let msgs = sess.drain(&[address.tag_hex()], |_| Ok(0)).await;
-        sess.close().await;
-        let inside = self.dir.group_members(&gid)?;
-        let mut asked: BTreeMap<[u8; 32], DoorRequest> = BTreeMap::new();
-        let mut withdrawn: BTreeSet<([u8; 32], [u8; 32])> = BTreeSet::new();
-        for m in msgs? {
-            let opened = pacific_wire::blob_unb64(&m.blob)
-                .map_err(|e| CoreError::Seal(format!("base64: {e}")))
-                .and_then(|blob| Ok((door::id_of(&blob), door::decode(&door::open_with(&d.key, &blob)?)?)));
-            match opened {
-                Ok((id, Knock::Request(r))) if r.object == gid => match self.askers_bundles(&r) {
-                    Ok(name) => {
-                        asked.insert(id, DoorRequest { object: object_hex.into(), kind: kind.name().into(), request: hex::encode(id), asker: r.asker, asker_name: name, note: r.note, at: r.at, bundles: r.bundles });
-                    }
-                    Err(e) => tracing::debug!(object = %object_hex, error = %e, "a request whose bundles are not its asker's; set aside"),
-                },
-                Ok((_, Knock::Withdraw(w))) if w.object == gid => {
-                    withdrawn.insert((w.request, w.asker));
+    /// The doors this device holds: (object, door's private key, mode).
+    fn held_doors(&self) -> Result<Vec<(String, [u8; 32], DoorMode)>, CoreError> {
+        let mut out = Vec::new();
+        for (gid, _) in self.dir.list_objects()? {
+            let object = hex::encode(&gid);
+            if let Ok(Some((_, state, _))) = self.exterior_state(&object) {
+                if let Some(d) = state.door {
+                    out.push((object, d.key, d.mode));
                 }
-                Ok(_) => tracing::debug!(object = %object_hex, "a knock naming another object; set aside"),
-                Err(e) => tracing::debug!(object = %object_hex, error = %e, "an unusable knock; set aside"),
             }
         }
-        // One request per asker: their latest.
+        Ok(out)
+    }
+
+    /// DRAIN EVERY DOOR I HOLD, from its cursor, into the knock store: what is new since the
+    /// last pass, on one held session. Every sync, review doors and auto alike, so a knock is
+    /// kept here before the relay can let it go. Returns how many knocks were new.
+    pub async fn drain_doors(&self) -> Result<usize, CoreError> {
+        let doors = self.held_doors()?;
+        if doors.is_empty() {
+            return Ok(0);
+        }
+        let seeds: Vec<[u8; 32]> = doors.iter().map(|(_, key, _)| door::address_seed(&door::public_of(key))).collect();
+        let tags: Vec<String> = seeds.iter().map(|s| Address::from_seed(s).tag_hex()).collect();
+        let dir = &self.dir;
+        let mut sess = self.home_session().await?;
+        let drained = sess
+            .drain_many(&tags, |tag, source| {
+                let i = tags.iter().position(|t| t == tag).expect("a tag asked for");
+                dir.cursor(&seeds[i], source)
+            })
+            .await;
+        self.keep_session(sess);
+        let mut new = 0;
+        for (seed, msgs) in seeds.iter().zip(drained?) {
+            for m in msgs {
+                match pacific_wire::blob_unb64(&m.blob) {
+                    Ok(blob) => {
+                        self.dir.put_knock(seed, &door::id_of(&blob), &blob)?;
+                        new += 1;
+                    }
+                    Err(e) => tracing::debug!(error = %e, "a door blob that is not base64; set aside"),
+                }
+                self.dir.advance_cursor(seed, m.source, m.seq)?;
+            }
+        }
+        Ok(new)
+    }
+
+    /// The requests waiting at one held door, read from the knock store: opened with its key,
+    /// signed by their askers, every bundle the asker's; the latest per asker. A knock that is
+    /// decided, withdrawn, already inside, superseded or unusable is settled with why, and
+    /// not read again.
+    fn waiting_at(&self, object_hex: &str, kind: ObjectKind, state: &ExteriorState) -> Result<Vec<DoorRequest>, CoreError> {
+        let Some(d) = state.door.as_ref() else { return Ok(Vec::new()) };
+        let seed = door::address_seed(&door::public_of(&d.key));
+        let gid = self.object_group_id(object_hex)?;
+        let inside = self.dir.group_members(&gid)?;
+        let mut asked: Vec<DoorRequest> = Vec::new();
+        let mut withdrawn: BTreeSet<([u8; 32], [u8; 32])> = BTreeSet::new();
+        for (id, blob, attempts, next_at) in self.dir.waiting_knocks(&seed)? {
+            let opened = door::open_with(&d.key, &blob).and_then(|p| door::decode(&p));
+            match opened {
+                Ok(Knock::Request(r)) if r.object == gid => match self.askers_bundles(&r) {
+                    Ok(name) => asked.push(DoorRequest {
+                        object: object_hex.into(),
+                        kind: kind.name().into(),
+                        request: hex::encode(id),
+                        asker: r.asker,
+                        asker_name: name,
+                        note: r.note,
+                        at: r.at,
+                        bundles: r.bundles,
+                        door: seed,
+                        id,
+                        attempts,
+                        next_at,
+                    }),
+                    Err(_) => self.dir.settle_knock(&seed, &id, "unusable")?,
+                },
+                Ok(Knock::Withdraw(w)) if w.object == gid => {
+                    withdrawn.insert((w.request, w.asker));
+                    self.dir.settle_knock(&seed, &id, "withdraw")?;
+                }
+                _ => self.dir.settle_knock(&seed, &id, "unusable")?,
+            }
+        }
         let mut latest: BTreeMap<[u8; 32], DoorRequest> = BTreeMap::new();
-        for (id, r) in asked {
-            if state.decided.contains_key(&id) || inside.contains(&r.asker) || withdrawn.contains(&(id, r.asker)) {
+        for r in asked {
+            let why = if state.decided.contains_key(&r.id) {
+                Some("decided")
+            } else if inside.contains(&r.asker) {
+                Some("inside")
+            } else if withdrawn.contains(&(r.id, r.asker)) {
+                Some("withdrawn")
+            } else {
+                None
+            };
+            if let Some(why) = why {
+                self.dir.settle_knock(&seed, &r.id, why)?;
                 continue;
             }
-            if latest.get(&r.asker).is_none_or(|held| r.at > held.at) {
-                latest.insert(r.asker, r);
+            match latest.get(&r.asker) {
+                Some(held) if held.at >= r.at => self.dir.settle_knock(&seed, &r.id, "superseded")?,
+                Some(held) => {
+                    self.dir.settle_knock(&seed, &held.id, "superseded")?;
+                    latest.insert(r.asker, r);
+                }
+                None => {
+                    latest.insert(r.asker, r);
+                }
             }
         }
         Ok(latest.into_values().collect())
@@ -336,35 +434,42 @@ impl Node {
         Ok(name)
     }
 
+    /// The requests waiting at one held object's door, from what this device has drained.
+    pub fn door_requests(&self, object_hex: &str) -> Result<Vec<DoorRequest>, CoreError> {
+        let Some((kind, state, _)) = self.exterior_state(object_hex)? else { return Ok(Vec::new()) };
+        self.waiting_at(object_hex, kind, &state)
+    }
+
     /// Every request waiting for ME: at the `review` doors of objects I own or admit to.
-    pub async fn pending_requests(&self) -> Result<Vec<DoorRequest>, CoreError> {
+    pub fn pending_requests(&self) -> Result<Vec<DoorRequest>, CoreError> {
         let me = self.id.identity_pk();
         let mut out = Vec::new();
-        for (gid, _) in self.dir.list_objects()? {
-            let object = hex::encode(&gid);
-            let Ok(Some((_, state, _))) = self.exterior_state(&object) else { continue };
-            if !state.door.as_ref().is_some_and(|d| d.mode == DoorMode::Review) {
-                continue;
-            }
+        for (object, _, mode) in self.held_doors()? {
+            let gid = self.object_group_id(&object)?;
             let mine = self.dir.group_owner(&gid)?.is_some_and(|o| o == me) || self.is_admitter(&object, &me);
-            if !mine {
-                continue;
-            }
-            match self.door_requests(&object).await {
-                Ok(mut v) => out.append(&mut v),
-                Err(e) => tracing::debug!(object = %object, error = %e, "a door not read"),
+            if mode == DoorMode::Review && mine {
+                out.append(&mut self.door_requests(&object)?);
             }
         }
         Ok(out)
     }
 
+    /// Add the asker by one of their bundles, unless they are already inside: another member may
+    /// have let them in, and a second Add would graft a second leaf for one knock.
     async fn admit_request(&self, r: &DoorRequest) -> Result<(), CoreError> {
+        let gid = self.object_group_id(&r.object)?;
         let mut last = CoreError::Coordinator("a request with no bundle".into());
         for b in &r.bundles {
+            if self.dir.group_members(&gid)?.contains(&r.asker) {
+                return Ok(());
+            }
             match self.group_add_member(&r.object, b).await {
                 Ok(_) => return Ok(()),
                 Err(e) => last = e,
             }
+        }
+        if self.dir.group_members(&gid)?.contains(&r.asker) {
+            return Ok(());
         }
         Err(last)
     }
@@ -373,33 +478,43 @@ impl Node {
     /// their bundles, then records the decision; declining records it, and the asker is not told.
     pub async fn decide_request(&self, object_hex: &str, request_hex: &str, admit: bool) -> Result<(), CoreError> {
         let r = self
-            .door_requests(object_hex)
-            .await?
+            .door_requests(object_hex)?
             .into_iter()
             .find(|r| r.request == request_hex)
             .ok_or_else(|| CoreError::Coordinator("no such request is waiting at this door".into()))?;
         if admit {
             self.admit_request(&r).await?;
         }
-        let id: [u8; 32] = hex::decode(request_hex).ok().and_then(|v| v.try_into().ok()).ok_or_else(|| CoreError::Coordinator("a request id is 64 hex".into()))?;
-        self.apply(object_hex, ext::OP_DECIDE_REQUEST, ext::decide_request_args(&id, &r.asker, admit)).await?;
+        self.apply(object_hex, ext::OP_DECIDE_REQUEST, ext::decide_request_args(&r.id, &r.asker, admit)).await?;
+        self.dir.settle_knock(&r.door, &r.id, "decided")?;
         Ok(())
     }
 
-    /// Answer every `auto` door I am behind: whoever asked is admitted. Runs on every member,
-    /// as the Place's doorbell does, so a door is answered while anyone inside is about.
+    /// Answer every `auto` door I am behind, from the knock store: whoever asked is admitted.
+    /// Runs on every member, as the Place's doorbell does, so a door is answered while anyone
+    /// inside is about. An admission that fails is tried again later, and in the end set aside.
     pub async fn answer_exterior_doors(&self) -> Result<Vec<String>, CoreError> {
+        let now = unix_now();
         let mut admitted = Vec::new();
-        for (gid, _) in self.dir.list_objects()? {
-            let object = hex::encode(&gid);
-            let Ok(Some((_, state, _))) = self.exterior_state(&object) else { continue };
-            if !state.door.as_ref().is_some_and(|d| d.mode == DoorMode::Auto) {
+        for (object, _, mode) in self.held_doors()? {
+            if mode != DoorMode::Auto {
                 continue;
             }
-            for r in self.door_requests(&object).await.unwrap_or_default() {
+            for r in self.door_requests(&object)? {
+                if r.next_at > now {
+                    continue;
+                }
                 match self.admit_request(&r).await {
                     Ok(()) => admitted.push(object.clone()),
-                    Err(e) => tracing::debug!(object = %object, error = %e, "an auto door could not admit"),
+                    Err(e) => {
+                        // A minute, doubling, at most a day apart.
+                        let next_at = now + (60i64 << r.attempts.min(11)).min(86_400);
+                        let attempts = self.dir.knock_failed(&r.door, &r.id, next_at)?;
+                        tracing::debug!(object = %object, attempts, error = %e, "an auto door could not admit");
+                        if attempts >= ADMIT_ATTEMPTS {
+                            self.dir.settle_knock(&r.door, &r.id, "unadmittable")?;
+                        }
+                    }
                 }
             }
         }
@@ -410,4 +525,11 @@ impl Node {
     pub(super) fn admits_at_an_auto_door(&self, object_hex: &str) -> bool {
         matches!(self.exterior_state(object_hex), Ok(Some((_, s, _))) if s.door.as_ref().is_some_and(|d| d.mode == DoorMode::Auto))
     }
+}
+
+/// The leg's args as a receiver folds them: a gen stands in for the one the write path stamps.
+fn with_gen(args: &coordinator::Args) -> coordinator::Args {
+    let mut a = args.clone();
+    a.insert("gen".into(), coordinator::ArgVal::Int(0));
+    a
 }

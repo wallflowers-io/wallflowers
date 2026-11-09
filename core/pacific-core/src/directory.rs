@@ -432,6 +432,20 @@ CREATE TABLE IF NOT EXISTS inbox_cursor_v2 (
   PRIMARY KEY (tag, source)
 );
 
+-- THE KNOCKS AT A DOOR (#76, ICD 2.6.0 mls.door): each blob drained from a door's address
+-- (its cursor is inbox_cursor_v2's, keyed by the door's seed), kept so a door is drained
+-- once and answered from here. Not state: the relay holds every knock, so a device that has
+-- never seen a door drains it from 0; what was decided is in the object's fold.
+CREATE TABLE IF NOT EXISTS door_knock (
+  door      BLOB NOT NULL,              -- the door's address seed
+  id        BLOB NOT NULL,              -- the knock's id: SHA-256 of its blob
+  blob      BLOB NOT NULL,
+  attempts  INTEGER NOT NULL DEFAULT 0, -- admissions tried and failed
+  next_at   INTEGER NOT NULL DEFAULT 0, -- unix s: no admission is tried before
+  outcome   TEXT,                       -- NULL while it waits; else why it no longer does
+  PRIMARY KEY (door, id)
+);
+
 -- The substrate source of truth: the per-object append-only delta log.
 -- `delivered` is the outbox flag: 0 = authored locally but not yet confirmed PUB'd
 -- to the relay (flush on next reconnect), 1 = relay-ack'd, or received. A received
@@ -1913,6 +1927,56 @@ impl Directory {
             params![&tag[..], source, last_seen_id as i64],
         )?;
         Ok(())
+    }
+
+    // ---- the knocks at a door (mls.door) ----
+
+    /// Keep a knock drained from a door. Idempotent by its id.
+    pub fn put_knock(&self, door: &[u8; 32], id: &[u8; 32], blob: &[u8]) -> Result<(), CoreError> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO door_knock (door, id, blob) VALUES (?1, ?2, ?3)",
+            params![&door[..], &id[..], blob],
+        )?;
+        Ok(())
+    }
+
+    /// The knocks still waiting at a door: (id, blob, attempts, next_at).
+    pub fn waiting_knocks(&self, door: &[u8; 32]) -> Result<Vec<([u8; 32], Vec<u8>, u32, i64)>, CoreError> {
+        let mut st = self.conn.prepare(
+            "SELECT id, blob, attempts, next_at FROM door_knock WHERE door=?1 AND outcome IS NULL ORDER BY rowid",
+        )?;
+        let rows = st.query_map(params![&door[..]], |r| {
+            Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, i64>(2)? as u32, r.get::<_, i64>(3)?))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, blob, attempts, next_at) = row?;
+            let id: [u8; 32] = id.try_into().map_err(|_| CoreError::Directory("door_knock id width".into()))?;
+            out.push((id, blob, attempts, next_at));
+        }
+        Ok(out)
+    }
+
+    /// A knock no longer waits, and why.
+    pub fn settle_knock(&self, door: &[u8; 32], id: &[u8; 32], outcome: &str) -> Result<(), CoreError> {
+        self.conn.execute(
+            "UPDATE door_knock SET outcome=?3 WHERE door=?1 AND id=?2",
+            params![&door[..], &id[..], outcome],
+        )?;
+        Ok(())
+    }
+
+    /// An admission tried and failed: not tried again before `next_at`.
+    pub fn knock_failed(&self, door: &[u8; 32], id: &[u8; 32], next_at: i64) -> Result<u32, CoreError> {
+        self.conn.execute(
+            "UPDATE door_knock SET attempts=attempts+1, next_at=?3 WHERE door=?1 AND id=?2",
+            params![&door[..], &id[..], next_at],
+        )?;
+        Ok(self.conn.query_row(
+            "SELECT attempts FROM door_knock WHERE door=?1 AND id=?2",
+            params![&door[..], &id[..]],
+            |r| r.get::<_, i64>(0),
+        )? as u32)
     }
 
     // ---- delta log (source of truth) ----

@@ -1198,7 +1198,8 @@ public protocol CoreProtocol : AnyObject {
     func peerProfile(peerId: String) throws  -> ProfileRow?
     
     /**
-     * The requests waiting for me: at the review doors of objects I own or admit to.
+     * The requests waiting for me: at the review doors of objects I own or admit to, from what
+     * this device's syncs have drained. No relay round trip.
      */
     func pendingRequests() throws  -> [RequestRow]
     
@@ -1515,13 +1516,6 @@ public protocol CoreProtocol : AnyObject {
     func sendInvite(peer: String, event: String, title: String, startMs: Int64, venue: String, note: String, at: Int64) throws  -> String
     
     /**
-     * Write an object's exterior: a name, a description, a still (inline base64, at most
-     * `exterior_photo_max()` characters; "" for none) and its door: "" none, "review" or
-     * "auto". The owner's alone. Call OFF the Swift main thread.
-     */
-    func setExterior(objectId: String, name: String, description: String, photo: String, photoMime: String, door: String) throws 
-    
-    /**
      * Replace my profile and TRANSMIT it to every connection as a signed
      * `contact.publishProfile` Delta. Returns how many connections received one
      * (0 when nothing changed — the call is idempotent).
@@ -1533,6 +1527,15 @@ public protocol CoreProtocol : AnyObject {
     func setMyProfile(displayName: String, shape: String, card: ProfileCard) throws  -> UInt32
     
     /**
+     * ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
+     * "connections" | "network") and, when `name` is not empty, the exterior: a description,
+     * a still (inline base64, at most `exterior_photo_max()` characters; "" for none) and its
+     * door ("" none, "review" or "auto"). Only what changed is written, and sent once.
+     * Returns how many ops were written. Call OFF the Swift main thread.
+     */
+    func setOutside(objectId: String, visibility: String, name: String, description: String, photo: String, photoMime: String, door: String) throws  -> UInt32
+    
+    /**
      * Point this device's messaging at a transport set — a comma-separated spec such as
      * `"wss://arc.example/v1/relay,mesh:"`. Persisted by the core.
      *
@@ -1542,11 +1545,6 @@ public protocol CoreProtocol : AnyObject {
      * fans out across whatever is in the set.
      */
     func setRoutes(spec: String) throws 
-    
-    /**
-     * How far an object, and its exterior, may travel: "private" | "connections" | "network".
-     */
-    func setVisibility(objectId: String, visibility: String) throws  -> String
     
     /**
      * PROVE THIS ACCOUNT TO A SERVER: sign a challenge the Arc just issued.
@@ -2949,7 +2947,8 @@ open func peerProfile(peerId: String)throws  -> ProfileRow? {
 }
     
     /**
-     * The requests waiting for me: at the review doors of objects I own or admit to.
+     * The requests waiting for me: at the review doors of objects I own or admit to, from what
+     * this device's syncs have drained. No relay round trip.
      */
 open func pendingRequests()throws  -> [RequestRow] {
     return try  FfiConverterSequenceTypeRequestRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
@@ -3553,23 +3552,6 @@ open func sendInvite(peer: String, event: String, title: String, startMs: Int64,
 }
     
     /**
-     * Write an object's exterior: a name, a description, a still (inline base64, at most
-     * `exterior_photo_max()` characters; "" for none) and its door: "" none, "review" or
-     * "auto". The owner's alone. Call OFF the Swift main thread.
-     */
-open func setExterior(objectId: String, name: String, description: String, photo: String, photoMime: String, door: String)throws  {try rustCallWithError(FfiConverterTypeFfiError.lift) {
-    uniffi_pacific_ffi_fn_method_core_set_exterior(self.uniffiClonePointer(),
-        FfiConverterString.lower(objectId),
-        FfiConverterString.lower(name),
-        FfiConverterString.lower(description),
-        FfiConverterString.lower(photo),
-        FfiConverterString.lower(photoMime),
-        FfiConverterString.lower(door),$0
-    )
-}
-}
-    
-    /**
      * Replace my profile and TRANSMIT it to every connection as a signed
      * `contact.publishProfile` Delta. Returns how many connections received one
      * (0 when nothing changed — the call is idempotent).
@@ -3589,6 +3571,27 @@ open func setMyProfile(displayName: String, shape: String, card: ProfileCard)thr
 }
     
     /**
+     * ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
+     * "connections" | "network") and, when `name` is not empty, the exterior: a description,
+     * a still (inline base64, at most `exterior_photo_max()` characters; "" for none) and its
+     * door ("" none, "review" or "auto"). Only what changed is written, and sent once.
+     * Returns how many ops were written. Call OFF the Swift main thread.
+     */
+open func setOutside(objectId: String, visibility: String, name: String, description: String, photo: String, photoMime: String, door: String)throws  -> UInt32 {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_set_outside(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(visibility),
+        FfiConverterString.lower(name),
+        FfiConverterString.lower(description),
+        FfiConverterString.lower(photo),
+        FfiConverterString.lower(photoMime),
+        FfiConverterString.lower(door),$0
+    )
+})
+}
+    
+    /**
      * Point this device's messaging at a transport set — a comma-separated spec such as
      * `"wss://arc.example/v1/relay,mesh:"`. Persisted by the core.
      *
@@ -3602,18 +3605,6 @@ open func setRoutes(spec: String)throws  {try rustCallWithError(FfiConverterType
         FfiConverterString.lower(spec),$0
     )
 }
-}
-    
-    /**
-     * How far an object, and its exterior, may travel: "private" | "connections" | "network".
-     */
-open func setVisibility(objectId: String, visibility: String)throws  -> String {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
-    uniffi_pacific_ffi_fn_method_core_set_visibility(self.uniffiClonePointer(),
-        FfiConverterString.lower(objectId),
-        FfiConverterString.lower(visibility),$0
-    )
-})
 }
     
     /**
@@ -15099,7 +15090,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_peer_profile() != 23024) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_pending_requests() != 38079) {
+    if (uniffi_pacific_ffi_checksum_method_core_pending_requests() != 22902) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_place() != 43788) {
@@ -15228,16 +15219,13 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_send_invite() != 10773) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_set_exterior() != 36651) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_pacific_ffi_checksum_method_core_set_my_profile() != 52976) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_set_routes() != 3390) {
+    if (uniffi_pacific_ffi_checksum_method_core_set_outside() != 39536) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_set_visibility() != 35695) {
+    if (uniffi_pacific_ffi_checksum_method_core_set_routes() != 3390) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_sign_challenge() != 28520) {

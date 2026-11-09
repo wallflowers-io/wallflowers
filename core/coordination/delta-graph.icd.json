@@ -3067,7 +3067,7 @@
           "op": 13,
           "ego": "member",
           "fold": "commutative",
-          "summary": "An object's exterior, carried pairwise to someone who is not on its roster: the owner's own base.setExterior row and base.setVisibility row, verbatim, so the receiver checks both against the owner key alone. Every member carries the exteriors of its objects to its connections (hops 1); a receiver carries a `network` one on to its own (hops 2, visibility.reach_hops). Per object, the newest exterior row by (epoch, seq) wins, then the fewest hops. A row whose owner did not sign it, or a copy past its reach, is refused and named.",
+          "summary": "An object's exterior, carried pairwise to someone who is not on its roster: the owner's own base.setExterior row and base.setVisibility row, verbatim, so the receiver checks both against the owner key alone. Every member carries the exteriors of its objects to its connections (hops 1); a receiver carries a `network` one on to its own (hops 2). The ceiling is visibility.reach_hops: private 0, connections 1, network 2 (contact::MAX_DISCOVER_HOPS), and the fold refuses a copy past it. Per object, the newest exterior row by (epoch, seq) wins, then the fewest hops. A row whose owner did not sign it, or a copy past its reach, is refused and named.",
           "args": {
             "object": {
               "type": "string",
@@ -3104,7 +3104,9 @@
               "type": "integer",
               "required": true
             }
-          }
+          },
+          "perSync": 32,
+          "perSyncSummary": "copies of this leg a device authors in one sync, at most: its own objects' first, then those it carries on; the rest go on the next sync, so a first pass or a burst of Saves is spread over ticks rather than sent in one"
         }
       }
     },
