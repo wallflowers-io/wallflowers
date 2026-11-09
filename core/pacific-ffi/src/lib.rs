@@ -738,6 +738,47 @@ pub fn mint_fields(kind: String) -> Vec<MintFieldRow> {
         .collect()
 }
 
+// ---- A Site's face (core/coordination/face.schema.json) -----------------------------
+
+/// One of a Host's picture slots, as `host.editMedia` takes it: an empty `data` clears it.
+#[derive(uniffi::Record, Debug, Clone, PartialEq, Eq)]
+pub struct SitePicture {
+    pub slot: String,
+    pub mime: String,
+    pub data: String,
+}
+
+/// A Site's face as its editor opens it, and where it is published.
+#[derive(uniffi::Record, Debug, Clone, PartialEq, Eq)]
+pub struct SiteFaceRow {
+    /// The working copy, as JSON; empty when the Site has none yet.
+    pub face: String,
+    /// The Host, once the Site has one.
+    pub host: Option<String>,
+    pub pictures: Vec<SitePicture>,
+    pub slug: String,
+    pub published: bool,
+}
+
+/// What an editor builds from, as JSON: the schema, the fonts and stickers a face may name,
+/// and each feed's fields. A pure read of what the core embeds.
+#[uniffi::export]
+pub fn face_catalogue() -> String {
+    pacific_core::face_spec::catalogue().to_string()
+}
+
+/// Why a face is not one the specification allows, or nothing.
+#[uniffi::export]
+pub fn face_refusal(face: String) -> Option<String> {
+    pacific_core::face_spec::refusal(&face)
+}
+
+/// The kinds the ICD gives a public page (a `host` part).
+#[uniffi::export]
+pub fn kinds_with_a_page() -> Vec<String> {
+    pacific_core::face_spec::kinds_with_a_page().to_vec()
+}
+
 impl From<MintDraft> for pacific_core::mint::MintDraft {
     fn from(d: MintDraft) -> Self {
         Self {
@@ -4126,6 +4167,38 @@ impl Core {
         Ok(space_id_of(&block_on(
             node.group_add_member(&object_id, &bundle),
         )?))
+    }
+
+    // ---- A Site, as the sign-up makes it (Node::site_*) -------------------------------
+
+    /// The Site's Host: the one it names, or a new one.
+    pub fn site_host(&self, site: String) -> Result<String, FfiError> {
+        Ok(block_on(self.write()?.site_host(&site))?)
+    }
+
+    /// Write the face and the changed pictures (owner or admin). Returns whether the
+    /// published page was hydrated again.
+    pub fn site_edit_face(&self, site: String, face: String, pictures: Vec<SitePicture>) -> Result<bool, FfiError> {
+        let media: Vec<(String, String, String)> = pictures.into_iter().map(|p| (p.slot, p.mime, p.data)).collect();
+        Ok(block_on(self.write()?.site_edit_face(&site, &face, &media))?)
+    }
+
+    /// Publish the Site at `slug`, served by the Arc whose pairing bundle is `arc_bundle`.
+    /// The address must already be claimed for this account at the Arc.
+    pub fn site_publish(&self, site: String, slug: String, arc_bundle: String) -> Result<(), FfiError> {
+        Ok(block_on(self.write()?.site_publish(&site, &slug, &arc_bundle))?)
+    }
+
+    /// The Site's face for its editor, and where it is published.
+    pub fn site_face(&self, site: String) -> Result<SiteFaceRow, FfiError> {
+        let f = self.read()?.site_face(&site)?;
+        Ok(SiteFaceRow {
+            face: f.face,
+            host: f.host,
+            pictures: f.media.into_iter().map(|(slot, mime, data)| SitePicture { slot, mime, data }).collect(),
+            slug: f.slug,
+            published: f.published,
+        })
     }
 
     // ---- membership through MLS (docs/membership-through-mls.md) ----------------

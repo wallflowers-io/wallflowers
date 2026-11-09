@@ -1554,6 +1554,28 @@ public protocol CoreProtocol : AnyObject {
     func signInFromWrap(displayName: String, prfSecret: Data, wrap: Data, host: String, expectKey: String, routes: String, head: Data?, headPosition: UInt64) throws  -> SignedIn
     
     /**
+     * Write the face and the changed pictures (owner or admin). Returns whether the
+     * published page was hydrated again.
+     */
+    func siteEditFace(site: String, face: String, pictures: [SitePicture]) throws  -> Bool
+    
+    /**
+     * The Site's face for its editor, and where it is published.
+     */
+    func siteFace(site: String) throws  -> SiteFaceRow
+    
+    /**
+     * The Site's Host: the one it names, or a new one.
+     */
+    func siteHost(site: String) throws  -> String
+    
+    /**
+     * Publish the Site at `slug`, served by the Arc whose pairing bundle is `arc_bundle`.
+     * The address must already be claimed for this account at the Arc.
+     */
+    func sitePublish(site: String, slug: String, arcBundle: String) throws 
+    
+    /**
      * Sync with the relay: drain pending Welcomes (join), process membership
      * commits (epoch advance), decrypt + fold inbound deltas. Returns the folded
      * transcript lines across all synced objects.
@@ -3569,6 +3591,55 @@ open func signInFromWrap(displayName: String, prfSecret: Data, wrap: Data, host:
         FfiConverterUInt64.lower(headPosition),$0
     )
 })
+}
+    
+    /**
+     * Write the face and the changed pictures (owner or admin). Returns whether the
+     * published page was hydrated again.
+     */
+open func siteEditFace(site: String, face: String, pictures: [SitePicture])throws  -> Bool {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_site_edit_face(self.uniffiClonePointer(),
+        FfiConverterString.lower(site),
+        FfiConverterString.lower(face),
+        FfiConverterSequenceTypeSitePicture.lower(pictures),$0
+    )
+})
+}
+    
+    /**
+     * The Site's face for its editor, and where it is published.
+     */
+open func siteFace(site: String)throws  -> SiteFaceRow {
+    return try  FfiConverterTypeSiteFaceRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_site_face(self.uniffiClonePointer(),
+        FfiConverterString.lower(site),$0
+    )
+})
+}
+    
+    /**
+     * The Site's Host: the one it names, or a new one.
+     */
+open func siteHost(site: String)throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_site_host(self.uniffiClonePointer(),
+        FfiConverterString.lower(site),$0
+    )
+})
+}
+    
+    /**
+     * Publish the Site at `slug`, served by the Arc whose pairing bundle is `arc_bundle`.
+     * The address must already be claimed for this account at the Arc.
+     */
+open func sitePublish(site: String, slug: String, arcBundle: String)throws  {try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_site_publish(self.uniffiClonePointer(),
+        FfiConverterString.lower(site),
+        FfiConverterString.lower(slug),
+        FfiConverterString.lower(arcBundle),$0
+    )
+}
 }
     
     /**
@@ -10748,6 +10819,188 @@ public func FfiConverterTypeSignedIn_lower(_ value: SignedIn) -> RustBuffer {
 
 
 /**
+ * A Site's face as its editor opens it, and where it is published.
+ */
+public struct SiteFaceRow {
+    /**
+     * The working copy, as JSON; empty when the Site has none yet.
+     */
+    public var face: String
+    /**
+     * The Host, once the Site has one.
+     */
+    public var host: String?
+    public var pictures: [SitePicture]
+    public var slug: String
+    public var published: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The working copy, as JSON; empty when the Site has none yet.
+         */face: String, 
+        /**
+         * The Host, once the Site has one.
+         */host: String?, pictures: [SitePicture], slug: String, published: Bool) {
+        self.face = face
+        self.host = host
+        self.pictures = pictures
+        self.slug = slug
+        self.published = published
+    }
+}
+
+
+
+extension SiteFaceRow: Equatable, Hashable {
+    public static func ==(lhs: SiteFaceRow, rhs: SiteFaceRow) -> Bool {
+        if lhs.face != rhs.face {
+            return false
+        }
+        if lhs.host != rhs.host {
+            return false
+        }
+        if lhs.pictures != rhs.pictures {
+            return false
+        }
+        if lhs.slug != rhs.slug {
+            return false
+        }
+        if lhs.published != rhs.published {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(face)
+        hasher.combine(host)
+        hasher.combine(pictures)
+        hasher.combine(slug)
+        hasher.combine(published)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSiteFaceRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SiteFaceRow {
+        return
+            try SiteFaceRow(
+                face: FfiConverterString.read(from: &buf), 
+                host: FfiConverterOptionString.read(from: &buf), 
+                pictures: FfiConverterSequenceTypeSitePicture.read(from: &buf), 
+                slug: FfiConverterString.read(from: &buf), 
+                published: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SiteFaceRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.face, into: &buf)
+        FfiConverterOptionString.write(value.host, into: &buf)
+        FfiConverterSequenceTypeSitePicture.write(value.pictures, into: &buf)
+        FfiConverterString.write(value.slug, into: &buf)
+        FfiConverterBool.write(value.published, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSiteFaceRow_lift(_ buf: RustBuffer) throws -> SiteFaceRow {
+    return try FfiConverterTypeSiteFaceRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSiteFaceRow_lower(_ value: SiteFaceRow) -> RustBuffer {
+    return FfiConverterTypeSiteFaceRow.lower(value)
+}
+
+
+/**
+ * One of a Host's picture slots, as `host.editMedia` takes it: an empty `data` clears it.
+ */
+public struct SitePicture {
+    public var slot: String
+    public var mime: String
+    public var data: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(slot: String, mime: String, data: String) {
+        self.slot = slot
+        self.mime = mime
+        self.data = data
+    }
+}
+
+
+
+extension SitePicture: Equatable, Hashable {
+    public static func ==(lhs: SitePicture, rhs: SitePicture) -> Bool {
+        if lhs.slot != rhs.slot {
+            return false
+        }
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.data != rhs.data {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(slot)
+        hasher.combine(mime)
+        hasher.combine(data)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSitePicture: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SitePicture {
+        return
+            try SitePicture(
+                slot: FfiConverterString.read(from: &buf), 
+                mime: FfiConverterString.read(from: &buf), 
+                data: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SitePicture, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.slot, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterString.write(value.data, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSitePicture_lift(_ buf: RustBuffer) throws -> SitePicture {
+    return try FfiConverterTypeSitePicture.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSitePicture_lower(_ value: SitePicture) -> RustBuffer {
+    return FfiConverterTypeSitePicture.lower(value)
+}
+
+
+/**
  * An external stakeholder — a non-member party the project touches (gets a swimlane).
  */
 public struct StakeholderRow {
@@ -13367,6 +13620,31 @@ fileprivate struct FfiConverterSequenceTypeRoomHostRow: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeSitePicture: FfiConverterRustBuffer {
+    typealias SwiftType = [SitePicture]
+
+    public static func write(_ value: [SitePicture], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSitePicture.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SitePicture] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SitePicture]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSitePicture.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeStakeholderRow: FfiConverterRustBuffer {
     typealias SwiftType = [StakeholderRow]
 
@@ -13686,6 +13964,26 @@ public func encodeDelta(draft: DeltaDraft)throws  -> EncodedDelta {
     )
 })
 }
+/**
+ * What an editor builds from, as JSON: the schema, the fonts and stickers a face may name,
+ * and each feed's fields. A pure read of what the core embeds.
+ */
+public func faceCatalogue() -> String {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_pacific_ffi_fn_func_face_catalogue($0
+    )
+})
+}
+/**
+ * Why a face is not one the specification allows, or nothing.
+ */
+public func faceRefusal(face: String) -> String? {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+    uniffi_pacific_ffi_fn_func_face_refusal(
+        FfiConverterString.lower(face),$0
+    )
+})
+}
 public func fieldDefineDeepLink(system: String, endpoint: String, addressJson: String, credentialOwner: String, credentialEntry: String, direction: String) -> DeltaDraft {
     return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
     uniffi_pacific_ffi_fn_func_field_define_deep_link(
@@ -13976,6 +14274,15 @@ public func isRetiredRelayUrl(url: String) -> Bool {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_pacific_ffi_fn_func_is_retired_relay_url(
         FfiConverterString.lower(url),$0
+    )
+})
+}
+/**
+ * The kinds the ICD gives a public page (a `host` part).
+ */
+public func kindsWithAPage() -> [String] {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_pacific_ffi_fn_func_kinds_with_a_page($0
     )
 })
 }
@@ -14447,6 +14754,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_func_encode_delta() != 30378) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_func_face_catalogue() != 59960) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_func_face_refusal() != 52488) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_func_field_define_deep_link() != 59497) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14529,6 +14842,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_func_is_retired_relay_url() != 28416) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_func_kinds_with_a_page() != 31726) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_func_locators() != 43569) {
@@ -15039,6 +15355,18 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_sign_in_from_wrap() != 9950) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_site_edit_face() != 60887) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_site_face() != 52621) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_site_host() != 48463) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_site_publish() != 47012) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_sync() != 59236) {
