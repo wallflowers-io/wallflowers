@@ -461,7 +461,7 @@ pub fn delta_catalog() -> Vec<OpSpec> {
         spec(Group, op::GROUP_EDIT_FACE, "group.editFace", OwnerOrAdmin, Commutative, true,
              &["face", "gen"], "the shared face: one LWW register by (gen, author) over the sequenced one; an admin's write counts while they hold admin"),
         spec(Group, op::GROUP_PUBLISH_LISTING, "group.publishListing", AnyMember, Commutative, true,
-             &["gen", "thingId", "posture", "title", "reach", "rev", "descriptor", "price", "deadline", "area", "withdrawn", "photo", "photoMime", "site"], "a member lists one of their Things on the Site's Trade board: the latest by gen per (lister, Thing); withdrawn takes it down; site 1 is the Site's own listing, the owner's or an admin's (W-98 Trade, T-7)"),
+             &["gen", "thingId", "posture", "title", "reach", "rev", "descriptor", "price", "deadline", "area", "withdrawn", "photo", "photoMime", "createdAt", "site"], "a member lists one of their Things on the Site's Trade board: the latest by gen per (lister, Thing); withdrawn takes it down; site 1 is the Site's own listing, the owner's or an admin's (W-98 Trade, T-7)"),
         spec(Group, op::GROUP_REMOVE_LISTING, "group.removeListing", OwnerOrAdmin, Commutative, true,
              &["author", "thingId", "gen"], "the owner or an admin takes a member's listing off the board, for good (W-98 Trade, T-7)"),
         spec(Group, op::GROUP_SET_CLAIM_ISSUER, "group.setClaimIssuer", Owner, Sequenced, true,
