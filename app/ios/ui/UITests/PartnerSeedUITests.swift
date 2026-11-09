@@ -35,10 +35,12 @@ final class PartnerSeedUITests: XCTestCase {
         XCTAssertTrue(feed.waitForExistence(timeout: 10), "the feed ground")
         XCTAssertTrue(poll(60) { self.rows().count > 0 }, "the seed lands on the feed")
 
-        // Top to bottom, ticking off each pack title as its card comes into view. Twice:
-        // the first card can start under the top bar, where it is not hittable.
+        // Top to bottom, ticking off each pack title as its card comes into view, pass after
+        // pass: the first card can start under the top bar, and on a fresh sim the seed is
+        // still minting (each mint uploads its media first, #112: ~2.5 min for the pack).
         var bare: [String] = []
-        for _ in 0..<2 where !pending.isEmpty {
+        let seeded = Date().addingTimeInterval(240)
+        while !pending.isEmpty && Date() < seeded {
             var still = 0
             while !pending.isEmpty && still < 3 {
                 let before = pending.count
@@ -46,7 +48,8 @@ final class PartnerSeedUITests: XCTestCase {
                     let label = row.label
                     guard let title = pending.first(where: { label.contains($0) }) else { continue }
                     pending.remove(title)
-                    if !hasPicture(row) { bare.append(title) }
+                    // A detached picture is fetched as its card appears, so it is given time.
+                    if !poll(8, { self.hasPicture(row) }) { bare.append(title) }
                 }
                 still = pending.count == before ? still + 1 : 0
                 feed.swipeUp()
