@@ -163,6 +163,7 @@ struct ChatsView: View {
         shell.beginNew(NewSession(kind: .space) { draft in
             guard let id = core.mint(kind: NewKind.space.rawValue, draft: draft.mint(for: .space))
             else { return nil }          // core surfaced the failure; the surface stays up
+            await core.setOutside(id, from: draft)
             for peer in peers { _ = await core.addContact(id, peerId: peer) }
             core.refreshOrgs()
             return .saved

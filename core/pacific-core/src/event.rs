@@ -339,6 +339,8 @@ pub struct EventState {
     pub photo_set: Option<BTreeMap<String, SetPhoto>>,
     /// Ids removed from the set: grow-only, so a removal is final whichever arrives first.
     pub photos_removed: BTreeSet<String>,
+    /// The exterior facet (`crate::exterior`; ICD 2.6.0): what a non-member holds of it.
+    pub exterior: crate::exterior::ExteriorState,
 }
 
 impl EventState {
@@ -578,6 +580,10 @@ const OPS: &[OpDecl] = &[
         authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
         commutativity: Commutativity::Commutative,
     },
+    // The base EXTERIOR ops (`crate::exterior`; ICD 2.6.0).
+    crate::exterior::SET_EXTERIOR,
+    crate::exterior::SET_DOOR,
+    crate::exterior::DECIDE_REQUEST,
 ];
 
 impl ObjectType for EventType {
@@ -593,6 +599,10 @@ impl ObjectType for EventType {
     }
 
     fn reduce(state: &mut Self::State, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::exterior::is_exterior_op(op.op_id) {
+            let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
+            return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }
@@ -1000,6 +1010,40 @@ impl Profile {
         state.video_url = self.video_url;
         state.descriptor_format = self.descriptor_format;
         state.all_day = self.all_day;
+    }
+}
+
+impl EventState {
+    /// The held profile as `event.setProfile` args. The op replaces the whole profile, so
+    /// an owner's edit starts here and changes one field instead of clearing the rest.
+    pub fn profile_args(&self) -> Args {
+        let mut a = Args::new();
+        a.insert("title".into(), ArgVal::Text(self.title.clone()));
+        a.insert("startMs".into(), ArgVal::Int(self.start_ms));
+        if let Some(e) = self.end_ms {
+            a.insert("endMs".into(), ArgVal::Int(e));
+        }
+        if self.all_day {
+            a.insert("allDay".into(), ArgVal::Int(1));
+        }
+        let text = [
+            ("descriptor", &self.descriptor),
+            ("ticketUrl", &self.ticket_url),
+            ("venue", &self.venue),
+            ("recurrence", &self.recurrence),
+            ("tz", &self.tz),
+            ("online", &self.online),
+            ("status", &self.status),
+            ("videoUrl", &self.video_url),
+            ("descriptorFormat", &self.descriptor_format),
+        ];
+        for (k, v) in text.into_iter().filter(|(_, v)| !v.is_empty()) {
+            a.insert(k.into(), ArgVal::Text(v.clone()));
+        }
+        if !self.lineup.is_empty() {
+            a.insert("lineup".into(), ArgVal::Text(self.lineup.join("\n")));
+        }
+        a
     }
 }
 

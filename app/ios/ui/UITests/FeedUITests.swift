@@ -31,6 +31,7 @@ final class FeedUITests: XCTestCase {
         // assertion here.
         XCTAssertTrue(waitAnyFeedRows(timeout: 8), "the feed carries rows (seeds guarantee it)")
         shoot("feed-ground")
+        app.openLifeSearch()
 
         // Maximise EVENT: the typed list takes the ground, the feed leaves.
         app.buttons["jewel-events"].tap()

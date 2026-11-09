@@ -97,7 +97,7 @@ use async_trait::async_trait;
 use tracing::{error, warn};
 
 use crate::blobs::{body_key, Blobs};
-use crate::mailbox::{Appended, Mailbox, Result, StoreError};
+use crate::mailbox::{Appended, Evicted, Mailbox, Result, StoreError};
 use crate::store::{blob_digest, Store};
 
 /// How many bodies to fetch at once during a replay.
@@ -118,6 +118,26 @@ pub struct OffloadMailbox {
 }
 
 impl OffloadMailbox {
+    /// Delete the objects behind index rows already removed. A failure leaks bytes, not a
+    /// backlog: counted at ERROR, never named.
+    async fn drop_objects(&self, keys: &[String]) {
+        let mut leaked = 0u64;
+        for key in keys {
+            if self.blobs.delete(key).await.is_err() {
+                leaked += 1;
+            }
+        }
+        if leaked > 0 {
+            // A count, never a key. Persistently non-zero means the bucket is
+            // growing with objects nothing will ever read again.
+            error!(
+                leaked,
+                "eviction dropped index rows whose objects could not be deleted — \
+                 they are now unreferenced garbage in the bucket"
+            );
+        }
+    }
+
     /// `index` MUST be a file-backed [`Store`]. An in-memory index would put the
     /// commit slots back in the process's lifetime, which is the exact defect
     /// durability was added to fix — and it would be invisible, because the bodies
@@ -223,23 +243,47 @@ impl Mailbox for OffloadMailbox {
         // the objects are unreferenced, so a failure below leaks bytes rather than
         // punching a hole in someone's backlog.
         let keys = self.index.evict_keys(now_us, window_us, max_per_tag)?;
-        let removed = keys.len() as u64;
-        let mut leaked = 0u64;
-        for key in &keys {
-            if self.blobs.delete(key).await.is_err() {
-                leaked += 1;
+        self.drop_objects(&keys).await;
+        Ok(keys.len() as u64)
+    }
+
+    async fn append_capped(&self, tag: &str, seq: u64, body: &str, cap: u64) -> Result<(Appended, Evicted)> {
+        let digest = blob_digest(body);
+        if let Some(prior) = self.index.find(tag, &digest)? {
+            return Ok((Appended::Duplicate { seq: prior }, Evicted::default()));
+        }
+        let key = body_key(tag, seq);
+        // Body first, then the index, as `append`; the rows the cap removes go in the
+        // index's transaction, and their objects after it.
+        self.blobs.put(&key, body.as_bytes()).await.map_err(StoreError::Body)?;
+        match self.index.append_capped_row(tag, seq, &key, &digest, body.len() as u64, false, cap) {
+            Ok((Appended::Stored, evicted, gone)) => {
+                self.drop_objects(&gone).await;
+                Ok((Appended::Stored, evicted))
+            }
+            Ok((other, evicted, _)) => {
+                if let Err(e) = self.blobs.delete(&key).await {
+                    warn!(error = %e, "a refused append left an unreferenced object in the bucket");
+                }
+                Ok((other, evicted))
+            }
+            Err(e) => {
+                if let Err(e2) = self.blobs.delete(&key).await {
+                    warn!(error = %e2, "an index failure left an unreferenced object in the bucket");
+                }
+                Err(e.into())
             }
         }
-        if leaked > 0 {
-            // A count, never a key. Persistently non-zero means the bucket is
-            // growing with objects nothing will ever read again.
-            error!(
-                leaked,
-                "eviction dropped index rows whose objects could not be deleted — \
-                 they are now unreferenced garbage in the bucket"
-            );
-        }
-        Ok(removed)
+    }
+
+    async fn evicted_totals(&self, tags: &[String]) -> Result<HashMap<String, u64>> {
+        Ok(self.index.evicted_totals(tags)?)
+    }
+
+    async fn expire(&self, prefix: &str, now_us: u64, window_us: u64) -> Result<u64> {
+        let keys = self.index.expire_keys(prefix, now_us, window_us)?;
+        self.drop_objects(&keys).await;
+        Ok(keys.len() as u64)
     }
 
     async fn counts(&self) -> Result<(u64, u64)> {

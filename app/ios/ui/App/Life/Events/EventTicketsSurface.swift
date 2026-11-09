@@ -122,9 +122,7 @@ struct EventTicketsSurface: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
-        .modifier(ComposeGlass(tint: Self.eventTint,
-                               glow: Self.eventTint,
-                               flash: flash, opaque: true))
+        .modifier(ComposeGlass(tint: Self.eventTint, flash: flash, opaque: true))
         .padding(.horizontal, DesignTokens.Life.gutter)
         .background(
             GeometryReader { geo in

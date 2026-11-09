@@ -826,6 +826,69 @@ fn attach(input: &MediaInput) -> Result<pacific_media::MediaRef, FfiError> {
     Ok(out.media)
 }
 
+/// An object's exterior as it reached me (`contact.publishExterior`): an object I am not in.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct ExteriorRow {
+    pub object: String,
+    /// The ICD kind name.
+    pub kind: String,
+    pub name: String,
+    pub description: String,
+    /// The owner's identity key, hex.
+    pub owner: String,
+    /// Who carried it to me, hex.
+    pub via: String,
+    /// My distance from its roster: 1, a connection is inside.
+    pub hops: u32,
+    /// Whether it has a door to knock at.
+    pub door: bool,
+    /// Whether I have asked to join and not withdrawn.
+    pub requested: bool,
+}
+
+impl ExteriorRow {
+    fn of(e: pacific_core::node::HeldExterior) -> Self {
+        let c = e.carried;
+        ExteriorRow {
+            object: c.object,
+            kind: c.kind.name().to_string(),
+            name: c.exterior.name,
+            description: c.exterior.description,
+            owner: hex::encode(c.owner),
+            via: hex::encode(c.via),
+            hops: c.hops,
+            door: c.exterior.door.is_some(),
+            requested: e.requested,
+        }
+    }
+}
+
+/// One of my objects' exteriors, as I wrote it.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct MyExterior {
+    pub name: String,
+    pub description: String,
+    /// "" no door, "review" or "auto".
+    pub door: String,
+    /// "private" | "connections" | "network".
+    pub visibility: String,
+}
+
+/// A request waiting at one of my doors.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct RequestRow {
+    pub object: String,
+    pub kind: String,
+    /// The request's id, hex.
+    pub request: String,
+    /// The asker's identity key, hex.
+    pub asker: String,
+    pub asker_name: String,
+    pub note: String,
+    /// Unix ms.
+    pub at: i64,
+}
+
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct ListingRow {
     /// Identity pubkey (hex) of whoever created the listing.
@@ -1066,6 +1129,135 @@ pub struct EventMediaRow {
     pub photos: Vec<EventPhotoRow>,
     pub clip: String,
     pub clip_mime: String,
+}
+
+/// One arg of `Core::object_apply`, keyed by its ICD name.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct OpArg {
+    pub key: String,
+    pub value: OpValue,
+}
+
+/// The wire's two arg types (`pacific_media::ArgVal`).
+#[derive(Clone, Debug, uniffi::Enum)]
+pub enum OpValue {
+    Text { v: String },
+    Int { v: i64 },
+}
+
+impl From<OpValue> for pacific_media::ArgVal {
+    fn from(v: OpValue) -> Self {
+        match v {
+            OpValue::Text { v } => pacific_media::ArgVal::Text(v),
+            OpValue::Int { v } => pacific_media::ArgVal::Int(v),
+        }
+    }
+}
+
+/// One picture, clip or document on a maximised detail. INLINE ONLY: a detached or
+/// sealed ref (O-79) has no fetch path at this boundary yet (#56), so it does not cross —
+/// a row with no bytes would render as a promise the reader cannot keep.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct MediaRow {
+    pub mime: String,
+    /// base64.
+    pub data: String,
+    /// Pixels, 0 when unknown.
+    pub width: u32,
+    pub height: u32,
+    /// The author's words for it, "" when none.
+    pub alt: String,
+}
+
+fn media_row(m: &pacific_media::MediaRef, alt: &str) -> Option<MediaRow> {
+    match &m.delivery {
+        pacific_media::Delivery::Inline { data } if !data.is_empty() => Some(MediaRow {
+            mime: m.mime.clone(),
+            data: data.clone(),
+            width: m.width,
+            height: m.height,
+            alt: alt.to_string(),
+        }),
+        _ => None,
+    }
+}
+
+fn inline_row(mime: &str, data: &str) -> Option<MediaRow> {
+    (!data.is_empty()).then(|| MediaRow {
+        mime: mime.to_string(),
+        data: data.to_string(),
+        width: 0,
+        height: 0,
+        alt: String::new(),
+    })
+}
+
+/// One act of the lineup register (`event.setLineup`): the performer's member key or
+/// object id, hex — never a name; the reader names it from the performer's own card.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct ActRow {
+    pub performer: String,
+    pub role: String,
+    /// Epoch ms, 0 = not said.
+    pub start: i64,
+    pub end: i64,
+}
+
+/// What `EventRow` leaves out — the rest of an Event's ops, for its maximised detail.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct EventDetailRow {
+    /// IANA zone, "" = the device's.
+    pub tz: String,
+    pub all_day: bool,
+    /// "" = scheduled.
+    pub status: String,
+    /// The online venue, "" = none.
+    pub online: String,
+    pub video_url: String,
+    pub ticket_url: String,
+    /// How `descriptor` is written ("" = plain).
+    pub descriptor_format: String,
+    /// `event.setBanner`, else the media facet's still.
+    pub banner: Option<MediaRow>,
+    /// `event.setClip`, else the media facet's motion.
+    pub clip: Option<MediaRow>,
+    /// The media facet's strip, then the `event.addPhoto` set in `at` order.
+    pub photos: Vec<MediaRow>,
+    /// The co-hosts' lineup register; empty = the profile's `lineup` stands.
+    pub acts: Vec<ActRow>,
+}
+
+/// What `ThingRow` leaves out — the rest of a Thing's ops, for its maximised detail.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct ThingDetailRow {
+    /// "" = not said.
+    pub condition: String,
+    pub description: String,
+    /// The `thing.addPhoto` set in `at` order; the face (`thing.setPhoto`) rides `ThingRow`.
+    pub photos: Vec<MediaRow>,
+    /// "" = no disposition stated.
+    pub disposition: String,
+    /// Whom it is held for, member key hex, "" = nobody named.
+    pub disposition_for: String,
+    /// Epoch ms, 0 = open-ended.
+    pub disposition_until: i64,
+}
+
+/// What `PostRow` leaves out — the rest of a Post's ops, for its maximised detail.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct PostDetailRow {
+    /// article | link | image | pdf
+    pub form: String,
+    pub link: String,
+    /// How `body` is written ("" = plain).
+    pub body_format: String,
+    pub excerpt: String,
+    pub banner_alt: String,
+    pub banner_mime: String,
+    /// `post.setDocument`; its alt is the document's name.
+    pub document: Option<MediaRow>,
+    /// The `post.addAsset` set in `at` order.
+    pub assets: Vec<MediaRow>,
 }
 
 /// One delivered ticket in the buyer's wallet, ready to present: the verbatim signed
@@ -2125,6 +2317,43 @@ impl Core {
         Ok(block_on(self.write()?.mint(k, &draft.into()))?)
     }
 
+    /// Apply one op to an object, BY ITS ICD NAME (`"event.editProfile"`), with its ICD
+    /// arg names — the Door's `apply` step (`authoring::op_on`), so an edit has one path
+    /// and no per-op writer to drift from the catalogue. Refused when the object's kind
+    /// has no such op; the fold judges authority and args. Reaches the relay → call OFF
+    /// the main thread.
+    pub fn object_apply(&self, object_id: String, op: String, args: Vec<OpArg>) -> Result<String, FfiError> {
+        let node = self.write()?;
+        let kind = node.object_kind(&object_id)?;
+        let d = pacific_core::authoring::op_on(&kind, &op)
+            .ok_or_else(|| FfiError::Core(format!("a {kind} has no op '{op}'")))?;
+        let args = args.into_iter().map(|a| (a.key, a.value.into())).collect::<pacific_media::Args>();
+        Ok(block_on(node.apply(&object_id, d.op_id, args))?)
+    }
+
+    /// The ICD's words for `op`'s `arg` — what a choice row offers. Empty when the arg is
+    /// free text.
+    pub fn op_vocabulary(&self, op: String, arg: String) -> Vec<String> {
+        pacific_core::authoring::vocabulary(&op, &arg)
+            .map(|w| w.iter().map(|s| s.to_string()).collect())
+            .unwrap_or_default()
+    }
+
+    /// The ICD's `maxLength` for `op`'s `arg` — characters for text, base64 characters for
+    /// inline media. 0 when the ICD states none.
+    pub fn op_arg_max(&self, op: String, arg: String) -> u64 {
+        pacific_core::authoring::max_length(&op, &arg).unwrap_or(0)
+    }
+
+    /// An owner's edit to an op that REPLACES WHOLE — `event.setProfile`, `thing.setProfile`,
+    /// `post.setProfile`: the held args, with `changes` laid over them (an
+    /// empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
+    /// the answer is "". Any other op is refused: it is `object_apply`'s.
+    pub fn object_edit(&self, object_id: String, op: String, changes: Vec<OpArg>) -> Result<String, FfiError> {
+        let changes = changes.into_iter().map(|a| (a.key, a.value.into())).collect::<pacific_media::Args>();
+        Ok(block_on(self.write()?.edit(&object_id, &op, changes))?.unwrap_or_default())
+    }
+
     /// Mint a THING and give it a name in one call — what the swipe deck does on ACCEPT.
     /// Local: a group of 1, no relay. Returns the new object id.
     /// `category` is the market-face axis: "artifact" | "skill" | "job" ("" = artifact).
@@ -2526,6 +2755,95 @@ impl Core {
                 .collect(),
             clip: st.media.clip,
             clip_mime: st.media.clip_mime,
+        })
+    }
+
+    /// The rest of one Event — its maximised detail's read, beside its `EventRow`.
+    pub fn event_detail(&self, object_id: String) -> Result<EventDetailRow, FfiError> {
+        let st = self.read()?.event_state(&object_id)?;
+        let mut set: Vec<&pacific_core::event::SetPhoto> =
+            st.photo_set.iter().flat_map(|s| s.values()).collect();
+        set.sort_by_key(|p| p.at);
+        Ok(EventDetailRow {
+            banner: st
+                .banner
+                .as_ref()
+                .and_then(|m| media_row(m, ""))
+                .or_else(|| inline_row(&st.media.banner_mime, &st.media.banner)),
+            clip: st
+                .clip
+                .as_ref()
+                .and_then(|m| media_row(m, ""))
+                .or_else(|| inline_row(&st.media.clip_mime, &st.media.clip)),
+            photos: st
+                .media
+                .photos
+                .iter()
+                .filter_map(|p| inline_row(&p.mime, &p.data))
+                .chain(set.into_iter().filter_map(|p| media_row(&p.media, "")))
+                .collect(),
+            acts: st
+                .acts
+                .unwrap_or_default()
+                .into_iter()
+                .map(|a| ActRow {
+                    performer: a.performer.id(),
+                    role: a.role,
+                    start: a.start.unwrap_or(0),
+                    end: a.end.unwrap_or(0),
+                })
+                .collect(),
+            tz: st.tz,
+            all_day: st.all_day,
+            status: st.status,
+            online: st.online,
+            video_url: st.video_url,
+            ticket_url: st.ticket_url,
+            descriptor_format: st.descriptor_format,
+        })
+    }
+
+    /// The rest of one Thing — its maximised detail's read, beside its `ThingRow`.
+    pub fn thing_detail(&self, object_id: String) -> Result<ThingDetailRow, FfiError> {
+        let st = self.read()?.thing_state(&object_id)?;
+        let mut photos: Vec<_> = st.photos.into_values().collect();
+        photos.sort_by_key(|p| p.at);
+        let d = st.disposition;
+        Ok(ThingDetailRow {
+            condition: st.condition.unwrap_or_default(),
+            description: st.description,
+            photos: photos
+                .iter()
+                .filter_map(|p| {
+                    inline_row(&p.mime, &p.data).map(|r| MediaRow { width: p.width, height: p.height, ..r })
+                })
+                .collect(),
+            disposition: d.as_ref().map(|d| d.state.clone()).unwrap_or_default(),
+            disposition_for: d.as_ref().and_then(|d| d.for_member.clone()).unwrap_or_default(),
+            disposition_until: d.as_ref().and_then(|d| d.until).unwrap_or(0),
+        })
+    }
+
+    /// The rest of one Post — its maximised detail's read, beside its `PostRow`.
+    pub fn post_detail(&self, object_id: String) -> Result<PostDetailRow, FfiError> {
+        let st = self
+            .read()?
+            .posts()?
+            .into_iter()
+            .find(|(id, _)| *id == object_id)
+            .map(|(_, st)| st)
+            .ok_or_else(|| FfiError::Core(format!("no post {object_id}")))?;
+        let mut assets: Vec<_> = st.assets.values().collect();
+        assets.sort_by_key(|a| a.at);
+        Ok(PostDetailRow {
+            form: st.form.as_str().to_string(),
+            link: st.link.clone(),
+            body_format: st.body_format.clone(),
+            excerpt: st.excerpt.clone(),
+            banner_alt: st.banner_alt.clone(),
+            banner_mime: st.banner_mime.clone(),
+            document: st.document.as_ref().and_then(|(m, name)| media_row(m, name)),
+            assets: assets.into_iter().filter_map(|a| media_row(&a.media, &a.alt)).collect(),
         })
     }
 
@@ -3251,6 +3569,82 @@ impl Core {
     /// Runs on EVERY member, not just the owner. Returns what anyone was admitted to.
     pub fn place_answer_doors(&self) -> Result<Vec<String>, FfiError> {
         Ok(block_on(self.write()?.answer_all_doors())?)
+    }
+
+    // ---- THE EXTERIOR (#76, ICD 2.6.0) ----
+
+    /// The exteriors that reached me through my connections: objects I am not in, each with
+    /// whether I have asked to join.
+    pub fn exteriors(&self) -> Result<Vec<ExteriorRow>, FfiError> {
+        Ok(self.read()?.exteriors()?.into_iter().map(ExteriorRow::of).collect())
+    }
+
+    /// One object of mine's exterior, as its owner wrote it; None until one is written.
+    pub fn object_exterior(&self, object_id: String) -> Result<Option<MyExterior>, FfiError> {
+        let Some((_, st, vis)) = self.read()?.exterior_state(&object_id)? else { return Ok(None) };
+        Ok(st.exterior.map(|e| MyExterior {
+            name: e.name,
+            description: e.description,
+            door: st.door.map(|d| d.mode.as_str().to_string()).unwrap_or_default(),
+            visibility: vis.as_str().to_string(),
+        }))
+    }
+
+    /// ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
+    /// "connections" | "network") and, when `name` is not empty, the exterior: a description
+    /// and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+    /// once. Returns how many ops were written. The exterior's still is by reference only
+    /// (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
+    pub fn set_outside(
+        &self,
+        object_id: String,
+        visibility: String,
+        name: String,
+        description: String,
+        door: String,
+    ) -> Result<u32, FfiError> {
+        let visibility = match visibility.as_str() {
+            "" => None,
+            v => Some(pacific_core::visibility::Visibility::parse(v).map_err(|_| {
+                FfiError::Core("visibility must be \"private\" | \"connections\" | \"network\"".into())
+            })?),
+        };
+        let draft = if name.is_empty() {
+            None
+        } else {
+            let door = match door.as_str() {
+                "" => None,
+                m => Some(pacific_core::exterior::DoorMode::parse(m).ok_or_else(|| FfiError::Core("door must be \"\" | \"review\" | \"auto\"".into()))?),
+            };
+            Some(pacific_core::node::ExteriorDraft { name, description, photo: None, door })
+        };
+        Ok(block_on(self.write()?.set_outside(&object_id, visibility, draft.as_ref()))? as u32)
+    }
+
+    /// Ask to join an object whose exterior reached me. Returns the request's id.
+    pub fn request_join(&self, object_id: String, note: String) -> Result<String, FfiError> {
+        Ok(block_on(self.write()?.request_join(&object_id, &note))?)
+    }
+
+    /// Withdraw my ask to join.
+    pub fn withdraw_request(&self, object_id: String) -> Result<(), FfiError> {
+        Ok(block_on(self.write()?.withdraw_request(&object_id))?)
+    }
+
+    /// The requests waiting for me: at the review doors of objects I own or admit to, from what
+    /// this device's syncs have drained. No relay round trip.
+    pub fn pending_requests(&self) -> Result<Vec<RequestRow>, FfiError> {
+        Ok(self
+            .read()?
+            .pending_requests()?
+            .into_iter()
+            .map(|r| RequestRow { object: r.object, kind: r.kind, request: r.request, asker: hex::encode(r.asker), asker_name: r.asker_name, note: r.note, at: r.at as i64 })
+            .collect())
+    }
+
+    /// Admit, or decline, one request. A decline is not told to the asker.
+    pub fn decide_request(&self, object_id: String, request: String, admit: bool) -> Result<(), FfiError> {
+        Ok(block_on(self.write()?.decide_request(&object_id, &request, admit))?)
     }
 
     // -- Anchoring a group to a place (the agreement) -------------------------
@@ -4616,5 +5010,158 @@ mod held_node_tests {
         assert!(counts(&core).0 > h1, "and both share one fold cache");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod detail_tests {
+    use super::*;
+
+    fn t(v: &str) -> OpArg {
+        OpArg { key: String::new(), value: OpValue::Text { v: v.into() } }
+    }
+    fn i(v: i64) -> OpArg {
+        OpArg { key: String::new(), value: OpValue::Int { v } }
+    }
+    fn args(kv: &[(&str, OpArg)]) -> Vec<OpArg> {
+        kv.iter().map(|(k, a)| OpArg { key: (*k).into(), ..a.clone() }).collect()
+    }
+
+    const PNG: &str = "QUJDRA==";
+
+    fn core(tag: &str) -> (Arc<Core>, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("pacific-detail-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temp state dir");
+        let core = Core::new(dir.to_string_lossy().to_string());
+        pacific_core::node::set_default_arc("ws://127.0.0.1:1").expect("the device's Arc");
+        core.init_identity("Ada".into()).expect("mint identity");
+        (core, dir)
+    }
+
+    fn mint(core: &Core, kind: &str, name: &str) -> String {
+        let draft = MintDraft { name: name.into(), start_ms: 1_790_000_000_000, ..Default::default() };
+        core.object_mint(kind.into(), draft).expect("a mint")
+    }
+
+    /// Every field a detail row adds is written by its ICD op, through `object_apply`
+    /// by name, and read back by the detail read.
+    #[test]
+    fn each_detail_read_returns_what_its_ops_wrote() {
+        let _held = STATE_DIR.lock().unwrap_or_else(|e| e.into_inner());
+        let (core, dir) = core("rt");
+
+        let ev = mint(&core, "event", "Night");
+        let profile = args(&[
+            ("title", t("Night")),
+            ("startMs", i(1_790_000_000_000)),
+            ("status", t("cancelled")),
+            ("online", t("https://meet.example/a")),
+            ("videoUrl", t("https://video.example/a")),
+            ("ticketUrl", t("https://tix.example/a")),
+            ("tz", t("Europe/London")),
+            ("allDay", i(1)),
+            ("descriptorFormat", t("markdown")),
+        ]);
+        core.object_apply(ev.clone(), "event.setProfile".into(), profile).expect("setProfile");
+        let photo = args(&[("id", t("0000000000000001")), ("photo", t(PNG)), ("photoMime", t("image/png")), ("at", i(5))]);
+        core.object_apply(ev.clone(), "event.addPhoto".into(), photo).expect("addPhoto");
+        let banner = args(&[("banner", t(PNG)), ("bannerMime", t("image/png"))]);
+        core.object_apply(ev.clone(), "event.setBanner".into(), banner).expect("setBanner");
+        let d = core.event_detail(ev.clone()).expect("event_detail");
+        assert_eq!(
+            (d.status.as_str(), d.online.as_str(), d.video_url.as_str(), d.ticket_url.as_str(), d.tz.as_str(), d.all_day, d.descriptor_format.as_str()),
+            ("cancelled", "https://meet.example/a", "https://video.example/a", "https://tix.example/a", "Europe/London", true, "markdown")
+        );
+        assert_eq!(d.photos.len(), 1, "the added photo");
+        assert_eq!(d.banner.as_ref().map(|b| b.data.as_str()), Some(PNG), "setBanner's still");
+
+        let th = mint(&core, "thing", "Chair");
+        let profile = args(&[("name", t("Chair")), ("condition", t("good")), ("description", t("Oak, one leg mended."))]);
+        core.object_apply(th.clone(), "thing.setProfile".into(), profile).expect("thing.setProfile");
+        let photo = args(&[("id", t("0000000000000001")), ("photo", t(PNG)), ("photoMime", t("image/png")), ("at", i(5))]);
+        core.object_apply(th.clone(), "thing.addPhoto".into(), photo).expect("thing.addPhoto");
+        core.object_apply(th.clone(), "thing.setDisposition".into(), args(&[("state", t("sold")), ("at", i(6))]))
+            .expect("setDisposition");
+        let d = core.thing_detail(th.clone()).expect("thing_detail");
+        assert_eq!((d.condition.as_str(), d.description.as_str(), d.disposition.as_str()), ("good", "Oak, one leg mended.", "sold"));
+        assert_eq!(d.photos.len(), 1, "the added photo");
+        core.object_edit(th.clone(), "thing.setProfile".into(), args(&[("condition", t("fair"))])).expect("a thing edit");
+        let d = core.thing_detail(th).expect("thing_detail");
+        assert_eq!((d.condition.as_str(), d.description.as_str()), ("fair", "Oak, one leg mended."), "the rest stands");
+
+        let po = mint(&core, "post", "Zine");
+        let profile = args(&[("title", t("Zine")), ("form", t("pdf")), ("link", t("https://zine.example/a.pdf")), ("bodyFormat", t("markdown")), ("excerpt", t("Issue one."))]);
+        core.object_apply(po.clone(), "post.setProfile".into(), profile).expect("post.setProfile");
+        let doc = args(&[("document", t(PNG)), ("documentMime", t("application/pdf")), ("name", t("zine.pdf"))]);
+        core.object_apply(po.clone(), "post.setDocument".into(), doc).expect("setDocument");
+        let asset = args(&[("id", t("0000000000000001")), ("asset", t(PNG)), ("assetMime", t("image/png")), ("alt", t("a still")), ("at", i(5))]);
+        core.object_apply(po.clone(), "post.addAsset".into(), asset).expect("addAsset");
+        core.object_edit(po.clone(), "post.setProfile".into(), args(&[("excerpt", t("Issue two."))])).expect("a post edit");
+        let d = core.post_detail(po).expect("post_detail");
+        assert_eq!((d.form.as_str(), d.link.as_str(), d.body_format.as_str(), d.excerpt.as_str()), ("pdf", "https://zine.example/a.pdf", "markdown", "Issue two."), "the rest stands");
+        assert_eq!(d.document.as_ref().map(|m| m.alt.as_str()), Some("zine.pdf"), "the document, named");
+        assert_eq!(d.assets.iter().map(|a| a.alt.as_str()).collect::<Vec<_>>(), ["a still"]);
+
+        // An edit restates the held profile: one field changes, the rest stand; an empty
+        // text clears its arg; an edit that changes nothing sends nothing.
+        core.object_edit(ev.clone(), "event.setProfile".into(), args(&[("status", t("postponed")), ("online", t(""))]))
+            .expect("an owner's edit");
+        let d = core.event_detail(ev.clone()).expect("event_detail");
+        assert_eq!((d.status.as_str(), d.online.as_str(), d.ticket_url.as_str()), ("postponed", "", "https://tix.example/a"));
+        assert_eq!(
+            core.object_edit(ev.clone(), "event.setProfile".into(), args(&[("status", t("postponed"))])).expect("a no-op"),
+            "",
+            "nothing changed, nothing sent"
+        );
+        assert!(core.object_edit(ev.clone(), "event.addPhoto".into(), vec![]).is_err(), "not an edit");
+        assert!(core.op_vocabulary("thing.setProfile".into(), "condition".into()).contains(&"good".to_string()));
+        assert!(core.op_vocabulary("thing.setProfile".into(), "description".into()).is_empty(), "free text");
+        assert_eq!(
+            core.op_arg_max("thing.setProfile".into(), "description".into()),
+            pacific_core::thing::MAX_DESCRIPTION as u64,
+            "the ICD's ceiling"
+        );
+
+        assert!(
+            core.object_apply(ev, "thing.setProfile".into(), vec![]).is_err(),
+            "an op the kind does not carry is refused by name"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// AC 9: each field a detail row adds is an arg of an op on that kind in the ICD —
+    /// read from the document, so a renamed or dropped arg breaks here, not on a screen.
+    #[test]
+    fn every_detail_field_is_an_icd_arg_of_its_kind() {
+        let icd: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../coordination/delta-graph.icd.json"))
+                .expect("the ICD"),
+        )
+        .expect("the ICD parses");
+        let rows: &[(&str, &[(&str, &str)])] = &[
+            ("event", &[
+                ("tz", "tz"), ("all_day", "allDay"), ("status", "status"), ("online", "online"),
+                ("video_url", "videoUrl"), ("ticket_url", "ticketUrl"), ("descriptor_format", "descriptorFormat"),
+                ("banner", "banner"), ("clip", "clip"), ("photos", "photo"), ("acts", "acts"),
+            ]),
+            ("thing", &[
+                ("condition", "condition"), ("description", "description"), ("photos", "photo"),
+                ("disposition", "state"), ("disposition_for", "for"), ("disposition_until", "until"),
+            ]),
+            ("post", &[
+                ("form", "form"), ("link", "link"), ("body_format", "bodyFormat"), ("excerpt", "excerpt"),
+                ("banner_alt", "bannerAlt"), ("banner_mime", "bannerMime"), ("document", "document"), ("assets", "asset"),
+            ]),
+        ];
+        for (kind, fields) in rows {
+            let ops = icd["kinds"][kind]["ops"].as_object().expect("the kind's ops");
+            for (field, arg) in *fields {
+                assert!(
+                    ops.values().any(|o| o["args"].get(*arg).is_some()),
+                    "{kind}: detail field `{field}` reads `{arg}`, which no {kind} op carries"
+                );
+            }
+        }
     }
 }

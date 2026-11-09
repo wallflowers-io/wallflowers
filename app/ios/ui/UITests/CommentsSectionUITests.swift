@@ -23,9 +23,9 @@ final class CommentsSectionUITests: XCTestCase {
         let name = "Comments \(Int(Date().timeIntervalSince1970))"
         let comment = "see you there \(Int(Date().timeIntervalSince1970))"
 
-        // Mint an Event through LIFE's +.
-        app.buttons["tab-new"].tap()
-        let field = app.descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
+        // Mint an Event through RED's creator.
+        let card = app.beginCreating("event")
+        let field = card.descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), "the event's NAME field")
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         app.typeText(name)
@@ -34,6 +34,7 @@ final class CommentsSectionUITests: XCTestCase {
         save.tap()
 
         // Open it from the EVENT jewel's feed.
+        app.openLifeSearch()
         app.buttons["jewel-events"].tap()
         // The feed draws only what is on screen: earlier runs' events can hold the top.
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
@@ -42,11 +43,13 @@ final class CommentsSectionUITests: XCTestCase {
         for _ in 0..<12 where !row.waitForExistence(timeout: 2) { mid.press(forDuration: 0.05, thenDragTo: up) }
         XCTAssertTrue(row.exists, "the event's feed row")
         row.tap()
-        XCTAssertTrue(app.staticTexts["detail-title"].waitForExistence(timeout: 10), "the event's page")
-        XCTAssertEqual(app.staticTexts["detail-title"].label, name)
+        // The owner's title is the heading's own field.
+        let title = app.descendants(matching: .any).matching(identifier: "detail-title").firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 10), "the event's page")
+        XCTAssertEqual(title.value as? String, name)
 
-        // Comment; BLUE sends.
-        let say = app.textFields.firstMatch   // the page's one field
+        // Comment, in the page's comments section; BLUE sends.
+        let say = app.descendants(matching: .any).matching(identifier: "detail-comment-field").firstMatch
         XCTAssertTrue(say.waitForExistence(timeout: 10), "the comment field")
         say.tap()
         say.typeText(comment)
@@ -54,9 +57,9 @@ final class CommentsSectionUITests: XCTestCase {
         XCTAssertEqual(send.label, "Send")
         XCTAssertTrue(send.isEnabled, "BLUE sends a comment")
         send.tap()
-        let said = app.staticTexts[comment]
+        let said = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == 'detail-comment' AND label CONTAINS %@", comment)).firstMatch
         XCTAssertTrue(said.waitForExistence(timeout: 10), "the comment shows on its event")
-        app.staticTexts["detail-title"].tap()   // the card back to its top
         XCTAssertTrue(said.isHittable, "the comment is on screen")
         shoot("event-with-comment")
 
@@ -87,15 +90,15 @@ final class CommentsSectionUITests: XCTestCase {
             welcome.tap(); welcome.typeText("QA")
             app.buttons["welcome-begin"].tap()
         }
-        // The app reopens on the tab it was left on: LIFE is up when its + makes an Event.
+        // The app reopens on the tab it was left on: LIFE is up when its search is.
         let life = app.buttons["shell-life"]
         XCTAssertTrue(life.waitForExistence(timeout: 15), "LIFE disc")
-        let plus = app.buttons["tab-new"]
-        for _ in 0..<3 where plus.label != "New Event" {
+        let search = app.buttons["tab-search"]
+        for _ in 0..<3 where !search.exists {
             life.tap()
             Thread.sleep(forTimeInterval: 1)
         }
-        XCTAssertEqual(plus.label, "New Event", "LIFE is up")
+        XCTAssertTrue(search.exists, "LIFE is up")
     }
 
     private func shoot(_ name: String) {

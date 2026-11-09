@@ -247,6 +247,12 @@ struct NewDraft: Equatable {
     var form = ""                         // Post: article | link | image
     var link = ""                         // Post: a link post's destination
 
+    // WHO IT IS FOR, and what stands outside it (#76). Part of the draft, so an edit to
+    // either is an edit, and the commit reads them with the rest.
+    var audience: Audience = .onlyMe
+    var outside = ""                      // the exterior's description
+    var door: DoorChoice = .review        // how an outsider gets in
+
     /// Read/write the slot a declared field binds to. One total switch, so a new
     /// `MintKey` cannot be half-wired.
     subscript(key: MintKey) -> String {
@@ -402,12 +408,11 @@ struct NewDraft: Equatable {
 /// The last two are `pacific_core::visibility::Visibility`, whose wire values these raw
 /// values match. The first three are the roster.
 ///
-/// NOTE ON PERSISTENCE: Ralph's ruling (18 Aug) is that visibility is a flag on EVERY
-/// DELTA, authorising relay on receipt — Pacific's core discoverability mechanism, not a
-/// per-object state field. That is the next piece of work. This dial is the surface for
-/// it; nothing here is authored yet, and `NewSession.audience` is deliberately inert
-/// until the delta flag exists. A control that looked live and dropped the choice is the
-/// exact bug the field declaration was built to prevent.
+/// PERSISTENCE: Only Me, Connections and Network are written at mint as the object's
+/// `base.setVisibility` (ICD 2.6.0 puts it on every kind with an exterior), and at
+/// Connections or Network its exterior and door with it (`CoreService.setOutside`). The
+/// per-delta flag (Ralph, 18 Aug) is separate and still to come. People and Spaces are the
+/// roster, and still need their selection step.
 enum Audience: String, CaseIterable, Identifiable {
     case onlyMe      = "private"
     case people      = "people"
@@ -481,8 +486,12 @@ final class NewSession: ObservableObject, Identifiable {
     @Published var face: NewFace = .fields
 
     /// WHO this is for. Universal across every kind (Ralph, 18 Aug), which settles the
-    /// open question about what GOLD means: it is privacy/sharing, everywhere.
-    @Published var audience: Audience = .onlyMe
+    /// open question about what GOLD means: it is privacy/sharing, everywhere. Held in the
+    /// draft, so it publishes with it.
+    var audience: Audience {
+        get { draft.audience }
+        set { draft.audience = newValue }
+    }
 
     /// The draft as it opened, seeded. What `edited` measures against.
     private var opening: NewDraft
@@ -497,7 +506,6 @@ final class NewSession: ObservableObject, Identifiable {
         var moved = zip(now, then).compactMap { a, b in
             String(describing: a.value) == String(describing: b.value) ? nil : a.label
         }
-        if audience != .onlyMe { moved.append("audience") }
         return moved
     }
 
@@ -645,8 +653,10 @@ struct NewSurface: View {
                 if let creator {
                     CreatorPages(creator: creator)
                 } else {
-                    NewCard(session: session).padding(.horizontal, 16)
-                        .onAppear { NSLog("[creator] single card %@", session.kind.rawValue) }
+                    CardTablet(id: "new-tablet-\(session.kind.rawValue)") { height in
+                        NewCard(session: session, minHeight: height).padding(.horizontal, 16)
+                    }
+                    .onAppear { NSLog("[creator] single card %@", session.kind.rawValue) }
                 }
             }
                 // The departure, in three flavours. SAVED opens out past the screen edges
@@ -658,10 +668,10 @@ struct NewSurface: View {
                 .offset(y: exit == .shared ? -travel : 0)
                 .animation(cardExit, value: exit)
                 // Up to the status bar, over the top row's buttons (Ralph, 5 Nov): while
-                // a New is up, the discs are the only controls.
-                .padding(.top, 8)
-                // Stop above the disc row — those circles ARE this surface's buttons.
-                .padding(.bottom, ShellMetrics.bottomBarHeight + 6)
+                // a New is up, the discs are the only controls. The tablet runs on under the
+                // status bar, blurred, and keeps its own space below it (`CardTablet.lead`).
+                // No stop above the disc row: the tablet runs on under it and the keyboard,
+                // blurred behind them, and keeps its own clearance (`CardTablet`).
                 .background(GeometryReader { geo in
                     Color.clear.onAppear { travel = geo.size.height * 1.4 }
                 })
@@ -677,9 +687,6 @@ extension NewSession {
     /// (Ralph, 18 Aug) — the same card, turned, wearing the audience dial's own colour so
     /// you can see at a glance which face you are on.
     var tint: Color { face == .visibility ? NewSurface.visibilityCyan : kind.gloss.hi }
-    var glow: Color {
-        face == .visibility ? NewSurface.visibilityCyan.darkened(0.34) : kind.gloss.lo
-    }
 }
 
 /// ONE session's glass card — the fields, the header, the visibility face. `NewSurface`
@@ -691,6 +698,8 @@ struct NewCard: View {
     /// The card in view. A card that leaves lets go of the keyboard; only the card in
     /// view reports its frame to the ground.
     var active = true
+    /// At least this tall: the page its tablet shows, so a short card still fills it.
+    var minHeight: CGFloat = 0
 
     @FocusState private var focus: FocusTarget?
     /// Focus is keyed by the DECLARED field, not by a hand-kept case list — so a new
@@ -721,7 +730,6 @@ struct NewCard: View {
     private var exit: NewExit? { session.exit }
     private var kind: NewKind { session.kind }
     private var tint: Color { session.tint }
-    private var glow: Color { session.glow }
 
     /// The tint for kept, azure for handed off. Discarding gets NO colour — it goes the
     /// way it always went, and a draft thrown away is not an event worth marking.
@@ -782,6 +790,9 @@ struct NewCard: View {
         // Let go of the keyboard the INSTANT the surface starts leaving, so it slides
         // down alongside the departure instead of blinking out once everything has gone.
         .onChange(of: exit) { _, leaving in if leaving != nil { focus = nil } }
+        // A container of its own: without one (the scroll view inside the card was it) the
+        // identifier lands on every field and overwrites theirs.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("new-surface-\(kind.rawValue)")
     }
 
@@ -801,26 +812,26 @@ struct NewCard: View {
             } else if showsHeader {
                 header
             }
-            ScrollView {
-                // THE EXPLICIT STACK. `fields` is a ViewBuilder that yields SEVERAL views,
-                // and a ScrollView's content is ONE view — so a bare `fields` became a
-                // TupleView that SwiftUI laid out on top of itself. That is a single bug
-                // with two faces: the note's title rendered UNDER its body, and every
-                // newitem modal's rows sat on each other instead of stacking.
-                //
-                // `.leading` because a label-over-well field row is left-aligned and a
-                // centred stack would make the labels wander with their content's width.
-                VStack(alignment: .leading, spacing: session.face == .visibility ? 0 : rowGap) {
-                    if session.face == .visibility { visibilityOptions } else { fields }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                // Without a header (the note, the creator) the fields take its top margin.
-                .padding(.top, showsHeader ? 4 : 24)
-                .padding(.bottom, 12)
+            // NOTHING SCROLLS INSIDE THE CARD (Ralph, 8 Nov, #60): the card is a tablet, at
+            // its full height, and its `CardTablet` scrolls it whole.
+            //
+            // THE EXPLICIT STACK. `fields` is a ViewBuilder that yields SEVERAL views, so a
+            // bare `fields` became a TupleView that SwiftUI laid out on top of itself: the
+            // note's title rendered UNDER its body, and every newitem modal's rows sat on
+            // each other instead of stacking.
+            //
+            // `.leading` because a label-over-well field row is left-aligned and a
+            // centred stack would make the labels wander with their content's width.
+            VStack(alignment: .leading, spacing: session.face == .visibility ? 0 : rowGap) {
+                if session.face == .visibility { visibilityOptions } else { fields }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            // Without a header (the note, the creator) the fields take its top margin.
+            .padding(.top, showsHeader ? 4 : 24)
+            .padding(.bottom, 12)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .top)
         // Report where the card actually IS. In the ground's own space, so the bloom can
         // use it directly — the ground and the card are siblings in the same ZStack, and
         // both ignore the safe area, so `.named("newSurface")` is common ground.
@@ -832,7 +843,7 @@ struct NewCard: View {
         // The shared glass. `flash` swaps the resting edge for the outcome's colour.
         // Opaque for every kind (Ralph, 5 Nov): the note's see-through ground made it the
         // odd card out beside the others.
-        .composeGlass(tint: tint, glow: glow, flash: flash, opaque: true)
+        .composeGlass(tint: tint, flash: flash, opaque: true)
     }
 
     /// The modal's title, in the SAME type as the "NOTE" / "CHAT" word a screen shows
@@ -902,6 +913,50 @@ struct NewCard: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("visibility-\(option.rawValue)")
             .accessibilityAddTraits(session.audience == option ? .isSelected : [])
+        }
+        // WHAT STANDS OUTSIDE (#76). Once it reaches past you, an outsider holds its name, a
+        // description and a way in, and nothing from inside: the owner writes it here. (Its
+        // picture is by reference, and comes with the blob store's client, #56.)
+        if session.audience == .connections || session.audience == .network {
+            outsideFields
+        }
+    }
+
+    @ViewBuilder private var outsideFields: some View {
+        Text("OUTSIDE")
+            .font(.system(.footnote, design: .monospaced))
+            .tracking(2)
+            .foregroundStyle(Theme.textTertiary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .accessibilityAddTraits(.isHeader)
+        TextField("What outsiders see", text: $session.draft.outside, axis: .vertical)
+            .lineLimit(2...4)
+            .font(.body)
+            .padding(.horizontal, 20)
+            .accessibilityIdentifier("outside-description")
+        ForEach(DoorChoice.allCases) { door in
+            Button {
+                session.draft.door = door
+            } label: {
+                HStack(spacing: 14) {
+                    Circle()
+                        .strokeBorder(session.draft.door == door ? tint : Theme.hairline,
+                                      lineWidth: session.draft.door == door ? 6 : 1)
+                        .frame(width: 20, height: 20)
+                    Text(door.title)
+                        .font(.body)
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 20)
+                .frame(height: CircleButton.discSize)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("door-\(door == .none ? "none" : door.rawValue)")
+            .accessibilityAddTraits(session.draft.door == door ? .isSelected : [])
         }
     }
 
@@ -1389,9 +1444,9 @@ final class NewCreator: ObservableObject {
         sessions = Dictionary(uniqueKeysWithValues: kinds.map { ($0, make($0)) })
         active = kinds.first ?? .note
         for (kind, s) in sessions {
-            // `$draft` and `$audience` publish the NEW value, before it is stored, so the
-            // edit is judged on what was sent rather than on `s.edited`.
-            sinks.append(s.$draft.combineLatest(s.$audience).sink { [weak self, weak s] _, _ in
+            // `$draft` publishes the NEW value (the audience with it), before it is stored, so
+            // the edit is judged on what was sent rather than on `s.edited`.
+            sinks.append(s.$draft.sink { [weak self, weak s] _ in
                 DispatchQueue.main.async {
                     guard let self, let s, !self.locked, kind == self.active, s.edited else { return }
                     NSLog("[creator] locked on %@ by %@", kind.rawValue, s.edits.joined(separator: ","))
@@ -1428,6 +1483,12 @@ private struct CreatorPages: View {
     /// items), and the touch that opened the creator can still be on it — on a cold first
     /// launch that pair carried the cards two kinds along, Event to Place.
     @State private var dialAligned = false
+    /// The tablet in view has scrolled up: the dial makes way (Ralph, 8 Nov, #60).
+    @State private var dialHidden = false
+    /// Where the tablet turned last: the furthest it went in the direction it is going.
+    @State private var turned: CGFloat = 0
+    /// Travel past the turn that hides or brings back the dial.
+    private static let dialSlack: CGFloat = 8
 
     private static let laps = 5
 
@@ -1448,34 +1509,22 @@ private struct CreatorPages: View {
     private var choosing: Bool { !creator.locked && inView.face == .fields }
 
     var body: some View {
-        VStack(spacing: 10) {
-            // Above the card it picks (Ralph, 8 Nov).
-            if choosing {
-                KindDial(kinds: creator.kinds, ids: ids, position: $dial,
-                         selected: Int(at.rounded()), following: lead == .cards,
-                         touched: { if dialAligned { lead = .dial } },
-                         moved: { f in
-                             if !dialAligned {
-                                 dialAligned = abs(f - at) < 0.5
-                             } else if lead == .dial {
-                                 cards.scrollTo(x: f * cardWidth)
-                             }
-                         },
-                         rested: { if lead == .dial { rest() } },
-                         pick: pick)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    // A dial that comes back (after VISIBILITY) aligns again before it leads.
-                    .onDisappear { dialAligned = false }
-            }
-
+        // THE DIAL FLOATS OVER THE TABLETS, it takes no space from them: going and coming
+        // it moves, and the tablet under it keeps its frame (Ralph, 8 Nov — a dial that gave
+        // its space to the page as it went made the tablet's height jitter under a slow drag).
+        // The cards rest below it, on the tablet's top margin.
+        ZStack(alignment: .top) {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(ids, id: \.self) { i in
                         let k = KindRing.kind(at: i, in: creator.kinds)
-                        NewCard(session: creator.sessions[k]!, creator: true,
-                                active: k == creator.active)
-                            .padding(.horizontal, 16)
-                            .containerRelativeFrame(.horizontal)
+                        CardTablet(id: "new-tablet-\(k.rawValue)", top: KindDial.slot,
+                                   scrolled: { y in if k == creator.active { tabletAt(y) } }) { height in
+                            NewCard(session: creator.sessions[k]!, creator: true,
+                                    active: k == creator.active, minHeight: height)
+                                .padding(.horizontal, 16)
+                        }
+                        .containerRelativeFrame(.horizontal)
                     }
                 }
                 .scrollTargetLayout()
@@ -1496,10 +1545,56 @@ private struct CreatorPages: View {
                 if phase == .interacting { lead = .cards }
                 if phase == .idle, lead != .dial { rest() }
             }
+
+            // Above the card it picks (Ralph, 8 Nov).
+            if choosing && !dialHidden {
+                KindDial(kinds: creator.kinds, ids: ids, position: $dial,
+                         selected: Int(at.rounded()), following: lead == .cards,
+                         touched: { if dialAligned { lead = .dial } },
+                         moved: { f in
+                             if !dialAligned {
+                                 // Not yet where the cards are: put it there. A new dial
+                                 // starts at its content's origin, two items in, and the
+                                 // cards at rest send it nowhere.
+                                 dialAligned = abs(f - at) < 0.5
+                                 if !dialAligned { dial.scrollTo(x: at * KindDial.item) }
+                             } else if lead == .dial {
+                                 cards.scrollTo(x: f * cardWidth)
+                             }
+                         },
+                         rested: { if lead == .dial { rest() } },
+                         pick: pick)
+                    .padding(.top, CardTablet<EmptyView>.lead)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    // A dial that comes back (after VISIBILITY, or scrolled away) aligns
+                    // again before it leads.
+                    .onAppear { dial.scrollTo(x: at * KindDial.item) }
+                    .onDisappear { dialAligned = false }
+            }
         }
         // One tick as each kind takes the centre, as a picker does. The kind, not the
         // index, so the unseen lap jump is silent.
         .sensoryFeedback(.selection, trigger: KindRing.kind(at: Int(at.rounded()), in: creator.kinds))
+        // Another kind in view: its tablet is at its own top, and the dial is back.
+        .onChange(of: creator.active) { _, _ in setDial(hidden: false, at: 0) }
+    }
+
+    /// The tablet in view is at `y` from its top. Up past the slack hides the dial, down
+    /// past it (or the top) brings it back, as Safari's bar does: a drag or a flick alike,
+    /// since the dial floats and its going moves nothing under it.
+    private func tabletAt(_ y: CGFloat) {
+        if y <= 0 { return setDial(hidden: false, at: 0) }
+        if dialHidden {
+            if y > turned { turned = y } else if turned - y > Self.dialSlack { setDial(hidden: false, at: y) }
+        } else {
+            if y < turned { turned = y } else if y - turned > Self.dialSlack { setDial(hidden: true, at: y) }
+        }
+    }
+
+    private func setDial(hidden: Bool, at y: CGFloat) {
+        turned = y
+        guard hidden != dialHidden else { return }
+        withAnimation(Motion.screenIn) { dialHidden = hidden }
     }
 
     /// A tap on the dial: the cards scroll to it, so the ones between cross on the way, and
@@ -1531,6 +1626,105 @@ private struct CreatorPages: View {
             }
         }
         lead = .cards
+    }
+}
+
+/// A card as a TABLET (Ralph, 8 Nov, #60): nothing scrolls inside it; the card itself
+/// scrolls, whole and at its full height. It runs on under the status bar, the disc row
+/// and the keyboard, blurred behind them all (the keyboard is glass; the bars get a blur
+/// of their own), and its ends scroll clear of them. `card` is given the height a
+/// short card fills, the page between its top margin and the row, measured with the
+/// keyboard down: LOCKED, so neither the keyboard nor the dial resizes a card under the
+/// finger (Ralph, 8 Nov).
+///
+/// THE BARS ARE TRACKED THROUGH THE SAFE AREA, not the keyboard's notifications. Readers:
+/// the page as it shows, which stops at the status bar and above the keyboard (or the home
+/// indicator), and the page the tablet runs under, which does not. Their differences are
+/// how far the bars reach, and SwiftUI moves them in the keyboard's own transaction, so the
+/// margins and the blurs ride with it exactly. (A reader that ignores the safe area reads
+/// an inset of nothing.)
+private struct CardTablet<Card: View>: View {
+    let id: String
+    /// Where the card rests below the status bar's space: below the dial, in the creator.
+    var top: CGFloat = gap
+    /// The tablet was scrolled: its offset from the top, reported for the person's own
+    /// movement only (`push`), and always at the top.
+    var scrolled: (CGFloat) -> Void = { _ in }
+    @ViewBuilder let card: (CGFloat) -> Card
+
+    /// What is moving the tablet. A finger, either way; a fling, the way it was thrown;
+    /// nothing else — the settle at either end, the bounce back from it, is not the person
+    /// scrolling, and read as a scroll back it brought the dial straight back.
+    private enum Push { case finger, up, down, none }
+    @State private var push = Push.none
+
+    /// Below the status bar, before anything rests: the dial, or a card with no dial.
+    static var lead: CGFloat { 8 }
+    /// Above the card: the same gap as the dial keeps from the notch (Ralph, 8 Nov).
+    static var gap: CGFloat { 20 }
+    /// Under the card: the disc row, the surface's buttons.
+    private static var row: CGFloat { ShellMetrics.bottomBarHeight + 6 }
+
+    var body: some View {
+        GeometryReader { shown in
+            GeometryReader { page in
+                GeometryReader { whole in
+                    let ceiling = max(shown.frame(in: .global).minY - whole.frame(in: .global).minY, 0)
+                    let bottom = whole.frame(in: .global).maxY - shown.frame(in: .global).maxY
+                    tablet(page: page.size.height, ceiling: ceiling, floor: max(bottom, 0))
+                }
+                .ignoresSafeArea(.container, edges: [.top, .bottom])
+            }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+        }
+    }
+
+    /// `page`: the tablet's height with the keyboard down, which the card's height is held
+    /// to. `ceiling`: the status bar. `floor`: what the row stands on, the keyboard when it
+    /// is up, else the home indicator.
+    private func tablet(page: CGFloat, ceiling: CGFloat, floor: CGFloat) -> some View {
+        ScrollView(.vertical) {
+            card(max(page - Self.lead - top - Self.row, 0))
+        }
+        .scrollIndicators(.hidden)
+        .contentMargins(.top, ceiling + Self.lead + top, for: .scrollContent)
+        .contentMargins(.bottom, Self.row + floor, for: .scrollContent)
+        .onScrollGeometryChange(for: CGFloat.self) { g in
+            let travel = max(g.contentSize.height + g.contentInsets.top + g.contentInsets.bottom - g.containerSize.height, 0)
+            return min(max(g.contentOffset.y + g.contentInsets.top, 0), travel)
+        } action: { old, y in
+            let d = y - old
+            if y <= 0 || push == .finger || (push == .up && d > 0) || (push == .down && d < 0) {
+                scrolled(y)
+            }
+        }
+        .onScrollPhaseChange { _, phase, context in
+            switch phase {
+            case .interacting: push = .finger
+            case .decelerating: push = (context.velocity?.dy ?? 0) >= 0 ? .up : .down
+            default: push = .none
+            }
+        }
+        .overlay(alignment: .top) {
+            // The blur behind the status bar, as behind the row: the card passes under it.
+            Rectangle().fill(.ultraThinMaterial)
+                .mask(LinearGradient(stops: [.init(color: .black, location: 0.65),
+                                             .init(color: .clear, location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(height: ceiling + Self.lead)
+                .allowsHitTesting(false)
+        }
+        .overlay(alignment: .bottom) {
+            // The blur behind the row, soft at its top edge: the card passes under the
+            // circles seen through frosted glass, not through a hole.
+            Rectangle().fill(.ultraThinMaterial)
+                .mask(LinearGradient(stops: [.init(color: .clear, location: 0),
+                                             .init(color: .black, location: 0.35)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(height: Self.row + floor)
+                .allowsHitTesting(false)
+        }
+        .accessibilityIdentifier(id)
     }
 }
 
@@ -1577,6 +1771,9 @@ private struct KindDial: View {
 
     static let item: CGFloat = 68
     private static let height: CGFloat = 62
+    /// What the cards rest below: the dial, and the gap it keeps from them, the same gap it
+    /// keeps from the notch.
+    static var slot: CGFloat { height + CardTablet<EmptyView>.gap }
     /// The kind in view, its neighbours, and one more each side, fading — so it reads as
     /// a set that goes on (Ralph, 5 Nov). The scroll view clips the rest.
     private static let visible: CGFloat = 5
