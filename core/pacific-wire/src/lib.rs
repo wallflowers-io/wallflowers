@@ -53,10 +53,16 @@ pub const V_GAP: u8 = 1;
 /// media frames are deployed and server-only, so until a client asks for them by
 /// sending `Sub { v: 2 }` the relay must never emit one.
 pub const V_MEDIA: u8 = 2;
+/// Vocabulary level 3: adds [`Frame::Evicted`] — how many knocks a door tag has lost to its
+/// cap (`mls.door.relay`, B3). The ICD names this level; `DOOR_EVICTED_V` is held to it.
+pub const V_DOOR: u8 = 3;
 /// The highest vocabulary level this build knows how to parse. A client may send
 /// this as `Sub.v` to opt into everything; it is NOT the default, because opting in
 /// to a frame means deciding what to DO with it.
-pub const V_MAX: u8 = V_MEDIA;
+pub const V_MAX: u8 = V_DOOR;
+
+// The door's bound, from the ICD (build.rs).
+include!(concat!(env!("OUT_DIR"), "/icd_door.rs"));
 
 /// Which way a frame travels. Used to state the contract in one place: a relay
 /// never sends a [`Dir::ToRelay`] frame, and ignores one it receives in reply.
@@ -123,6 +129,7 @@ pub enum Frame {
         ///   v = 0 (absent) — Msg/Ack/Eose only.
         ///   v >= 1         — may also receive `Gap`.
         ///   v >= 2         — may also send/receive the media frames.
+        ///   v >= 3         — may also receive `Evicted`.
         /// Omitted when 0, so an unchanged client is byte-identical on the wire and
         /// an older relay (which ignores unknown fields) is unaffected either way.
         ///
@@ -205,6 +212,11 @@ pub enum Frame {
     /// `budget_stale` or `rate_limited` (this connection's presigns are paced).
     /// Only ever sent to a `Sub { v >= 2 }`.
     MediaErr { key: String, reason: String },
+    /// relay→client: after the replay of a door tag (`mls.door.relay`), the number of knocks
+    /// ever evicted from it by the cap. Monotonic: a client keeps the last total it saw and
+    /// shows the difference, so a flood is visible to the door it targets. Sent once per
+    /// door tag with a total above 0, before `Eose`, and only to a `Sub { v >= 3 }`.
+    Evicted { tag: String, total: u64 },
     /// relay→client: end of the stored backlog for the current `Sub`; live follows.
     Eose,
 }
@@ -237,6 +249,7 @@ impl Frame {
         "media_get",
         "media_url",
         "media_err",
+        "evicted",
     ];
 
     /// Serialize to the on-wire JSON text.
@@ -265,6 +278,7 @@ impl Frame {
             Frame::MediaGet { .. } => "media_get",
             Frame::MediaUrl { .. } => "media_url",
             Frame::MediaErr { .. } => "media_err",
+            Frame::Evicted { .. } => "evicted",
         }
     }
 
@@ -281,6 +295,7 @@ impl Frame {
             | Frame::Gap { .. }
             | Frame::MediaUrl { .. }
             | Frame::MediaErr { .. }
+            | Frame::Evicted { .. }
             | Frame::Eose => Dir::ToClient,
         }
     }
@@ -309,6 +324,7 @@ impl Frame {
             | Frame::MediaGet { .. }
             | Frame::MediaUrl { .. }
             | Frame::MediaErr { .. } => V_MEDIA,
+            Frame::Evicted { .. } => V_DOOR,
         }
     }
 
@@ -782,7 +798,9 @@ mod wire_spec {
     #[test]
     fn the_declared_levels_agree_with_min_v() {
         spec::assert_levels_agree::<Frame>();
-        assert_eq!(V_MAX, V_MEDIA, "V_MAX must name the highest level in the spec");
+        assert_eq!(V_MAX, V_DOOR, "V_MAX must name the highest level in the spec");
+        assert_eq!(DOOR_EVICTED_V, V_DOOR, "the ICD's mls.door.relay.evicted.v is this level");
+        assert_eq!(DOOR_EVICTED_FRAME, Frame::Evicted { tag: String::new(), total: 0 }.wire_tag());
     }
 }
 

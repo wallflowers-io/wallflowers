@@ -542,14 +542,21 @@ struct Composer: View {
 struct SearchField: View {
     @Binding var text: String
     var placeholder: String = "Search"
+    /// In the top bar (LIFE): the bar's height, no side inset of its own, focused as it
+    /// opens — it is there because you tapped to type.
+    var inBar = false
+    @FocusState private var focused: Bool
 
     /// The composer's slot, taken in a notch: 90% of the disc's diameter, so search reads
     /// as the quieter relative of the field you type into rather than its twin. Still a
     /// stadium — the radius follows the height, so the shape language holds.
     static let height = CircleButton.discSize * 0.9
+    /// The top bar's field: the account circle's height plus a breath, so it fits the bar.
+    static let barHeight: CGFloat = 36
+    private var h: CGFloat { inBar ? Self.barHeight : Self.height }
 
     private var slot: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Self.height / 2, style: .continuous)
+        RoundedRectangle(cornerRadius: h / 2, style: .continuous)
     }
 
     var body: some View {
@@ -558,16 +565,20 @@ struct SearchField: View {
             TextField(placeholder, text: $text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .focused($focused)
+                .accessibilityIdentifier(inBar ? "tab-search-field" : "search-field")
             if !text.isEmpty {
                 Button { text = "" } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear")
+                .accessibilityIdentifier("search-clear")
             }
         }
         .padding(.leading, 20)      // matches the composer's text inset
         .padding(.trailing, 16)
-        .frame(height: Self.height)
+        .frame(height: h)
         // Sheerer than the composer's solid slot: the content below should read through
         // it, and search is a resting affordance, not the thing you came to use.
         .background(Theme.surface2.opacity(0.55), in: slot)
@@ -576,7 +587,8 @@ struct SearchField: View {
         // 4pt further in than its code padding suggests (its list sits inside a
         // NavigationStack that adds its own margin). Matching what the EYE sees beats
         // matching the source number.
-        .padding(.horizontal, 16)
+        .padding(.horizontal, inBar ? 0 : 16)
+        .onAppear { if inBar { focused = true } }
         // The gap under the top bar. NOT a free choice: the toolbar row (avatar · ＋ · bell)
         // is centred in the nav bar, and this number is what decides whether that row reads as
         // centred in the band above the field. Measured on an iPhone 17 Pro: safe-area top 59,

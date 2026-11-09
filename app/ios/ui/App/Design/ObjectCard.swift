@@ -80,6 +80,10 @@ struct ObjectCard: View {
                     .padding(DesignTokens.Card.titleInset)
             }
             .aspectRatio(1, contentMode: .fit)
+            // Where the square sits on screen: what a tap grows the detail out of.
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                CardFrames.shared.frames[row.id] = $0
+            }
             .clipShape(square)
             .overlay(square.strokeBorder(Theme.edge, lineWidth: DesignTokens.Card.hairline))
             .background(square.fill(Theme.edge).offset(x: DesignTokens.Skin.shadow, y: DesignTokens.Skin.shadow))
@@ -164,6 +168,15 @@ struct ObjectCard: View {
         case .people, .things, .job: return nil
         }
     }
+}
+
+/// Each card's square on screen, by row id — the rect a tapped card's detail grows
+/// from and shrinks back into. Not published: a frame is read on a tap, and
+/// publishing every scroll step would redraw every card.
+@MainActor
+final class CardFrames {
+    static let shared = CardFrames()
+    var frames: [String: CGRect] = [:]
 }
 
 /// Decoded banners, cached by row id — the b64 rides the fold (EventRow.banner);

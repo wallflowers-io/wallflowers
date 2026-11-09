@@ -3330,6 +3330,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "trust",
+ "x25519-dalek",
  "zeroize",
 ]
 

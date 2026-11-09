@@ -711,6 +711,7 @@ struct GroupDetailView: View {
             // recoverable; a silent half-mint is not.
             guard let id = await core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
             else { return nil }
+            await core.setOutside(id, from: draft)
             attach(id, name: draft.name)
             return .saved
         })

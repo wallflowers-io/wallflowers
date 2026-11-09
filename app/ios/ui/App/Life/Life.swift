@@ -269,39 +269,6 @@ enum LifeFilter: String, CaseIterable {
                        : PaletteStore.base(colorIndex - 5).lightened(0.34)
     }
 
-    /// What the `+` MINTS while this category is selected — a `NewKind`, which names an
-    /// `ObjectKind`. nil hides the `+` rather than offering a flow that isn't there.
-    ///
-    /// This replaces `mintType: MintType?`. `MintType` was a rail-shaped vocabulary and
-    /// the `+` minted whatever the wizard behind it happened to call, which on two
-    /// jewels was the WRONG SPECIES: `.events` reached `EntityWizard`, which minted a
-    /// device-local OutlineModel row plus a Google Calendar insert while the real
-    /// Event(29) mint was reachable only by owning a Space; `.people` minted a local row
-    /// while the list above it was built from real Contact(25) connections.
-    ///
-    /// PEOPLE now has NO `+`. A connection is a DOUBLE OPT-IN formed by pairing — it
-    /// cannot be minted alone, and the honest thing is to hide the button rather than
-    /// mint a row that looks like a person you are connected to and is not. Pairing
-    /// lives where it always did (Chats · Connect · Me). This is ruling R3,
-    /// resolved the conservative way pending Ralph's call.
-    var newKind: NewKind? {
-        switch self {
-        case .events:   return .event
-        case .places:   return .place
-        case .groups:   return .space
-        case .projects: return .project
-        case .things:   return .listing
-        case .posts:    return .post
-        // PEOPLE has a `+` again, but it is NOT a mint — see `onNew`. A connection is a
-        // DOUBLE OPT-IN and one side cannot author it, so the button opens the pair QR
-        // (with a camera, for scanning theirs) rather than a newitem modal.
-        case .people:   return nil
-        case .plants, .animals: return nil
-        // The + under MEDIA is an IMPORT, not a mint — captures come from the library.
-        case .media: return nil
-        }
-    }
-
     /// The section's icon — one glyph per thing-type (matches the mint menu).
     var glyph: String {
         switch self {
@@ -330,10 +297,8 @@ struct LifeView: View {
     @EnvironmentObject private var art: ArtService       // the Art System (ArtRabbit) → reference rows in EVENTS
     @ObservedObject private var model = OutlineModel.shared
 
-    /// DERIVED from the rail's selection — never stored. Holding a second copy is what
-    /// broke `+`: the rail moved `lifeQuery.selected` while this sat on its initial
-    /// `.people`, so the button minted a Person and wore the People tint whatever was
-    /// maximised. On conflict, re-derivation wins.
+    /// DERIVED from the rail's selection — never stored: a second copy drifted from the
+    /// rail. On conflict, re-derivation wins.
     private var filter: LifeFilter { LifeFilter(lifeQuery.selected) }
     /// Heterogeneous value-based routes: a String pushes a Project (the
     /// `pacificOpenProject` deep link), a `GroupLink` pushes a group's page, an
@@ -382,6 +347,8 @@ struct LifeView: View {
     /// jewels' LOCK state (a kind filter), and a text query is a different question
     /// asked of the same feed — conflating them would make clearing one clear the other.
     @State private var lifeSearch = ""
+    /// The top bar's search is open — the only time the jewel rail is up (9 Nov).
+    @State private var searchOpen = false
 
     @StateObject private var lifeQuery = LifeQuery()
     /// Commitments + participants read out of the resolver graph. Rebuilt off-main whenever
@@ -571,21 +538,9 @@ struct LifeView: View {
                                               source: RealProfileSource(core: core, subject: .peer(link.id)))
                                 .shellBottomBarClearance()
                         }
-                        .navigationDestination(for: PlaceLink.self) { link in
-                            PlaceProfilePage(placeID: link.id,
-                                             source: RealProfileSource(core: core, subject: .place(link.id)))
-                                .shellBottomBarClearance()
-                        }
-                        .accountToolbar()
-                        // No wizard for a category ⇒ no `+` at all, rather than a button
-                        // that can't work. Same function the jewel fills with, keyed by
-                        // category so reordering never detunes it.
-                        .tabChrome("Life",
-                                   newLabel: filter == .people
-                                       ? "Connect" : "New \(filter.newKind?.noun ?? "item")",
-                                   showsTitle: false, showsNotifications: true,
-                                   newTint: EventsSeed.tint(lifeQuery.selected),
-                                   onNew: (filter.newKind == nil && filter != .people) ? nil : onNew)
+                        // No `+` (9 Nov): RED's creator mints every kind it did.
+                        .tabChrome("Life", showsTitle: false, showsNotifications: true,
+                                   search: TabSearch(text: $lifeSearch, open: $searchOpen))
                 }
         }
         // The feed assembles once per sync tick, once per filter change, and whenever one
@@ -613,14 +568,29 @@ struct LifeView: View {
             shell.suppressPageSwipe = on || showingMap
             shell.showCompass = showingMap
         }
-        .onChange(of: lifeQuery.maximised) { _, _ in
+        .onChange(of: lifeQuery.maximised) { _, m in
             shell.suppressPageSwipe = jiggle || showingMap
             shell.showCompass = showingMap
+            // A jewel picked while searching is browsing, not typing: the keyboard gives
+            // the ground back (it covered the map's lower half, where its sheet rises).
+            if m != nil {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                to: nil, from: nil, for: nil)
+            }
         }
-        // BLUE pressed while LIFE is up (10 Aug order): home to the Feed — every
-        // jewel minimised, same spring as the rail's own tap grammar.
+        // Opening or closing search starts from the feed, every jewel minimised.
+        .onChange(of: searchOpen) { _, _ in
+            jiggle = false
+            lifeQuery.minimiseAll()
+            shell.suppressPageSwipe = showingMap
+            shell.showCompass = showingMap
+        }
+        // BLUE pressed while LIFE is up (10 Aug order): home to the Feed — search
+        // closed, every jewel minimised, same spring as the rail's own tap grammar.
         .onReceive(NotificationCenter.default.publisher(for: .pacificLifeHome)) { _ in
             withAnimation(.spring(response: 0.36, dampingFraction: 0.78)) {
+                lifeSearch = ""
+                searchOpen = false
                 lifeQuery.minimiseAll()
             }
         }
@@ -635,8 +605,8 @@ struct LifeView: View {
             ScanCodeSheet(onOpen: { _ in scanningPlace = false })
                 .environmentObject(core)
         }
-        // The POV cover: reached from the map sheet's WALK UP and from the
-        // Place Profile page (T4) — the place's interior is a property of the place.
+        // The POV cover: reached from the map's pin and its sheet's WALK UP — the
+        // place's interior is a property of the place.
         .fullScreenCover(item: $openedPlace) { place in
             PlacePOVView(focus: place,
                          neighbours: placeAnnotations,
@@ -689,6 +659,13 @@ struct LifeView: View {
                 path = NavigationPath([PersonLink(id: obj)])
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .pacificOpenPlace)) { note in
+            // A Place's door — an event's venue, a map row, a profile's pin: its
+            // maximised detail, wherever the door was.
+            if let obj = note.userInfo?["object"] as? String {
+                PlaceDetail.open(obj, core: core, shell: shell)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .pacificOpenGroup)) { note in
             // A room title's deep link: land on GROUPS with the hosting group's
             // page pushed — the typed route the rows themselves take.
@@ -729,7 +706,8 @@ struct LifeView: View {
             // is keyed on the MAXIMISED jewel — nil means every jewel is minimised and
             // the ground is the Active Scroll Feed. Each config page owns its layer as
             // the PRIMARY view so its touches actually arrive (the map precedent).
-            if lifeQuery.maximised == .places {
+            // Searching is the only way to a jewel (9 Nov): closed, the ground is the feed.
+            if showingMap {
                 // THE map returns as PLACE's maximised state (10 Aug word) — fullscreen,
                 // the one map, with the join door.
                 PlacesMap(places: placeAnnotations,
@@ -737,79 +715,75 @@ struct LifeView: View {
                           onOpen: { openedPlace = $0 })
                     .ignoresSafeArea()
                     .overlay(alignment: .bottomTrailing) { joinPlaceButton }
-            } else if let m = lifeQuery.maximised {
+            } else if searchOpen, let m = lifeQuery.maximised {
                 // Every other maximised jewel is a flat LIST of that type's
                 // GroupObjects (0-ANSWER-G S27), on the same card the feed uses.
                 Theme.bg.ignoresSafeArea()
-                TypedListPage(category: m, onOpen: openObject, onAuthor: openAuthor)
+                TypedListPage(category: m, onOpen: openObject, onAuthor: openAuthor,
+                              query: lifeSearch)
             } else {
-                // Every jewel minimised: the Active Scroll Feed IS the LIFE page.
+                // Every jewel minimised: the Active Scroll Feed IS the LIFE page. Its
+                // search is the top bar's (TabChrome's search layout), not a pull-down.
                 Theme.bg.ignoresSafeArea()
-                // The SAME pull-down search NOTE and CHAT wear (`SearchableList`):
-                // hidden until you drag past the top, gone again as you scroll in.
-                // One component, so the gesture means the same thing on all three
-                // tabs — and the feed is a scroll view, which is what the reveal
-                // reads its offset from.
-                // The field opens BELOW the rail. The same expression the feed insets
-                // its own content by, so the two cannot drift apart.
-                SearchableList(text: $lifeSearch,
-                               topInset: RibbonWidth.contracted + DesignTokens.Feed.topGap) {
-                    FeedView(store: feedStore, onOpen: openObject,
-                             onAuthor: openAuthor, query: lifeSearch)
-                }
+                FeedView(store: feedStore, onOpen: openObject,
+                         onAuthor: openAuthor, query: lifeSearch, railShown: searchOpen)
             }
 
-            // The mode strip — the selector ROW's own gestures (S14): a decisive drag
-            // RIGHT restores the last saved configuration; LEFT opens Modes Config.
-            // Behind the rail, so jewels keep their taps and the strip reads the gaps.
-            Color.clear
-                .frame(height: RibbonWidth.contracted + 16)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 45)
-                        .onEnded { v in
-                            guard abs(v.translation.width) > 70,
-                                  abs(v.translation.width) > abs(v.translation.height) * 2
-                            else { return }
-                            if v.translation.width > 0 {
-                                if let m = modeStore.active() { m.apply(to: lifeQuery) }
-                                else { lifeQuery.clear() }
-                            } else {
-                                modesSheet = true
+            if searchOpen { selectors }
+        }
+    }
+
+    /// The rail and the mode strip — up only while searching (9 Nov).
+    @ViewBuilder private var selectors: some View {
+        // The mode strip — the selector ROW's own gestures (S14): a decisive drag
+        // RIGHT restores the last saved configuration; LEFT opens Modes Config.
+        // Behind the rail, so jewels keep their taps and the strip reads the gaps.
+        Color.clear
+            .frame(height: RibbonWidth.contracted + 16)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 45)
+                    .onEnded { v in
+                        guard abs(v.translation.width) > 70,
+                              abs(v.translation.width) > abs(v.translation.height) * 2
+                        else { return }
+                        if v.translation.width > 0 {
+                            if let m = modeStore.active() { m.apply(to: lifeQuery) }
+                            else { lifeQuery.clear() }
+                        } else {
+                            modesSheet = true
+                        }
+                    }
+            )
+            .zIndex(0.5)
+
+        // The selector rail — LIFE's ONE selector mechanic. When a maximised selector
+        // owns the background (the map, the events page), the rail collapses to the
+        // jewel band plus each LOCKED selector's summary overlay and passes touches
+        // through everywhere else, so the background stays interactive. It fills the
+        // canvas otherwise (and while arranging, so the drag owns the whole surface).
+        RibbonRail(query: lifeQuery,
+                   orbID: feedStore.rows.last?.id,
+                   onOrb: {
+                       withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
+                           lifeQuery.minimiseAll()
+                       }
+                   },
+                   jiggle: $jiggle)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .zIndex(1)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background {
+                if jiggle {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
+                                jiggle = false
                             }
                         }
-                )
-                .zIndex(0.5)
-
-
-            // The selector rail — LIFE's ONE selector mechanic. When a maximised selector
-            // owns the background (the map, the events page), the rail collapses to the
-            // jewel band plus each LOCKED selector's summary overlay and passes touches
-            // through everywhere else, so the background stays interactive. It fills the
-            // canvas otherwise (and while arranging, so the drag owns the whole surface).
-            RibbonRail(query: lifeQuery,
-                       orbID: feedStore.rows.last?.id,
-                       onOrb: {
-                           withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
-                               lifeQuery.minimiseAll()
-                           }
-                       },
-                       jiggle: $jiggle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .zIndex(1)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .background {
-                    if jiggle {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
-                                    jiggle = false
-                                }
-                            }
-                    }
                 }
-        }
+            }
     }
 
     /// Locked EVENTS overlays its located, still-outstanding commitments on THE map —
@@ -821,9 +795,9 @@ struct LifeView: View {
             places: placeAnnotations)
     }
 
-    /// The top-down map is up only on the DISCOVER face with MAP maximised — the market
-    /// face replaces the body, so the map's gestures and compass go with it.
-    private var showingMap: Bool { lifeQuery.maximised == .places }
+    /// The top-down map is up only while searching with MAP maximised — the map's
+    /// gestures and compass go with it.
+    private var showingMap: Bool { searchOpen && lifeQuery.maximised == .places }
 
     /// THE tap contract for ObjectCard, everywhere it appears (feed + typed lists):
     /// The author DOOR (11 Aug order): tapping a card's header name opens the
@@ -838,42 +812,30 @@ struct LifeView: View {
     /// TAP = INSTANCE DETAIL, routed by the item's kind. Kinds without a detail page
     /// yet fall through silently — a card never navigates somewhere that isn't its
     /// object. Browsing a KIND stays on the rail (10 Aug order).
+    ///
+    /// The non-egoic kinds MAXIMISE: the card's square grows into the object's page
+    /// (`Design/Detail`). A Space and a person are profiles, pushed onto the stack.
+    /// A card with no object id is something this device is not a member of: it opens
+    /// its exterior (#76), not a detail.
     private func openObject(_ item: FeedItem) {
-        guard let oid = item.objectID else { return }
+        // Not held: its exterior, if one reached me (#76). Otherwise nothing is behind it.
+        guard let oid = item.objectID else {
+            if let ext = item.exterior { ExteriorDetail.open(ext.object, core: core, shell: shell) }
+            return
+        }
+        let origin = CardFrames.shared.frames[item.id]
         switch item.category {
         case .groups: path.append(GroupLink(id: oid))
-        case .events: EventDetail.open(oid, core: core, graph: graph, shell: shell)
-        // TRADE used to open the EVENT page — a listing rendered as a night, mostly
-        // empty. POSTS fell through `default:` to nothing at all, so a post card was
-        // a card you could tap forever. Both open their own object now.
-        case .trade:  ListingDetail.open(oid, core: core, shell: shell)
-        case .posts:  PostDetail.open(oid, core: core, shell: shell)
+        case .events: EventDetail.open(oid, core: core, graph: graph, shell: shell, origin: origin)
+        case .trade:  ListingDetail.open(oid, core: core, shell: shell, origin: origin)
+        case .posts:  PostDetail.open(oid, core: core, shell: shell, origin: origin)
+        case .places: PlaceDetail.open(oid, core: core, shell: shell, origin: origin)
         case .people: path.append(PersonLink(id: oid))
-        case .places: path.append(PlaceLink(id: oid))
         default: break
         }
     }
 
-    // MARK: The `+` chrome — creates this filter's object
-
-    /// The `+` raises the universal `New` surface (Design/New.swift) for the selected
-    /// jewel's kind — as a SHELL OVERLAY, so the RED·GOLD·BLUE circles slide out of
-    /// their neutral positions and become its ✕ · Share · Commit. It used to be a
-    /// `.fullScreenCover`, which covered those very circles and forced a static replica.
-    ///
-    /// The kind comes from `LifeFilter.newKind`, which names an `ObjectKind` — so the
-    /// `+` mints the species the list is built from. It previously routed through
-    /// `mintType` into `EntityWizard`, which minted a device-local outline row for
-    /// EVENTS and PEOPLE while the real Event(29) mint sat unreachable.
-    private func onNew() {
-        // PEOPLE is the one `+` that mints nothing. A connection is formed by PAIRING —
-        // a double opt-in — so the honest surface is your own code plus a way to scan
-        // theirs, which is what `ConnectSheet` is. Routing it here rather than hiding
-        // the button means the jewel that lists your connections can also make one.
-        if filter == .people { return shell.openOverlay(.connect) }
-        guard let kind = filter.newKind else { return }
-        shell.beginNew(session(for: kind))
-    }
+    // MARK: Mint sessions — RED's creator mints through these
 
     /// One session per kind. The commit closure is the ONLY thing that differs, and each
     /// one is a single `core.mint` — the arg vocabularies live in `pacific_core::mint`,
@@ -886,6 +848,7 @@ struct LifeView: View {
         return NewSession(kind: kind) { draft in
             guard let id = await core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
             else { return nil }          // core surfaced the error; the surface stays up
+            await core.setOutside(id, from: draft)
             await afterMint(kind, id: id, draft: draft)
             return .saved
         }
@@ -980,20 +943,12 @@ struct LifeView: View {
         return source.entities(ofKind: kind)
     }
 
-    // The `+` no longer raises a cover. `onNew()` calls `shell.beginNew`, so the mint
-    // is a SHELL OVERLAY under the disc row and the three circles are its buttons —
-    // see Design/New.swift. `mintCover`, `EntityWizard` and `OrgWizard` were the three
-    // things it used to present; the first is gone, and the other two are superseded
-    // by `NewKind.space` / `.place` / `.event` / `.listing` / `.project`.
-    //
     // PLACES is minted from a COORDINATE, as it has been since the scan path was
     // orphaned (v1 ships no spatial processing): a Place is somewhere you have been,
     // and the fix carries that claim. See Life/Space/SpatialCaptureView.swift and the
     // excludes in ui/project.yml.
 
-    /// The placed PLACES entities, for the top-down Map. Falls back to a small DEMO SEED
-    /// so the map renders before the location facet is surfaced through core → FFI —
-    /// remove the fallback once real coordinates flow.
+    /// The placed PLACES entities, for the top-down Map.
     private var placeAnnotations: [PlaceAnnotation] {
         // No demo fallback: showing Bristol/Stroud/London when you have scanned your
         // own room is worse than showing nothing, and it hid exactly this bug.

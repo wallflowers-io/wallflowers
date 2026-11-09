@@ -34,7 +34,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::coordinator::Args;
+use crate::coordinator::{ArgVal, Args};
 use crate::object::{
     Authority, Commutativity, DeltaRejection, MemberId, ObjectKind, ObjectType, Op, OpDecl,
 };
@@ -193,6 +193,9 @@ pub struct PostState {
     /// The visibility facet; `None` is the kind's default (`visibility::default_for`).
     #[serde(skip)]
     pub visibility: Option<crate::visibility::Visibility>,
+    /// The exterior facet (`crate::exterior`; ICD 2.6.0): what a non-member holds of it.
+    #[serde(default)]
+    pub exterior: crate::exterior::ExteriorState,
 }
 
 /// One image a post's body shows as `asset:<id>`.
@@ -207,6 +210,19 @@ impl PostState {
     /// The visibility in force: the written one, else the kind's default from the ICD.
     pub fn visibility(&self) -> crate::visibility::Visibility {
         self.visibility.unwrap_or_else(|| crate::visibility::default_for(ObjectKind::Post.name()))
+    }
+
+    /// The held profile as `post.setProfile` args — the whole profile, which the op
+    /// replaces, so an owner's edit changes one field instead of clearing the rest.
+    pub fn profile_args(&self) -> Args {
+        let mut a = Args::new();
+        a.insert("title".into(), ArgVal::Text(self.title.clone()));
+        a.insert("form".into(), ArgVal::Text(self.form.as_str().into()));
+        let text = [("body", &self.body), ("link", &self.link), ("bodyFormat", &self.body_format), ("excerpt", &self.excerpt)];
+        for (k, v) in text.into_iter().filter(|(_, v)| !v.is_empty()) {
+            a.insert(k.into(), ArgVal::Text(v.clone()));
+        }
+        a
     }
 }
 
@@ -306,6 +322,10 @@ static OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base EXTERIOR ops (`crate::exterior`; ICD 2.6.0).
+    crate::exterior::SET_EXTERIOR,
+    crate::exterior::SET_DOOR,
+    crate::exterior::DECIDE_REQUEST,
     // The base MEDIA facet, spliced (`crate::object_media`, #112): the icon and banner,
     // detached; `media_ops_are_spliced_verbatim` pins them to `MEDIA_OPS`.
     OpDecl {
@@ -331,6 +351,10 @@ impl ObjectType for PostType {
     }
 
     fn reduce(state: &mut Self::State, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::exterior::is_exterior_op(op.op_id) {
+            let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
+            return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);
+        }
         if crate::object_media::is_media_op(op.op_id) {
             return crate::object_media::reduce_media(&mut state.base_media, None, op);
         }

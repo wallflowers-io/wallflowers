@@ -32,6 +32,11 @@ enum FeedProvenance: Equatable {
 /// Where a tapped author name lands: a person's profile or a Space's (a Space
 /// is a Group — GroupDetailView is its profile). Routed at the Life call site,
 /// same discipline as the card tap itself.
+/// An object this device is NOT in, whose exterior reached it (#76): what a tap opens.
+struct ExteriorRef: Equatable {
+    let object: String
+}
+
 enum AuthorRoute: Hashable {
     case person(String)
     case space(String)
@@ -59,6 +64,9 @@ struct FeedItem: Identifiable, Equatable {
     var authorRoute: AuthorRoute? = nil
     /// The author's identity hex, for the header's avatar; nil when the card has no person.
     var authorID: String? = nil
+    /// Set on a card for an object I am not in that has an exterior: the tap opens it, and
+    /// "Ask to join" is its one act. nil with no `objectID` = a card with nothing behind it.
+    var exterior: ExteriorRef? = nil
 
     /// Equality is the per-tick republish gate — comparing full banners would run
     /// megabytes of string compare every 3s (the audit's 70MB landmine), so media
@@ -69,7 +77,17 @@ struct FeedItem: Identifiable, Equatable {
             && a.whenMs == b.whenMs && a.provenance == b.provenance
             && a.objectID == b.objectID && a.bannerB64.count == b.bannerB64.count
             && a.bannerRef?.digest == b.bannerRef?.digest
-            && a.authorRoute == b.authorRoute && a.authorID == b.authorID
+            && a.authorRoute == b.authorRoute && a.authorID == b.authorID && a.exterior == b.exterior
+    }
+}
+
+extension FeedItem {
+    /// LIFE's search, over what a card SHOWS — title, author, place — because that is
+    /// what a person is scanning for. An empty query matches everything.
+    func matches(_ query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        return q.isEmpty || title.lowercased().contains(q) || author.lowercased().contains(q)
+            || location.lowercased().contains(q)
     }
 }
 
@@ -113,11 +131,11 @@ enum FeedAssembler {
     }
 
     static func rows(events: [PacificCore.EventRow], listings: [ListingRow],
-                     posts: [PostRow] = [], nowMs: Int64,
+                     things: [ThingRow] = [], posts: [PostRow] = [], exteriors: [ExteriorRow] = [], nowMs: Int64,
                      makerOf: (String) -> Maker? = { _ in nil },
                      nameFor: (String) -> String = { String($0.prefix(8)) }) -> [FeedItem] {
         var out: [FeedItem] = []
-        out.reserveCapacity(events.count + listings.count + posts.count)
+        out.reserveCapacity(events.count + listings.count + things.count + posts.count)
 
         // POSTS. A Post has no `when` of its own — it is not scheduled, it was written —
         // so it rides at `nowMs`, exactly as a standing listing does, and interleaves with
@@ -151,15 +169,39 @@ enum FeedAssembler {
         for e in events where e.endMs >= nowMs || e.startMs >= nowMs {
             out.append(item(for: e, maker: makerOf(e.id)))
         }
+        // MY OWN LISTINGS: Things I hold, folds I am in. `listings` is everyone else's
+        // and excludes mine, so without these a Listing I make never reaches a card.
+        for t in things {
+            let maker = makerOf(t.id)
+            out.append(FeedItem(
+                id: "thing:\(t.id)",
+                category: .trade,
+                title: t.name,
+                author: maker?.name ?? "",
+                location: t.area,
+                footer: Self.posture(t.posture, deadline: t.deadline),
+                whenMs: t.deadline == 0 ? nowMs : t.deadline,
+                provenance: .member,
+                objectID: t.id,
+                bannerB64: t.photo,
+                bannerRef: t.bannerRef,
+                authorRoute: maker?.id.map(AuthorRoute.person),
+                authorID: maker?.id))
+        }
+        // A listing and an exterior of the same Thing are one thing: its card carries both.
+        let outside = Dictionary(exteriors.map { ($0.object, $0) }, uniquingKeysWith: { a, _ in a })
+        var shown = Set<String>()
+        // A Thing I hold is opened, never asked into: no exterior card beside it.
+        for t in things where outside[t.id] != nil { shown.insert(t.id) }
         for l in listings {
+            if outside[l.thingId] != nil { shown.insert(l.thingId) }
             out.append(FeedItem(
                 id: "listing:\(l.origin):\(l.thingId)",
                 category: .trade,
                 title: l.title,
                 author: nameFor(l.origin),
                 location: l.area,
-                footer: l.deadline == 0 ? l.posture.uppercased()
-                                        : "\(l.posture.uppercased()) · \(Self.stamp(l.deadline))",
+                footer: Self.posture(l.posture, deadline: l.deadline),
                 whenMs: l.deadline == 0 ? nowMs : l.deadline,
                 // ALWAYS over hops. `.member` means a fold this device is IN, and it
                 // drew the filled mark for a direct connection's listing — which is
@@ -169,9 +211,40 @@ enum FeedAssembler {
                 objectID: nil,
                 bannerB64: l.photo,
                 authorRoute: .person(l.origin),
-                authorID: l.origin))
+                authorID: l.origin,
+                exterior: outside[l.thingId].flatMap { $0.door ? ExteriorRef(object: $0.object) : nil }))
+        }
+        // EXTERIORS (#76): objects I am not in, carried to me by their members.
+        for e in exteriors where !shown.contains(e.object) {
+            out.append(FeedItem(
+                id: "exterior:\(e.object)",
+                category: Self.category(ofKind: e.kind),
+                title: e.name,
+                author: nameFor(e.owner),
+                location: "",
+                footer: e.requested ? "REQUESTED" : "",
+                whenMs: nowMs,
+                provenance: .hops(e.hops),
+                objectID: nil,
+                authorRoute: .person(e.owner),
+                authorID: e.owner,
+                // No door, nothing to ask: the card is seen and not opened.
+                exterior: e.door ? ExteriorRef(object: e.object) : nil))
         }
         return out.sorted { $0.whenMs == $1.whenMs ? $0.id < $1.id : $0.whenMs < $1.whenMs }
+    }
+
+    /// The lane an object of an ICD kind rides in.
+    static func category(ofKind kind: String) -> EventCategory {
+        switch kind {
+        case "group":   return .groups
+        case "event":   return .events
+        case "thing":   return .trade
+        case "place":   return .places
+        case "project": return .projects
+        case "forum":   return .channels
+        default:        return .posts      // post, note: words
+        }
     }
 
     /// The lock filter: locked categories are the ACTIVE kinds. Nothing locked = no
@@ -179,6 +252,11 @@ enum FeedAssembler {
     static func filter(_ rows: [FeedItem], locked: Set<EventCategory>) -> [FeedItem] {
         guard !locked.isEmpty else { return rows }
         return rows.filter { locked.contains($0.category) }
+    }
+
+    /// A listing's honest "when": its posture, and its deadline when it has one.
+    private static func posture(_ posture: String, deadline: Int64) -> String {
+        [posture.uppercased(), stamp(deadline)].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     private static func stamp(_ ms: Int64) -> String {

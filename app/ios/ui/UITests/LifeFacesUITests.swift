@@ -1,9 +1,9 @@
 //  LifeFacesUITests.swift
 //  The one-page LIFE surface, asserted on the REAL app (FEED-TRANSMISSION
 //  0-ANSWER-G, S27–S33 — the 10 Aug rail simplification):
-//   • the rail is SIX SINGULAR jewels — GROUP · EVENT · PLACE · PERSON · TRADE ·
-//     JOB — plus the white orb: seven circles, no "MAP" label, no THINGS, no
-//     PROJECTS;
+//   • the rail is SIX SINGULAR jewels — GROUP · EVENT · PERSON · TRADE · POSTS ·
+//     PLACE — plus the white orb: seven circles, no THINGS, no PROJECTS. It is up
+//     only while LIFE's search is open (9 Nov);
 //   • the ground state is the Feed; a jewel's tap maximises it to that type's
 //     flat list, a second tap minimises back to the Feed (two modes, exactly);
 //   • the LIFE disc's second tap is HOME (minimise-all) — the axial market flip
@@ -26,29 +26,31 @@ final class LifeFacesUITests: XCTestCase {
 
     func test_railSelectors_sixSingularJewels_andTheOrb() {
         launchToLife()
+        app.openLifeSearch()
 
-        // THE FIVE-JEWEL RAIL (11 Aug order): places left the rail, JOB folded
-        // into LISTINGS, POSTS took a seat.
+        // THE RAIL (11 Aug order, MAP back 9 Nov): JOB folded into LISTINGS, POSTS
+        // took a seat, PLACE is the map's way in.
         XCTAssertTrue(app.buttons["jewel-groups"].waitForExistence(timeout: 10), "SPACES jewel")
         XCTAssertTrue(app.buttons["jewel-events"].exists, "EVENT jewel")
         XCTAssertTrue(app.buttons["jewel-people"].exists, "PERSON jewel")
         XCTAssertTrue(app.buttons["jewel-trade"].exists, "TRADE jewel — a rail seat, not a flip")
         XCTAssertTrue(app.buttons["jewel-posts"].exists, "POSTS jewel")
-        XCTAssertFalse(app.buttons["jewel-places"].exists, "PLACES left the rail (11 Aug)")
+        XCTAssertTrue(app.buttons["jewel-places"].exists, "PLACE jewel — the map, back 9 Nov")
         XCTAssertFalse(app.buttons["jewel-job"].exists, "JOB folded into LISTINGS (11 Aug)")
         XCTAssertFalse(app.buttons["jewel-projects"].exists, "PROJECTS stays deferred — no jewel")
         XCTAssertFalse(app.buttons["jewel-things"].exists, "THINGS has no jewel")
 
-        // Titles are SINGULAR (S12/S27). "MAP" is gone — the map is PLACE's
-        // maximised state, not a label.
+        // Titles are SINGULAR (S12/S27). The map is PLACE's maximised state, not a
+        // label.
         XCTAssertEqual(app.buttons["jewel-groups"].label, "GROUP")
         XCTAssertEqual(app.buttons["jewel-events"].label, "EVENT")
         XCTAssertEqual(app.buttons["jewel-people"].label, "PERSON")
         XCTAssertEqual(app.buttons["jewel-trade"].label, "TRADE")
+        XCTAssertEqual(app.buttons["jewel-places"].label, "PLACE")
 
         // The orb — the seventh circle, the feed's reset.
         XCTAssertTrue(app.buttons["feed-orb"].exists, "the white orb leads the rail")
-        shoot("rail-five-jewels")
+        shoot("rail-six-jewels")
     }
 
     func test_lifeLandsOnFeed_jewelMaximises_secondTapMinimises() {
@@ -57,6 +59,7 @@ final class LifeFacesUITests: XCTestCase {
         // The ground state is the FEED — not a category page (S27: two modes only).
         XCTAssertTrue(waitGround("life-feed", timeout: 10),
                       "LIFE lands on the Active Scroll Feed")
+        app.openLifeSearch()
 
         // Tap a jewel: its typed list takes the ground.
         app.buttons["jewel-groups"].tap()
@@ -78,6 +81,7 @@ final class LifeFacesUITests: XCTestCase {
     func test_lifeDiscSecondTap_isHome_andTheMarketFaceIsGone() {
         launchToLife()
         XCTAssertTrue(waitGround("life-feed", timeout: 10), "the feed ground")
+        app.openLifeSearch()
 
         app.buttons["jewel-events"].tap()
         XCTAssertTrue(waitGround("typed-list-events"), "EVENT maximised")
@@ -86,6 +90,9 @@ final class LifeFacesUITests: XCTestCase {
         app.buttons["shell-life"].tap()
         XCTAssertTrue(waitGround("life-feed"),
                       "the LIFE disc's second tap minimises to the feed")
+        XCTAssertTrue(app.buttons["tab-search"].waitForExistence(timeout: 5),
+                      "and closes search")
+        XCTAssertFalse(app.buttons["jewel-events"].exists, "the rail goes with it")
 
         // The market face never appears — its selectors do not exist on any tap.
         XCTAssertFalse(app.buttons["jewel-inventory"].exists, "INVENTORY died with the flip")

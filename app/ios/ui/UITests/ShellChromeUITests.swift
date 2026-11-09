@@ -53,10 +53,18 @@ final class ShellChromeUITests: XCTestCase {
                       "tapping the bell should open the convergence deck")
         (close.exists ? close : app.buttons["Done"]).tap()
 
-        // LIFE carries the same chrome — plain + and the bell.
+        // LIFE's bar is the SEARCH layout (9 Nov): | account · search bell |, no `+` —
+        // RED's creator makes things.
         app.buttons["shell-life"].tap()
-        XCTAssertTrue(app.buttons["tab-new"].waitForExistence(timeout: 5), "Life should show the plain +")
-        XCTAssertTrue(app.buttons["tab-notifications"].exists, "Life should show the notification bell")
+        let search = app.buttons["tab-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5), "Life should show search")
+        let lifeBell = app.buttons["tab-notifications"]
+        XCTAssertTrue(lifeBell.exists, "Life should show the notification bell")
+        XCTAssertFalse(app.buttons["tab-new"].exists, "Life has no +")
+        let account = app.buttons["account-button"]
+        XCTAssertTrue(account.exists, "Life should show the account")
+        XCTAssertLessThan(account.frame.midX, search.frame.midX, "the account sits west")
+        XCTAssertLessThan(search.frame.midX, lifeBell.frame.midX, "search sits west of the bell")
     }
 
     /// The NOTE disc carries BOTH halves of notes on one button: a tap opens the compose
@@ -255,6 +263,8 @@ final class ShellChromeUITests: XCTestCase {
     /// If a prior session restored a pushed conversation, pop back to the list root so the
     /// tab chrome (`tab-new`) is on screen.
     private func goToChatsList() {
+        // LIFE's bar has no `+` (9 Nov); a launch that reopens on LIFE goes to CHAT first.
+        if app.buttons["tab-search"].waitForExistence(timeout: 3) { app.buttons["shell-chat"].tap() }
         if app.buttons["tab-new"].waitForExistence(timeout: 3) { return }
         let back = app.navigationBars.buttons.element(boundBy: 0)
         if back.exists { back.tap() }
