@@ -26,7 +26,7 @@ final class MaximisedDetailUITests: XCTestCase {
         let title = "MaxPost\(Int(Date().timeIntervalSince1970))"
         mintPost(title)
         toLife()
-        app.buttons["feed-orb"].tap()
+        XCTAssertTrue(app.scrollViews["life-feed"].waitForExistence(timeout: 10), "the feed")
 
         let page = open(title)
         let excerpt = element("detail-edit-post.setProfile.excerpt")
@@ -55,19 +55,14 @@ final class MaximisedDetailUITests: XCTestCase {
                        "the excerpt, read back from the fold")
     }
 
-    /// An Event made from LIFE's +, maximised from its card; its owner sets its status
+    /// An Event made on RED, maximised from its card; its owner sets its status
     /// and its online link in place.
     func test_anEventsOwnerWritesItsRowsInPlace() {
         launch()
         toLife()
         let title = "MaxEvent\(Int(Date().timeIntervalSince1970))"
-        app.buttons["tab-new"].tap()
-        let name = element("new-field-name")
-        XCTAssertTrue(name.waitForExistence(timeout: 10), "the event's NAME field")
-        name.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.typeText(title)
-        app.buttons["shell-life"].tap()
-        app.buttons["feed-orb"].tap()
+        mint("event", title)
+        XCTAssertTrue(app.scrollViews["life-feed"].waitForExistence(timeout: 10), "the feed")
 
         let page = open(title)
         let status = element("detail-edit-event.setProfile.status")
@@ -94,13 +89,8 @@ final class MaximisedDetailUITests: XCTestCase {
         launch()
         toLife()
         let title = "MaxDate\(Int(Date().timeIntervalSince1970))"
-        app.buttons["tab-new"].tap()
-        let name = element("new-field-name")
-        XCTAssertTrue(name.waitForExistence(timeout: 10), "the event's NAME field")
-        name.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.typeText(title)
-        app.buttons["shell-life"].tap()
-        app.buttons["feed-orb"].tap()
+        mint("event", title)
+        XCTAssertTrue(app.scrollViews["life-feed"].waitForExistence(timeout: 10), "the feed")
         let page = open(title)
 
         let starts = element("detail-edit-event.setProfile.startMs")
@@ -139,7 +129,7 @@ final class MaximisedDetailUITests: XCTestCase {
     /// card's square and ends the screen's width.
     private func open(_ title: String) -> XCUIElement {
         let card = row(titled: title)
-        XCTAssertTrue(card.exists, "\(title)'s card on the feed")
+        XCTAssertTrue(card.exists, "\(title)'s card")
         let cardFrame = card.frame
         card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
 
@@ -186,11 +176,14 @@ final class MaximisedDetailUITests: XCTestCase {
     private func row(titled title: String) -> XCUIElement {
         let card = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'feed-row-' AND label CONTAINS %@", title)).firstMatch
-        let screen = app.windows.firstMatch.frame
+        // On screen and above the disc row, which floats over the feed's foot: a tap
+        // below its top lands on a disc.
+        var clear = app.windows.firstMatch.frame
+        clear.size.height = app.buttons["shell-life"].frame.minY - 8
         let mid = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
         let up = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25))
         for _ in 0..<40 {
-            if card.waitForExistence(timeout: 1), screen.contains(CGPoint(x: card.frame.midX, y: card.frame.midY)) { break }
+            if card.waitForExistence(timeout: 1), clear.contains(CGPoint(x: card.frame.midX, y: card.frame.midY)) { break }
             mid.press(forDuration: 0.05, thenDragTo: up)
         }
         return card
@@ -220,16 +213,30 @@ final class MaximisedDetailUITests: XCTestCase {
         XCTAssertTrue(app.buttons["shell-note"].waitForExistence(timeout: 15), "RED disc")
     }
 
-    /// LIFE up, its + making an Event. The app reopens on the tab it was left on.
+    /// LIFE up: its feed on screen, not a page beside it — other tabs share the top
+    /// row's search. The app reopens on the tab it was left on.
     private func toLife() {
         let life = app.buttons["shell-life"]
         XCTAssertTrue(life.waitForExistence(timeout: 15), "LIFE disc")
-        let plus = app.buttons["tab-new"]
-        for _ in 0..<3 where plus.label != "New Event" {
+        let feed = app.scrollViews["life-feed"]
+        let up = { feed.exists && abs(feed.frame.minX) < 1 }
+        for _ in 0..<3 where !up() {
             life.tap()
             Thread.sleep(forTimeInterval: 1)
         }
-        XCTAssertEqual(plus.label, "New Event", "LIFE is up")
+        XCTAssertTrue(up(), "LIFE is up")
+    }
+
+    /// `kind` named `title` through RED's creator; BLUE saves it.
+    private func mint(_ kind: String, _ title: String) {
+        let card = app.beginCreating(kind)
+        let name = card.descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 10), "the \(kind)'s NAME field")
+        name.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.typeText(title)
+        XCTAssertTrue(app.buttons["shell-life"].label.hasPrefix("Save"), "BLUE saves")
+        app.buttons["shell-life"].tap()
+        XCTAssertTrue(creator(kind).waitForNonExistence(timeout: 10), "the creator closes on save")
     }
 
     private func shoot(_ name: String) {
