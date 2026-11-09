@@ -41,22 +41,7 @@ pub fn seal(
     dest_tag: &[u8; 32],
     conn_secret: &[u8; 32],
 ) -> Result<Vec<u8>, CoreError> {
-    let key = derive_key(conn_secret, dest_tag);
-    let cipher = XChaCha20Poly1305::new((&key).into());
-    let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
-    let ct = cipher
-        .encrypt(
-            &nonce,
-            Payload {
-                msg: inner_mls,
-                aad: &dest_tag[..],
-            },
-        )
-        .map_err(|e| CoreError::Seal(format!("seal encrypt: {e}")))?;
-    let mut out = Vec::with_capacity(NONCE_LEN + ct.len());
-    out.extend_from_slice(nonce.as_slice());
-    out.extend_from_slice(&ct);
-    Ok(out)
+    seal_with_key(inner_mls, &derive_key(conn_secret, dest_tag), &dest_tag[..])
 }
 
 /// Open a sealed blob -> inner MLS bytes. Loud on a wrong `conn_secret`/tamper.
@@ -65,6 +50,26 @@ pub fn open(
     dest_tag: &[u8; 32],
     conn_secret: &[u8; 32],
 ) -> Result<Vec<u8>, CoreError> {
+    open_with_key(blob, &derive_key(conn_secret, dest_tag), &dest_tag[..])
+}
+
+/// The construction under [`seal`], keyed directly: XChaCha20-Poly1305, a random 24-byte
+/// nonce, `aad` bound in. Returns `nonce(24) || ct`. A detached media object is this under its
+/// own content key, with its object key as the AAD (`media.detached`, #56).
+pub fn seal_with_key(msg: &[u8], key: &[u8; 32], aad: &[u8]) -> Result<Vec<u8>, CoreError> {
+    let cipher = XChaCha20Poly1305::new(key.into());
+    let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
+    let ct = cipher
+        .encrypt(&nonce, Payload { msg, aad })
+        .map_err(|e| CoreError::Seal(format!("seal encrypt: {e}")))?;
+    let mut out = Vec::with_capacity(NONCE_LEN + ct.len());
+    out.extend_from_slice(nonce.as_slice());
+    out.extend_from_slice(&ct);
+    Ok(out)
+}
+
+/// Open what [`seal_with_key`] sealed. Loud on a wrong key, a different `aad`, or a changed byte.
+pub fn open_with_key(blob: &[u8], key: &[u8; 32], aad: &[u8]) -> Result<Vec<u8>, CoreError> {
     if blob.len() < NONCE_LEN {
         return Err(CoreError::Seal(format!(
             "sealed blob too short: {} bytes",
@@ -72,23 +77,29 @@ pub fn open(
         )));
     }
     let (nonce_bytes, ct) = blob.split_at(NONCE_LEN);
-    let key = derive_key(conn_secret, dest_tag);
-    let cipher = XChaCha20Poly1305::new((&key).into());
-    let nonce = XNonce::from_slice(nonce_bytes);
-    cipher
-        .decrypt(
-            nonce,
-            Payload {
-                msg: ct,
-                aad: &dest_tag[..],
-            },
-        )
+    XChaCha20Poly1305::new(key.into())
+        .decrypt(XNonce::from_slice(nonce_bytes), Payload { msg: ct, aad })
         .map_err(|_| CoreError::Seal("seal open failed (wrong key or tampered)".into()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A media object (`media.detached`): opens under its own key and AAD, and under nothing
+    /// else, and not after one byte changes.
+    #[test]
+    fn a_keyed_seal_opens_only_under_its_key_and_aad() {
+        let (k, aad, msg) = ([7u8; 32], b"the object key".as_slice(), b"a photo's bytes".as_slice());
+        let blob = seal_with_key(msg, &k, aad).unwrap();
+        assert_eq!(blob.len(), NONCE_LEN + msg.len() + 16);
+        assert_eq!(open_with_key(&blob, &k, aad).unwrap(), msg);
+        assert!(open_with_key(&blob, &[8u8; 32], aad).is_err(), "another key");
+        assert!(open_with_key(&blob, &k, b"another object").is_err(), "another object key");
+        let mut flipped = blob.clone();
+        flipped[NONCE_LEN] ^= 1;
+        assert!(open_with_key(&flipped, &k, aad).is_err(), "a changed byte");
+    }
 
     #[test]
     fn seal_open_roundtrip() {
