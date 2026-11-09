@@ -184,3 +184,76 @@ async fn a_relay_that_does_not_have_it_is_caught_only_by_the_fetch() {
          would be told it can recover something it cannot: {r:?}"
     );
 }
+
+/// A relay in front of `relay` that drops the connection at the first subscribe after a
+/// commit-flagged publish: the walk after a lost index, failing.
+async fn cut_at_the_walk(relay: &str) -> String {
+    use futures_util::{SinkExt, StreamExt};
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = l.local_addr().unwrap();
+    let upstream = relay.to_string();
+    tokio::spawn(async move {
+        while let Ok((tcp, _)) = l.accept().await {
+            let upstream = upstream.clone();
+            tokio::spawn(async move {
+                let Ok(client) = tokio_tungstenite::accept_async(tcp).await else { return };
+                let Ok((server, _)) = tokio_tungstenite::connect_async(upstream.as_str()).await else { return };
+                let ((mut c_tx, mut c_rx), (mut s_tx, mut s_rx)) = (client.split(), server.split());
+                let up = async {
+                    let mut committed = false;
+                    while let Some(Ok(m)) = c_rx.next().await {
+                        match m.to_text().ok().and_then(|t| pacific_wire::Frame::from_json(t).ok()) {
+                            Some(pacific_wire::Frame::Pub { commit: true, .. }) => committed = true,
+                            Some(pacific_wire::Frame::Sub { .. }) if committed => return,
+                            _ => {}
+                        }
+                        if s_tx.send(m).await.is_err() {
+                            return;
+                        }
+                    }
+                };
+                let down = async {
+                    while let Some(Ok(m)) = s_rx.next().await {
+                        if c_tx.send(m).await.is_err() {
+                            return;
+                        }
+                    }
+                };
+                tokio::select! { _ = up => {}, _ = down => {} }
+            });
+        }
+    });
+    format!("ws://{addr}")
+}
+
+/// THE SPINE IS APPEND-ONLY, AND SO IS WHAT IS QUEUED FOR IT. The laptop takes the index the
+/// phone's entry was queued for; the phone's entry moves past it, after a walk to the end.
+/// A relay that fails in that walk leaves the phone's queue as it was, and the next drain
+/// appends it, with the laptop's entry known at the index it won.
+#[tokio::test]
+async fn a_relay_that_fails_while_an_index_is_lost_leaves_the_queue_whole() {
+    let h = Harness::people(&[("ana", &["phone", "laptop"])]).await;
+    let (phone, laptop) = (h.device("ana", "phone"), h.device("ana", "laptop"));
+    h.settle().await;
+
+    let thursday = h.node(phone).object_new("forum", "thursday").expect("the phone mints");
+    h.node(laptop).object_new("forum", "friday").expect("the laptop mints");
+    let won = h.node(laptop).pending_spine_entries().unwrap()[0].0;
+    h.node(laptop).drain_spine().await.expect("the laptop appends first");
+
+    let mut n = h.node(phone);
+    let queued = n.dir.pending_spine(0).unwrap();
+    assert_eq!(queued.first().map(|q| q.0), Some(won), "the phone's entry was queued for the index the laptop won");
+
+    n.set_routes(Routes::parse(&cut_at_the_walk(&h.relay).await)).unwrap();
+    assert!(n.drain_spine().await.is_err(), "the walk failed");
+    assert_eq!(n.dir.pending_spine(0).unwrap(), queued, "every queued entry, at its index, as it was");
+
+    n.set_routes(Routes::parse(&h.relay)).unwrap();
+    n.drain_spine().await.expect("the next drain appends it");
+    assert!(n.dir.pending_spine(0).unwrap().is_empty(), "nothing still owed");
+    assert!(n.recoverability(&thursday).unwrap().named, "the phone's object is named on the spine");
+    let laptops = h.node(laptop).dir.delivered_spine(0).unwrap().into_iter().find(|e| e.0 == won);
+    let phones = h.node(phone).dir.delivered_spine(0).unwrap().into_iter().find(|e| e.0 == won);
+    assert_eq!(phones, laptops, "the phone holds the laptop's entry at the index it won");
+}
