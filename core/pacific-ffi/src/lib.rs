@@ -826,6 +826,69 @@ fn attach(input: &MediaInput) -> Result<pacific_media::MediaRef, FfiError> {
     Ok(out.media)
 }
 
+/// An object's exterior as it reached me (`contact.publishExterior`): an object I am not in.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct ExteriorRow {
+    pub object: String,
+    /// The ICD kind name.
+    pub kind: String,
+    pub name: String,
+    pub description: String,
+    /// The owner's identity key, hex.
+    pub owner: String,
+    /// Who carried it to me, hex.
+    pub via: String,
+    /// My distance from its roster: 1, a connection is inside.
+    pub hops: u32,
+    /// Whether it has a door to knock at.
+    pub door: bool,
+    /// Whether I have asked to join and not withdrawn.
+    pub requested: bool,
+}
+
+impl ExteriorRow {
+    fn of(e: pacific_core::node::HeldExterior) -> Self {
+        let c = e.carried;
+        ExteriorRow {
+            object: c.object,
+            kind: c.kind.name().to_string(),
+            name: c.exterior.name,
+            description: c.exterior.description,
+            owner: hex::encode(c.owner),
+            via: hex::encode(c.via),
+            hops: c.hops,
+            door: c.exterior.door.is_some(),
+            requested: e.requested,
+        }
+    }
+}
+
+/// One of my objects' exteriors, as I wrote it.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct MyExterior {
+    pub name: String,
+    pub description: String,
+    /// "" no door, "review" or "auto".
+    pub door: String,
+    /// "private" | "connections" | "network".
+    pub visibility: String,
+}
+
+/// A request waiting at one of my doors.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct RequestRow {
+    pub object: String,
+    pub kind: String,
+    /// The request's id, hex.
+    pub request: String,
+    /// The asker's identity key, hex.
+    pub asker: String,
+    pub asker_name: String,
+    pub note: String,
+    /// Unix ms.
+    pub at: i64,
+}
+
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct ListingRow {
     /// Identity pubkey (hex) of whoever created the listing.
@@ -3251,6 +3314,82 @@ impl Core {
     /// Runs on EVERY member, not just the owner. Returns what anyone was admitted to.
     pub fn place_answer_doors(&self) -> Result<Vec<String>, FfiError> {
         Ok(block_on(self.write()?.answer_all_doors())?)
+    }
+
+    // ---- THE EXTERIOR (#76, ICD 2.6.0) ----
+
+    /// The exteriors that reached me through my connections: objects I am not in, each with
+    /// whether I have asked to join.
+    pub fn exteriors(&self) -> Result<Vec<ExteriorRow>, FfiError> {
+        Ok(self.read()?.exteriors()?.into_iter().map(ExteriorRow::of).collect())
+    }
+
+    /// One object of mine's exterior, as its owner wrote it; None until one is written.
+    pub fn object_exterior(&self, object_id: String) -> Result<Option<MyExterior>, FfiError> {
+        let Some((_, st, vis)) = self.read()?.exterior_state(&object_id)? else { return Ok(None) };
+        Ok(st.exterior.map(|e| MyExterior {
+            name: e.name,
+            description: e.description,
+            door: st.door.map(|d| d.mode.as_str().to_string()).unwrap_or_default(),
+            visibility: vis.as_str().to_string(),
+        }))
+    }
+
+    /// ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
+    /// "connections" | "network") and, when `name` is not empty, the exterior: a description
+    /// and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+    /// once. Returns how many ops were written. The exterior's still is by reference only
+    /// (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
+    pub fn set_outside(
+        &self,
+        object_id: String,
+        visibility: String,
+        name: String,
+        description: String,
+        door: String,
+    ) -> Result<u32, FfiError> {
+        let visibility = match visibility.as_str() {
+            "" => None,
+            v => Some(pacific_core::visibility::Visibility::parse(v).map_err(|_| {
+                FfiError::Core("visibility must be \"private\" | \"connections\" | \"network\"".into())
+            })?),
+        };
+        let draft = if name.is_empty() {
+            None
+        } else {
+            let door = match door.as_str() {
+                "" => None,
+                m => Some(pacific_core::exterior::DoorMode::parse(m).ok_or_else(|| FfiError::Core("door must be \"\" | \"review\" | \"auto\"".into()))?),
+            };
+            Some(pacific_core::node::ExteriorDraft { name, description, photo: None, door })
+        };
+        Ok(block_on(self.write()?.set_outside(&object_id, visibility, draft.as_ref()))? as u32)
+    }
+
+    /// Ask to join an object whose exterior reached me. Returns the request's id.
+    pub fn request_join(&self, object_id: String, note: String) -> Result<String, FfiError> {
+        Ok(block_on(self.write()?.request_join(&object_id, &note))?)
+    }
+
+    /// Withdraw my ask to join.
+    pub fn withdraw_request(&self, object_id: String) -> Result<(), FfiError> {
+        Ok(block_on(self.write()?.withdraw_request(&object_id))?)
+    }
+
+    /// The requests waiting for me: at the review doors of objects I own or admit to, from what
+    /// this device's syncs have drained. No relay round trip.
+    pub fn pending_requests(&self) -> Result<Vec<RequestRow>, FfiError> {
+        Ok(self
+            .read()?
+            .pending_requests()?
+            .into_iter()
+            .map(|r| RequestRow { object: r.object, kind: r.kind, request: r.request, asker: hex::encode(r.asker), asker_name: r.asker_name, note: r.note, at: r.at as i64 })
+            .collect())
+    }
+
+    /// Admit, or decline, one request. A decline is not told to the asker.
+    pub fn decide_request(&self, object_id: String, request: String, admit: bool) -> Result<(), FfiError> {
+        Ok(block_on(self.write()?.decide_request(&object_id, &request, admit))?)
     }
 
     // -- Anchoring a group to a place (the agreement) -------------------------
