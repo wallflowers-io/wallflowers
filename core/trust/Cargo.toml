@@ -1,0 +1,8 @@
+[package]
+name = "trust"
+description = "Whose key is whose: the checks that bind a public key to a person. Pure: no I/O, no state."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

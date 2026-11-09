@@ -6,6 +6,7 @@ resolver = "2"
 members = [
   # core: the protocol
   "core/pacific-wire",
+  "core/trust",
   "core/pacific-core",
   "core/pacific-ffi",
   "core/uniffi-bindgen",
@@ -49,6 +50,7 @@ license = "AGPL-3.0-or-later"
 [workspace.dependencies]
 pacific-wire = { path = "core/pacific-wire" }
 pacific-core = { path = "core/pacific-core" }
+trust = { path = "core/trust" }
 # The deploy stamp every shipped plane compiles in; arc/hosting/deploy-arc.sh fills its env.
 arc-build = { path = "arc/lib/arc-build" }
 # MLS (sync — do NOT set --cfg mls_build_async). rustcrypto = no system OpenSSL dep.
