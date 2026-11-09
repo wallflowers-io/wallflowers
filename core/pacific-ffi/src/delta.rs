@@ -106,6 +106,12 @@ pub mod op {
     pub const GROUP_EDIT_FACE: u32 = pacific_core::group::OP_EDIT_FACE;
     pub const GROUP_PUBLISH_LISTING: u32 = pacific_core::group::OP_PUBLISH_LISTING;
     pub const GROUP_REMOVE_LISTING: u32 = pacific_core::group::OP_REMOVE_LISTING;
+    pub const GROUP_SET_REQUEST: u32 = pacific_core::group::OP_SET_REQUEST;
+    // The visibility and exterior facets (ICD 2.6.0), on every kind with an exterior.
+    pub const BASE_SET_VISIBILITY: u32 = pacific_core::visibility::OP_SET_VISIBILITY;
+    pub const BASE_SET_EXTERIOR: u32 = pacific_core::exterior::OP_SET_EXTERIOR;
+    pub const BASE_SET_DOOR: u32 = pacific_core::exterior::OP_SET_DOOR;
+    pub const BASE_DECIDE_REQUEST: u32 = pacific_core::exterior::OP_DECIDE_REQUEST;
     pub const GROUP_SET_CLAIM_ISSUER: u32 = pacific_core::group::OP_SET_CLAIM_ISSUER;
     pub const GROUP_CLEAR_CLAIM_ISSUER: u32 = pacific_core::group::OP_CLEAR_CLAIM_ISSUER;
     pub const GROUP_RSVP: u32 = pacific_core::group::OP_RSVP;
@@ -685,6 +691,28 @@ pub fn delta_catalog() -> Vec<OpSpec> {
         // in `Kind`: adding one is a UniFFI surface change and neither has an iOS
         // caller yet. `every_core_kind_is_surfaced_or_declined` records that
         // decision, and this catalogue surfaces what Swift can reach.
+        spec(Group, op::GROUP_SET_REQUEST, "group.setRequest", Owner, Sequenced, true,
+             &["object", "kind", "owner", "request", "at", "withdrawn"],
+             "on MY OWN identity record: I asked to join an object (#76), or withdrew the ask (withdrawn=1); the sibling of group.joinedObject, so a pending ask survives a new device. A decline is silent: nothing is written for it"),
+    ]
+    .into_iter()
+    .chain([Group, Forum, Project].into_iter().flat_map(outside_specs))
+    .collect()
+}
+/// The visibility and exterior facets (ICD 2.6.0, #76), the same on every kind that carries them.
+fn outside_specs(kind: Kind) -> [OpSpec; 4] {
+    use Authority::{Owner, OwnerOrAdmitter};
+    use Fold::{Commutative, Sequenced};
+    [
+        spec(kind, op::BASE_SET_VISIBILITY, "base.setVisibility", Owner, Sequenced, true,
+             &["visibility"], "visibility ∈ {private,connections,network}: how far the object's existence, and its exterior, may travel (contact.publishExterior: connections one hop, network two)"),
+        spec(kind, op::BASE_SET_EXTERIOR, "base.setExterior", Owner, Sequenced, true,
+             &["name", "description", "photo", "photoMime", "photoVia", "photoKind", "photoDigest", "photoBytes", "photoSession", "photoW", "photoH", "photoMs", "photoKey", "photoSecret", "door"],
+             "what a non-member holds: a name, a description, a still BY REFERENCE only (detached, O-79; inline refused), and the door's X25519 public key (64 hex). Carried verbatim and owner-signed by contact.publishExterior"),
+        spec(kind, op::BASE_SET_DOOR, "base.setDoor", Owner, Sequenced, true,
+             &["key", "mode"], "the door's X25519 private key (64 hex; empty closes it), held in the log so every member can open a request (mls.door); NEVER projected. mode ∈ {review,auto}"),
+        spec(kind, op::BASE_DECIDE_REQUEST, "base.decideRequest", OwnerOrAdmitter, Commutative, true,
+             &["request", "asker", "decision", "gen"], "decision ∈ {admit,decline} on one request at a review door; the first per request holds. An admission is also the MLS Add; a decline is not told to the asker"),
     ]
 }
 
