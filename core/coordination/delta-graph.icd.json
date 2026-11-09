@@ -1085,6 +1085,172 @@
       "view": {
         "bundles": "{<member key>: [{kp_id, bundle, not_after}]}: live offers of members on the roster only"
       }
+    },
+    "media": {
+      "summary": "an object's icon and banner: its face in a list and its wall on its page",
+      "note": "Band 0xF00F. Ruled 9 Nov 2026 (#112): every kind's media is detached (#56), and none of the per-kind slots can carry a reference (post.setMedia, group.setCover, thing.setPhoto and group.setProfile's card take inline base64 only), so the mint writes here. Where a slot of this facet has been written it wins over the kind's own slot, which stays readable for objects made before it. Considered and ruled out: a MediaRef added to each kind's own op (five shapes, four readers); event.setBanner on every kind (one kind's op); host.setMedia (a Host's named slots).",
+      "on": [
+        "group",
+        "event",
+        "thing",
+        "post"
+      ],
+      "ops": {
+        "base.setIcon": {
+          "op": 4027514880,
+          "ego": "owner|role:admin",
+          "fold": "commutative",
+          "summary": "The object's icon, one still, as its own Delta: one register, LWW by (gen, author); an empty ref clears it. Counts from the owner, or from a roster member holding admin in this object's own roles.",
+          "args": {
+            "icon": {
+              "type": "string",
+              "summary": "a still (image mimes), square: a MediaRef flattened under the prefix `icon` (MediaRef::to_args); present and broken is refused; empty clears. Inline data at most 150000 base64 characters: the item's own Delta must fit the carriage ceiling (MAX_DELTA_ENVELOPE_BYTES); detached (O-79) for more: the Delta then carries the digest and keys, not the bytes",
+              "maxLength": 150000,
+              "mediaRef": {
+                "prefix": "icon",
+                "suffixes": [
+                  "",
+                  "Mime",
+                  "Via",
+                  "Kind",
+                  "Digest",
+                  "Bytes",
+                  "Session",
+                  "W",
+                  "H",
+                  "Ms",
+                  "Key",
+                  "Secret"
+                ],
+                "source": "pacific-media MediaRef::to_args, as forum.post's `media`"
+              }
+            },
+            "iconMime": {
+              "type": "string"
+            },
+            "iconVia": {
+              "type": "string",
+              "vocabulary": {
+                "inline": "the bytes ride in the Delta",
+                "detached": "the Delta carries a digest, the object key and the content key; the bytes are fetched from the relay's blob store (O-79)"
+              }
+            },
+            "iconKind": {
+              "type": "string"
+            },
+            "iconDigest": {
+              "type": "string"
+            },
+            "iconBytes": {
+              "type": "integer"
+            },
+            "iconSession": {
+              "type": "string"
+            },
+            "iconW": {
+              "type": "integer"
+            },
+            "iconH": {
+              "type": "integer"
+            },
+            "iconMs": {
+              "type": "integer"
+            },
+            "iconKey": {
+              "type": "string",
+              "summary": "with via=detached: the bytes' object key in the relay's blob store (O-79); absent inline"
+            },
+            "iconSecret": {
+              "type": "string",
+              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this event's log, the Lamport generation; the highest (gen, author) that counts wins"
+            }
+          }
+        },
+        "base.setBanner": {
+          "op": 4027514881,
+          "ego": "owner|role:admin",
+          "fold": "commutative",
+          "summary": "The object's banner, one still, as its own Delta: one register, LWW by (gen, author); an empty ref clears it. Counts from the owner, or from a roster member holding admin in this object's own roles.",
+          "args": {
+            "banner": {
+              "type": "string",
+              "summary": "a still (image mimes), wide: a MediaRef flattened under the prefix `banner` (MediaRef::to_args); present and broken is refused; empty clears. Inline data at most 150000 base64 characters: the item's own Delta must fit the carriage ceiling (MAX_DELTA_ENVELOPE_BYTES); detached (O-79) for more: the Delta then carries the digest and keys, not the bytes",
+              "maxLength": 150000,
+              "mediaRef": {
+                "prefix": "banner",
+                "suffixes": [
+                  "",
+                  "Mime",
+                  "Via",
+                  "Kind",
+                  "Digest",
+                  "Bytes",
+                  "Session",
+                  "W",
+                  "H",
+                  "Ms",
+                  "Key",
+                  "Secret"
+                ],
+                "source": "pacific-media MediaRef::to_args, as forum.post's `media`"
+              }
+            },
+            "bannerMime": {
+              "type": "string"
+            },
+            "bannerVia": {
+              "type": "string",
+              "vocabulary": {
+                "inline": "the bytes ride in the Delta",
+                "detached": "the Delta carries a digest, the object key and the content key; the bytes are fetched from the relay's blob store (O-79)"
+              }
+            },
+            "bannerKind": {
+              "type": "string"
+            },
+            "bannerDigest": {
+              "type": "string"
+            },
+            "bannerBytes": {
+              "type": "integer"
+            },
+            "bannerSession": {
+              "type": "string"
+            },
+            "bannerW": {
+              "type": "integer"
+            },
+            "bannerH": {
+              "type": "integer"
+            },
+            "bannerMs": {
+              "type": "integer"
+            },
+            "bannerKey": {
+              "type": "string",
+              "summary": "with via=detached: the bytes' object key in the relay's blob store (O-79); absent inline"
+            },
+            "bannerSecret": {
+              "type": "string",
+              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this event's log, the Lamport generation; the highest (gen, author) that counts wins"
+            }
+          }
+        }
+      },
+      "view": {
+        "icon": "the icon's MediaRef view (event::media_view), or absent",
+        "banner": "the banner's MediaRef view, or absent"
+      }
     }
   },
   "kinds": {

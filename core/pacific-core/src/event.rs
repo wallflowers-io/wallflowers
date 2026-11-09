@@ -263,6 +263,10 @@ pub struct VenueRef {
 /// The compiled read-side state of an Event.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct EventState {
+    /// The base MEDIA facet's icon and banner (`crate::object_media`), winning over the
+    /// kind's own slots where written.
+    #[serde(default)]
+    pub base_media: crate::object_media::Media,
     /// THE PARTS THIS OBJECT IS MADE OF, keyed by the part's object id — its comments
     /// section is one, a real Forum GroupObject with its own roster and not a field
     /// on this one. See `crate::parts`.
@@ -578,6 +582,20 @@ const OPS: &[OpDecl] = &[
         authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
         commutativity: Commutativity::Commutative,
     },
+    // The base MEDIA facet, spliced (`crate::object_media`, #112): the icon and banner,
+    // detached; `media_ops_are_spliced_verbatim` pins them to `MEDIA_OPS`.
+    OpDecl {
+        op_id: crate::object_media::OP_SET_ICON,
+        name: "base.setIcon",
+        authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
+        commutativity: Commutativity::Commutative,
+    },
+    OpDecl {
+        op_id: crate::object_media::OP_SET_BANNER,
+        name: "base.setBanner",
+        authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
+        commutativity: Commutativity::Commutative,
+    },
 ];
 
 impl ObjectType for EventType {
@@ -593,6 +611,9 @@ impl ObjectType for EventType {
     }
 
     fn reduce(state: &mut Self::State, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::object_media::is_media_op(op.op_id) {
+            return crate::object_media::reduce_media(&mut state.base_media, Some(&state.member_roles), op);
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }

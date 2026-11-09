@@ -131,6 +131,10 @@ pub const MAX_LINK_CHARS: usize = 2_048;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostState {
+    /// The base MEDIA facet's icon and banner (`crate::object_media`), winning over the
+    /// kind's own slots where written.
+    #[serde(default)]
+    pub base_media: crate::object_media::Media,
     /// Which shape this is. `#[serde(default)]` on the struct's
     /// derive covers a state folded before the field existed.
     pub form: Form,
@@ -302,6 +306,20 @@ static OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base MEDIA facet, spliced (`crate::object_media`, #112): the icon and banner,
+    // detached; `media_ops_are_spliced_verbatim` pins them to `MEDIA_OPS`.
+    OpDecl {
+        op_id: crate::object_media::OP_SET_ICON,
+        name: "base.setIcon",
+        authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
+        commutativity: Commutativity::Commutative,
+    },
+    OpDecl {
+        op_id: crate::object_media::OP_SET_BANNER,
+        name: "base.setBanner",
+        authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
+        commutativity: Commutativity::Commutative,
+    },
 ];
 
 impl ObjectType for PostType {
@@ -313,6 +331,9 @@ impl ObjectType for PostType {
     }
 
     fn reduce(state: &mut Self::State, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::object_media::is_media_op(op.op_id) {
+            return crate::object_media::reduce_media(&mut state.base_media, None, op);
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }

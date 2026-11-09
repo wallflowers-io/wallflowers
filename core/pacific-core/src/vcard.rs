@@ -566,6 +566,7 @@ mod tests {
     fn sample_state() -> GroupState {
         GroupState {
             face: Default::default(),
+            base_media: Default::default(),
             rsvps: Default::default(),
             about: Default::default(),
             questions: Default::default(),

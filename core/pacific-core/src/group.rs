@@ -587,6 +587,10 @@ pub struct ClaimPick {
 /// NOTE: member SET is NOT here — that is the MLS roster; this holds the overlay.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GroupState {
+    /// The base MEDIA facet's icon and banner (`crate::object_media`), winning over the
+    /// kind's own slots where written.
+    #[serde(default)]
+    pub base_media: crate::object_media::Media,
     pub display_name: String,
     pub shape: GroupShape,
     pub presence: Presence,
@@ -1129,6 +1133,20 @@ static GROUP_OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base MEDIA facet, spliced (`crate::object_media`, #112): the icon and banner,
+    // detached; `media_ops_are_spliced_verbatim` pins them to `MEDIA_OPS`.
+    OpDecl {
+        op_id: crate::object_media::OP_SET_ICON,
+        name: "base.setIcon",
+        authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
+        commutativity: Commutativity::Commutative,
+    },
+    OpDecl {
+        op_id: crate::object_media::OP_SET_BANNER,
+        name: "base.setBanner",
+        authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
+        commutativity: Commutativity::Commutative,
+    },
 ];
 
 /// A face document as group.setFace and group.editFace both take it. ONE document,
@@ -1170,6 +1188,9 @@ impl ObjectType for GroupType {
     }
 
     fn reduce(state: &mut GroupState, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::object_media::is_media_op(op.op_id) {
+            return crate::object_media::reduce_media(&mut state.base_media, Some(&state.member_roles), op);
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }
