@@ -37,12 +37,18 @@ enum EventSeeder {
         func hour(_ h: Int) -> Int64 {
             Int64((cal.date(byAdding: .hour, value: h, to: today) ?? today).timeIntervalSince1970 * 1000)
         }
+        // The two real nights are dated from NOW, not a time of day: at fixed hours an
+        // evening run found them past and their suites red (a clock flake, as #79).
+        let now = Date()
+        func fromNow(_ h: Int) -> Int64 {
+            Int64(now.addingTimeInterval(TimeInterval(h * 3600)).timeIntervalSince1970 * 1000)
+        }
 
         let beach = "BEACHCRIMES — Rooftop Day Party"
         if !existing.contains(beach) {
             if let id = core.mint(kind: "event", draft: draft(
                     beach, descriptor: "City Graffiti · Truthlive · All Day All Night",
-                    startMs: hour(13), endMs: hour(18), venue: "Hotel VIA Rooftop, SF",
+                    startMs: fromNow(-1), endMs: fromNow(4), venue: "Hotel VIA Rooftop, SF",
                     banner: poster("beachcrimes"))) {
                 // PRICED through the real pipe: the fold requires acct + delegate iff
                 // priced, so the seed names THIS device's own identity as its fulfilment
@@ -56,12 +62,11 @@ enum EventSeeder {
             }
         }
 
-        // A guaranteed-FUTURE row for the feed suites: both posters above are
-        // seeded at TODAY's hours, so an evening run finds them already past and
-        // the feed honestly empty — flaky by clock. This one lands tomorrow
-        // 19:00 and is titled by that date, so each day's first seeded run puts
-        // exactly one future event on the feed at ANY hour (idempotent-by-title,
-        // like the rest of the seeder).
+        // A guaranteed-FUTURE row for the feed suites: the posters above are dated
+        // from the run that FIRST seeds them (idempotent by title), so a sim seeded
+        // yesterday holds them past. This one lands tomorrow 19:00 and is titled by
+        // that date, so each day's first seeded run puts exactly one future event on
+        // the feed at ANY hour.
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
         let qaDay = df.string(from: cal.date(byAdding: .day, value: 1, to: today) ?? today)
@@ -88,7 +93,7 @@ enum EventSeeder {
         if !existing.contains(upward) {
             if let id = core.mint(kind: "event", draft: draft(
                     upward, descriptor: "Apex Martin · Cloopez · Joey Trip · 21+",
-                    startMs: hour(6), endMs: hour(11), venue: "Monroe, 473 Broadway, SF",
+                    startMs: fromNow(2), endMs: fromNow(7), venue: "Monroe, 473 Broadway, SF",
                     banner: poster("upward"))) {
                 _ = core.setEventTickets(id, priceCents: 0, currency: "usd", capacity: 120)
                 NSLog("[seed-events] %@ id=%@ err=%@", upward, id, core.error ?? "none")

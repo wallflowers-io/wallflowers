@@ -20,6 +20,7 @@ final class EventTicketingUITests: XCTestCase {
         // and Art Systems' live reference rows must stay out: with the opt-outs the
         // page behaves exactly as it did before those Systems existed.
         app.launchArguments += ["-pacificNoMusic", "-pacificNoArt"]
+        app.launchEnvironment["PACIFIC_IDENTITY_NAME"] = "QA"
         addUIInterruptionMonitor(withDescription: "system-alert") { [weak self] _ in
             self?.tapSpringboard(["Allow", "OK", "Don’t Allow", "Don't Allow"]) ?? false
         }
@@ -32,6 +33,12 @@ final class EventTicketingUITests: XCTestCase {
     private func openEventsPage() {
         app.launch()
         _ = tapSpringboard(["Allow", "Don’t Allow", "Don't Allow"], waitFor: 4)
+        // A fresh sim opens on the welcome, not the shell.
+        let welcome = app.textFields["welcome-name"]
+        if welcome.waitForExistence(timeout: 3) {
+            welcome.tap(); welcome.typeText("QA")
+            app.buttons["welcome-begin"].tap()
+        }
         let life = app.buttons["shell-life"]
         XCTAssertTrue(life.waitForExistence(timeout: 20), "LIFE disc")
         life.tap()
