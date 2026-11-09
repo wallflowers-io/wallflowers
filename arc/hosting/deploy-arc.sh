@@ -160,6 +160,8 @@ REQUIRED_ENV="ARC_NAME ARC_CLAIM_KEYS PACIFIC_STATE_DIR
   ARC_RELAY_UPSTREAM ARC_MEMBERSHIP_UPSTREAM ARC_BOXOFFICE_UPSTREAM ARC_WAKER_UPSTREAM
   RELAY_BIND RELAY_STORE ARC_RELAY_URL RELAY_MAX_STORE_BYTES RELAY_MAX_BLOB_BYTES
   RELAY_R2_ENDPOINT RELAY_R2_BUCKET RELAY_R2_ACCESS_KEY_ID RELAY_R2_SECRET_ACCESS_KEY RELAY_R2_REGION"
+# Production's alarm: without a DSN the relay's store and disk alarms reach nobody (8 Nov 2026).
+[ -n "${ARC_BOX:-}" ] || REQUIRED_ENV="$REQUIRED_ENV SENTRY_DSN SENTRY_ENVIRONMENT"
 # The names of REQUIRED_ENV the box's arc.env leaves unset or empty. Read on the box by root;
 # only names come back. ARC_ENV_PATH only so this can run against a scratch file.
 env_unset() {
@@ -279,6 +281,7 @@ setup() {
     $SCP "/tmp/arc-$u.service" "$BOX:/tmp/$u.service" || die "scp $u"
   done
   $SCP "$envf" "$BOX:/tmp/arc.env" || die "scp env"
+  $SCP -r "$ARC/hosting/box" "$BOX:/tmp/arc-box" || die "scp box"
   # The env file is the operator's once it exists: never overwritten.
   $SSHC "$BOX" "set -e
     sudo mkdir -p /opt/arc/bin /opt/arc/state /etc/arc
@@ -286,6 +289,13 @@ setup() {
     sudo chown $user /opt/arc && sudo chown -R $user /opt/arc/bin /opt/arc/state
     [ -f /etc/arc/arc.env ] || sudo install -m 0640 -g \$(id -gn $user) /tmp/arc.env /etc/arc/arc.env
     for u in $UNITS; do sudo install -m 0644 /tmp/\$u.service /etc/systemd/system/\$u.service; done
+    # Logs are capped and never carry a room (hosting/box).
+    sudo install -m 0644 /tmp/arc-box/logrotate-rsyslog /etc/logrotate.d/rsyslog
+    for d in logrotate.timer.d arc-node.service.d; do
+      sudo install -D -m 0644 -t /etc/systemd/system/\$d /tmp/arc-box/\$d/*.conf; done
+    sudo install -D -m 0644 -t /etc/systemd/journald.conf.d /tmp/arc-box/journald.conf.d/*.conf
+    rm -rf /tmp/arc-box
+    sudo systemctl restart systemd-journald
     sudo systemctl daemon-reload
     sudo systemctl enable $UNITS >/dev/null 2>&1" || die "setup failed"
   note "the units start at the first deploy, with the binaries"

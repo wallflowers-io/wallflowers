@@ -28,6 +28,8 @@ percent-encoding = "2.3"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 tokio-tungstenite = "0.24"
 futures-util = "0.3"
+# statvfs for the disk check in src/health.rs. Already in the lockfile.
+nix = { version = "0.31", default-features = false, features = ["fs"] }
 # `mailbox::Mailbox` is an async trait behind `dyn`, which native `async fn` in
 # traits cannot be (no object safety). Already a workspace dependency, so this adds
 # nothing to the lockfile.

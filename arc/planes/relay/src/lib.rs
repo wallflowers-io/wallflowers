@@ -37,13 +37,15 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::Message;
-use tracing::{error, info, info_span, warn, Instrument};
+use tracing::{debug, error, info, info_span, warn, Instrument};
 
 pub mod wire;
 /// THE storage interface. One trait; the relay talks to nothing else.
 pub mod mailbox;
 // What the relay accepts and how fast: the v1 admission posture (see its header).
 pub mod limits;
+
+pub mod health;
 pub use limits::Limits;
 /// The DURABLE mailbox behind the blind interface — persistence, retention, floors.
 pub mod store;
@@ -756,6 +758,8 @@ pub async fn serve_with_policy(
     );
     let hub: Arc<Mutex<Hub>> = Arc::new(Mutex::new(Hub::new(store, retention, limits).await));
     let metrics = hub.lock().await.metrics.clone();
+    let health = Arc::new(health::Health::new(limits.min_disk_free_pct));
+    tokio::spawn(health_loop(hub.clone(), metrics.clone(), health.clone()));
     // Object storage is read from the environment here rather than taken as a
     // parameter, so the existing `serve_with_store` signature (and every test that
     // drives it) is unchanged. Unset means media offload is simply off, and every
@@ -796,12 +800,20 @@ pub async fn serve_with_policy(
         let metrics = metrics.clone();
         let obs = obs.clone();
         let media = media.clone();
+        let health = health.clone();
         // One span per connection, carrying ONLY the opaque connection id.
         let span = info_span!("conn", id);
         tokio::spawn(
             async move {
+                let mut stream = stream;
+                // `GET /health` is answered here and is not a connection.
+                match health::answer(&mut stream, &health).await {
+                    Ok(false) => {}
+                    Ok(true) => return,
+                    Err(e) => return debug!(error = %e, "health request failed"),
+                }
                 metrics.active_conns.fetch_add(1, Ordering::Relaxed);
-                info!("connection opened");
+                debug!("connection opened");
                 emit(&obs, RelayEvent::ConnOpened { conn: id });
                 emit_snapshot(&obs, &hub, &metrics).await;
                 if let Err(e) =
@@ -809,9 +821,13 @@ pub async fn serve_with_policy(
                 {
                     // No client IP in logs — keep the relay blind even in telemetry.
                     // `e` is a ws/io error kind/message; it never embeds tag/blob data.
-                    warn!(error = %e, "connection closed with error");
+                    if hung_up(&*e) {
+                        debug!(error = %e, "connection closed with error");
+                    } else {
+                        warn!(error = %e, "connection closed with error");
+                    }
                 } else {
-                    info!("connection closed");
+                    debug!("connection closed");
                 }
                 hub.lock().await.conns.remove(&id);
                 metrics.active_conns.fetch_sub(1, Ordering::Relaxed);
@@ -841,6 +857,36 @@ async fn emit_snapshot(obs: &Option<Observer>, hub: &Arc<Mutex<Hub>>, metrics: &
 /// Emit an INFO `stats` event roughly every 30s with the operational counters and
 /// store cardinalities. This is the heartbeat of the ops plane; it contains no
 /// routing or content data. Also nudges the traffic snapshot when observed.
+/// Every minute: can the store take a write, has a publish failed in it, how much disk
+/// is free. Said at ERROR (Sentry) once an hour while bad, and once when it recovers.
+async fn health_loop(hub: Arc<Mutex<Hub>>, metrics: Arc<Metrics>, health: Arc<health::Health>) {
+    let dir = hub.lock().await.store.dir();
+    let mut errors = metrics.store_errors.load(Ordering::Relaxed);
+    let mut said: Option<Instant> = None;
+    let mut ticker = tokio::time::interval(Duration::from_secs(60));
+    loop {
+        ticker.tick().await;
+        let probe = hub.lock().await.store.probe().await;
+        let now = metrics.store_errors.load(Ordering::Relaxed);
+        let free = dir.as_deref().and_then(health::free_pct);
+        health.set(probe.is_ok() && now == errors, free);
+        errors = now;
+        if health.ok() {
+            if said.take().is_some() {
+                info!(disk_free_pct = free, "relay healthy again");
+            }
+        } else if said.map_or(true, |t| t.elapsed() >= Duration::from_secs(3600)) {
+            said = Some(Instant::now());
+            error!(
+                store = health.store(),
+                probe_error = probe.err().map(|e| e.to_string()),
+                disk_free_pct = free,
+                "RELAY UNHEALTHY — publishes may be refused until an operator acts"
+            );
+        }
+    }
+}
+
 async fn stats_loop(hub: Arc<Mutex<Hub>>, metrics: Arc<Metrics>, obs: Option<Observer>) {
     let mut ticker = tokio::time::interval(Duration::from_secs(30));
     // The first tick fires immediately; skip it so we don't log an all-zero line.
@@ -894,6 +940,16 @@ async fn evict_loop(hub: Arc<Mutex<Hub>>, retention: Retention) {
             );
         }
     }
+}
+
+/// A client that went away without a close frame: ordinary, not a fault. Per-connection
+/// lines at INFO and these at WARN filled wallflowers-01's disk (8 Nov 2026).
+fn hung_up(e: &(dyn std::error::Error + Send + Sync + 'static)) -> bool {
+    use tokio_tungstenite::tungstenite::{error::ProtocolError, Error};
+    matches!(
+        e.downcast_ref::<Error>(),
+        Some(Error::Protocol(ProtocolError::ResetWithoutClosingHandshake)) | Some(Error::ConnectionClosed)
+    )
 }
 
 async fn handle(
@@ -1028,9 +1084,9 @@ async fn handle(
                 };
                 drop(h);
                 // fanout + latency + verdict are pure ops metrics; `tag`/`blob`
-                // never reach this INFO event (they go ONLY to the traffic
+                // never reach this event (they go ONLY to the traffic
                 // observer, if any).
-                info!(
+                debug!(
                     fanout,
                     ok,
                     reason = reason.unwrap_or(""),
@@ -1067,7 +1123,7 @@ async fn handle(
                     None
                 };
                 drop(h);
-                info!(
+                debug!(
                     tag_count,
                     replayed,
                     gaps,

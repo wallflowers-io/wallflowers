@@ -4200,7 +4200,13 @@
   {
     "audience": "arc",
     "auth": "none",
-    "errors": [],
+    "errors": [
+      {
+        "source": "gateway",
+        "status": "SERVICE_UNAVAILABLE",
+        "words": null
+      }
+    ],
     "handler": "health",
     "limits": {},
     "method": "GET",
