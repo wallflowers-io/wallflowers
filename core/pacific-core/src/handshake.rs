@@ -1,55 +1,14 @@
-//! The pairing Contact Bundle — defined inside pacific-core (the on-disk pacific-wire
-//! has no bundle type). It carries the identity pubkey, a fresh one-time MLS
-//! KeyPackage, the intro mailbox tag, the display name, and the KERI next-key
-//! commitment, all signed by the Ed25519 stable key. Encoded as canonical CBOR,
-//! base64-wrapped for paste.
+//! The pairing handshake. The contact bundle and its checks are `trust::qr`'s; this
+//! module signs with the device's identity, and carries the intro payload a Welcome
+//! rides in.
 
 use serde::{Deserialize, Serialize};
+use trust::cbor::{bytes32 as serde_bytes_array32, bytes_vec as serde_bytes_vec};
 
-use crate::identity::{self, Identity};
+use crate::identity::Identity;
 use crate::CoreError;
 
-pub const PROTOCOL_VERSION: u32 = 1;
-
-/// A pasteable, self-signed pairing bundle.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ContactBundle {
-    pub v: u32,
-    #[serde(with = "serde_bytes_array32")]
-    pub identity_pk: [u8; 32],
-    #[serde(with = "serde_bytes_vec")]
-    pub key_package: Vec<u8>,
-    #[serde(with = "serde_bytes_array32")]
-    pub intro_tag: [u8; 32],
-    pub display_name: String,
-    #[serde(with = "serde_bytes_array32")]
-    pub next_key_commit: [u8; 32],
-    #[serde(with = "serde_bytes_array64")]
-    pub sig: [u8; 64],
-}
-
-impl ContactBundle {
-    /// The canonical bytes that the signature covers (sig field zeroed).
-    fn signing_bytes(&self) -> Result<Vec<u8>, CoreError> {
-        let unsigned = ContactBundle {
-            sig: [0u8; 64],
-            ..self.clone()
-        };
-        let mut buf = Vec::new();
-        ciborium::ser::into_writer(&unsigned, &mut buf)
-            .map_err(|e| CoreError::Handshake(format!("bundle encode: {e}")))?;
-        Ok(buf)
-    }
-
-    /// Base64 of the full (signed) CBOR bundle — the paste string.
-    pub fn encode(&self) -> Result<String, CoreError> {
-        use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-        let mut buf = Vec::new();
-        ciborium::ser::into_writer(self, &mut buf)
-            .map_err(|e| CoreError::Handshake(format!("bundle encode: {e}")))?;
-        Ok(B64.encode(buf))
-    }
-}
+pub use trust::qr::{ContactBundle, ERR_KEY_PACKAGE_IDENTITY, PROTOCOL_VERSION};
 
 /// The bootstrap payload sealed to a peer's intro mailbox: the scanner's identity
 /// pubkey (so the scannee learns who paired) + the MLS Welcome bytes.
@@ -126,145 +85,37 @@ pub fn build_bundle(
     intro_tag: [u8; 32],
     display_name: &str,
 ) -> Result<ContactBundle, CoreError> {
-    let mut b = ContactBundle {
-        v: PROTOCOL_VERSION,
-        identity_pk: id.identity_pk(),
+    Ok(trust::qr::build(
+        id.identity_pk(),
+        id.next_key_commit(),
         key_package,
         intro_tag,
-        display_name: display_name.to_string(),
-        next_key_commit: id.next_key_commit(),
-        sig: [0u8; 64],
-    };
-    b.sig = id.sign(&b.signing_bytes()?);
-    Ok(b)
+        display_name,
+        |m| id.sign(m),
+    )?)
 }
 
 /// Parse a pasted base64 bundle AND verify its self-signature. Loud on tamper.
 pub fn parse_and_verify(s: &str) -> Result<ContactBundle, CoreError> {
-    use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-    let raw = B64
-        .decode(s.trim())
-        .map_err(|e| CoreError::Handshake(format!("bundle base64: {e}")))?;
-    let b: ContactBundle = ciborium::de::from_reader(&raw[..])
-        .map_err(|e| CoreError::Handshake(format!("bundle decode: {e}")))?;
-    if b.v != PROTOCOL_VERSION {
-        return Err(CoreError::Handshake(format!(
-            "unsupported bundle version {}",
-            b.v
-        )));
-    }
-    identity::verify_sig(&b.identity_pk, &b.signing_bytes()?, &b.sig)?;
-    Ok(b)
+    Ok(trust::qr::parse_and_verify(s)?)
 }
 
-// ── THE KEY-PACKAGE BINDING CHECK ────────────────────────────────────────────
-//
-// WHAT [`parse_and_verify`] DOES NOT ATTEST, stated here because the omission is
-// invisible at the call site. Its signature check proves exactly one thing: the
-// holder of `identity_pk` signed these bundle bytes. It proves NOTHING about what
-// is inside `key_package` — the two are independent fields, and anyone holding
-// their OWN identity key can sign a perfectly well-formed bundle wrapped around
-// SOMEBODY ELSE'S credential. The leaf that add then grafts into the ratchet tree
-// carries the victim's identity pubkey as its BasicCredential id, and that is the
-// value `mls::roster_identities` and `mls::member_identity` read, which is the
-// value the commutative fold keys AUTHORSHIP and AUTHORITY on. The attacker does
-// not merely get in; they get in AS SOMEONE ELSE, with that person's authority,
-// and every delta they author is attributed to the victim for ever.
-//
-// BEFORE A1a THIS WAS COVERED BY ACCIDENT. `BasicIdentityProvider::identity()`
-// returns the credential verbatim, so mls-rs's tree-index uniqueness map refused
-// any leaf whose credential was already in the tree (`MlsError::DuplicateLeafData`)
-// — which happened to refuse the forgery whenever the victim was already a member.
-// `mls::PerLeafIdentity` returns credential ‖ signature_key PRECISELY so that two
-// leaves may share one credential (one person, two devices), and the accidental
-// refusal went with it — and it never covered the case where the victim was not
-// yet in the group at all. So the check has to be stated. Here it is stated, and
-// [`crate::node::Node::add_member_core`] is the one place it is enforced.
-
-/// The refusal a mis-bound key package earns. A named constant, not prose at the
-/// throw site, so callers and tests can recognise this specific refusal without
-/// matching on a sentence that may be reworded.
-pub const ERR_KEY_PACKAGE_IDENTITY: &str = "key package identity mismatch";
-
-/// The 32-byte BasicCredential identifier carried by the leaf inside an encoded
-/// KeyPackage — i.e. WHO this key package will become once it is added to a group.
-///
-/// Read WITHOUT joining anything: an `MlsMessage` carrying a KeyPackage exposes
-/// its `LeafNode`'s `SigningIdentity` directly, so the identity a bundle is
-/// offering can be inspected before a single byte of group state moves.
+/// WHO a key package will become once added: see [`trust::qr::key_package_cred_id`].
 #[cfg(feature = "mls")]
 pub fn key_package_cred_id(key_package: &[u8]) -> Result<[u8; 32], CoreError> {
-    use mls_rs::MlsMessage;
-    let bad = |what: &str| CoreError::Handshake(format!("{ERR_KEY_PACKAGE_IDENTITY}: {what}"));
-    let msg = MlsMessage::from_bytes(key_package)
-        .map_err(|e| bad(&format!("key package does not decode ({e})")))?;
-    let kp = msg
-        .as_key_package()
-        .ok_or_else(|| bad("bundle payload is not a KeyPackage"))?;
-    let basic = kp
-        .signing_identity()
-        .credential
-        .as_basic()
-        .ok_or_else(|| bad("key package credential is not a BasicCredential"))?;
-    basic
-        .identifier
-        .as_slice()
-        .try_into()
-        .map_err(|_| bad("key package cred_id is not 32 bytes"))
+    Ok(trust::qr::key_package_cred_id(key_package)?)
 }
 
-/// REFUSE unless the leaf inside `key_package` carries `identity_pk` as its
-/// BasicCredential identifier — the binding [`parse_and_verify`] leaves open.
-///
-/// Deliberately an EQUALITY on the credential and nothing else. It must NOT look
-/// at the leaf's signature key: one person's second device brings a fresh
-/// signature key and the SAME credential, which is exactly what A1a exists to
-/// permit. Credential equality admits every honest leaf — a first device, an Nth
-/// device, a stocked prekey — and refuses only the one thing no honest client ever
-/// produces: a key package speaking for somebody other than the bundle's signer.
+/// REFUSE a key package that speaks for someone other than `identity_pk`: see
+/// [`trust::qr::verify_key_package_identity`], which says why.
 #[cfg(feature = "mls")]
-pub fn verify_key_package_identity(
-    identity_pk: &[u8; 32],
-    key_package: &[u8],
-) -> Result<(), CoreError> {
-    let cred = key_package_cred_id(key_package)?;
-    if &cred != identity_pk {
-        return Err(CoreError::Handshake(format!(
-            "{ERR_KEY_PACKAGE_IDENTITY}: bundle is signed by {} but its key package \
-             speaks for {} — refusing to graft a leaf that would author as somebody \
-             other than the party that signed for it",
-            hex::encode(identity_pk),
-            hex::encode(cred),
-        )));
-    }
-    Ok(())
+pub fn verify_key_package_identity(identity_pk: &[u8; 32], key_package: &[u8]) -> Result<(), CoreError> {
+    Ok(trust::qr::verify_key_package_identity(identity_pk, key_package)?)
 }
 
-// --- serde helpers for fixed-width byte arrays as CBOR byte strings ----------
+// --- serde helpers ---------------------------------------------------------
 
-mod serde_bytes_vec {
-    use serde::{Deserialize, Deserializer, Serializer};
-    pub fn serialize<S: Serializer>(v: &[u8], s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_bytes(v)
-    }
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
-        let b = serde_bytes::ByteBuf::deserialize(d)?;
-        Ok(b.into_vec())
-    }
-}
 
-mod serde_bytes_array32 {
-    use serde::{Deserialize, Deserializer, Serializer};
-    pub fn serialize<S: Serializer>(v: &[u8; 32], s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_bytes(v)
-    }
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error> {
-        let b = serde_bytes::ByteBuf::deserialize(d)?;
-        b.into_vec()
-            .try_into()
-            .map_err(|_| serde::de::Error::custom("expected 32 bytes"))
-    }
-}
 
 /// [`serde_bytes_array32`] for an OPTIONAL field: the value, when present, is the
 /// same CBOR byte string; absence is handled by the field's `#[serde(default)]`.
@@ -289,22 +140,11 @@ mod serde_opt_bytes_array32 {
     }
 }
 
-mod serde_bytes_array64 {
-    use serde::{Deserialize, Deserializer, Serializer};
-    pub fn serialize<S: Serializer>(v: &[u8; 64], s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_bytes(v)
-    }
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 64], D::Error> {
-        let b = serde_bytes::ByteBuf::deserialize(d)?;
-        b.into_vec()
-            .try_into()
-            .map_err(|_| serde::de::Error::custom("expected 64 bytes"))
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::identity;
 
     fn with_state_dir<F: FnOnce()>(f: F) {
         let _guard = crate::TEST_ENV_LOCK

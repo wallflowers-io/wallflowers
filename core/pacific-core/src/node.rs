@@ -739,7 +739,7 @@ impl Node {
         let kp = mls::make_key_package_bytes(&client)?;
         let intro = self.dir.my_intro_tag()?;
         let bundle = handshake::build_bundle(&self.id, kp, intro, &name)?;
-        bundle.encode()
+        Ok(bundle.encode()?)
     }
 
     // ---- `pacific pair --scan <bundle>` (scanner: create group + send Welcome) ----
