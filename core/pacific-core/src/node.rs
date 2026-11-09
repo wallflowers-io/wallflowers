@@ -222,6 +222,8 @@ struct LiveState {
     /// Objects whose queued sequenced writes could not take a slot: not claimed again
     /// before the instant, and the wait doubles while they keep failing (`flush_sequenced`).
     slot_backoff: std::collections::HashMap<Vec<u8>, (std::time::Instant, std::time::Duration)>,
+    /// Objects found to have a pool leaf ([`Node::pool_ready`]): once one has, it always has.
+    pool_ready: std::collections::HashSet<Vec<u8>>,
 }
 
 /// What [`Node::ingest_delivered`] and [`Node::catch_up`] did.
@@ -1831,6 +1833,7 @@ impl Node {
         }
         self.converge_before_writing(&group_id, true).await;
         let (mut sess, home) = self.write_session(&group_id).await?;
+        self.provision_before_sending(&mut sess, &group_id).await?;
         let (sid, sk, _name) = self.signer()?;
         let client = mls::build_client_sqlite(&paths::db_path(), sid, sk)?;
         let mut group = self.load_member_group(&client, &group_id)?;
@@ -2078,6 +2081,20 @@ impl Node {
         // Route to the object's governing Arc's relay (its static IP), not a global
         // relay — an object flushes only through the Arc that governs it.
         if let Ok((mut sess, home)) = self.write_session(group_id).await {
+            match self.provision_before_sending(&mut sess, group_id).await {
+                Ok(false) => {}
+                // The Add moved the epoch: the caller's copy of the group is behind it.
+                Ok(true) => {
+                    let (sid, sk, _n) = self.signer()?;
+                    *group = mls::load_group(&mls::build_client_sqlite(&paths::db_path(), sid, sk)?, group_id)?;
+                }
+                Err(e) => {
+                    tracing::warn!(target: "pacific::resumption", group = %hex::encode(group_id), error = %e,
+                                   "no pool leaf yet, so the delta waits in the outbox");
+                    sess.close().await;
+                    return Ok(delta_id);
+                }
+            }
             // A proposal is waiting: RFC 9420 §12.4 says commit before sending, and
             // mls-rs refuses to encrypt until someone has (§7). Commit it, then reload —
             // the caller's copy of the group is now an epoch behind, and writing it back
@@ -2172,6 +2189,8 @@ impl Node {
         envelope: &[u8],
         patient: bool,
     ) -> Result<(), CoreError> {
+        // Before the sequenced branch, so a slot is never claimed for a row that cannot go.
+        self.refuse_unless_pool_ready(group_id)?;
         if coordinator::decode_delta(envelope)?.seq.is_some() {
             if self.dir.pending_outbox(group_id, &self.id.identity_pk())?.iter().any(|(d, _)| d == delta_id) {
                 return self.flush_sequenced(sess, group, group_id, patient).await;
@@ -2387,6 +2406,8 @@ impl Node {
         delta_id: &[u8; 32],
         envelope: &[u8],
     ) -> Result<(), CoreError> {
+        // THE ONE PLACE A ROW IS SENT, and so where #68 is held: never before a pool leaf.
+        self.refuse_unless_pool_ready(group_id)?;
         // THE ENVELOPE TRAVELS SIGNED (A-10 part 1, SEC-35): every Delta flushed here is
         // this device's own, so it goes with this identity's signature over it.
         let payload = crate::delta_sig::seal_payload(
@@ -3332,6 +3353,10 @@ impl Node {
         let (sid, msk, _n) = self.signer()?;
         let epoch = mls::load_group(&mls::build_client_sqlite(&paths::db_path(), sid, msk)?, &gid)?.current_epoch();
 
+        // WHAT THE LEAF CANNOT READ, written before the entry that names it (#68). What a
+        // sibling device's segments carry is read first, so no row goes in two.
+        self.read_segments(sess, &gid).await?;
+        let (history, carried) = self.write_segment(sess, &gid, &pool).await?;
         let leaf = crate::spine::PoolLeaf {
             pool,
             welcome,
@@ -3339,6 +3364,7 @@ impl Node {
             kp_id,
             kp_data,
             epoch,
+            history,
         };
         // Only leaves still in the tree: an evicted one has been removed and is
         // never listed again (§6.3).
@@ -3352,9 +3378,190 @@ impl Node {
             arc: self.dir.group_arc(&gid)?.unwrap_or_default(),
             pools,
         }))?;
-        tracing::info!(target: "pacific::resumption", group = %object, epoch, "pool leaf provisioned");
-        let _ = &object;
+        // Carried only now: every part acked, and the entry naming them queued on the spine,
+        // which re-places an entry that loses its index and never drops one.
+        self.dir.mark_carried(&gid, &carried)?;
+        self.dir.mark_segment_read(&gid, &pool)?;
+        self.live_state().pool_ready.insert(gid.clone());
+        tracing::info!(target: "pacific::resumption", group = %object, epoch, history, "pool leaf provisioned");
         Ok(leaf)
+    }
+
+    /// #68: WHETHER AN OBJECT MAY SEND A ROW (ICD `mls.poolHistory`): it has a pool leaf named on
+    /// the spine, sent or queued, so a device restored from the words reads everything sent from
+    /// here on. A node with no seed keeps no pool, and is not held to it.
+    fn pool_ready(&self, group_id: &[u8]) -> Result<bool, CoreError> {
+        if self.id.seed_bytes().is_none() || self.live_state().pool_ready.contains(group_id) {
+            return Ok(true);
+        }
+        let ready = !self.spine_pools(group_id)?.is_empty();
+        if ready {
+            self.live_state().pool_ready.insert(group_id.to_vec());
+        }
+        Ok(ready)
+    }
+
+    /// [`Self::pool_ready`] as a refusal, which leaves the row queued: upkeep adds the leaf, and
+    /// the next sync sends it.
+    fn refuse_unless_pool_ready(&self, group_id: &[u8]) -> Result<(), CoreError> {
+        if self.pool_ready(group_id)? {
+            return Ok(());
+        }
+        Err(CoreError::Membership(format!(
+            "{} has no pool leaf yet, so nothing is sent to it that a restored device could not read",
+            hex::encode(&group_id[..group_id.len().min(6)])
+        )))
+    }
+
+    /// #68: NO ROW BEFORE A POOL LEAF. An object with none gets one now, the Add upkeep would
+    /// make, and the spine entry naming it is published with it, so a restore finds the leaf.
+    /// Whether one was added.
+    async fn provision_before_sending(&self, sess: &mut Router, group_id: &[u8]) -> Result<bool, CoreError> {
+        if self.pool_ready(group_id)? {
+            return Ok(false);
+        }
+        self.pool_provision_over(sess, group_id).await?;
+        if let Err(e) = self.drain_spine_over(sess).await {
+            tracing::warn!(target: "pacific::resumption", group = %hex::encode(group_id), error = %e,
+                           "the pool leaf's spine entry waits for the next sync");
+        }
+        Ok(true)
+    }
+
+    /// #68: A POOL LEAF'S SEGMENT (ICD `mls.poolHistory`): the rows of `group_id` this device holds
+    /// and has sent or received, so sent before now and unreadable by a leaf added now, that no
+    /// segment it knows of carries; the spine whole in chain order, then the rest oldest first,
+    /// packed into history bundles to this person, each part sealed under the root at the leaf's
+    /// own address. The parts written, and the rows they carry. Nothing to carry writes nothing.
+    async fn write_segment(&self, sess: &mut Router, group_id: &[u8], pool: &[u8; 32]) -> Result<(u32, Vec<[u8; 32]>), CoreError> {
+        use crate::history::{Row, CAP};
+        let root = crate::locator::storage_root(&*self.seed_or_refuse()?);
+        let me = self.id.identity_pk();
+        let carried = self.dir.carried(group_id)?;
+        let unsent: std::collections::HashSet<[u8; 32]> = self.dir.pending_outbox(group_id, &me)?.into_iter().map(|(d, _)| d).collect();
+        let (mut spine, mut rest, mut unsigned) = (Vec::new(), Vec::new(), 0usize);
+        for (author, envelope, sig) in self.dir.load_log_signed(group_id)? {
+            let d = coordinator::decode_delta(&envelope)?;
+            let id = d.id();
+            if carried.contains(&id) || unsent.contains(&id) {
+                continue;
+            }
+            let Some(sig) = sig else {
+                unsigned += 1;
+                continue;
+            };
+            match d.seq {
+                Some(seq) => spine.push(((d.epoch, seq), Row { envelope, author, sig })),
+                None => rest.push(((d.gen.unwrap_or(0), author, id), Row { envelope, author, sig })),
+            }
+        }
+        if unsigned > 0 {
+            tracing::warn!(target: "pacific::resumption", group = %hex::encode(group_id), unsigned,
+                           "rows with no author signature cannot be carried to a late leaf");
+        }
+        if spine.is_empty() && rest.is_empty() {
+            return Ok((0, Vec::new()));
+        }
+        spine.sort_by(|a, b| a.0.cmp(&b.0));
+        rest.sort_by(|a, b| a.0.cmp(&b.0));
+        let rows = spine.into_iter().map(|(_, r)| r).chain(rest.into_iter().map(|(_, r)| r));
+        let sizing = segment_address(&root, group_id, pool, 0).tag();
+        let (bundles, _, over, _) = self.pack(group_id, &me, &sizing, rows, CAP, usize::MAX)?;
+        if over > 0 {
+            tracing::warn!(target: "pacific::resumption", group = %hex::encode(group_id), over,
+                           "rows each over one blob cannot be carried to a late leaf");
+        }
+        let mut ids = Vec::new();
+        for (i, b) in bundles.iter().enumerate() {
+            let at = segment_address(&root, group_id, pool, i as u32);
+            let sealed = seal::seal(&crate::history::encode(b), &at.tag(), &root)?;
+            sess.publish(&at, &pacific_wire::blob_b64(&sealed)).await?;
+            for r in &b.rows {
+                ids.push(coordinator::decode_delta(&r.envelope)?.id());
+            }
+        }
+        Ok((bundles.len() as u32, ids))
+    }
+
+    /// #68: EVERY SEGMENT THE SPINE NAMES FOR `group_id` that this device has not read, taken
+    /// ([`Self::take_own_history`]): at a join through a pool leaf, before a segment is written,
+    /// and on upkeep's walk, so a sibling's segment is read once. How many rows it stored.
+    async fn read_segments(&self, sess: &mut Router, group_id: &[u8]) -> Result<usize, CoreError> {
+        let root = crate::locator::storage_root(&*self.seed_or_refuse()?);
+        let read = self.dir.segments_read(group_id)?;
+        let mut named: Vec<([u8; 32], u32)> = Vec::new();
+        for (_, e) in self.spine_entries()? {
+            if let crate::spine::Body::Pool(p) = e.body {
+                if p.group_id != group_id {
+                    continue;
+                }
+                for l in p.pools {
+                    if l.history > 0 && !read.contains(&l.pool) && !named.iter().any(|(k, _)| *k == l.pool) {
+                        named.push((l.pool, l.history));
+                    }
+                }
+            }
+        }
+        let mut stored = 0;
+        for (pool, parts) in named {
+            for i in 0..parts {
+                let at = segment_address(&root, group_id, &pool, i);
+                let mut taken = false;
+                for m in sess.drain(&[at.tag_hex()], |_| Ok(0)).await? {
+                    let Ok(blob) = pacific_wire::blob_unb64(&m.blob) else { continue };
+                    let Ok(plain) = seal::open(&blob, &at.tag(), &root) else { continue };
+                    match crate::history::decode(&plain) {
+                        Ok(Some(b)) if b.object == group_id => match self.take_own_history(&b) {
+                            Ok(n) => {
+                                stored += n;
+                                taken = true;
+                            }
+                            Err(e) => tracing::warn!(target: "pacific::resumption", group = %hex::encode(group_id), part = i, error = %e,
+                                                     "a pool-history part refused"),
+                        },
+                        _ => tracing::warn!(target: "pacific::resumption", group = %hex::encode(group_id), part = i,
+                                            "a pool-history part that is not one of this object's bundles"),
+                    }
+                }
+                if !taken {
+                    // Named and not there yet: read again on the next walk, never marked read.
+                    return Err(CoreError::Transport(format!(
+                        "part {i} of the segment of leaf {} is named and not readable yet",
+                        hex::encode(&pool[..6])
+                    )));
+                }
+            }
+            self.dir.mark_segment_read(group_id, &pool)?;
+        }
+        Ok(stored)
+    }
+
+    /// One part of this person's own segment (ICD `mls.poolHistory.refused`): for this identity,
+    /// from it, signed whole; each row checked as a history row and stored, delivered, never into
+    /// the outbox, and counted carried. Rows it already holds are left. How many it stored.
+    fn take_own_history(&self, b: &crate::history::Bundle) -> Result<usize, CoreError> {
+        let me = self.id.identity_pk();
+        if b.joiner != me || b.sender != me {
+            return Err(CoreError::Handshake("pool history: not this person's own".into()));
+        }
+        crate::history::verify(b)?;
+        let owner = self.group_owner_id(&b.object)?;
+        let now = unix_now();
+        let (mut stored, mut ids) = (0usize, Vec::new());
+        for (i, r) in b.rows.iter().enumerate() {
+            match history_row(&b.object, &owner, r) {
+                Ok((id, _)) => {
+                    if self.dir.append_delta_via(&b.object, &id, &r.author, &r.envelope, &r.sig, &me, now)? {
+                        stored += 1;
+                    }
+                    ids.push(id);
+                }
+                Err(why) => tracing::warn!(target: "pacific::resumption", object = %hex::encode(&b.object), row = i,
+                                          "a pool-history row refused: {why}"),
+            }
+        }
+        self.dir.mark_carried(&b.object, &ids)?;
+        Ok(stored)
     }
 
     /// The pool leaves the latest `Pool` entry this device knows names for `group`.
@@ -3532,6 +3739,8 @@ impl Node {
                         _ => {}
                     }
                 }
+                // A sibling's segment, read once (#68); local unless the spine names a new one.
+                self.read_segments(sess, &gid).await?;
                 if !idle {
                     self.pool_provision_over(sess, &gid).await?;
                 }
@@ -3679,6 +3888,11 @@ impl Node {
             self.dir.put_lease(gid, &leaf.pool, 1, until)?;
             return Ok(match self.join_through(gid, way, leaf) {
                 Ok(()) => {
+                    // What the leaf cannot read, from the segments the spine names (#68).
+                    if let Err(e) = self.read_segments(sess, gid).await {
+                        tracing::warn!(target: "pacific::resumption", group = %hex::encode(gid), error = %e,
+                                       "joined; its earlier history is read on the next walk");
+                    }
                     // Climb to the current epoch — reading only (§9.3).
                     if let Err(e) = self.drain_to_head(gid).await {
                         tracing::warn!(target: "pacific::resumption", group = %hex::encode(gid), error = %e,
@@ -12131,6 +12345,20 @@ pub fn sequenced_slot(root: &[u8; 32], group_id: &[u8], prev: &[u8; 32]) -> Addr
     h.update(root);
     h.update(group_id);
     h.update(prev);
+    Address::from_seed(&h.finalize().into())
+}
+
+/// PART `part` OF A POOL LEAF'S SEGMENT (ICD `mls.poolHistory.address`): unique to the leaf, so
+/// no two devices write one address, and from the person's storage root, so only their own
+/// devices can find or read it.
+pub fn segment_address(root: &[u8; 32], group_id: &[u8], pool: &[u8; 32], part: u32) -> Address {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(crate::icd_consts::POOL_HISTORY_LABEL.as_bytes());
+    h.update(root);
+    h.update(group_id);
+    h.update(pool);
+    h.update(part.to_be_bytes());
     Address::from_seed(&h.finalize().into())
 }
 
