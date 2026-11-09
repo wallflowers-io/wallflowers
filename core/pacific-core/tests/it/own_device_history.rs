@@ -70,6 +70,43 @@ async fn a_second_restore_reads_every_post_from_the_start() {
     }
 }
 
+/// A Pool entry that loses its spine index to a sibling device is re-placed after it, still
+/// naming its leaf and its segment, so the rows it carries are not lost to a later restore
+/// (ARC_HEALTH's C1′: rows count carried once the entry is queued, which is never dropped).
+#[tokio::test]
+async fn a_pool_entry_that_loses_its_index_still_names_its_segment() {
+    use pacific_core::spine::{Body, Departed};
+    let mut h = Harness::people(&[("ada", &["phone"]), ("bo", &["sim"])]).await;
+    let (phone, bo) = (h.device("ada", "phone"), h.device("bo", "sim"));
+    let room = h.form_forum(phone, &[bo]).await;
+    h.obj_post(bo, &room, "carried by the segment").await;
+    h.settle().await;
+    let words = h.with_sync(phone, |n| n.recovery_key()).expect("words");
+    let at = head(&h, phone);
+    let (laptop, _) = h.sign_in_from_words("ada", "laptop", &words, at).await.unwrap();
+
+    // The phone adds a leaf, its segment written and its entry queued, not yet sent; the
+    // laptop takes that spine index first.
+    let r = room.clone();
+    let leaf = h.with(phone, |n| async move { n.pool_provision(&r).await.unwrap() }).await;
+    assert!(leaf.history > 0, "the leaf carries a segment");
+    let gone = Body::Left(Departed { group_id: vec![7; 32], last_epoch: 7 });
+    h.with(laptop, |n| async move { n.chain_append(vec![gone]).await.unwrap() }).await;
+    h.sync(phone).await;
+
+    let walk = h.with(phone, |n| async move { n.chain_walk(0).await.unwrap() }).await;
+    let named = walk.entries.iter().any(|(_, e)| {
+        matches!(&e.body, Body::Pool(p) if p.pools.iter().any(|l| l.pool == leaf.pool && l.history == leaf.history))
+    });
+    assert!(named, "the entry was re-placed, naming its leaf and segment");
+
+    h.partition(laptop);
+    let at = head(&h, phone);
+    let (third, _) = h.sign_in_from_words("ada", "third", &words, at).await.unwrap();
+    h.settle_among(&[phone, bo, third]).await;
+    assert!(texts(&h, third, &room).contains(&"carried by the segment".to_string()), "{:?}", texts(&h, third, &room));
+}
+
 /// A segment is written once, at its leaf's Add, and a settled mesh writes nothing more: no
 /// segment, no restatement, on any tick (the relay-write gate).
 #[tokio::test]
