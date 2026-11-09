@@ -283,6 +283,7 @@
 		96E3E30ECE8F41F5A12C680A /* ProfileEditorUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C540A904E91AFF13C7134E4 /* ProfileEditorUITests.swift */; };
 		96E82466E55B9E799C195072 /* GraphService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14BF9F203B6B13C1D708305 /* GraphService.swift */; };
 		970BA35DEC5D50961BF4AE67 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 6B48606BE077EFB8FD96D591 /* libsqlite3.tbd */; };
+		97606A801218781B7297E89A /* LifeSearchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6547900105724ADB301F40D2 /* LifeSearchUITests.swift */; };
 		98574F3AE0A7747322703BC6 /* ConfigPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520381E61FCE3492499AF790 /* ConfigPages.swift */; };
 		999F13801281E32F727DA47A /* SysiphusEnrichmentBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE3134052BD3046B580DF5C1 /* SysiphusEnrichmentBridge.swift */; };
 		9BB2117DA533E2F2102E9FA4 /* LiveSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 221DD701C94B2E3CE2A2F9F9 /* LiveSync.swift */; };
@@ -330,6 +331,7 @@
 		B7BC76CB78D2DD30727E3BB6 /* OutputStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9538501BF0E905C1EDD40C70 /* OutputStore.swift */; };
 		B7D469F3390F6C144FA2CE37 /* EventsSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B386D5F768834D0821556BF3 /* EventsSeed.swift */; };
 		B81C05443D24D924145634FA /* EnrichedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 564854D8ABC9819DA4BD538D /* EnrichedText.swift */; };
+		B88D025BD2A05F54F7138A69 /* LifeRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 175A55EECD980655550DD46D /* LifeRoutes.swift */; };
 		B8B652BAED1A0558E7B1F533 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 621A5389F338CF6612F93659 /* NotesView.swift */; };
 		BA115B748E88F364B4134FB9 /* NoteEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7394E3B25C84768D024F4391 /* NoteEditorView.swift */; };
 		BA5712645E372E9708CFD7CB /* LodeDBCore in Frameworks */ = {isa = PBXBuildFile; productRef = E77127AFBA92FA1661AE0245 /* LodeDBCore */; };
@@ -523,6 +525,7 @@
 		15CAE5613A104757A6B3F836 /* MusicEventsSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicEventsSource.swift; sourceTree = "<group>"; };
 		1621ADB420D3140835739240 /* RankFusion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankFusion.swift; sourceTree = "<group>"; };
 		164C561B2E0B23AD750A22C4 /* GroupObjectEventsSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupObjectEventsSource.swift; sourceTree = "<group>"; };
+		175A55EECD980655550DD46D /* LifeRoutes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeRoutes.swift; sourceTree = "<group>"; };
 		18E6756B416B7D4CBE96EC96 /* FleetJourneyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FleetJourneyUITests.swift; sourceTree = "<group>"; };
 		19C830EEA1791CF83AD1FE50 /* MusicService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicService.swift; sourceTree = "<group>"; };
 		1B44F4256745C6640957D90E /* ConvergenceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvergenceView.swift; sourceTree = "<group>"; };
@@ -588,6 +591,7 @@
 		60B86AB3638B2C2525DD9235 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		621A5389F338CF6612F93659 /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
 		6367F96FA2FA98C69635B19D /* PlaygroundApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaygroundApp.swift; sourceTree = "<group>"; };
+		6547900105724ADB301F40D2 /* LifeSearchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeSearchUITests.swift; sourceTree = "<group>"; };
 		656216AEFBE09CC86E0EDB63 /* ProfileStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStack.swift; sourceTree = "<group>"; };
 		66262556B64749A44AF33134 /* RelayProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayProbe.swift; sourceTree = "<group>"; };
 		6634BC69C0914B0E69E1F993 /* ProposalPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProposalPipelineTests.swift; sourceTree = "<group>"; };
@@ -925,6 +929,8 @@
 				518BCA88F47C9700E6CA9E50 /* GroupsPageUITests.swift */,
 				78A8A5573CA48D928BAAF5EB /* HarnessRunnerUITests.swift */,
 				3C5F320A7C6B9A55E150A435 /* LifeFacesUITests.swift */,
+				175A55EECD980655550DD46D /* LifeRoutes.swift */,
+				6547900105724ADB301F40D2 /* LifeSearchUITests.swift */,
 				8EA68DB1CE0DD390C76D1D7E /* MarketSelectorUITests.swift */,
 				113E04F94032A058A853B69B /* NewItemBloomUITests.swift */,
 				9C0A33199E9A986EBE5985BE /* OnePagerJourneyUITests.swift */,
@@ -1729,6 +1735,8 @@
 				BC808FB4BA3D8968A088A891 /* GroupsPageUITests.swift in Sources */,
 				361D001B79B7BA4566ECF6B1 /* HarnessRunnerUITests.swift in Sources */,
 				FC9BB8DDBC9AD1CBD4EC7041 /* LifeFacesUITests.swift in Sources */,
+				B88D025BD2A05F54F7138A69 /* LifeRoutes.swift in Sources */,
+				97606A801218781B7297E89A /* LifeSearchUITests.swift in Sources */,
 				21C2F8BD776490F5D8D6E28E /* MarketSelectorUITests.swift in Sources */,
 				DA57BAABD35851F1B239F490 /* NewItemBloomUITests.swift in Sources */,
 				0AFB41BFCC58B78E2CAFBD5B /* OnePagerJourneyUITests.swift in Sources */,

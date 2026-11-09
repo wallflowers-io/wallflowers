@@ -23,9 +23,9 @@ final class CommentsSectionUITests: XCTestCase {
         let name = "Comments \(Int(Date().timeIntervalSince1970))"
         let comment = "see you there \(Int(Date().timeIntervalSince1970))"
 
-        // Mint an Event through LIFE's +.
-        app.buttons["tab-new"].tap()
-        let field = app.descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
+        // Mint an Event through RED's creator.
+        let card = app.beginCreating("event")
+        let field = card.descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), "the event's NAME field")
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         app.typeText(name)
@@ -34,6 +34,7 @@ final class CommentsSectionUITests: XCTestCase {
         save.tap()
 
         // Open it from the EVENT jewel's feed.
+        app.openLifeSearch()
         app.buttons["jewel-events"].tap()
         // The feed draws only what is on screen: earlier runs' events can hold the top.
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
@@ -87,15 +88,15 @@ final class CommentsSectionUITests: XCTestCase {
             welcome.tap(); welcome.typeText("QA")
             app.buttons["welcome-begin"].tap()
         }
-        // The app reopens on the tab it was left on: LIFE is up when its + makes an Event.
+        // The app reopens on the tab it was left on: LIFE is up when its search is.
         let life = app.buttons["shell-life"]
         XCTAssertTrue(life.waitForExistence(timeout: 15), "LIFE disc")
-        let plus = app.buttons["tab-new"]
-        for _ in 0..<3 where plus.label != "New Event" {
+        let search = app.buttons["tab-search"]
+        for _ in 0..<3 where !search.exists {
             life.tap()
             Thread.sleep(forTimeInterval: 1)
         }
-        XCTAssertEqual(plus.label, "New Event", "LIFE is up")
+        XCTAssertTrue(search.exists, "LIFE is up")
     }
 
     private func shoot(_ name: String) {

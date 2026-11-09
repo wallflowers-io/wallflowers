@@ -11,11 +11,15 @@ struct TypedListPage: View {
     let category: EventCategory
     var onOpen: (FeedItem) -> Void
     var onAuthor: ((AuthorRoute) -> Void)? = nil
+    /// The LIFE search text — the same match the feed makes (`FeedItem.matches`).
+    var query: String = ""
+
+    private var shown: [FeedItem] { items.filter { $0.matches(query) } }
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(items) { item in
+                ForEach(shown) { item in
                     Group {
                         // PEOPLE and GROUPS are DIRECTORIES (11 Aug order): the
                         // row is the component's collapsed profile bar — the
@@ -36,7 +40,7 @@ struct TypedListPage: View {
                     .accessibilityAddTraits(.isButton)
                     .accessibilityIdentifier("list-row-\(item.id)")
                 }
-                if items.isEmpty {
+                if shown.isEmpty {
                     Text("—")
                         .foregroundStyle(.secondary)
                         .padding(.top, 120)

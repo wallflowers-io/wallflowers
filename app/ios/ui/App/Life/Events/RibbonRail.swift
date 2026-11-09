@@ -46,14 +46,15 @@ struct RibbonRail: View {
     // PROJECTS is DEFERRED (1 Aug): hidden from the rail, not removed from the grammar —
     // restore by adding `.projects` back here. The `pacificOpenProject` deep link still
     // opens ProjectDetailView; only the jewel is gone.
-    // THE FIVE-JEWEL RAIL (11 Aug order): SPACES · EVENTS · PEOPLE · LISTINGS ·
-    // POSTS. Places left the rail (the map is its own ground); JOB folded into
+    // THE RAIL (11 Aug order, MAP back 9 Nov): SPACES · EVENTS · PEOPLE · LISTINGS ·
+    // POSTS · MAP. The rail is up only while LIFE searches, so MAP is the map's way in;
+    // last, where `storedOrder` appends it to an older arrangement. JOB folded into
     // LISTINGS (a job is a listing posture, resolver-retarget). Key versioned so
     // the new roster beats an older persisted arrangement.
     @State private var order: [EventCategory] = RibbonRail.storedOrder()
     @State private var carousel: [EventCategory] = []
 
-    static let defaultOrder: [EventCategory] = [.groups, .events, .people, .trade, .posts]
+    static let defaultOrder: [EventCategory] = [.groups, .events, .people, .trade, .posts, .places]
     private static let orderKey = "life.rail.order.v2"
 
     static func storedOrder() -> [EventCategory] {

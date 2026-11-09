@@ -1,6 +1,7 @@
 //  PlaceProfileUITests.swift
-//  The Place Profile path on the REAL app (T4): a REAL Place minted through the
-//  wizard (a simulated fix makes it PLACED), its pin on THE map, the pin's
+//  The Place Profile path on the REAL app (T4): a REAL Place minted through RED's
+//  creator (a simulated fix makes it PLACED), its pin on THE map — reached by the
+//  PLACE jewel in LIFE's search rail — the pin's
 //  bottom sheet — the quick resolution — and the sheet's tap-through to the
 //  Place Profile page: headline, the location card whose area cells derive from
 //  the Place's own GeoPoint, and the walk-up bar (the POV, reachable from the
@@ -34,36 +35,37 @@ final class PlaceProfileUITests: XCTestCase {
 
         launchToLife()
 
-        // PLACES left the rail (11 Aug order) — the map needs its next door
-        // (Events MAP lens or a dedicated surface) before this flow can walk it.
-        throw XCTSkip("places jewel left the rail 11 Aug; retarget via the map's new door")
+        app.openLifeSearch()
         let jewel = app.buttons["jewel-places"]
         XCTAssertTrue(jewel.waitForExistence(timeout: 10), "PLACE jewel")
         jewel.tap()
         XCTAssertTrue(waitAny(["places-map"], timeout: 10), "the map takes the ground")
 
-        // Mint a real Place through the wizard (the LIFE chrome's one ＋ mints
-        // the selected category). Unique name per run — places accumulate.
+        // Mint a real Place through RED's creator. Unique name per run — places
+        // accumulate.
         let placeName = "QA Pin \(Int(Date().timeIntervalSince1970) % 100_000)"
-        app.buttons["tab-new"].tap()
-        let nameField = app.textFields["Place name"]
-        XCTAssertTrue(nameField.waitForExistence(timeout: 6), "the wizard's name field")
-        nameField.tap()
+        let card = app.beginCreating("place")
+        let nameField = card.descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
+        XCTAssertTrue(nameField.waitForExistence(timeout: 8), "the Place's name field")
+        nameField.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.element.waitForExistence(timeout: 6), "the keyboard")
         nameField.typeText(placeName)
 
-        // The location prompt lands when the fix field's locator starts —
-        // grant it explicitly rather than trusting the interruption monitor.
+        // Locate: the prompt lands when the fix's locator starts — grant it
+        // explicitly rather than trusting the interruption monitor.
+        let fix = card.descendants(matching: .any).matching(identifier: "new-fix").firstMatch
+        XCTAssertTrue(fix.waitForExistence(timeout: 6), "the Place's fix")
+        fix.tap()
         _ = tapSpringboard(["Allow While Using App", "Allow Once", "Allow"], waitFor: 5)
 
         // Wait for the fix readout ("gcpvj0… · ±N m") — saving earlier mints an
         // UNPLACED Place, which the map honestly declines to pin.
-        let fixReadout = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS '±'")).firstMatch
-        XCTAssertTrue(fixReadout.waitForExistence(timeout: 20),
-                      "the simulated fix reaches the wizard")
+        // The readout is the fix control's own label (RedCreatorUITests reads it the same way).
+        expectation(for: NSPredicate(format: "label CONTAINS '±'"), evaluatedWith: fix)
+        waitForExpectations(timeout: 20)
 
         let save = app.buttons["Save Place"]
-        XCTAssertTrue(save.waitForExistence(timeout: 6), "the wizard's commit disc")
+        XCTAssertTrue(save.waitForExistence(timeout: 6), "BLUE commits the Place")
         save.tap()
 
         // The pin folds in at the simulated coordinate. The camera follows the

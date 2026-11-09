@@ -30,6 +30,7 @@ final class PersonProfileUITests: XCTestCase {
         launchToLife()
 
         // PERSON jewel → the flat typed list (S27).
+        app.openLifeSearch()
         let jewel = app.buttons["jewel-people"]
         XCTAssertTrue(jewel.waitForExistence(timeout: 10), "PERSON jewel")
         jewel.tap()

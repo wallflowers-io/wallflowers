@@ -48,6 +48,7 @@ final class GroupsPageUITests: XCTestCase {
         // pages). Buttons, narrowly: the jewels wear `.isButton` (RibbonRail),
         // and a broad `.any` descendants query snapshots the whole LIFE
         // hierarchy — heavy enough to take the test runner down.
+        app.openLifeSearch()
         let jewel = app.buttons["jewel-groups"]
         XCTAssertTrue(jewel.waitForExistence(timeout: 10), "GROUP jewel")
         jewel.tap()
@@ -57,28 +58,20 @@ final class GroupsPageUITests: XCTestCase {
                       "GROUP maximised puts its typed list on the ground")
         shoot("groups-page")
 
-        // ＋ constitutes a real Group GroupObject through OrgWizard (the LIFE
-        // chrome's one `+`, minting the selected category). The name is unique
-        // per run — repeated runs leave real groups on the device (there is
-        // deliberately no delete), and a duplicate name makes `firstMatch`
+        // RED's creator constitutes a real Space (LIFE has no `+` since 9 Nov). The
+        // name is unique per run — repeated runs leave real groups on the device
+        // (there is deliberately no delete), and a duplicate name makes `firstMatch`
         // ambiguous.
         let groupName = "QA Club \(Int(Date().timeIntervalSince1970) % 100_000)"
-        app.buttons["tab-new"].tap()
-        let nameField = app.textFields["Butterrow Community Garden"]
-        XCTAssertTrue(nameField.waitForExistence(timeout: 6), "OrgWizard's name field")
-        nameField.tap()
+        let card = app.beginCreating("group")
+        let nameField = card.descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
+        XCTAssertTrue(nameField.waitForExistence(timeout: 8), "the New surface's name field")
+        nameField.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.element.waitForExistence(timeout: 6), "the keyboard")
         nameField.typeText(groupName)
-        // The wizard's commit is a ComposeDiscs CircleButton wearing its label
-        // ("Constitute" for the default community type).
-        let constitute = app.buttons["Constitute"]
-        XCTAssertTrue(constitute.waitForExistence(timeout: 6), "the wizard's commit disc")
-        constitute.tap()
-        let done = app.buttons["org-done"]
-        XCTAssertTrue(done.waitForExistence(timeout: 8), "the office board's Done")
-        done.tap()
-        // Let the wizard's cover finish dismissing — its header carries the group
-        // name too, and a match against that mid-animation is not hittable.
-        XCTAssertTrue(waitGone(done, timeout: 6), "the wizard dismisses")
+        let create = app.buttons["Create Space"]
+        create.tap()
+        XCTAssertTrue(waitGone(create, timeout: 8), "the creator leaves")
 
         // The new group re-lists without a manual refresh. The typed list's row
         // is ONE combined card element (ObjectCard via TypedListPage) whose
@@ -324,6 +317,7 @@ final class GroupsPageUITests: XCTestCase {
         let life = app.buttons["shell-life"]
         XCTAssertTrue(life.waitForExistence(timeout: 10), "LIFE disc")
         if !life.isSelected { life.tap() }
+        app.openLifeSearch()
         let jewel = app.buttons["jewel-groups"]
         XCTAssertTrue(jewel.waitForExistence(timeout: 10), "GROUP jewel")
         jewel.tap()
@@ -334,13 +328,12 @@ final class GroupsPageUITests: XCTestCase {
         let rows = app.descendants(matching: .any).matching(rowMatch)
         var row = rows.firstMatch
         _ = row.waitForExistence(timeout: 8)
-        // A DEVICE WITH NO SPACE constitutes one, the way a person does: the shell's
-        // ＋ mints the lit jewel's species, and GROUPS is lit. Installing a build
-        // replaces the app's data container, so "there is already a Space here" is
-        // not a thing a test may assume between runs.
+        // A DEVICE WITH NO SPACE constitutes one, the way a person does: through RED's
+        // creator. Installing a build replaces the app's data container, so "there is
+        // already a Space here" is not a thing a test may assume between runs.
         if !row.exists {
-            app.buttons["tab-new"].tap()
-            let nameField = app.textFields["new-field-name"]
+            let card = app.beginCreating("group")
+            let nameField = card.descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
             XCTAssertTrue(nameField.waitForExistence(timeout: 8), "the New surface's name field")
             nameField.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             XCTAssertTrue(app.keyboards.element.waitForExistence(timeout: 6), "the keyboard")
@@ -487,6 +480,7 @@ final class GroupsPageUITests: XCTestCase {
         let life = app.buttons["shell-life"]
         XCTAssertTrue(life.waitForExistence(timeout: 10), "LIFE disc")
         if !life.isSelected { life.tap() }
+        app.openLifeSearch()
         let jewel = app.buttons["jewel-groups"]
         XCTAssertTrue(jewel.waitForExistence(timeout: 10), "GROUP jewel")
         jewel.tap()
