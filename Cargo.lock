@@ -3328,6 +3328,7 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+ "trust",
  "zeroize",
 ]
 
@@ -5158,6 +5159,21 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "trust"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "ciborium",
+ "ed25519-dalek",
+ "hex",
+ "mls-rs",
+ "mls-rs-crypto-rustcrypto",
+ "serde",
+ "serde_bytes",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
