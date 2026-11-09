@@ -60,10 +60,9 @@ final class PlaceProfileUITests: XCTestCase {
 
         // Wait for the fix readout ("gcpvj0… · ±N m") — saving earlier mints an
         // UNPLACED Place, which the map honestly declines to pin.
-        let fixReadout = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS '±'")).firstMatch
-        XCTAssertTrue(fixReadout.waitForExistence(timeout: 20),
-                      "the simulated fix reaches the card")
+        // The readout is the fix control's own label (RedCreatorUITests reads it the same way).
+        expectation(for: NSPredicate(format: "label CONTAINS '±'"), evaluatedWith: fix)
+        waitForExpectations(timeout: 20)
 
         let save = app.buttons["Save Place"]
         XCTAssertTrue(save.waitForExistence(timeout: 6), "BLUE commits the Place")
