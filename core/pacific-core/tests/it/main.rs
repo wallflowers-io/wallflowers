@@ -84,6 +84,8 @@ mod o69_fc5_seal;
 mod o69_fold_cache;
 mod o69_fold_cache_bound;
 mod o69_fold_cache_off;
+mod o69_kept;
+mod o69_open_beside;
 mod o69_own_commit_retag;
 mod o69_write_local;
 mod o75_a_joiner_takes_the_sites_spine_from_its_admitter;

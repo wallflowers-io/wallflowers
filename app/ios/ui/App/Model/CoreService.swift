@@ -59,6 +59,32 @@ final class CoreService: ObservableObject {
         Trace.shared.log("read", object: object, "\(what) — \(error)", ok: false)
     }
 
+    // MARK: - Reads off the main thread
+
+    /// The latest read asked for, per property: a result that lands after a newer one was
+    /// asked for is dropped, never applied over it.
+    private var asked: [String: Int] = [:]
+
+    /// READ OFF THE MAIN THREAD, APPLY ON IT: the screen never waits on a fold. `read` runs
+    /// detached against the core; `apply` runs on the main actor with its result, if no
+    /// newer read of `what` was asked for meanwhile. The returned task ends once applied,
+    /// for a caller that reads the property next.
+    @discardableResult
+    private func offMain<T>(_ what: String, _ read: @escaping (Core) throws -> T,
+                            apply: @escaping (CoreService, T) -> Void) -> Task<Void, Never> {
+        let gen = (asked[what] ?? 0) &+ 1
+        asked[what] = gen
+        let c = core
+        return Task { [weak self] in
+            let r = await Task.detached(priority: .userInitiated) { Result { try read(c) } }.value
+            guard let self, self.asked[what] == gen else { return }
+            switch r {
+            case .success(let v): apply(self, v)
+            case .failure(let e): self.readFailed(what, e)
+            }
+        }
+    }
+
     /// Record a failure against the operation that failed. `operation` completes
     /// "Couldn't …" and is the sentence a person reads, so write it as one:
     /// `fail("add them to the Space", error)`, not `fail("addContact", error)`.
@@ -182,6 +208,12 @@ final class CoreService: ObservableObject {
     /// signed Delta — debounced. Idempotent by construction: the core compares a
     /// digest per connection, so a commit that changes nothing authors nothing.
     private func commitProfile() {
+        // Not before the stored card is read: a commit then would publish the empty card
+        // over the profile this person already has.
+        guard profileLoaded else {
+            NSLog("[profile] commit before the profile loaded — not written")
+            return
+        }
         profileCommit?.cancel()
         profileCommit = Task { [weak self] in
             try? await Task.sleep(for: Self.profileDebounce)
@@ -215,8 +247,20 @@ final class CoreService: ObservableObject {
     /// The photo + block colour used to live in UserDefaults and never crossed the
     /// FFI. Anyone upgrading has one there and none in the core, so we lift it in
     /// once — otherwise upgrading would silently blank the avatar the user chose.
-    private func loadProfile() {
-        guard let row = try? core.myProfile() else { return }
+    /// The stored card has been read (`loadProfile`); until then nothing commits one.
+    private var profileLoaded = false
+
+    /// Read off the main thread (a cold fold, most of a second at launch), applied on it,
+    /// then `then` — what reads the card next waits for it.
+    private func loadProfile(then: (() -> Void)? = nil) {
+        offMain("read your profile", { try $0.myProfile() }) { s, row in
+            s.applyProfile(row)
+            then?()
+        }
+    }
+
+    private func applyProfile(_ row: ProfileRow) {
+        profileLoaded = true
         card = row.card
         if card.avatarColor.isEmpty { card.avatarColor = Self.defaultAvatarColorHex }
 
@@ -498,11 +542,10 @@ final class CoreService: ObservableObject {
                 d.set(true, forKey: Self.firstBootCompleteKey)
             }
         }
-        finishBootstrap()
-        // AFTER the fold is up: an edit made before `finishBootstrap` is clobbered
-        // when the stored card loads (11 Aug — the fleet's colours silently never
-        // landed). A CI mint gets the same key-derived face a real one does.
-        if minted { seedDerivedFace() }
+        // AFTER the stored card loads: an edit made before it is clobbered when it
+        // lands (11 Aug — the fleet's colours silently never landed). A CI mint gets the
+        // same key-derived face a real one does.
+        finishBootstrap(then: minted ? { [weak self] in self?.seedDerivedFace() } : nil)
         // A sequence interrupted AFTER the identity was created (the app was
         // killed between the mint and the last step) resumes rather than
         // stranding a half-set-up user in the shell.
@@ -533,8 +576,7 @@ final class CoreService: ObservableObject {
         guard !trimmed.isEmpty else { return false }
         do {
             _ = try core.initIdentity(displayName: trimmed)
-            finishBootstrap()
-            seedDerivedFace()
+            finishBootstrap { [weak self] in self?.seedDerivedFace() }
             return true
         } catch {
             self.error = String(describing: error)
@@ -663,8 +705,7 @@ final class CoreService: ObservableObject {
     /// catches the app up to it.
     func adoptRestoredIdentity(_ identityKey: String) {
         guard !identityKey.isEmpty else { return }
-        finishBootstrap()
-        seedDerivedFace()
+        finishBootstrap { [weak self] in self?.seedDerivedFace() }
     }
 
     /// A SIGN-IN LANDS, by either door: this device IS the person, so no mint, no
@@ -700,7 +741,8 @@ final class CoreService: ObservableObject {
 
     /// Everything after the identity exists: load it, the profile, the credential
     /// minter, and the first fold.
-    private func finishBootstrap() {
+    /// `then` runs once the stored card has loaded, off the main thread (`loadProfile`).
+    private func finishBootstrap(then: (() -> Void)? = nil) {
         // ROUTES, RE-APPLIED NOW THE IDENTITY EXISTS. The init-time setRoutes fails
         // on a first session (the node opens with the identity) and used to be
         // swallowed whole — so a fresh device spent its ENTIRE first session syncing
@@ -712,7 +754,7 @@ final class CoreService: ObservableObject {
             sas = try core.sas()
             sasWords = (try? core.sasWords()) ?? ""
             displayName = (try? core.displayName()) ?? ""
-            loadProfile()
+            loadProfile(then: then)
             registerArcCredentialMinter()
             refresh()
             #if DEBUG
@@ -780,23 +822,26 @@ final class CoreService: ObservableObject {
     /// freshly-built bundle. Callable via the `export-contact` dev link.
     func reexportContact() { exportDevContact() }
 
-    func refresh() {
+    @discardableResult
+    func refresh() -> Task<Void, Never> {
         // Publish only on CHANGE. @Published fires on every assignment, and this runs
         // on every 3-second sync tick — an ungated write here re-fires every $objects
         // subscriber (the graph projection among them) on a steady-state tick.
-        do {
-            let fresh = try core.objects()
-            if fresh != objects { objects = fresh }
-        } catch { readFailed("re-read your objects", error) }
-        // Places are folded per-object (each has its own log), so they are not derivable
-        // from `objects` — they need their own read, exactly like Things.
-        refreshPlaces()
-        // Posts are folded per-object too — same reason as Places and Things. The FEED
-        // reads them, so a Post minted anywhere reaches the scroll on the next pass.
-        refreshPosts()
-        // The forum→host map rides every re-list: the CHAT list joins on it, and a
-        // room minted or detached anywhere must re-dress its row on the next pass.
-        refreshForumHosts()
+        let reads = [
+            offMain("re-read your objects", { try $0.objects() }) { s, fresh in
+                if fresh != s.objects { s.objects = fresh }
+            },
+            // Places are folded per-object (each has its own log), so they are not
+            // derivable from `objects` — they need their own read, exactly like Things.
+            refreshPlaces(),
+            // Posts are folded per-object too — same reason as Places and Things. The FEED
+            // reads them, so a Post minted anywhere reaches the scroll on the next pass.
+            refreshPosts(),
+            // The forum→host map rides every re-list: the CHAT list joins on it, and a
+            // room minted or detached anywhere must re-dress its row on the next pass.
+            refreshForumHosts(),
+        ]
+        return Task { for r in reads { await r.value } }
     }
 
     /// forum object id → its hosting Group, the whole map in one FFI call. What
@@ -827,18 +872,18 @@ final class CoreService: ObservableObject {
         forumParents.values.first { $0.parent == objectId && $0.role == Self.commentsPart }?.forum
     }
 
-    func refreshForumHosts() {
-        do {
-            let fresh = Dictionary(try core.forumHosts().map { ($0.forum, $0) },
-                                   uniquingKeysWith: { a, _ in a })
-            if fresh != forumHosts { forumHosts = fresh }
-            let rooms = Dictionary(try core.roomHosts().map { ($0.room, $0) },
-                                   uniquingKeysWith: { a, _ in a })
-            if rooms != roomHosts { roomHosts = rooms }
-            let parents = Dictionary(try core.forumParents().map { ($0.forum, $0) },
-                                     uniquingKeysWith: { a, _ in a })
-            if parents != forumParents { forumParents = parents }
-        } catch { readFailed("re-read channel hosts", error) }
+    @discardableResult
+    func refreshForumHosts() -> Task<Void, Never> {
+        offMain("re-read channel hosts", { c in
+            (Dictionary(try c.forumHosts().map { ($0.forum, $0) }, uniquingKeysWith: { a, _ in a }),
+             Dictionary(try c.roomHosts().map { ($0.room, $0) }, uniquingKeysWith: { a, _ in a }),
+             Dictionary(try c.forumParents().map { ($0.forum, $0) }, uniquingKeysWith: { a, _ in a }))
+        }) { s, read in
+            let (hosts, rooms, parents) = read
+            if hosts != s.forumHosts { s.forumHosts = hosts }
+            if rooms != s.roomHosts { s.roomHosts = rooms }
+            if parents != s.forumParents { s.forumParents = parents }
+        }
     }
 
     /// A fresh signed contact bundle for the pairing QR. Fails loudly (surfaces
@@ -993,11 +1038,15 @@ final class CoreService: ObservableObject {
     /// an OutlineModel entity row: those are device-local and cannot be sent to anyone.
     @Published private(set) var places: [PlaceRow] = []
 
-    func refreshPlaces() {
-        do {
-            let fresh = try core.places()
-            if fresh != places { places = fresh }
-        } catch { readFailed("re-read your places", error) }
+    /// The places as the core holds them NOW, read on the caller's thread: only for a
+    /// lookup that missed the published list (a deep link ahead of the first refresh).
+    func placesNow() -> [PlaceRow] { (try? core.places()) ?? places }
+
+    @discardableResult
+    func refreshPlaces() -> Task<Void, Never> {
+        offMain("re-read your places", { try $0.places() }) { s, fresh in
+            if fresh != s.places { s.places = fresh }
+        }
     }
 
     /// Mint a Place from a live location fix. A group of 1: local, no relay, until shared.
@@ -1052,12 +1101,11 @@ final class CoreService: ObservableObject {
     }
 
     /// Re-read the merged listing (pure fold read; asks nobody anything).
-    func refreshDiscovered(hops: UInt32 = 2) {
-        do {
-            let fresh = try core.discoverResults(kind: "place", hops: hops)
-            if fresh != discovered { discovered = fresh }
+    @discardableResult
+    func refreshDiscovered(hops: UInt32 = 2) -> Task<Void, Never> {
+        offMain("re-read discovered places", { try $0.discoverResults(kind: "place", hops: hops) }) { s, fresh in
+            if fresh != s.discovered { s.discovered = fresh }
         }
-        catch { readFailed("re-read discovered places", error) }
     }
 
     /// Adopt a discovered place as a held Place I can publish into. Minted-wins:
@@ -1305,21 +1353,22 @@ final class CoreService: ObservableObject {
 
     // Equality-gated like `refresh()`: an unchanged read must not republish — with the
     // feed subscribed to the tick, an ungated assignment is the 4 Aug storm again.
-    func refreshThings() {
-        do {
-            let fresh = try core.things()
-            if fresh != things { things = fresh }
-        }
-        catch { readFailed("re-read your things", error) }
-        refreshListings()
+    @discardableResult
+    func refreshThings() -> Task<Void, Never> {
+        let reads = [
+            offMain("re-read your things", { try $0.things() }) { s, fresh in
+                if fresh != s.things { s.things = fresh }
+            },
+            refreshListings(),
+        ]
+        return Task { for r in reads { await r.value } }
     }
 
-    func refreshListings() {
-        do {
-            let fresh = try core.listings()
-            if fresh != listings { listings = fresh }
+    @discardableResult
+    func refreshListings() -> Task<Void, Never> {
+        offMain("re-read listings", { try $0.listings() }) { s, fresh in
+            if fresh != s.listings { s.listings = fresh }
         }
-        catch { readFailed("re-read listings", error) }
     }
 
     /// Fan my postures out to every connection and relay onward what I hold. The sync loop
@@ -1551,23 +1600,28 @@ final class CoreService: ObservableObject {
     /// is what keeps the 3s sync tick from re-rendering the feed over unchanged rows.
     @Published private(set) var posts: [PostRow] = []
 
-    func refreshPosts() {
-        do {
-            let fresh = try core.posts()
-            if fresh != posts { posts = fresh }
+    @discardableResult
+    func refreshPosts() -> Task<Void, Never> {
+        offMain("re-read your posts", { try $0.posts() }) { s, fresh in
+            if fresh != s.posts { s.posts = fresh }
         }
-        catch { readFailed("re-read your posts", error) }
     }
 
     @Published private(set) var events: [EventRow] = []
 
-    func refreshEvents() {
-        do {
-            let fresh = try core.events()
-            if fresh != events { events = fresh }
-        }
-        catch { readFailed("re-read your events", error) }
-        refreshInvites()
+    /// The events as the core holds them NOW, read on the caller's thread: only for a
+    /// lookup that missed the published list (a deep link ahead of the first refresh).
+    func eventsNow() -> [EventRow] { (try? core.events()) ?? events }
+
+    @discardableResult
+    func refreshEvents() -> Task<Void, Never> {
+        let reads = [
+            offMain("re-read your events", { try $0.events() }) { s, fresh in
+                if fresh != s.events { s.events = fresh }
+            },
+            refreshInvites(),
+        ]
+        return Task { for r in reads { await r.value } }
     }
 
     /// Events I have said I am GOING to — the delta-backed commitment that replaced
@@ -1580,28 +1634,34 @@ final class CoreService: ObservableObject {
 
     /// eventId -> the peer whose channel carries the invitation. An answer has to be
     /// authored to SOMEBODY; this is who.
-    private var inviteChannels: [String: String] = [:]
+    /// Published: `EventsPage.canCommit` reads it as it draws, and it now lands off main.
+    @Published private(set) var inviteChannels: [String: String] = [:]
 
     /// Re-fold the invitations on every connection. Cheap enough to run on the sync
     /// tick (one fold per connection) and it must not be lazy — a row asking "am I
     /// going" mid-scroll cannot afford a per-row fold.
-    func refreshInvites() {
-        var going: Set<String> = []
-        var channels: [String: String] = [:]
+    @discardableResult
+    func refreshInvites() -> Task<Void, Never> {
         let me = myIdentityHex
-        // includeBlocked: a commitment you made stays true after you block the inviter.
-        for c in connectionRows(includeBlocked: true) {
-            for inv in invites(peer: c.peerId) {
-                // An invitation I RECEIVED — mine to answer, so this channel is where
-                // the answer goes.
-                if inv.author != me {
-                    channels[inv.event] = c.peerId
-                    if inv.reply == "going" { going.insert(inv.event) }
+        return offMain("read your connections", { c in
+            var going: Set<String> = []
+            var channels: [String: String] = [:]
+            // includeBlocked: a commitment you made stays true after you block the inviter.
+            for conn in try c.connections() {
+                for inv in (try? c.invites(peer: IdentityKey.hex(conn.peerId))) ?? [] {
+                    // An invitation I RECEIVED — mine to answer, so this channel is where
+                    // the answer goes.
+                    if inv.author != me {
+                        channels[inv.event] = conn.peerId
+                        if inv.reply == "going" { going.insert(inv.event) }
+                    }
                 }
             }
+            return (going, channels)
+        }) { s, read in
+            if read.0 != s.goingEvents { s.goingEvents = read.0 }
+            if read.1 != s.inviteChannels { s.inviteChannels = read.1 }
         }
-        if going != goingEvents { goingEvents = going }
-        inviteChannels = channels
     }
 
     /// Commit, or withdraw. Returns false when there is nobody to tell — an event
@@ -1892,6 +1952,25 @@ final class CoreService: ObservableObject {
     }
 
     /// BUYER: the ticket wallet folded off the connection with `peer` (who delivered).
+    /// LIFE's people and the listings the wallet holds tickets for, read off the main
+    /// thread in one pass: on it, the wallet's per-connection fold stalled every arrival.
+    func peopleAndHeldListings() async -> (people: [ConnectionRow], held: Set<String>) {
+        let core = self.core
+        let read = await Task.detached(priority: .userInitiated) { () -> ([ConnectionRow], Set<String>, Error?) in
+            do {
+                let people = try core.connections()
+                var held: Set<String> = []
+                for p in people {
+                    // A not-yet-formed channel is not an error worth an alert.
+                    for t in (try? core.wallet(peer: IdentityKey.hex(p.peerId))) ?? [] { held.insert(t.listing) }
+                }
+                return (people, held, nil)
+            } catch { return ([], [], error) }
+        }.value
+        if let e = read.2 { readFailed("read your connections", e) }
+        return (read.0.filter { !BlockStore.shared.contains($0.peerId) }, read.1)
+    }
+
     func walletTickets(peer: String) -> [WalletTicketRow] {
         do { return try core.wallet(peer: Self.identityHex(peer)) }
         catch { return [] }   // a not-yet-formed channel is not an error worth an alert
@@ -2002,6 +2081,42 @@ final class CoreService: ObservableObject {
             return ProjectionInputs(connections: (try? core.connections()) ?? [],
                                     members: members, groups: groups)
         }.value
+    }
+
+    // MARK: - The chat list, read in one pass off the main thread
+
+    /// What the CHAT list draws, gathered off the main actor: on it, the list's per-group
+    /// and per-DM transcript folds made every arrival on CHAT a stall.
+    struct ChatSnapshot {
+        let connections: [ConnectionRow]           // blocked ones included; the list filters
+        let messages: [String: [ChatMsg]]          // group object id or peer id → transcript
+        let members: [String: [String]]            // unnamed group id → roster identity hexes
+        let profiles: [String: ProfileRow]         // peer id → the profile they published
+    }
+
+    func chatSnapshot(groups: [ObjectRow]) async -> ChatSnapshot {
+        let core = self.core
+        let wanted = groups.map { (id: $0.id, named: !$0.name.isEmpty) }
+        let read = await Task.detached(priority: .userInitiated) { () -> (ChatSnapshot, [Error]) in
+            var failed: [Error] = []
+            var messages: [String: [ChatMsg]] = [:]
+            var members: [String: [String]] = [:]
+            var profiles: [String: ProfileRow] = [:]
+            for g in wanted {
+                do { messages[g.id] = try core.objectMessages(objectId: g.id) } catch { failed.append(error) }
+                if !g.named { members[g.id] = (try? core.objectMembers(objectId: g.id)) ?? [] }
+            }
+            var connections: [ConnectionRow] = []
+            do { connections = try core.connections() } catch { failed.append(error) }
+            for c in connections {
+                do { messages[c.peerId] = try core.dmMessages(peerId: c.peerId) } catch { failed.append(error) }
+                if let p = (try? core.peerProfile(peerId: c.peerId)) ?? nil { profiles[c.peerId] = p }
+            }
+            return (ChatSnapshot(connections: connections, messages: messages,
+                                 members: members, profiles: profiles), failed)
+        }.value
+        for e in read.1 { readFailed("read the transcript", e) }
+        return read.0
     }
 
     // MARK: - Orgs (the LIFE ▸ GROUPS ▸ ＋ hot path)
@@ -2158,12 +2273,11 @@ final class CoreService: ObservableObject {
     /// name in the MLS GroupContext and not in its folded profile.
     var spaces: [GroupListRow] { orgs.filter(\.isSpace) }
 
-    func refreshOrgs() {
-        do {
-            let fresh = try core.groups()
-            if fresh != orgs { orgs = fresh }
+    @discardableResult
+    func refreshOrgs() -> Task<Void, Never> {
+        offMain("re-read your Spaces", { try $0.groups() }) { s, fresh in
+            if fresh != s.orgs { s.orgs = fresh }
         }
-        catch { readFailed("re-read your Spaces", error) }
     }
 
     /// ONE group's LIFE listing row — roster count (MLS, the single source) +
@@ -2496,8 +2610,12 @@ final class CoreService: ObservableObject {
     /// object id: that is an address, not a name. Members we have no name for are
     /// counted ("+2") rather than rendered as hex.
     func derivedGroupName(_ objectId: String, names: [String: String]? = nil) -> String {
-        let names = names ?? peerNamesByIdentity()
-        let others = objectMembers(objectId).filter { $0 != myIdentityHex }
+        derivedGroupName(members: objectMembers(objectId), names: names ?? peerNamesByIdentity())
+    }
+
+    /// The same label from a roster already read.
+    func derivedGroupName(members: [String], names: [String: String]) -> String {
+        let others = members.filter { $0 != myIdentityHex }
         guard !others.isEmpty else { return "Just you" }
         let known = others.compactMap { names[$0] }
         let unknown = others.count - known.count
@@ -2790,11 +2908,14 @@ final class CoreService: ObservableObject {
         syncing = true
         defer { syncing = false }
         let c = core
+        var synced = false
         do {
             _ = try await Task.detached { try c.sync() }.value
-            syncTick &+= 1
+            synced = true
         } catch { if !silent { self.error = String(describing: error) } }
-        refresh()
+        // The re-read lands BEFORE the tick: every handler on `syncTick` reads this pass.
+        await refresh().value
+        if synced { syncTick &+= 1 }
         TimingProbe.shared.drain(core: self)   // no-op unless PACIFIC_TIMING=1
     }
 

@@ -59,14 +59,14 @@ pub fn is_question_op(op_id: u32) -> bool {
 }
 
 /// One member's answer: free text, option indexes, or both where the question takes both.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Answer {
     pub text: Option<String>,
     pub choices: Vec<usize>,
     pub gen: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Question {
     pub text: String,
     /// None for a free question.

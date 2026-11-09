@@ -345,13 +345,13 @@ struct RealProfileSource: ProfileSource {
     private func placeRow(_ id: String) -> PlaceRow? {
         if let hit = core.places.first(where: { $0.id == id }) { return hit }
         core.refreshPlaces()
-        return core.places.first { $0.id == id }
+        return core.placesNow().first { $0.id == id }
     }
 
     private func eventRow(_ id: String) -> EventRow? {
         if let hit = core.events.first(where: { $0.id == id }) { return hit }
         core.refreshEvents()
-        return core.events.first { $0.id == id }
+        return core.eventsNow().first { $0.id == id }
     }
 
 }

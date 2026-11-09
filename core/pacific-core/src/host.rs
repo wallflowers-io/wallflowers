@@ -82,7 +82,7 @@ pub const MEDIA_MIMES: &[&str] = &["image/jpeg", "image/png", "image/webp"];
 pub const MAX_MEDIA_B64: usize = 156_000;
 
 /// A picture in one slot.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Media {
     pub mime: String,
     pub data: String,
@@ -119,7 +119,7 @@ pub fn check_media(slot: &str, data: &str, mime: &str) -> Result<(), String> {
 }
 
 /// The compiled read-side state of a Host: what the Arc folds and serves.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HostState {
     /// What a human calls it.
     pub name: String,

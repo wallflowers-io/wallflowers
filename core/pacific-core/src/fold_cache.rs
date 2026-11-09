@@ -16,8 +16,15 @@
 //!
 //! IT HOLDS FOLDS, NOT ANSWERS: nothing is scoped here, and every caller filters after it
 //! exactly as after a fresh fold. It lives in memory, per directory, bounded in bytes, and
-//! evicts the least recently used; an eviction is only a miss. No folded state is written
-//! anywhere.
+//! evicts the least recently used; an eviction is only a miss.
+//!
+//! ON DISK TOO, where the embedding says so (option B, `set_persist`; Ralph, 8 Nov): the
+//! folded states and views are also kept in the directory's `fold_store`, under the same
+//! key less the nonce, so a restart picks up where it left off rather than refolding and
+//! re-verifying every object. Never read as truth: the key is the restored rows' own
+//! `fold_gen`, a model that differs is a miss, and `fold_store` goes whenever `fold_gen`
+//! starts again. It is derived from the deltas alone, so a device that never saw it
+//! rebuilds it from the log.
 //!
 //! ITS BYTES ARE COUNTED, NOT ESTIMATED (FC-10): a fold retains about three times its rows,
 //! so an estimate bounds nothing. The embedding names its allocator's count (`set_measure`);
@@ -76,6 +83,20 @@ pub fn model() -> Option<[u8; 32]> {
     })
 }
 
+static PERSIST: OnceLock<bool> = OnceLock::new();
+
+/// Keep folds on disk as well, once, at start (O-69 option B; `Directory::cached_kept`): an
+/// embedding whose directory outlives the process and is not sealed every session (the
+/// iOS app), so a restart reads where it left off. Off unless named; a test names it in
+/// `PACIFIC_FOLD_CACHE_PERSIST=1`, as it names a model.
+pub fn set_persist(on: bool) {
+    let _ = PERSIST.set(on);
+}
+
+pub fn persist() -> bool {
+    *PERSIST.get_or_init(|| std::env::var("PACIFIC_FOLD_CACHE_PERSIST").is_ok_and(|v| v == "1"))
+}
+
 /// Bound every directory's cache, once, at start (the session's memory budget).
 pub fn set_bytes(bytes: usize) {
     let _ = BYTES.set(bytes);
@@ -119,6 +140,8 @@ pub struct FoldCache {
     /// Hits and misses since this directory opened: what the cache is doing, for tests.
     pub hits: u64,
     pub misses: u64,
+    /// Of the misses, those answered from disk (`Directory::cached_kept`).
+    pub kept: u64,
     /// A bound of its own, for a test; otherwise the process's (`set_bytes`).
     limit: Option<usize>,
 }

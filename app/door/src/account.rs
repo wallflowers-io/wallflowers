@@ -1056,7 +1056,7 @@ pub fn run() {
     if arc_build::STAMPED {
         pacific_core::fold_cache::set_model((!arc_build::DIRTY).then_some(arc_build::CORE));
     }
-    pacific_core::fold_cache::set_measure(crate::counting::allocated);
+    pacific_core::fold_cache::set_measure(pacific_counting::allocated);
     eprintln!(
         "door session: fold cache {}",
         match (pacific_core::fold_cache::model().is_some(), pacific_core::fold_cache::verify()) {

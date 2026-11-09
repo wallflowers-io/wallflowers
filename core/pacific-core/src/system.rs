@@ -61,7 +61,7 @@ pub const MAX_HYDRATED_PAYLOAD: usize = 16_384;
 /// `payload` is the source's own JSON, kept VERBATIM — the System that wrote it owns
 /// its shape, and every reader parses the same bytes. Keeping it opaque here is what
 /// lets a new connector ship without a core change.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HydratedItem {
     /// The source's stable id for this item, e.g. `ra:event:166016`. THE dedup key:
     /// re-fetching the same listing produces the same key, so hydration is idempotent
@@ -81,7 +81,7 @@ pub struct HydratedItem {
 }
 
 /// The compiled read-side state of a System.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SystemState {
     /// What a human calls it — "Resident Advisor".
     pub name: String,

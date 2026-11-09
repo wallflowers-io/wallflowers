@@ -59,6 +59,36 @@ impl PeerStatus {
 /// `delta_log`'s `delivered` flag is left out: the relay's acknowledgement changes nothing
 /// a fold reads. The triggers are dropped and made again at every open, so a changed body
 /// reaches a database made before it.
+/// `FOLD_GEN`'s triggers, as (name, the statement SQLite keeps for it: from CREATE to END,
+/// without the semicolon).
+fn fold_triggers() -> Vec<(&'static str, &'static str)> {
+    let mut out = Vec::new();
+    let mut rest = FOLD_GEN;
+    while let Some(at) = rest.find("CREATE TRIGGER ") {
+        let stmt = &rest[at..];
+        let end = stmt.find("\nEND;").map(|e| e + "\nEND".len()).unwrap_or(stmt.len());
+        let name = stmt["CREATE TRIGGER ".len()..].split_whitespace().next().unwrap_or_default();
+        out.push((name, &stmt[..end]));
+        rest = &stmt[end..];
+    }
+    out
+}
+
+/// THE FOLDS KEPT ON DISK (O-69 option B): one row per object, lens and product, keyed as
+/// the memory cache is less its nonce. Named by no trigger, so keeping a fold moves no
+/// generation.
+const FOLD_STORE: &str = r#"
+CREATE TABLE IF NOT EXISTS fold_store (
+  group_id BLOB NOT NULL,
+  lens     TEXT NOT NULL,
+  what     TEXT NOT NULL,
+  gen      INTEGER NOT NULL,
+  model    BLOB NOT NULL,
+  value    BLOB NOT NULL,
+  PRIMARY KEY (group_id, lens, what)
+);
+"#;
+
 const FOLD_GEN: &str = r#"
 CREATE TABLE IF NOT EXISTS fold_gen (
   group_id BLOB PRIMARY KEY,
@@ -514,18 +544,28 @@ CREATE TABLE IF NOT EXISTS pending_departure (
 /// peer must not be able to grow local disk unboundedly.
 pub const QUARANTINE_CAP: i64 = 256;
 
+/// One open of a directory, as a second connection to it shares it (`Directory::open_beside`).
+#[derive(Clone)]
+pub struct Shared {
+    path: String,
+    nonce: u64,
+    verified: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<[u8; 32]>>>,
+    folds: std::sync::Arc<std::sync::Mutex<crate::fold_cache::FoldCache>>,
+}
+
 /// The on-device directory. Owns a SQLite connection.
 pub struct Directory {
     pub conn: Connection,
     /// Rows whose authorship signature this Directory has already checked, keyed by
     /// a hash of group, author, signature and envelope: a row that changes in any of
-    /// them is checked again (A-10; RX.8).
-    verified: std::sync::Mutex<std::collections::HashSet<[u8; 32]>>,
+    /// them is checked again (A-10; RX.8). Shared with a Directory opened beside it.
+    verified: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<[u8; 32]>>>,
     /// Random at every open (O-69): a restore that brings back an older `fold_gen` never
-    /// meets a cache entry made before it.
+    /// meets a cache entry made before it. A Directory opened beside another is the same
+    /// open, and takes its nonce.
     pub nonce: u64,
     /// The folds of this open (O-69): keyed as `crate::fold_cache::Key` says.
-    pub folds: std::sync::Mutex<crate::fold_cache::FoldCache>,
+    pub folds: std::sync::Arc<std::sync::Mutex<crate::fold_cache::FoldCache>>,
 }
 
 impl Directory {
@@ -543,6 +583,20 @@ impl Directory {
         let conn = Connection::open(path)?;
         Self::init(&conn)?;
         Ok(Self::with(conn))
+    }
+
+    /// What a second connection to this open shares with it (`open_beside`).
+    pub fn shared(&self) -> Result<Shared, CoreError> {
+        let path = self.conn.path().filter(|p| !p.is_empty()).ok_or_else(|| CoreError::Directory("an in-memory directory has no second connection".into()))?;
+        Ok(Shared { path: path.into(), nonce: self.nonce, verified: self.verified.clone(), folds: self.folds.clone() })
+    }
+
+    /// A second connection to an open: its checked signatures, its folds and its nonce, so a
+    /// long write on one never holds up a read on the other. The schema is the open's,
+    /// already migrated. Safe because nothing shared is keyed by the connection: a checked
+    /// row by its content, a fold by `fold_gen`, which the writing transaction's triggers raise.
+    pub fn open_beside(open: &Shared) -> Result<Self, CoreError> {
+        Ok(Self { conn: Connection::open(&open.path)?, verified: open.verified.clone(), nonce: open.nonce, folds: open.folds.clone() })
     }
 
     fn with(conn: Connection) -> Self {
@@ -571,9 +625,52 @@ impl Directory {
         same: impl Fn(&V, &V) -> bool,
         fresh: impl Fn() -> Result<V, CoreError>,
     ) -> Result<V, CoreError> {
+        self.layered(id, lens, what, same, fresh, |_| None, |_, _| {})
+    }
+
+    /// [`cached`] with the disk beneath memory, where the embedding keeps folds
+    /// (`fold_cache::persist`; O-69 option B): a miss in memory reads `fold_store` under
+    /// the same key, and a fresh fold is kept there as well. A disk hit is checked by
+    /// FC-2 against a refold exactly as a memory hit is.
+    pub fn cached_kept<V: Clone + Send + Sync + 'static + serde::Serialize + serde::de::DeserializeOwned>(
+        &self,
+        id: &[u8],
+        lens: &str,
+        what: &'static str,
+        same: impl Fn(&V, &V) -> bool,
+        fresh: impl Fn() -> Result<V, CoreError>,
+    ) -> Result<V, CoreError> {
+        if !crate::fold_cache::persist() {
+            return self.cached(id, lens, what, same, fresh);
+        }
+        self.layered(id, lens, what, same, fresh, |key| self.kept(key), |key, v| self.keep(key, v))
+    }
+
+    /// The fold cache's one path: memory, then `load`, then the fold, kept in memory and
+    /// handed to `store`.
+    #[allow(clippy::too_many_arguments)]
+    fn layered<V: Clone + Send + Sync + 'static>(
+        &self,
+        id: &[u8],
+        lens: &str,
+        what: &'static str,
+        same: impl Fn(&V, &V) -> bool,
+        fresh: impl Fn() -> Result<V, CoreError>,
+        load: impl Fn(&crate::fold_cache::Key) -> Option<Result<V, crate::object_store::Refusal>>,
+        store: impl Fn(&crate::fold_cache::Key, &Result<V, crate::object_store::Refusal>),
+    ) -> Result<V, CoreError> {
         use crate::object_store::Refusal;
         let Some(key) = self.fold_key(id, lens, what)? else { return fresh() };
-        let hit = self.folds.lock().ok().and_then(|mut c| c.get::<Result<V, Refusal>>(&key));
+        let mut hit = self.folds.lock().ok().and_then(|mut c| c.get::<Result<V, Refusal>>(&key));
+        if hit.is_none() {
+            if let Some(kept) = load(&key) {
+                if let Ok(mut c) = self.folds.lock() {
+                    c.kept += 1;
+                    c.put::<Result<V, Refusal>>(key.clone(), &kept);
+                }
+                hit = Some(kept);
+            }
+        }
         if let Some(hit) = hit {
             if crate::fold_cache::verify() {
                 let again = fresh();
@@ -591,10 +688,54 @@ impl Directory {
             Ok(v) => Some(Ok(v.clone())),
             Err(e) => Refusal::of(e).map(Err),
         };
-        if let (Some(kept), Ok(mut c)) = (kept, self.folds.lock()) {
-            c.put::<Result<V, Refusal>>(key, &kept);
+        if let Some(kept) = kept {
+            store(&key, &kept);
+            if let Ok(mut c) = self.folds.lock() {
+                c.put::<Result<V, Refusal>>(key, &kept);
+            }
         }
         out
+    }
+
+    /// A fold kept on disk under `key`, if there is one and it decodes. A device fault
+    /// reading it is only a miss.
+    fn kept<V: serde::de::DeserializeOwned>(&self, key: &crate::fold_cache::Key) -> Option<Result<V, crate::object_store::Refusal>> {
+        let blob: Vec<u8> = self
+            .conn
+            .query_row(
+                "SELECT value FROM fold_store WHERE group_id = ?1 AND lens = ?2 AND what = ?3 AND gen = ?4 AND model = ?5",
+                params![key.object, key.lens, key.what, key.gen as i64, &key.model[..]],
+                |r| r.get(0),
+            )
+            .optional()
+            .ok()??;
+        ciborium::from_reader(&blob[..]).ok()
+    }
+
+    /// Keep a fold on disk under `key`, replacing the object's older one. Best effort: a
+    /// fold not kept is folded again next time.
+    fn keep<V: serde::Serialize>(&self, key: &crate::fold_cache::Key, v: &Result<V, crate::object_store::Refusal>) {
+        let mut blob = Vec::new();
+        if ciborium::into_writer(v, &mut blob).is_err() {
+            return;
+        }
+        let _ = self.conn.execute(
+            "INSERT OR REPLACE INTO fold_store (group_id, lens, what, gen, model, value) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![key.object, key.lens, key.what, key.gen as i64, &key.model[..], blob],
+        );
+    }
+
+    /// Every object whose generation has moved past what `fold_store` keeps for it under
+    /// `model`: what a write pass left to fold (`Node::refold_moved`).
+    pub fn moved_objects(&self, model: &[u8; 32]) -> Result<Vec<(Vec<u8>, String)>, CoreError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT o.group_id, o.kind FROM groups o JOIN fold_gen g ON g.group_id = o.group_id
+             WHERE NOT EXISTS (SELECT 1 FROM fold_store s
+                               WHERE s.group_id = o.group_id AND s.gen = g.gen AND s.model = ?1)
+             ORDER BY o.group_id",
+        )?;
+        let rows = stmt.query_map(params![&model[..]], |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, String>(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     /// The object's fold generation: 0 when nothing the fold reads was ever written.
@@ -713,9 +854,60 @@ impl Directory {
             [],
         );
         let _ = conn.execute("DROP TABLE IF EXISTS inbox_cursor", []);
-        // After the migrations: the triggers name columns some of them add.
-        conn.execute_batch(FOLD_GEN)?;
+        // After the migrations: the triggers name columns some of them add. Triggers that
+        // already read as written are left alone, so an open of a current database writes
+        // nothing and waits on no one; otherwise ONE OPEN AT A TIME redoes them, in an
+        // immediate transaction: two opens of one database at once (the app's first, a
+        // test's relaunch beside it) interleaved their DROP and CREATE and failed with
+        // "trigger … already exists". A second waits its turn (busy_timeout).
+        if Self::fold_triggers_current(conn)? {
+            return Ok(());
+        }
+        conn.execute_batch("BEGIN IMMEDIATE")?;
+        let triggers = || -> Result<(), CoreError> {
+            let gens: i64 = conn.query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'fold_gen'",
+                [],
+                |r| r.get(0),
+            )?;
+            conn.execute_batch(FOLD_STORE)?;
+            conn.execute_batch(FOLD_GEN)?;
+            // Generations that start again from nothing could meet a kept fold of an
+            // earlier count: the kept folds go with them.
+            if gens == 0 {
+                conn.execute("DELETE FROM fold_store", [])?;
+            }
+            Ok(())
+        };
+        match triggers() {
+            Ok(()) => conn.execute_batch("COMMIT")?,
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(e);
+            }
+        }
         Ok(())
+    }
+
+    /// Every fold trigger reads in the schema exactly as `FOLD_GEN` writes it, and the
+    /// tables they and the kept folds need are there: nothing for an open to redo.
+    fn fold_triggers_current(conn: &Connection) -> Result<bool, CoreError> {
+        let tables: i64 = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('fold_gen', 'store_gen', 'fold_store')",
+            [],
+            |r| r.get(0),
+        )?;
+        if tables != 3 {
+            return Ok(false);
+        }
+        let mut held = conn.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?1")?;
+        for (name, sql) in fold_triggers() {
+            let have: Option<String> = held.query_row(params![name], |r| r.get(0)).optional()?;
+            if have.as_deref() != Some(sql) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     // ---- me ----
@@ -2419,6 +2611,38 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         Directory::init(&conn).unwrap();
         Directory::with(conn)
+    }
+
+    /// `FOLD_GEN` is read as SQLite keeps it: a database just opened reads current, and one
+    /// missing a trigger does not.
+    #[test]
+    fn the_fold_triggers_read_as_written() {
+        let dir = mem();
+        assert_eq!(fold_triggers().len(), FOLD_GEN.matches("CREATE TRIGGER ").count());
+        assert!(Directory::fold_triggers_current(&dir.conn).unwrap(), "just written");
+        dir.conn.execute_batch("DROP TRIGGER fold_gen_log_ins").unwrap();
+        assert!(!Directory::fold_triggers_current(&dir.conn).unwrap(), "one dropped");
+        Directory::init(&dir.conn).unwrap();
+        assert!(Directory::fold_triggers_current(&dir.conn).unwrap(), "and an open puts it back");
+    }
+
+    /// Opens of one database at once all succeed. Each redid the fold triggers, and two
+    /// interleaving their DROP and CREATE failed on the first read ("trigger … already
+    /// exists"), as the app's first opens did at sign-up and a test's relaunch beside it;
+    /// under a loaded host, opens queued for the write lock ran past busy_timeout. Now an
+    /// open of a current database only reads.
+    #[test]
+    fn opens_at_once_all_succeed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pacific.db");
+        Directory::open_at(&path).unwrap();
+        let failed: Vec<String> = std::thread::scope(|s| {
+            let opens: Vec<_> = (0..8)
+                .map(|_| s.spawn(|| (0..25).filter_map(|_| Directory::open_at(&path).err().map(|e| e.to_string())).collect::<Vec<_>>()))
+                .collect();
+            opens.into_iter().flat_map(|t| t.join().unwrap()).collect()
+        });
+        assert!(failed.is_empty(), "{} of 200 opens failed: {:?}", failed.len(), failed.first());
     }
 
     /// O-69: the fold generation moves on every change to a row the fold reads (a Delta

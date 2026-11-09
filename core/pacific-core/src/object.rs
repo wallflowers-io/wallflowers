@@ -270,7 +270,7 @@ pub struct Op<'a> {
 
 /// Every reject is typed and LOUD — nothing is ever swallowed (`core.py` rejection
 /// taxonomy, PROTOCOL sec 3.6). A reducer returns one of these instead of mutating.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum DeltaRejection {
     /// Author lacks the authority the op requires.
     Unauthorized,

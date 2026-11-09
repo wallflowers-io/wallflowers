@@ -22,13 +22,13 @@ enum EventSeeder {
             || UserDefaults.standard.string(forKey: "pacificOpenListing") != nil
     }
 
-    static func seedIfRequested(core: CoreService) {
+    static func seedIfRequested(core: CoreService) async {
         guard ProcessInfo.processInfo.arguments.contains(launchArg) else { return }
-        seed(core: core)
+        await seed(core: core)
     }
 
-    static func seed(core: CoreService) {
-        core.refreshEvents()
+    static func seed(core: CoreService) async {
+        await core.refreshEvents().value
         let existing = Set(core.events.map(\.title))
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
@@ -103,9 +103,9 @@ enum EventSeeder {
         // time and a test taps whatever is on top, so a single hosted event makes
         // beat 2 a coin toss. The diagram says the same thing — its feed cards each
         // carry an author ('Beachcrimes', 'Monroe', 'NTS London').
-        seedHost(core: core, space: "Monroe",      publishing: upward)
-        seedHost(core: core, space: "Beachcrimes", publishing: beach)
-        seedHost(core: core, space: "QA Promoter", publishing: qa)
+        await seedHost(core: core, space: "Monroe",      publishing: upward)
+        await seedHost(core: core, space: "Beachcrimes", publishing: beach)
+        await seedHost(core: core, space: "QA Promoter", publishing: qa)
     }
 
     /// THE JOURNEY'S HOST (one-pager beats 2–3). An event minted by this device has
@@ -122,8 +122,8 @@ enum EventSeeder {
     ///
     /// Then one CHANNEL on that Space (beat 3), through `groupForumNew` — a real
     /// Forum GroupObject plus its `part_of` edge (`base.setPart`), never a row.
-    private static func seedHost(core: CoreService, space host: String, publishing title: String) {
-        core.refreshOrgs()
+    private static func seedHost(core: CoreService, space host: String, publishing title: String) async {
+        await core.refreshOrgs().value
         let space: String
         if let existing = core.orgs.first(where: { $0.name == host }) {
             space = existing.id
@@ -138,7 +138,7 @@ enum EventSeeder {
 
         // Claim the night. Idempotent: the fold is LWW per (peer, rel), so a
         // relaunch rewrites the same edge rather than accumulating them.
-        core.refreshEvents()
+        await core.refreshEvents().value
         if let event = core.events.first(where: { $0.title == title }) {
             _ = core.setAffiliation(space, peer: event.id, rel: "created", name: event.title)
         }

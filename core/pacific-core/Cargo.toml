@@ -51,7 +51,7 @@ mls = ["dep:mls-rs", "dep:mls-rs-core", "dep:mls-rs-crypto-rustcrypto", "trust/m
 #   cargo build -p pacific-core --no-default-features --target wasm32-unknown-unknown
 
 [dependencies]
-pacific-media = { path = "../pacific-media" }
+pacific-media = { path = "../pacific-media", features = ["serde"] }
 pacific-wire.workspace = true
 mls-rs = { workspace = true, optional = true }
 mls-rs-core = { workspace = true, optional = true }
@@ -100,6 +100,8 @@ serde_json.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+# The tests' global allocator: the fold cache's measure (tests/it/common).
+pacific-counting = { workspace = true }
 # The resume lines a sign-in emits, captured by its test.
 tracing-subscriber = "0.3"
 # Integration/transport tests spin up a real in-process Semaphore relay: the Arc's, in

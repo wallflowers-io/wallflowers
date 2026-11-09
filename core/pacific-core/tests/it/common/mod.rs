@@ -19,59 +19,9 @@
 
 #![allow(dead_code)] // shared across test binaries; not every test uses every helper.
 
-/// THE FOLD CACHE'S MEASURE (O-69, FC-10), as the Door installs it (app/door/src/counting.rs):
-/// the system allocator, counting each thread's bytes allocated net of those freed. Every
+/// THE FOLD CACHE'S MEASURE (O-69, FC-10), the allocator every embedding installs. Every
 /// binary with this harness counts, so a model in the env turns the cache on under it.
-pub mod counting {
-    use std::alloc::{GlobalAlloc, Layout, System};
-    use std::cell::Cell;
-
-    pub struct Counting;
-
-    thread_local! {
-        static NET: Cell<isize> = const { Cell::new(0) };
-    }
-
-    fn count(n: isize) {
-        let _ = NET.try_with(|c| c.set(c.get() + n));
-    }
-
-    /// This thread's bytes allocated, net of those it freed.
-    pub fn allocated() -> isize {
-        NET.try_with(Cell::get).unwrap_or(0)
-    }
-
-    unsafe impl GlobalAlloc for Counting {
-        unsafe fn alloc(&self, l: Layout) -> *mut u8 {
-            let p = System.alloc(l);
-            if !p.is_null() {
-                count(l.size() as isize);
-            }
-            p
-        }
-
-        unsafe fn alloc_zeroed(&self, l: Layout) -> *mut u8 {
-            let p = System.alloc_zeroed(l);
-            if !p.is_null() {
-                count(l.size() as isize);
-            }
-            p
-        }
-
-        unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
-            System.dealloc(p, l);
-            count(-(l.size() as isize));
-        }
-
-        unsafe fn realloc(&self, p: *mut u8, l: Layout, new: usize) -> *mut u8 {
-            let q = System.realloc(p, l, new);
-            if !q.is_null() {
-                count(new as isize - l.size() as isize);
-            }
-            q
-        }
-    }
-}
+pub use pacific_counting as counting;
 
 #[global_allocator]
 static COUNTING: counting::Counting = counting::Counting;

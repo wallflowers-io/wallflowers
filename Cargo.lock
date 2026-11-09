@@ -1254,6 +1254,7 @@ dependencies = [
  "libc",
  "p256",
  "pacific-core",
+ "pacific-counting",
  "pacific-media",
  "postgres",
  "rand_core 0.6.4",
@@ -3310,6 +3311,7 @@ dependencies = [
  "mls-rs",
  "mls-rs-core",
  "mls-rs-crypto-rustcrypto",
+ "pacific-counting",
  "pacific-media",
  "pacific-wire",
  "rand_core 0.6.4",
@@ -3331,12 +3333,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pacific-counting"
+version = "0.1.0"
+
+[[package]]
 name = "pacific-ffi"
 version = "0.1.0"
 dependencies = [
+ "arc-build",
  "base64",
  "hex",
  "pacific-core",
+ "pacific-counting",
  "pacific-media",
  "serde_json",
  "thiserror 2.0.20",
@@ -3354,6 +3362,9 @@ version = "0.1.0"
 [[package]]
 name = "pacific-media"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "pacific-wire"

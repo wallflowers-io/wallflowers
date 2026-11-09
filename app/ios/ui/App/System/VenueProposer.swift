@@ -83,7 +83,7 @@ final class VenueProposer: ObservableObject {
     /// Reads the minted Places FRESH (`refreshPlaces` is a cheap local fold), so a
     /// Place minted since the last sweep suppresses its venue immediately.
     func sweep(events: [MusicEvent], core: CoreService, proposals: ProposalStore) async {
-        core.refreshPlaces()
+        await core.refreshPlaces().value
         await sweep(events: events,
                     mintedPlaces: Set(core.places.map { Self.normalized($0.name) }),
                     proposals: proposals)
@@ -124,7 +124,7 @@ final class VenueProposer: ObservableObject {
     /// you can stand in front of, and the minted Place carries the address as its
     /// descriptor. Coordinates come from the listing card itself (no second fetch).
     func sweepArt(events: [ArtEvent], core: CoreService, proposals: ProposalStore) async {
-        core.refreshPlaces()
+        await core.refreshPlaces().value
         await sweepArt(events: events,
                        mintedPlaces: Set(core.places.map { Self.normalized($0.name) }),
                        proposals: proposals)

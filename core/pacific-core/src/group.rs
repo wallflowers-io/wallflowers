@@ -550,7 +550,7 @@ pub struct Affiliation {
 /// The record is KEPT when you leave, dated rather than removed, so the fold
 /// answers both "am I in X" and "was I ever". Re-joining is a later
 /// `joinedObject` and the sequenced order resolves it with no tombstone.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Joined {
     /// The directory kind — "forum", "place", "project", … — which decides the lens.
     /// It rides here because it only ever travels in a sealed Welcome otherwise, and
@@ -576,7 +576,7 @@ pub struct Joined {
 // ---- the folded state --------------------------------------------------------
 
 /// What a spent claim carried besides its member (ICD 2.1.0 row 2): the claim's `c` and `a`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ClaimPick {
     pub choice: Option<String>,
     pub share: Option<String>,
@@ -585,7 +585,7 @@ pub struct ClaimPick {
 /// The compiled projection of a Group's Delta log — the source of truth for the
 /// identity. `Default` is the genesis of a fresh group-of-1 (an individual).
 /// NOTE: member SET is NOT here — that is the MLS roster; this holds the overlay.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GroupState {
     pub display_name: String,
     pub shape: GroupShape,
@@ -664,7 +664,7 @@ pub struct GroupState {
 
 /// One listing on a Site's Trade board: a snapshot of the lister's Thing, as
 /// `contact.publishListing` carries one pairwise, less the relay's fields.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SiteListing {
     #[serde(serialize_with = "hex_member")]

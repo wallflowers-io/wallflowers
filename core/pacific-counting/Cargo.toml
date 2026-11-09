@@ -1,0 +1,10 @@
+# pacific-counting — the fold cache's measure (O-69, FC-10): the system allocator, counting
+# each thread's bytes. pacific-core forbids unsafe code, so every embedding (the Door, the iOS
+# FFI, the core's tests) installs this one and names its count to `fold_cache::set_measure`.
+[package]
+name = "pacific-counting"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

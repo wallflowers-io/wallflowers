@@ -22,6 +22,10 @@ use std::sync::Arc;
 
 use pacific_core::Node;
 
+/// What the fold cache measures its entries by (O-69, FC-10).
+#[global_allocator]
+static ALLOC: pacific_counting::Counting = pacific_counting::Counting;
+
 /// One loud FFI error. pacific-core's typed `CoreError` is flattened to a message
 /// at the boundary and surfaces in Swift as a native `throws`. No silent path.
 #[derive(uniffi::Error, Debug, thiserror::Error)]
@@ -56,6 +60,7 @@ pub fn set_device_key(key: Vec<u8>) -> Result<(), FfiError> {
         .try_into()
         .map_err(|_| FfiError::Core(format!("device key must be 32 bytes, got {}", key.len())))?;
     pacific_core::atrest::set_device_key(arr);
+    DEVICE_KEY.fetch_add(1, std::sync::atomic::Ordering::Release);
     Ok(())
 }
 
@@ -64,6 +69,7 @@ pub fn set_device_key(key: Vec<u8>) -> Result<(), FfiError> {
 #[uniffi::export]
 pub fn clear_device_key() {
     pacific_core::atrest::clear_device_key();
+    DEVICE_KEY.fetch_add(1, std::sync::atomic::Ordering::Release);
 }
 
 /// The two halves of the account channel derived from a passkey's PRF secret:
@@ -1608,19 +1614,116 @@ fn deliverable_row(d: pacific_core::project::DeliverableView) -> DeliverableRow 
     }
 }
 
-/// The single handle the Swift app holds. Immutable (just the state dir), so it
-/// is trivially `Send + Sync` as UniFFI requires. Every call rebuilds the Node
-/// from persisted state — the exact per-call model the CLI uses.
+/// The single handle the Swift app holds, one per process: the state dir, and the open of
+/// it every call reads through for as long as the process lives. Its checked signatures and
+/// folds outlive every call (O-69), where a Node per call re-verified and refolded every
+/// object on every read.
+///
+/// READS borrow a Node from a pool beside that open (`read`), so two reads never wait on
+/// each other: a main-thread read is not held up by a background one. Anything that may
+/// touch the network (every `block_on`) opens a Node of its own beside it (`write`): so a
+/// sync holds up no read, and writes run side by side as they always have, arbitrated by
+/// SQLite.
 #[derive(uniffi::Object)]
 pub struct Core {
     state_dir: String,
+    held: std::sync::Mutex<Option<Held>>,
+    /// Opens of the state dir since start: a Node lent under one is not taken back under
+    /// the next.
+    opens: std::sync::atomic::AtomicU64,
+}
+
+/// The open every Node shares, the device key it was made under, and the readers idle.
+struct Held {
+    open: pacific_core::directory::Shared,
+    key: u64,
+    gen: u64,
+    idle: Vec<Node>,
+}
+
+/// Readers kept idle for the next call; more are opened when more read at once.
+const IDLE: usize = 4;
+
+/// Device-key changes since start: a Node opened under one key reopens under the next.
+static DEVICE_KEY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn device_key() -> u64 {
+    DEVICE_KEY.load(std::sync::atomic::Ordering::Acquire)
+}
+
+/// A lock whose holder panicked (UniFFI turns a panic into an error) is taken, and what it
+/// held dropped: an open a panic interrupted is opened again.
+fn take<T>(m: &std::sync::Mutex<Option<T>>) -> std::sync::MutexGuard<'_, Option<T>> {
+    m.lock().unwrap_or_else(|p| {
+        m.clear_poison();
+        let mut g = p.into_inner();
+        *g = None;
+        g
+    })
+}
+
+/// A reader, lent for one call and given back when it ends.
+struct Reading<'a> {
+    core: &'a Core,
+    node: Option<Node>,
+    gen: u64,
+}
+
+impl std::ops::Deref for Reading<'_> {
+    type Target = Node;
+    fn deref(&self) -> &Node {
+        self.node.as_ref().expect("lent until dropped")
+    }
+}
+
+impl Drop for Reading<'_> {
+    fn drop(&mut self) {
+        let Some(node) = self.node.take() else { return };
+        if let Some(h) = take(&self.core.held).as_mut() {
+            if h.gen == self.gen && h.idle.len() < IDLE {
+                h.idle.push(node);
+            }
+        }
+    }
 }
 
 impl Core {
-    /// Point pacific-core at our sandbox before each op. Cheap and idempotent;
-    /// guards against any process that touched the env in between.
-    fn point(&self) {
-        std::env::set_var("PACIFIC_STATE_DIR", &self.state_dir);
+    /// The held open, made on first use and again after the identity or the device key
+    /// changes: its first Node runs the schema, every later one connects beside it.
+    fn opened(&self) -> Result<(pacific_core::directory::Shared, u64, Option<Node>), FfiError> {
+        let mut held = take(&self.held);
+        let key = device_key();
+        if held.as_ref().map_or(true, |h| h.key != key) {
+            *held = None;
+            let node = Node::open()?;
+            let gen = self.opens.fetch_add(1, std::sync::atomic::Ordering::AcqRel) + 1;
+            *held = Some(Held { open: node.dir.shared()?, key, gen, idle: vec![node] });
+        }
+        let h = held.as_mut().expect("opened above");
+        Ok((h.open.clone(), h.gen, h.idle.pop()))
+    }
+
+    /// A reader for one call: an idle one, or a new one beside the held open.
+    fn read(&self) -> Result<Reading<'_>, FfiError> {
+        let (open, gen, idle) = self.opened()?;
+        let node = match idle {
+            Some(n) => n,
+            None => Node::open_beside(&open)?,
+        };
+        Ok(Reading { core: self, node: Some(node), gen })
+    }
+
+    /// A Node for one call that may touch the network, beside the held open.
+    fn write(&self) -> Result<Node, FfiError> {
+        let (open, gen, idle) = self.opened()?;
+        // A reader taken only to find the open goes back.
+        drop(Reading { core: self, node: idle, gen });
+        Ok(Node::open_beside(&open)?)
+    }
+
+    /// The identity changed under the held open: the next call opens a new one.
+    fn reopen(&self) {
+        *take(&self.held) = None;
     }
 }
 
@@ -1643,20 +1746,29 @@ impl Core {
     #[uniffi::constructor]
     pub fn new(state_dir: String) -> Arc<Self> {
         std::env::set_var("PACIFIC_STATE_DIR", &state_dir);
-        Arc::new(Self { state_dir })
+        // THE FOLD CACHE (O-69), as the Door turns it on: its model the core commit a stamped,
+        // clean build was built from; a dirty one names none and folds uncached (FC-8).
+        if arc_build::STAMPED {
+            pacific_core::fold_cache::set_model((!arc_build::DIRTY).then_some(arc_build::CORE));
+        }
+        pacific_core::fold_cache::set_measure(pacific_counting::allocated);
+        // The app's directory outlives the process and is never sealed: its folds are kept
+        // on disk, so a launch reads where the last one left off (O-69 option B).
+        pacific_core::fold_cache::set_persist(true);
+        Arc::new(Self { state_dir, held: Default::default(), opens: Default::default() })
     }
 
     /// True once an identity has been minted on this device.
     pub fn has_identity(&self) -> bool {
-        self.point();
-        Node::open().is_ok()
+        self.read().is_ok()
     }
 
     /// Mint the on-device identity on first run. Loud if one already exists.
     /// Returns the stable IdentityKey (`ed25519:…`).
     pub fn init_identity(&self, display_name: String) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::init_identity(&display_name)?.identity_key())
+        let key = Node::init_identity(&display_name)?.identity_key();
+        self.reopen();
+        Ok(key)
     }
 
     /// This identity's recovery key — the 24 words that bring it back. Empty when
@@ -1664,41 +1776,35 @@ impl Core {
     /// omits the step rather than showing a placeholder. Device-local: nothing
     /// transmits this, and no server has ever held it.
     pub fn recovery_key(&self) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.recovery_key().unwrap_or_default())
+        Ok(self.read()?.recovery_key().unwrap_or_default())
     }
 
     /// The stable, user-facing identifier for this device's identity.
     pub fn identity_key(&self) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.identity_key())
+        Ok(self.read()?.identity_key())
     }
 
     /// This device's own identity display name (from `id init`). The REAL self
     /// name — the app's own avatar/profile reads this, so two devices show their
     /// own identities rather than a shared hardcoded mock.
     pub fn display_name(&self) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.display_name()?)
+        Ok(self.read()?.display_name()?)
     }
 
     /// The human-comparable short authentication string (identity fingerprint).
     pub fn sas(&self) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.sas())
+        Ok(self.read()?.sas())
     }
 
     /// The read-aloud three-word rendering of the SAS — same identity as `sas()`,
     /// for a "verify you match" check people can say out loud.
     pub fn sas_words(&self) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.sas_words())
+        Ok(self.read()?.sas_words())
     }
 
     /// A fresh, signed contact bundle (base64) to render as a pairing QR.
     pub fn contact_bundle(&self) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.build_contact_bundle()?)
+        Ok(self.read()?.build_contact_bundle()?)
     }
 
     /// THE WRAP, sealed: the identity seed under a key only the passkey can
@@ -1709,9 +1815,8 @@ impl Core {
     /// This is the artefact the Arc serves to anyone who asks by public key, so
     /// it carries the seed and nothing else. Loud on an identity that has none.
     pub fn export_wrap(&self, prf_secret: Vec<u8>, host: String) -> Result<Vec<u8>, FfiError> {
-        self.point();
         let prf = prf32(&prf_secret)?;
-        Ok(Node::open()?.export_wrap(&prf, &host)?)
+        Ok(self.read()?.export_wrap(&prf, &host)?)
     }
 
     /// SIGN IN ON A DEVICE THAT HOLDS NOTHING: `Node::sign_in_from_wrap`. The wrap
@@ -1734,10 +1839,12 @@ impl Core {
         head: Option<Vec<u8>>,
         head_position: u64,
     ) -> Result<SignedIn, FfiError> {
-        self.point();
         let prf = prf32(&prf_secret)?;
         let head = before_sign_in(&routes, head, head_position)?;
-        signed_in(block_on(Node::sign_in_from_wrap(&prf, &wrap, &host, &display_name, &expect_key, head))?)
+        // Whatever it wrote, the held Node predates it.
+        let out = block_on(Node::sign_in_from_wrap(&prf, &wrap, &host, &display_name, &expect_key, head));
+        self.reopen();
+        signed_in(out?)
     }
 
     /// SIGN IN FROM THE 24 WORDS on a device that holds nothing:
@@ -1752,9 +1859,11 @@ impl Core {
         head: Option<Vec<u8>>,
         head_position: u64,
     ) -> Result<SignedIn, FfiError> {
-        self.point();
         let head = before_sign_in(&routes, head, head_position)?;
-        signed_in(block_on(Node::sign_in_from_words(&recovery_key, &display_name, head))?)
+        // Whatever it wrote, the held Node predates it.
+        let out = block_on(Node::sign_in_from_words(&recovery_key, &display_name, head));
+        self.reopen();
+        signed_in(out?)
     }
 
     // THE HISTORY BLOB IS NOT ON THIS SURFACE, and its absence is the point.
@@ -1791,8 +1900,7 @@ impl Core {
     /// the bytes. See `pacific_core::identity::auth_payload` for the one
     /// definition this and the verifier both build from.
     pub fn sign_challenge(&self, audience: String, nonce: String) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.sign_challenge(&audience, &nonce)?)
+        Ok(self.read()?.sign_challenge(&audience, &nonce)?)
     }
 
     /// CLOSE THE FORK after a restore: a fresh-path commit in every group,
@@ -1802,8 +1910,7 @@ impl Core {
     /// forked one, and the app must say so rather than proceed. Safe to retry.
     /// Relay-backed: call off the main thread.
     pub fn rekey_all_groups(&self) -> Result<Vec<String>, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(async {
             let mut sess = pacific_core::router::Router::open(node.routes()).await?;
             let out = node.rekey_all_groups(&mut sess).await;
@@ -1828,8 +1935,7 @@ impl Core {
     /// primitive across the FFI: the payload format stays pinned to the verifier, and the app
     /// never gets a signing oracle it could be talked into pointing at other bytes.
     pub fn arc_member_credential(&self, arc_identity_key: String) -> Result<String, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.read()?;
         // BARE HEX inside the token: the credential is colon-delimited
         // (`<id>:<ts>:<sig>`), and the `ed25519:` rendering carries a colon of its
         // own — putting it here would shatter the split. Hex is the wire form and
@@ -1850,8 +1956,7 @@ impl Core {
     /// display name — read live, and resolved for the whole list on one MLS client,
     /// so the chat list needs no per-row `object_title` round trip.
     pub fn objects(&self) -> Result<Vec<ObjectRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .objects_named()?
             .into_iter()
             .map(|(id, kind, name)| ObjectRow { id, kind, name })
@@ -1862,8 +1967,7 @@ impl Core {
     /// empty) rides the MLS GroupContext extension, so late joiners read it from
     /// their Welcome. Local only.
     pub fn object_new(&self, kind: String, name: String) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.object_new(&kind, &name)?)
+        Ok(self.read()?.object_new(&kind, &name)?)
     }
 
     /// THE mint — the one call behind every `+` in the app.
@@ -1878,10 +1982,9 @@ impl Core {
     /// authors them after, so a failure is reportable against the step that failed
     /// rather than leaving a half-configured object behind one opaque error.
     pub fn object_mint(&self, kind: String, draft: MintDraft) -> Result<String, FfiError> {
-        self.point();
         let k = pacific_core::mint::kind_from_name(&kind)
             .ok_or_else(|| FfiError::Core(format!("unknown object kind '{kind}'")))?;
-        Ok(block_on(Node::open()?.mint(k, &draft.into()))?)
+        Ok(block_on(self.write()?.mint(k, &draft.into()))?)
     }
 
     /// Mint a THING and give it a name in one call — what the swipe deck does on ACCEPT.
@@ -1919,7 +2022,6 @@ impl Core {
         reach: String,
         area: String,
     ) -> Result<String, FfiError> {
-        self.point();
         let mut args = pacific_core::coordinator::Args::new();
         args.insert(
             "posture".into(),
@@ -1946,7 +2048,7 @@ impl Core {
         if !area.is_empty() {
             args.insert("area".into(), pacific_core::coordinator::ArgVal::Text(area));
         }
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &object_id,
             pacific_core::thing::OP_SET_POSTURE,
@@ -1956,8 +2058,7 @@ impl Core {
 
     /// Drop a thing's posture (and with it any price/deadline, which only qualify one).
     pub fn thing_clear_posture(&self, object_id: String) -> Result<String, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &object_id,
             pacific_core::thing::OP_CLEAR_POSTURE,
@@ -1975,7 +2076,6 @@ impl Core {
         photo: String,
         mime: String,
     ) -> Result<String, FfiError> {
-        self.point();
         let mut args = pacific_core::coordinator::Args::new();
         if !photo.is_empty() {
             args.insert(
@@ -1984,7 +2084,7 @@ impl Core {
             );
             args.insert("mime".into(), pacific_core::coordinator::ArgVal::Text(mime));
         }
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &object_id,
             pacific_core::thing::OP_SET_PHOTO,
@@ -2001,7 +2101,6 @@ impl Core {
         descriptor: String,
         category: String,
     ) -> Result<String, FfiError> {
-        self.point();
         let mut args = pacific_core::coordinator::Args::new();
         args.insert("name".into(), pacific_core::coordinator::ArgVal::Text(name));
         args.insert(
@@ -2014,7 +2113,7 @@ impl Core {
                 pacific_core::coordinator::ArgVal::Text(category),
             );
         }
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &object_id,
             pacific_core::thing::OP_SET_PROFILE,
@@ -2033,8 +2132,7 @@ impl Core {
     /// Every Thing we own, folded. The LIFE market list reads THIS — minted GroupObjects
     /// are the durable truth; the resolver graph is the derived read-index.
     pub fn things(&self) -> Result<Vec<ThingRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .things()?
             .into_iter()
             .map(|(id, st)| ThingRow {
@@ -2097,7 +2195,6 @@ impl Core {
         name: String,
         at: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         let at = if at > 0 {
             at
         } else {
@@ -2111,7 +2208,7 @@ impl Core {
             &name,
             at,
         );
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &object_id,
             pacific_core::event::OP_SET_VENUE,
@@ -2136,7 +2233,6 @@ impl Core {
         terms: String,
         rev: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         let delegate_pk: Option<[u8; 32]> = if delegate.is_empty() {
             None
         } else {
@@ -2159,7 +2255,7 @@ impl Core {
             (!terms.is_empty()).then_some(terms.as_str()),
             rev.max(0) as u64,
         );
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &object_id,
             pacific_core::event::OP_SET_TICKETS,
@@ -2173,8 +2269,7 @@ impl Core {
     /// statement and the surface should be able to show the tombstone. Filtering it out
     /// at the read would make "taken down" indistinguishable from "never existed".
     pub fn posts(&self) -> Result<Vec<PostRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .posts()?
             .into_iter()
             .map(|(id, st)| PostRow {
@@ -2195,8 +2290,7 @@ impl Core {
     /// Every Event we hold, folded to display shape. The EVENTS page's GroupObject
     /// source reads THIS — minted objects are the durable truth.
     pub fn events(&self) -> Result<Vec<EventRow>, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.read()?;
         let mut out = Vec::new();
         for (id, st) in node.events()? {
             let listing_key = node.event_listing_id(&id).unwrap_or_default();
@@ -2257,7 +2351,6 @@ impl Core {
         clip: String,
         clip_mime: String,
     ) -> Result<String, FfiError> {
-        self.point();
         let core_photos: Vec<pacific_core::event::EventPhoto> = photos
             .into_iter()
             .map(|p| pacific_core::event::EventPhoto {
@@ -2270,7 +2363,7 @@ impl Core {
             &core_photos,
             (!clip.is_empty()).then_some((clip.as_str(), clip_mime.as_str())),
         );
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &object_id,
             pacific_core::event::OP_SET_MEDIA,
@@ -2280,8 +2373,7 @@ impl Core {
 
     /// The full media facet of one event — the detail page's read.
     pub fn event_media(&self, object_id: String) -> Result<EventMediaRow, FfiError> {
-        self.point();
-        let st = Node::open()?.event_state(&object_id)?;
+        let st = self.read()?.event_state(&object_id)?;
         Ok(EventMediaRow {
             banner: st.media.banner,
             banner_mime: st.media.banner_mime,
@@ -2317,7 +2409,6 @@ impl Core {
         scope: String,
         items: Vec<HydrateItem>,
     ) -> Result<u32, FfiError> {
-        self.point();
         let batch: Vec<(String, String, i64, u64, bool)> = items
             .into_iter()
             .map(|i| {
@@ -2330,7 +2421,7 @@ impl Core {
                 )
             })
             .collect();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.system_hydrate(
             &connector,
             &display_name,
@@ -2341,8 +2432,7 @@ impl Core {
 
     /// Every System this device holds.
     pub fn systems(&self) -> Result<Vec<SystemRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .systems()?
             .into_iter()
             .map(|(id, st)| SystemRow {
@@ -2363,8 +2453,7 @@ impl Core {
         object_id: String,
         live_only: bool,
     ) -> Result<Vec<HydratedItemRow>, FfiError> {
-        self.point();
-        let st = Node::open()?.system_state(&object_id)?;
+        let st = self.read()?.system_state(&object_id)?;
         Ok(st
             .items
             .values()
@@ -2381,8 +2470,7 @@ impl Core {
 
     /// The stable listing key of one event (what buyers and the box office use).
     pub fn event_listing_id(&self, object_id: String) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.event_listing_id(&object_id)?)
+        Ok(self.read()?.event_listing_id(&object_id)?)
     }
 
     /// BUYER: author the request Delta into the connection with `peer` (the organizer
@@ -2395,9 +2483,8 @@ impl Core {
         qty: i64,
         pi: String,
     ) -> Result<String, FfiError> {
-        self.point();
         let peer_pk = parse_peer_hex(&peer)?;
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &node.connection_object(&peer_pk)?
                 .ok_or_else(|| FfiError::Core("no connection with that peer".into()))?
@@ -2420,9 +2507,8 @@ impl Core {
         note: String,
         at: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         let peer_pk = parse_peer_hex(&peer)?;
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &node.connection_object(&peer_pk)?
                 .ok_or_else(|| FfiError::Core("no connection with that peer".into()))?
@@ -2440,9 +2526,8 @@ impl Core {
         going: bool,
         at: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         let peer_pk = parse_peer_hex(&peer)?;
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &node.connection_object(&peer_pk)?
                 .ok_or_else(|| FfiError::Core("no connection with that peer".into()))?
@@ -2455,9 +2540,8 @@ impl Core {
     /// Every invitation on the channel with `peer` — sent AND received, newest first,
     /// each joined to its answer. One read for the thread card and the event page.
     pub fn invites(&self, peer: String) -> Result<Vec<InviteRow>, FfiError> {
-        self.point();
         let peer_pk = parse_peer_hex(&peer)?;
-        let node = Node::open()?;
+        let node = self.read()?;
         let st = node.contact_state_with(&peer_pk)?;
         let mut out: Vec<InviteRow> = st
             .invites
@@ -2491,9 +2575,8 @@ impl Core {
 
     /// SELLER: pending ticket requests folded off our connection with `peer`.
     pub fn ticket_requests(&self, peer: String) -> Result<Vec<TicketRequestRow>, FfiError> {
-        self.point();
         let peer_pk = parse_peer_hex(&peer)?;
-        let node = Node::open()?;
+        let node = self.read()?;
         Ok(node
             .contact_state_with(&peer_pk)?
             .ticket_requests
@@ -2521,9 +2604,8 @@ impl Core {
         currency: String,
         tickets: Vec<String>,
     ) -> Result<String, FfiError> {
-        self.point();
         let buyer_pk = parse_peer_hex(&buyer)?;
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &object_id,
             pacific_core::event::OP_RECORD_SALE,
@@ -2543,8 +2625,7 @@ impl Core {
     /// the connection with the sale's buyer, in one call. The fulfilment tail:
     /// recordSale → this → (box-office fulfil, last).
     pub fn event_issue_and_deliver(&self, object_id: String, pi: String) -> Result<u32, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         let creds = node.event_issue_credentials(&object_id, &pi)?;
         let st = node.event_state(&object_id)?;
         let sale = st
@@ -2568,9 +2649,8 @@ impl Core {
     /// `verified` checks each credential's signature against that peer's identity —
     /// the signer a buyer can actually know.
     pub fn wallet(&self, peer: String) -> Result<Vec<WalletTicketRow>, FfiError> {
-        self.point();
         let peer_pk = parse_peer_hex(&peer)?;
-        let node = Node::open()?;
+        let node = self.read()?;
         Ok(node
             .contact_state_with(&peer_pk)?
             .wallet
@@ -2606,8 +2686,7 @@ impl Core {
         object_id: String,
         qr: String,
     ) -> Result<DoorCheckRow, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.read()?;
         let empty = |verdict: &str| DoorCheckRow {
             verdict: verdict.into(),
             ticket: String::new(),
@@ -2655,9 +2734,8 @@ impl Core {
         ticket: String,
         admitted_ms: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         let peer = parse_peer_hex(&buyer)?;
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &node
                 .connection_object(&peer)?
@@ -2670,8 +2748,7 @@ impl Core {
 
     /// DOOR: admit — author the redemption Delta (OR-set; converges across doors).
     pub fn event_redeem(&self, object_id: String, ticket: String) -> Result<String, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &object_id,
             pacific_core::event::OP_REDEEM,
@@ -2683,8 +2760,7 @@ impl Core {
     /// late-joining door-staff device converges (state re-emission — the no-backfill
     /// doctrine's answer). Call after adding a member. Returns deltas re-emitted.
     pub fn event_reemit(&self, object_id: String) -> Result<u32, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.event_reemit(&object_id))? as u32)
     }
 
@@ -2696,8 +2772,7 @@ impl Core {
     /// so the result is a snapshot; the caller re-registers when the set changes.
     /// Sorted and deduped, so an unchanged set hashes identically.
     pub fn wake_tags(&self) -> Result<Vec<String>, FfiError> {
-        self.point();
-        Ok(Node::open()?.wake_tags()?)
+        Ok(self.read()?.wake_tags()?)
     }
 
     /// THE MARKET READ: every live listing others have published or relayed to me.
@@ -2706,8 +2781,7 @@ impl Core {
     /// else's. Deduped across channels by `(origin, thing_id)`, newest revision winning and
     /// the shortest path breaking ties, so a listing that reached me three ways appears once.
     pub fn listings(&self) -> Result<Vec<ListingRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .inbound_listings()?
             .into_iter()
             .map(|l| ListingRow {
@@ -2742,8 +2816,7 @@ impl Core {
     /// `network` listing I hold. Returns the number of deltas authored — 0 when nothing has
     /// changed, so it is safe (and intended) to call on every sync.
     pub fn publish_market(&self) -> Result<u32, FfiError> {
-        self.point();
-        Ok(block_on(Node::open()?.publish_market(false))? as u32)
+        Ok(block_on(self.write()?.publish_market(false))? as u32)
     }
 
     // -- Places -------------------------------------------------------------
@@ -2787,11 +2860,10 @@ impl Core {
         lat: f64,
         lng: f64,
     ) -> Result<String, FfiError> {
-        self.point();
         let source = pacific_core::geo::LocationSource::Fixed {
             point: pacific_core::geo::GeoPoint::from_degrees(lat, lng),
         };
-        Ok(block_on(Node::open()?.apply(
+        Ok(block_on(self.write()?.apply(
             &object_id,
             pacific_core::geo::OP_SET_LOCATION,
             pacific_core::geo::set_location_args(&source),
@@ -2801,8 +2873,7 @@ impl Core {
     /// Every Place we own, folded. This is what LIFE's PLACES list reads — the minted
     /// GroupObjects are the durable truth.
     pub fn places(&self) -> Result<Vec<PlaceRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .places()?
             .into_iter()
             .map(|(id, st)| place_row(id, st))
@@ -2811,8 +2882,7 @@ impl Core {
 
     /// One Place, folded.
     pub fn place(&self, object_id: String) -> Result<PlaceRow, FfiError> {
-        self.point();
-        let st = Node::open()?.place_state(&object_id)?;
+        let st = self.read()?.place_state(&object_id)?;
         Ok(place_row(object_id, st))
     }
 
@@ -2823,8 +2893,7 @@ impl Core {
     /// is reused, never re-flooded. Trade warms itself (listings are push gossip,
     /// reconciled by every sync). Returns the request ids in play.
     pub fn warm_caches(&self) -> Result<Vec<String>, FfiError> {
-        self.point();
-        Ok(block_on(Node::open()?.warm_gossip_caches())?)
+        Ok(block_on(self.write()?.warm_gossip_caches())?)
     }
 
     /// Ask my connections (and, within `budget` hops, theirs) to list their PUBLIC
@@ -2837,8 +2906,7 @@ impl Core {
         tags: Vec<String>,
         budget: u32,
     ) -> Result<String, FfiError> {
-        self.point();
-        Ok(block_on(Node::open()?.discover(&kind, &tags, budget))?)
+        Ok(block_on(self.write()?.discover(&kind, &tags, budget))?)
     }
 
     /// Everything of `kind` within `hops` handshakes: what I hold (hops 0) merged
@@ -2849,8 +2917,7 @@ impl Core {
         kind: String,
         hops: u32,
     ) -> Result<Vec<DiscoveredRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .discover_results(&kind, hops)?
             .into_iter()
             .map(|r| {
@@ -2882,13 +2949,12 @@ impl Core {
         lng: f64,
         remote_id: String,
     ) -> Result<String, FfiError> {
-        self.point();
         let (lat, lng) = if placed {
             (Some(lat), Some(lng))
         } else {
             (None, None)
         };
-        Ok(block_on(Node::open()?.place_adopt(
+        Ok(block_on(self.write()?.place_adopt(
             &name,
             &descriptor,
             lat,
@@ -2908,16 +2974,14 @@ impl Core {
         text: String,
         at: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         Ok(block_on(
-            Node::open()?.place_post(&object_id, &note, &title, &text, at),
+            self.write()?.place_post(&object_id, &note, &title, &text, at),
         )?)
     }
 
     /// The notes published at one Place, newest first.
     pub fn place_posts(&self, object_id: String) -> Result<Vec<PlacePostRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .place_posts(&object_id)?
             .into_iter()
             .map(|p| PlacePostRow {
@@ -2939,11 +3003,10 @@ impl Core {
     /// not publish the Place's contents — joiners become members, they do not read it
     /// from outside. Closing stops future admissions and evicts nobody.
     pub fn place_set_access(&self, object_id: String, access: String) -> Result<String, FfiError> {
-        self.point();
         let access = pacific_core::place::Access::parse(&access)
             .map_err(|_| FfiError::Core("access must be \"public\" or \"private\"".into()))?;
         Ok(block_on(
-            Node::open()?.place_set_access(&object_id, access),
+            self.write()?.place_set_access(&object_id, access),
         )?)
     }
 
@@ -2958,11 +3021,10 @@ impl Core {
         object_id: String,
         visibility: String,
     ) -> Result<String, FfiError> {
-        self.point();
         let v = pacific_core::visibility::Visibility::parse(&visibility).map_err(|_| {
             FfiError::Core("visibility must be \"private\" | \"connections\" | \"network\"".into())
         })?;
-        Ok(block_on(Node::open()?.place_set_visibility(&object_id, v))?)
+        Ok(block_on(self.write()?.place_set_visibility(&object_id, v))?)
     }
 
     /// The string behind a PUBLIC place's QR — what goes on the poster.
@@ -2974,8 +3036,7 @@ impl Core {
     /// Errors on a private Place rather than vending a bundle — handing out a pairing
     /// route to somewhere the owner has not opened is not a thing to do quietly.
     pub fn place_join_card(&self, object_id: String) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.place_join_card(&object_id)?)
+        Ok(self.read()?.place_join_card(&object_id)?)
     }
 
     /// Record whose land a Place sits on — an authored CLAIM with its provenance.
@@ -3002,7 +3063,6 @@ impl Core {
         as_of: i64,
         permission: String,
     ) -> Result<String, FfiError> {
-        self.point();
         let source = pacific_core::place::LandSource::parse(&source).map_err(|_| {
             FfiError::Core("source must be inspire|ccod|ocod|scotlis|manual".into())
         })?;
@@ -3017,13 +3077,12 @@ impl Core {
             as_of,
             permission,
         };
-        Ok(block_on(Node::open()?.place_set_land(&object_id, &claim))?)
+        Ok(block_on(self.write()?.place_set_land(&object_id, &claim))?)
     }
 
     /// Retract a land claim — the lookup was wrong, or the land changed hands.
     pub fn place_clear_land(&self, object_id: String) -> Result<String, FfiError> {
-        self.point();
-        Ok(block_on(Node::open()?.place_clear_land(&object_id))?)
+        Ok(block_on(self.write()?.place_clear_land(&object_id))?)
     }
 
     /// Fit (or ROTATE) a place's doorbell. Returns the new capability as hex.
@@ -3032,9 +3091,8 @@ impl Core {
     /// stop an ex-member reading arrivals — removing them from the group does not retract
     /// the doorbell they already folded out of the log.
     pub fn place_fit_doorbell(&self, object_id: String) -> Result<String, FfiError> {
-        self.point();
         Ok(hex::encode(block_on(
-            Node::open()?.place_fit_doorbell(&object_id),
+            self.write()?.place_fit_doorbell(&object_id),
         )?))
     }
 
@@ -3044,19 +3102,17 @@ impl Core {
     /// 1:1 connection with whoever printed the poster, no waiting on prekeys. Returns as
     /// soon as the knock is published; MEMBERSHIP LANDS when any member next answers.
     pub fn place_knock(&self, place_id: String, doorbell_hex: String) -> Result<(), FfiError> {
-        self.point();
         let raw = hex::decode(&doorbell_hex)
             .ok()
             .and_then(|v| <[u8; 32]>::try_from(v).ok())
             .ok_or_else(|| FfiError::Core("doorbell must be 64 hex chars".into()))?;
-        Ok(block_on(Node::open()?.place_knock(&place_id, &raw))?)
+        Ok(block_on(self.write()?.place_knock(&place_id, &raw))?)
     }
 
     /// Answer the door at every open place we are in, now rather than on the next sync.
     /// Runs on EVERY member, not just the owner. Returns what anyone was admitted to.
     pub fn place_answer_doors(&self) -> Result<Vec<String>, FfiError> {
-        self.point();
-        Ok(block_on(Node::open()?.answer_all_doors())?)
+        Ok(block_on(self.write()?.answer_all_doors())?)
     }
 
     // -- Anchoring a group to a place (the agreement) -------------------------
@@ -3069,9 +3125,8 @@ impl Core {
         place_id: String,
         at_ms: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         Ok(block_on(
-            Node::open()?.group_anchor_at_place(&group_id, &place_id, at_ms),
+            self.write()?.group_anchor_at_place(&group_id, &place_id, at_ms),
         )?)
     }
 
@@ -3086,11 +3141,10 @@ impl Core {
         data: String,
         mime: String,
     ) -> Result<String, FfiError> {
-        self.point();
         let mut args = pacific_core::coordinator::Args::new();
         args.insert("data".into(), pacific_core::coordinator::ArgVal::Text(data));
         args.insert("mime".into(), pacific_core::coordinator::ArgVal::Text(mime));
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &object_id,
             pacific_core::group::OP_SET_COVER,
@@ -3107,7 +3161,6 @@ impl Core {
         name: String,
         at: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         let at = if at > 0 {
             at
         } else {
@@ -3117,22 +3170,20 @@ impl Core {
                 .unwrap_or(1)
         };
         Ok(block_on(
-            Node::open()?.group_attach_created(&group_id, &object_id, &name, at),
+            self.write()?.group_attach_created(&group_id, &object_id, &name, at),
         )?)
     }
 
     pub fn group_unanchor(&self, group_id: String, place_id: String) -> Result<String, FfiError> {
-        self.point();
         Ok(block_on(
-            Node::open()?.group_unanchor(&group_id, &place_id),
+            self.write()?.group_unanchor(&group_id, &place_id),
         )?)
     }
 
     /// The places this group has agreed to answer for: `(place_id, place_name)` pairs
     /// flattened as alternating entries.
     pub fn group_anchored_places(&self, group_id: String) -> Result<Vec<String>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .group_anchored_places(&group_id)?
             .into_iter()
             .flat_map(|(id, name)| [id, name])
@@ -3141,16 +3192,14 @@ impl Core {
 
     /// Our groups that answer for `place_id` — what the scan picker lists.
     pub fn groups_anchored_at(&self, place_id: String) -> Result<Vec<String>, FfiError> {
-        self.point();
-        Ok(Node::open()?.our_groups_anchored_at(&place_id)?)
+        Ok(self.read()?.our_groups_anchored_at(&place_id)?)
     }
 
     /// Admit everyone pending on our public places NOW, rather than waiting for the next
     /// sync tick (the sync loop calls this itself). Returns the ids of places somebody
     /// was admitted to.
     pub fn place_reconcile_joins(&self) -> Result<Vec<String>, FfiError> {
-        self.point();
-        Ok(block_on(Node::open()?.reconcile_place_joins())?)
+        Ok(block_on(self.write()?.reconcile_place_joins())?)
     }
 
     /// Admit a joiner explicitly. Public places do this themselves on every sync
@@ -3158,10 +3207,9 @@ impl Core {
     /// never scanned, or forcing it without waiting for a tick. Refused if the Place is
     /// private.
     pub fn place_admit(&self, object_id: String, peer_id: String) -> Result<String, FfiError> {
-        self.point();
         let peer = pacific_core::identity::parse_identity_key(&peer_id)?;
         Ok(space_id_of(&block_on(
-            Node::open()?.place_admit(&object_id, &peer),
+            self.write()?.place_admit(&object_id, &peer),
         )?))
     }
 
@@ -3176,8 +3224,7 @@ impl Core {
         text: String,
         media: Option<MediaInput>,
     ) -> Result<String, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         let m = media.as_ref().map(attach).transpose()?;
         Ok(block_on(node.object_post(&object_id, &text, m.as_ref()))?)
     }
@@ -3186,16 +3233,14 @@ impl Core {
     /// named). Rides the Welcome, so every member — including late joiners — reads the
     /// same current value; the UI derives a fallback label only while this is blank.
     pub fn object_title(&self, object_id: String) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.object_name(&object_id)?)
+        Ok(self.read()?.object_name(&object_id)?)
     }
 
     /// The object's OWNER as 64-char identity hex (same form as `object_members`),
     /// or "" if we hold no such group. Only the owner may add members or rename, so
     /// the UI compares this to its own identity before offering either.
     pub fn object_owner(&self, object_id: String) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .object_owner(&object_id)?
             .map(hex::encode)
             .unwrap_or_default())
@@ -3207,23 +3252,20 @@ impl Core {
     /// object → call OFF the Swift main thread. A non-owner throws, as does losing
     /// the epoch's commit slot (retry against the new epoch).
     pub fn object_rename(&self, object_id: String, name: String) -> Result<(), FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         block_on(node.object_rename(&object_id, &name))?;
         Ok(())
     }
 
     /// The folded transcript of a local Forum object (deterministic order).
     pub fn object_transcript(&self, object_id: String) -> Result<Vec<String>, FfiError> {
-        self.point();
-        Ok(Node::open()?.object_transcript(&object_id)?)
+        Ok(self.read()?.object_transcript(&object_id)?)
     }
 
     /// The STRUCTURED transcript of a Forum object — the group-object twin of
     /// `dm_messages` (timestamps, reply linkage, reaction groups). One UI path.
     pub fn object_messages(&self, object_id: String) -> Result<Vec<ChatMsg>, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.read()?;
         let me = node.id.identity_pk();
         Ok(to_chat_msgs(node.object_detailed(&object_id)?, &me))
     }
@@ -3233,8 +3275,7 @@ impl Core {
     /// twin of `object_messages`; the ChatRoom UI binds to this. Reply/react target
     /// the same `post.author`/`post.gen` as the flat path.
     pub fn object_thread(&self, object_id: String) -> Result<Vec<ForumThreadRow>, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.read()?;
         let me = node.id.identity_pk();
         Ok(to_thread_rows(node.object_thread(&object_id)?, &me))
     }
@@ -3243,8 +3284,7 @@ impl Core {
     /// same ids that appear in `ProjectItemRow.assignees` and `ChatMsg.author`. Who
     /// a Project's assignee picker offers and the "Add people" screen already lists.
     pub fn object_members(&self, object_id: String) -> Result<Vec<String>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .object_members(&object_id)?
             .into_iter()
             .map(hex::encode)
@@ -3262,9 +3302,8 @@ impl Core {
         emoji: String,
         active: bool,
     ) -> Result<(), FfiError> {
-        self.point();
         let target = parse_msgref(&target_author, target_gen)?;
-        block_on(Node::open()?.object_react(&object_id, target, &emoji, active))?;
+        block_on(self.write()?.object_react(&object_id, target, &emoji, active))?;
         Ok(())
     }
 
@@ -3279,14 +3318,13 @@ impl Core {
         target_gen: u64,
         dir: i8,
     ) -> Result<(), FfiError> {
-        self.point();
         if !(-1..=1).contains(&dir) {
             return Err(FfiError::Core(format!(
                 "vote dir must be -1|0|1, got {dir}"
             )));
         }
         let target = parse_msgref(&target_author, target_gen)?;
-        block_on(Node::open()?.object_vote_post(&object_id, target, dir))?;
+        block_on(self.write()?.object_vote_post(&object_id, target, dir))?;
         Ok(())
     }
 
@@ -3301,10 +3339,9 @@ impl Core {
         reply_to_gen: u64,
         media: Option<MediaInput>,
     ) -> Result<String, FfiError> {
-        self.point();
         let parent = parse_msgref(&reply_to_author, reply_to_gen)?;
         let m = media.as_ref().map(attach).transpose()?;
-        Ok(hex::encode(block_on(Node::open()?.object_post_reply(
+        Ok(hex::encode(block_on(self.write()?.object_post_reply(
             &object_id,
             &text,
             Some(parent),
@@ -3318,8 +3355,7 @@ impl Core {
     /// Reaches the relay once the object has other members — call OFF the Swift main
     /// thread. Returns how many receipts were authored.
     pub fn object_mark_read(&self, object_id: String) -> Result<u32, FfiError> {
-        self.point();
-        Ok(block_on(Node::open()?.object_mark_read(&object_id))? as u32)
+        Ok(block_on(self.write()?.object_mark_read(&object_id))? as u32)
     }
 
     /// Author one Project delta (built via the `project_*` constructors) into a
@@ -3331,7 +3367,6 @@ impl Core {
         object_id: String,
         draft: delta::DeltaDraft,
     ) -> Result<String, FfiError> {
-        self.point();
         // Group and Project both number ops from 0; a mis-kinded draft would
         // otherwise author an inert no-op and return a "success" delta id. Reject
         // it loudly (no silent no-op) before touching the log.
@@ -3343,7 +3378,7 @@ impl Core {
         }
         let op_id = draft.op_id;
         let args = delta::draft_args(&draft);
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(&object_id, op_id, args))?)
     }
 
@@ -3356,7 +3391,6 @@ impl Core {
         object_id: String,
         draft: delta::DeltaDraft,
     ) -> Result<String, FfiError> {
-        self.point();
         if draft.kind != delta::Kind::Group {
             return Err(FfiError::Core(format!(
                 "draft is a {:?} op, not a Group op",
@@ -3365,7 +3399,7 @@ impl Core {
         }
         let op_id = draft.op_id;
         let args = delta::draft_args(&draft);
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(&object_id, op_id, args))?)
     }
 
@@ -3380,8 +3414,7 @@ impl Core {
     ///
     /// False for an object that is not a Group, and for one we are not in.
     pub fn group_may_mint(&self, object_id: String) -> Result<bool, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.read()?;
         let me = node.id.identity_pk();
         let st = node.group_state(&object_id)?;
         // The owner is the owner whether or not a `setMemberRole` was ever authored —
@@ -3399,16 +3432,14 @@ impl Core {
     /// The folded Group read-model — profile + presence + contact card + the roles
     /// projected onto the live MLS roster + credential handles. Synchronous read.
     pub fn group_view(&self, object_id: String) -> Result<GroupRow, FfiError> {
-        self.point();
-        Ok(group_row(Node::open()?.group_view(&object_id)?))
+        Ok(group_row(self.read()?.group_view(&object_id)?))
     }
 
     /// The LIFE ▸ GROUPS listing: every Group identity record we hold, folded.
     /// A group whose log will not fold is skipped by the core rather than
     /// blanking the list. Synchronous read (folds, no relay).
     pub fn groups(&self) -> Result<Vec<GroupListRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .group_rows()?
             .into_iter()
             .map(|(id, v, members, is_space)| GroupListRow {
@@ -3437,7 +3468,6 @@ impl Core {
         status: String,
         at: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         let mut args = pacific_core::coordinator::Args::new();
         args.insert(
             "office".into(),
@@ -3452,7 +3482,7 @@ impl Core {
             pacific_core::coordinator::ArgVal::Text(status),
         );
         args.insert("at".into(), pacific_core::coordinator::ArgVal::Int(at));
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &group_id,
             pacific_core::group::OP_SET_OFFICE,
@@ -3462,13 +3492,12 @@ impl Core {
 
     /// Vacate an office — removes the appointment rather than marking it vacant.
     pub fn group_clear_office(&self, group_id: String, office: String) -> Result<String, FfiError> {
-        self.point();
         let mut args = pacific_core::coordinator::Args::new();
         args.insert(
             "office".into(),
             pacific_core::coordinator::ArgVal::Text(office),
         );
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.apply(
             &group_id,
             pacific_core::group::OP_CLEAR_OFFICE,
@@ -3487,9 +3516,8 @@ impl Core {
         name: String,
         at_ms: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         Ok(block_on(
-            Node::open()?.group_forum_new(&group_id, &name, at_ms),
+            self.write()?.group_forum_new(&group_id, &name, at_ms),
         )?)
     }
 
@@ -3501,9 +3529,8 @@ impl Core {
         forum_id: String,
         at_ms: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         Ok(block_on(
-            Node::open()?.group_forum_attach(&group_id, &forum_id, at_ms),
+            self.write()?.group_forum_attach(&group_id, &forum_id, at_ms),
         )?)
     }
 
@@ -3515,16 +3542,14 @@ impl Core {
         group_id: String,
         forum_id: String,
     ) -> Result<String, FfiError> {
-        self.point();
         Ok(block_on(
-            Node::open()?.group_forum_detach(&group_id, &forum_id),
+            self.write()?.group_forum_detach(&group_id, &forum_id),
         )?)
     }
 
     /// The Group's rooms, folded from ITS log, attach order. Synchronous read.
     pub fn group_forums(&self, group_id: String) -> Result<Vec<GroupForumRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .group_forums(&group_id)?
             .into_iter()
             .map(|(id, name, at, held)| GroupForumRow { id, name, at, held })
@@ -3534,8 +3559,7 @@ impl Core {
     /// Every forum→host edge this device can fold — the whole map in one call,
     /// so the CHAT list never does a per-row fold. Synchronous read.
     pub fn forum_hosts(&self) -> Result<Vec<ForumHostRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .forum_hosts()?
             .into_iter()
             .map(|(forum, group, group_name)| ForumHostRow {
@@ -3559,9 +3583,8 @@ impl Core {
         name: String,
         at_ms: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         Ok(block_on(
-            Node::open()?.forum_room_new(&forum_id, &name, at_ms),
+            self.write()?.forum_room_new(&forum_id, &name, at_ms),
         )?)
     }
 
@@ -3574,9 +3597,8 @@ impl Core {
         room_id: String,
         at_ms: i64,
     ) -> Result<String, FfiError> {
-        self.point();
         Ok(block_on(
-            Node::open()?.forum_room_attach(&forum_id, &room_id, at_ms),
+            self.write()?.forum_room_attach(&forum_id, &room_id, at_ms),
         )?)
     }
 
@@ -3584,16 +3606,14 @@ impl Core {
     /// log and its roster are untouched. Owner-only. Reaches the relay — call
     /// OFF the Swift main thread.
     pub fn forum_room_detach(&self, forum_id: String, room_id: String) -> Result<String, FfiError> {
-        self.point();
         Ok(block_on(
-            Node::open()?.forum_room_detach(&forum_id, &room_id),
+            self.write()?.forum_room_detach(&forum_id, &room_id),
         )?)
     }
 
     /// The Channel's rooms, folded from ITS log, attach order. Synchronous read.
     pub fn forum_rooms(&self, forum_id: String) -> Result<Vec<ForumRoomRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .forum_rooms(&forum_id)?
             .into_iter()
             .map(|(id, name, at, held)| ForumRoomRow { id, name, at, held })
@@ -3603,8 +3623,7 @@ impl Core {
     /// Every Forum's back-edge this device can fold, in one call, so the CHAT list
     /// never does a per-row fold. Synchronous read.
     pub fn forum_parents(&self) -> Result<Vec<ForumParentRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .forum_parents()?
             .into_iter()
             .map(|(forum, parent, role)| ForumParentRow { forum, parent, role })
@@ -3614,8 +3633,7 @@ impl Core {
     /// Every room→host edge this device can fold — the whole map in one call,
     /// so the CHAT list never does a per-row fold. Synchronous read.
     pub fn room_hosts(&self) -> Result<Vec<RoomHostRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .room_hosts()?
             .into_iter()
             .map(|(room, forum, forum_name)| RoomHostRow {
@@ -3635,8 +3653,7 @@ impl Core {
 
     /// My own profile — name, shape and the full card. Reads local state only.
     pub fn my_profile(&self) -> Result<ProfileRow, FfiError> {
-        self.point();
-        let (display_name, shape, card) = Node::open()?.my_profile()?;
+        let (display_name, shape, card) = self.read()?.my_profile()?;
         Ok(ProfileRow {
             display_name,
             shape: shape.as_str().to_string(),
@@ -3658,10 +3675,9 @@ impl Core {
         shape: String,
         card: ProfileCard,
     ) -> Result<u32, FfiError> {
-        self.point();
         let shape = pacific_core::group::GroupShape::parse(&shape)
             .map_err(|_| FfiError::Core(format!("bad shape '{shape}'")))?;
-        let node = Node::open()?;
+        let node = self.write()?;
         let n = block_on(node.set_my_profile(&display_name, shape, &profile_card_core(card)))?;
         Ok(n as u32)
     }
@@ -3670,8 +3686,7 @@ impl Core {
     /// holding it; otherwise only stale ones are told. The manual twin of the
     /// reconciliation every sync runs. Reaches the relay — call OFF the main thread.
     pub fn publish_profile(&self, force: bool) -> Result<u32, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.publish_profile(force))? as u32)
     }
 
@@ -3680,9 +3695,8 @@ impl Core {
     /// NOT an empty profile: the caller falls back to the pairing-bundle name
     /// rather than rendering a blank card. Synchronous read (a fold, no relay).
     pub fn peer_profile(&self, peer_id: String) -> Result<Option<ProfileRow>, FfiError> {
-        self.point();
         let peer = pacific_core::identity::parse_identity_key(&peer_id)?;
-        Ok(Node::open()?.peer_profile(&peer)?.map(|p| ProfileRow {
+        Ok(self.read()?.peer_profile(&peer)?.map(|p| ProfileRow {
             display_name: p.display_name,
             shape: p.shape.as_str().to_string(),
             card: profile_card_row(p.card),
@@ -3695,46 +3709,40 @@ impl Core {
     /// per card, in file order. Loud on a non-Group KIND or missing FN in any
     /// card. Call OFF the main thread (best-effort relay flush).
     pub fn group_import_vcard(&self, vcf_text: String) -> Result<Vec<String>, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.group_import_vcard(&vcf_text))?)
     }
 
     /// Export a Group as a vCard 4.0 string (MEMBER derived from the roster;
     /// credentials never serialised). Synchronous.
     pub fn group_export_vcard(&self, object_id: String) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.group_export_vcard(&object_id)?)
+        Ok(self.read()?.group_export_vcard(&object_id)?)
     }
 
     /// The folded board of a Project object — one line per live timeline item.
     /// Deterministic text dump, kept for the CLI and the two-sim board diff; the
     /// UI uses the STRUCTURED `project_items` below.
     pub fn project_board(&self, object_id: String) -> Result<Vec<String>, FfiError> {
-        self.point();
-        Ok(Node::open()?.project_board(&object_id)?)
+        Ok(self.read()?.project_board(&object_id)?)
     }
 
     /// Structured timeline rows for the Work-tab Gantt (the typed projection the UI
     /// binds to — no string parsing). Synchronous read (no relay).
     pub fn project_items(&self, object_id: String) -> Result<Vec<ProjectItemRow>, FfiError> {
-        self.point();
-        let st = Node::open()?.project_state(&object_id)?;
+        let st = self.read()?.project_state(&object_id)?;
         Ok(st.board().into_iter().map(item_row).collect())
     }
 
     /// The Project's deliverables (child-Project subscriptions), collapsed-view rows.
     pub fn project_deliverables(&self, object_id: String) -> Result<Vec<DeliverableRow>, FfiError> {
-        self.point();
-        let st = Node::open()?.project_state(&object_id)?;
+        let st = self.read()?.project_state(&object_id)?;
         Ok(st.deliverables().into_iter().map(deliverable_row).collect())
     }
 
     /// The Project's dependency edges — what the UI lists and removes; the derived
     /// `blocked` state comes from these unresolved edges.
     pub fn project_dependencies(&self, object_id: String) -> Result<Vec<DependencyRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .project_dependencies(&object_id)?
             .into_iter()
             .map(|(edge_id, from, to, kind)| DependencyRow {
@@ -3749,8 +3757,7 @@ impl Core {
     /// The Objectives spine of a Project (Tab 1): headline, goal, participants+roles,
     /// external stakeholders, key locations, KPIs — what the timeline is derived from.
     pub fn project_objectives(&self, object_id: String) -> Result<ObjectivesRow, FfiError> {
-        self.point();
-        let st = Node::open()?.project_state(&object_id)?;
+        let st = self.read()?.project_state(&object_id)?;
         Ok(ObjectivesRow {
             headline: st.headline.clone(),
             goal: st.goal.clone(),
@@ -3794,8 +3801,7 @@ impl Core {
     /// The Project's linked ChatRoom (Tab 3) — the target of its first `forum`-kind
     /// subscription edge, or nil if none is linked yet.
     pub fn project_chatroom(&self, object_id: String) -> Result<Option<String>, FfiError> {
-        self.point();
-        let st = Node::open()?.project_state(&object_id)?;
+        let st = self.read()?.project_state(&object_id)?;
         Ok(st
             .subscriptions
             .values()
@@ -3805,8 +3811,7 @@ impl Core {
 
     /// The Project card header (title/status + DERIVED piece count).
     pub fn project_header(&self, object_id: String) -> Result<ProjectHeaderRow, FfiError> {
-        self.point();
-        let st = Node::open()?.project_state(&object_id)?;
+        let st = self.read()?.project_state(&object_id)?;
         Ok(ProjectHeaderRow {
             title: st.title.clone(),
             status: st.status.as_str().to_string(),
@@ -3818,8 +3823,7 @@ impl Core {
     /// (owner-sequenced structure if we are the owner, plus our own progress).
     /// Reaches the relay — call OFF the Swift main thread. Mirrors `seed_dm_demo`.
     pub fn seed_project_demo(&self, object_id: String) -> Result<bool, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(block_on(node.seed_project_demo(&object_id))?)
     }
 
@@ -3835,8 +3839,7 @@ impl Core {
     /// `display_name` falls back to a short prefix of the space id when the
     /// directory has no name yet.
     pub fn connections(&self) -> Result<Vec<ConnectionRow>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .connections()?
             .into_iter()
             .map(|(pk, name, connected)| {
@@ -3862,9 +3865,8 @@ impl Core {
     /// Loud if the peer is unknown or the double-opt-in isn't complete (the peer
     /// must be Connected). Reaches the relay, so call OFF the Swift main thread.
     pub fn dm_post(&self, peer_id: String, text: String) -> Result<String, FfiError> {
-        self.point();
         let peer = pacific_core::identity::parse_identity_key(&peer_id)?;
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(hex::encode(block_on(node.author_post(&peer, &text))?))
     }
 
@@ -3872,9 +3874,8 @@ impl Core {
     /// deterministic, pre-formatted style as `object_transcript`. Loud if there
     /// is no connection group for this peer.
     pub fn dm_transcript(&self, peer_id: String) -> Result<Vec<String>, FfiError> {
-        self.point();
         let peer = pacific_core::identity::parse_identity_key(&peer_id)?;
-        Ok(Node::open()?.dm_transcript(&peer)?)
+        Ok(self.read()?.dm_transcript(&peer)?)
     }
 
     /// The STRUCTURED 1:1 transcript: real messages with timestamps, reply
@@ -3882,9 +3883,8 @@ impl Core {
     /// to. Same fold as `dm_transcript`, richer projection. Loud if there is no
     /// connection group for this peer.
     pub fn dm_messages(&self, peer_id: String) -> Result<Vec<ChatMsg>, FfiError> {
-        self.point();
         let peer = pacific_core::identity::parse_identity_key(&peer_id)?;
-        let node = Node::open()?;
+        let node = self.read()?;
         let me = node.id.identity_pk();
         Ok(to_chat_msgs(node.dm_detailed(&peer)?, &me))
     }
@@ -3902,10 +3902,9 @@ impl Core {
         emoji: String,
         active: bool,
     ) -> Result<(), FfiError> {
-        self.point();
         let peer = pacific_core::identity::parse_identity_key(&peer_id)?;
         let target = parse_msgref(&target_author, target_gen)?;
-        block_on(Node::open()?.react_dm(&peer, target, &emoji, active))?;
+        block_on(self.write()?.react_dm(&peer, target, &emoji, active))?;
         Ok(())
     }
 
@@ -3921,11 +3920,10 @@ impl Core {
         reply_to_gen: u64,
         media: Option<MediaInput>,
     ) -> Result<String, FfiError> {
-        self.point();
         let peer = pacific_core::identity::parse_identity_key(&peer_id)?;
         let parent = parse_msgref(&reply_to_author, reply_to_gen)?;
         let m = media.as_ref().map(attach).transpose()?;
-        Ok(hex::encode(block_on(Node::open()?.author_post_reply(
+        Ok(hex::encode(block_on(self.write()?.author_post_reply(
             &peer,
             &text,
             Some(parent),
@@ -3938,9 +3936,8 @@ impl Core {
     /// idempotent. Reaches the relay — call OFF the Swift main thread. Returns how
     /// many receipts were authored. Loud if the peer is unknown / not connected.
     pub fn dm_mark_read(&self, peer_id: String) -> Result<u32, FfiError> {
-        self.point();
         let peer = pacific_core::identity::parse_identity_key(&peer_id)?;
-        Ok(block_on(Node::open()?.dm_mark_read(&peer))? as u32)
+        Ok(block_on(self.write()?.dm_mark_read(&peer))? as u32)
     }
 
     /// Seed the DEMO conversation through REAL ops: this device authors only the
@@ -3951,9 +3948,8 @@ impl Core {
     /// RUN ONCE per install (posts carry a per-author generation counter); the
     /// caller guards it. Reaches the relay — call OFF the Swift main thread.
     pub fn seed_dm_demo(&self, peer_id: String) -> Result<bool, FfiError> {
-        self.point();
         let peer = pacific_core::identity::parse_identity_key(&peer_id)?;
-        let node = Node::open()?;
+        let node = self.write()?;
         let my_name = node.display_name()?;
         let Some(actor) = pacific_core::demo::actor_for_display_name(&my_name) else {
             return Ok(false);
@@ -3971,8 +3967,7 @@ impl Core {
     /// Scan a peer's pairing bundle: form the 2-party connection and seal the
     /// Welcome to the peer over the relay. Returns the peer's space id.
     pub fn pair_scan(&self, bundle: String) -> Result<String, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(space_id_of(&block_on(node.pair_scan(&bundle))?))
     }
 
@@ -3980,20 +3975,18 @@ impl Core {
     /// "connection" — e.g. "group-tether", the delegate↔delegate channel between
     /// two federated Groups. Returns the peer's space id.
     pub fn pair_scan_kind(&self, bundle: String, kind: String) -> Result<String, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(space_id_of(&block_on(node.pair_scan_kind(&bundle, &kind))?))
     }
 
     /// Accept a pending connection (double-opt-in): mark the peer Connected.
     /// `peer` is the peer's space id (as returned by pair_scan / a pending intro).
     pub fn pair_accept(&self, peer: String) -> Result<(), FfiError> {
-        self.point();
         let peer_id = pacific_core::identity::parse_identity_key(&peer)?;
         // Async in core since accepting also stocks our prekeys into the channel
         // (the half `pair_scan` never did for this side). The exported signature is
         // unchanged, so the uniffi checksum and the generated bindings still match.
-        block_on(Node::open()?.pair_accept(&peer_id))?;
+        block_on(self.write()?.pair_accept(&peer_id))?;
         Ok(())
     }
 
@@ -4001,8 +3994,7 @@ impl Core {
     /// distributes the MLS Commit to existing members and the Welcome to the
     /// newcomer over the relay. Returns the new member's space id.
     pub fn group_add_member(&self, object_id: String, bundle: String) -> Result<String, FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(space_id_of(&block_on(
             node.group_add_member(&object_id, &bundle),
         )?))
@@ -4021,8 +4013,7 @@ impl Core {
     /// device of theirs. Another member completes it on their next sync; this device
     /// learns it has left when that commit arrives. Idempotent while a leave is in flight.
     pub fn group_leave(&self, object_id: String) -> Result<(), FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         block_on(node.group_leave(&object_id))?;
         Ok(())
     }
@@ -4035,8 +4026,7 @@ impl Core {
         member_id: String,
         reason: Option<String>,
     ) -> Result<(), FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         block_on(node.group_remove_member(&object_id, &member_id, reason.as_deref()))?;
         Ok(())
     }
@@ -4044,30 +4034,26 @@ impl Core {
     /// HAND OVER (§9): the owner makes `member_id` the owner. Required before an owner
     /// may leave.
     pub fn group_hand_over(&self, object_id: String, member_id: String) -> Result<(), FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         block_on(node.group_hand_over(&object_id, &member_id))?;
         Ok(())
     }
 
     /// Is a leave in flight for this object — proposed, not yet completed (§6)?
     pub fn is_leaving(&self, object_id: String) -> Result<bool, FfiError> {
-        self.point();
-        Ok(Node::open()?.is_leaving(&object_id)?)
+        Ok(self.read()?.is_leaving(&object_id)?)
     }
 
     /// Has a commit removed this device from the object (§8.3)? Its history stays
     /// readable; nothing more can be sent or received in it.
     pub fn is_departed(&self, object_id: String) -> Result<bool, FfiError> {
-        self.point();
-        Ok(Node::open()?.is_departed(&object_id)?)
+        Ok(self.read()?.is_departed(&object_id)?)
     }
 
     /// How the membership RECORDS and the MLS tree disagree (§10.3), or `None` when
     /// they agree. Group-typed objects only.
     pub fn membership_divergence(&self, object_id: String) -> Result<Option<MembershipDivergence>, FfiError> {
-        self.point();
-        Ok(Node::open()?
+        Ok(self.read()?
             .membership_divergence(&object_id)?
             .map(|d| MembershipDivergence {
                 unrecorded: d.unrecorded,
@@ -4079,8 +4065,7 @@ impl Core {
     /// KNOCK ON A JOIN CARD (§8.5): parse it, remember the owner it names, knock. A
     /// Welcome whose group names a different owner is then refused. Reaches the relay.
     pub fn place_knock_card(&self, card: String) -> Result<(), FfiError> {
-        self.point();
-        let node = Node::open()?;
+        let node = self.write()?;
         block_on(node.place_knock_card(&card))?;
         Ok(())
     }
@@ -4094,9 +4079,8 @@ impl Core {
         object_id: String,
         peer_id: String,
     ) -> Result<String, FfiError> {
-        self.point();
         let peer = pacific_core::identity::parse_identity_key(&peer_id)?;
-        let node = Node::open()?;
+        let node = self.write()?;
         Ok(space_id_of(&block_on(
             node.add_contact_to_object(&object_id, &peer),
         )?))
@@ -4116,25 +4100,34 @@ impl Core {
                 "a transport set needs at least one route (e.g. \"wss://…,mesh:\")".into(),
             ));
         }
-        self.point();
-        let mut node = Node::open()?;
-        node.set_routes(routes)?;
+        // The app hands its routes over at every launch and Arc change: the same set again
+        // writes nothing and keeps the held open.
+        if *self.read()?.routes() == routes {
+            return Ok(());
+        }
+        self.write()?.set_routes(routes)?;
+        // Every Node read the routes when it opened.
+        self.reopen();
         Ok(())
     }
 
     /// The transport set this device is using, as a spec string.
     pub fn routes(&self) -> Result<String, FfiError> {
-        self.point();
-        Ok(Node::open()?.routes().to_spec())
+        Ok(self.read()?.routes().to_spec())
     }
 
     /// Sync with the relay: drain pending Welcomes (join), process membership
     /// commits (epoch advance), decrypt + fold inbound deltas. Returns the folded
     /// transcript lines across all synced objects.
     pub fn sync(&self) -> Result<Vec<String>, FfiError> {
-        self.point();
-        let node = Node::open()?;
-        Ok(block_on(node.sync_once())?)
+        let node = self.write()?;
+        let out = block_on(node.sync_once())?;
+        // What arrived is folded and kept now, off the main thread, so the next launch
+        // reads it from disk (O-69 option B).
+        if let Err(e) = node.refold_moved() {
+            tracing::warn!(target: "fold", "keeping what arrived: {e}");
+        }
+        Ok(out)
     }
 }
 
@@ -4437,5 +4430,63 @@ mod log_sink_tests {
         assert_eq!(mine.len(), 1, "{got:?}");
         assert_eq!(mine[0].1, "INFO");
         assert_eq!(mine[0].2, "1/1 group ab12cd34: AlreadyHeld group=\"ab12cd34\"");
+    }
+}
+
+#[cfg(test)]
+mod held_node_tests {
+    use super::*;
+
+    fn counts(core: &Core) -> (u64, u64) {
+        let node = core.read().expect("the held Node");
+        let folds = node.dir.folds.lock().unwrap();
+        (folds.hits, folds.misses)
+    }
+
+    /// One open for the process (O-69): the second read of a room is all hits, a write
+    /// through a Node beside it is the reader's miss, neither a writer nor a reader held open
+    /// holds up a read, and a new identity is read without a new `Core`.
+    #[test]
+    fn reads_share_one_node_and_writes_open_beside_it() {
+        let _held = STATE_DIR.lock().unwrap_or_else(|e| e.into_inner());
+        // Before `Core::new`: the model is read once per process.
+        std::env::set_var("PACIFIC_FOLD_CACHE_MODEL", "ffi-held");
+        let dir = std::env::temp_dir().join(format!("pacific-held-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temp state dir");
+        let core = Core::new(dir.to_string_lossy().to_string());
+        pacific_core::node::set_default_arc("ws://127.0.0.1:1").expect("the device's Arc");
+
+        assert!(!core.has_identity(), "nothing minted yet");
+        core.init_identity("Ada".into()).expect("mint identity");
+        assert!(core.has_identity(), "the held Node reopens on the new identity");
+
+        let room = core
+            .object_mint("forum".into(), MintDraft { name: "Talk".into(), ..Default::default() })
+            .expect("a room of one");
+        core.object_post(room.clone(), "first".into(), None).expect("a post");
+        let said = core.object_transcript(room.clone()).expect("the transcript");
+        let (h0, m0) = counts(&core);
+        assert_eq!(core.object_transcript(room.clone()).unwrap(), said);
+        let (h1, m1) = counts(&core);
+        assert!(h1 > h0 && m1 == m0, "the second read is all hits: {h0}/{m0} then {h1}/{m1}");
+
+        core.object_post(room.clone(), "second".into(), None).expect("a post, through a writer");
+        let now = core.object_transcript(room.clone()).unwrap();
+        assert!(counts(&core).1 > m1, "the write beside is the reader's miss");
+        assert!(now.iter().any(|l| l.contains("second")), "and the read sees it: {now:?}");
+
+        let writer = core.write().expect("a writer");
+        assert_eq!(core.object_transcript(room.clone()).unwrap(), now, "a writer held open holds up no read");
+        drop(writer);
+
+        // A read in flight on one thread holds up none on another: each borrows a reader.
+        let busy = core.read().expect("a reader, held");
+        let other = std::thread::scope(|s| s.spawn(|| core.object_transcript(room.clone())).join().unwrap());
+        assert_eq!(other.unwrap(), now, "a second thread reads beside the first");
+        drop(busy);
+        assert!(counts(&core).0 > h1, "and both share one fold cache");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

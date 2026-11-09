@@ -313,7 +313,7 @@ enum DevLinks {
         case "seed-events":
             // The two real launch events through the REAL pipe (mint + tickets + media
             // with the bundled posters) — same seam as the -pacificSeedEvents launch arg.
-            EventSeeder.seed(core: core)
+            Task { await EventSeeder.seed(core: core) }
         case "union-language":
             // The Seoul language lane (F-3): persist the ONE union language authority
             // (`pacific://union-language?lang=ko|en`). The heavy half — the store
@@ -406,8 +406,7 @@ enum DevLinks {
         case "dump-tickets":
             core.dumpTicketRequests()
         case "dump-events":
-            core.refreshEvents()
-            core.dumpEvents()
+            Task { await core.refreshEvents().value; core.dumpEvents() }
         case "load-fixture":
             // Fold a QA fixture into real objects (FixtureLoader): the two-sim feed
             // harness drops fixtures/<name>.json in the container, then drives this.
@@ -441,8 +440,8 @@ enum DevLinks {
             // invite channels; a headless drive has no page entry, and the 3s tick's
             // refresh() deliberately skips events/invites — so refresh here or
             // setGoing never finds the channel (run-4 finding: ok=0 forever).
-            core.refreshEvents()   // chains refreshInvites()
             Task {
+                await core.refreshEvents().value   // chains refreshInvites()
                 let ok = await core.setGoing(event: event, going: q("going") != "false")
                 NSLog("[devlink] rsvp %@ ok=%d", event, ok ? 1 : 0)
                 devWrite("dev-rsvp.txt", "rsvp \(event) ok=\(ok ? 1 : 0)\n")
@@ -452,16 +451,18 @@ enum DevLinks {
             let dir = FileManager.default.urls(for: .applicationSupportDirectory,
                                                in: .userDomainMask)[0]
                 .appendingPathComponent("pacific", isDirectory: true)
-            core.refreshListings()
-            let rows = core.listings.map {
-                // photo = b64 length, so the harness can assert media re-gossip
-                // (the §14 DS-1 loose end) without shipping bytes through a dump.
-                "\($0.origin.prefix(8))|\($0.posture)|\($0.title)|hops=\($0.hops)|photo=\($0.photo.count)"
+            Task {
+                await core.refreshListings().value
+                let rows = core.listings.map {
+                    // photo = b64 length, so the harness can assert media re-gossip
+                    // (the §14 DS-1 loose end) without shipping bytes through a dump.
+                    "\($0.origin.prefix(8))|\($0.posture)|\($0.title)|hops=\($0.hops)|photo=\($0.photo.count)"
+                }
+                try? rows.joined(separator: "\n")
+                    .write(to: dir.appendingPathComponent("dev-listings.txt"),
+                           atomically: true, encoding: .utf8)
+                NSLog("[devlink] dump-listings %d rows", rows.count)
             }
-            try? rows.joined(separator: "\n")
-                .write(to: dir.appendingPathComponent("dev-listings.txt"),
-                       atomically: true, encoding: .utf8)
-            NSLog("[devlink] dump-listings %d rows", rows.count)
         case "show-life":
             NotificationCenter.default.post(name: .pacificShowLife, object: nil)
         case "show-notes":

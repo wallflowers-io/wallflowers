@@ -512,7 +512,7 @@ pub type MsgRef = ([u8; 32], u64);
 
 /// One folded forum message: text + optional wall-clock ts (display only, not the
 /// sort key) + optional reply parent.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Msg {
     pub text: String,
     /// Media attached to this message, if any. `None` for a text-only post and
@@ -565,7 +565,7 @@ pub struct ThreadNode {
     pub descendants: u32,
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ForumState {
     /// THE BACK-EDGE: the object this Forum is a part of, and in what role. `None`
     /// for a Forum that stands alone (a Channel somebody made directly). Written by
@@ -607,7 +607,7 @@ pub struct ForumState {
 }
 
 /// One write of a room's description; empty text is a clear.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Description {
     pub text: String,
     pub gen: u64,

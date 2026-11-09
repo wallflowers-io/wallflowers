@@ -595,9 +595,16 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 
 
 /**
- * The single handle the Swift app holds. Immutable (just the state dir), so it
- * is trivially `Send + Sync` as UniFFI requires. Every call rebuilds the Node
- * from persisted state — the exact per-call model the CLI uses.
+ * The single handle the Swift app holds, one per process: the state dir, and the open of
+ * it every call reads through for as long as the process lives. Its checked signatures and
+ * folds outlive every call (O-69), where a Node per call re-verified and refolded every
+ * object on every read.
+ *
+ * READS borrow a Node from a pool beside that open (`read`), so two reads never wait on
+ * each other: a main-thread read is not held up by a background one. Anything that may
+ * touch the network (every `block_on`) opens a Node of its own beside it (`write`): so a
+ * sync holds up no read, and writes run side by side as they always have, arbitrated by
+ * SQLite.
  */
 public protocol CoreProtocol : AnyObject {
     
@@ -1664,9 +1671,16 @@ public protocol CoreProtocol : AnyObject {
 }
 
 /**
- * The single handle the Swift app holds. Immutable (just the state dir), so it
- * is trivially `Send + Sync` as UniFFI requires. Every call rebuilds the Node
- * from persisted state — the exact per-call model the CLI uses.
+ * The single handle the Swift app holds, one per process: the state dir, and the open of
+ * it every call reads through for as long as the process lives. Its checked signatures and
+ * folds outlive every call (O-69), where a Node per call re-verified and refolded every
+ * object on every read.
+ *
+ * READS borrow a Node from a pool beside that open (`read`), so two reads never wait on
+ * each other: a main-thread read is not held up by a background one. Anything that may
+ * touch the network (every `block_on`) opens a Node of its own beside it (`write`): so a
+ * sync holds up no read, and writes run side by side as they always have, arbitrated by
+ * SQLite.
  */
 open class Core:
     CoreProtocol {
