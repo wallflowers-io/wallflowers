@@ -1061,6 +1061,7 @@ struct RootShell: View {
             // Headless drive: seed the two real launch events (real mints, real posters)
             // and land on EVENTS when asked — simctl can't tap the LIFE disc.
             await EventSeeder.seedIfRequested(core: core)
+            await PartnerSeeder.seedIfRequested(core: core)
             if EventSeeder.wantsEventsScreen { show(.life) }
             #endif
             core.warmCaches()           // re-ask the graph (n-2) so every shelf is warm

@@ -69,9 +69,9 @@ run: build                      # build, install & launch on the booted simulato
     xcrun simctl launch booted network.pacific
 
 [group('ios')]
-seed-partners:                  # build the partners' media pack and drop it into the booted simulator's app
+seed-partners device="booted": # build the partners' media pack and drop it into a simulator's app (name or UDID)
     scripts/partner-pack.py
-    c=$(xcrun simctl get_app_container booted network.pacific data) && \
+    c=$(xcrun simctl get_app_container "{{device}}" network.pacific data) && \
     d="$c/Library/Application Support/pacific/seed" && mkdir -p "$d" && \
     rm -rf "$d/partners" && cp -R ui/SeedMedia/partners "$d/partners" && echo "→ $d/partners"
 

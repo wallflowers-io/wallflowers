@@ -29,15 +29,14 @@ HERE = Path(__file__).resolve().parent
 SRC = Path.home() / "wallflowers/business/collaborations"
 OUT = HERE.parent / "ui/SeedMedia/partners"
 
-# Longest edge for the pack's JPEGs. The seeder still fits each under its fold cap
-# (CoreService.jpegUnderCap), so this only keeps the pack small.
+# Longest edge for the pack's JPEGs. Sizing for the wire is the mint's (#56, #111);
+# this only keeps the pack small.
 EDGE = 1600
 ICON_EDGE = 512
 
 # STOMA's pages that are nights, not documentation.
 STOMA_EVENTS = {"facc-anual-event-2024", "on-immigration", "feast-xalapa",
                 "las-3000", "story-hole", "homeless-2018", "mural-fest-kosovo"}
-MAX_EVENT_PHOTOS = 6       # event.rs MAX_EVENT_PHOTOS
 MANOLIN_POSTS = 6
 MONTHS = r"(January|February|March|April|May|June|July|August|September|October|November|December)"
 
@@ -82,13 +81,13 @@ def stoma(src: Path, out: Path) -> dict:
         head, _, what = imgs[0]["caption"].partition(" — ")
         title, _, place = head.partition(", ")
         place = re.sub(rf"\b{MONTHS}\b|\b(19|20)\d\d\b", "", place).strip(" ,")
-        files = [jpeg(d / "assets/imagery" / i["file"], out / "stoma" / i["file"]) for i in imgs]
+        files = [jpeg(d / "assets/imagery" / imgs[0]["file"], out / "stoma" / imgs[0]["file"])]
         if page in STOMA_EVENTS:
             # The night is re-dated, so its old year leaves the title with it.
+            # Banner only: a draft has no photo slot, and no screen shows them (#109).
             events.append({"title": re.sub(r"\s+(19|20)\d\d$", "", title),
                            "descriptor": what, "venue": place,
-                           "banner": f"stoma/{files[0]}",
-                           "photos": [f"stoma/{f}" for f in files[1:1 + MAX_EVENT_PHOTOS]]})
+                           "banner": f"stoma/{files[0]}"})
         else:
             # No mark (stoma/docs/brand.md), and not ours to make: the icon is the
             # same photograph, squared.
