@@ -7845,13 +7845,23 @@ impl Node {
     /// the Site's `base.setPart` and the Host's `base.setParent`, role `host`. Owner
     /// of the Site only. Returns the Host's id.
     pub async fn host_new(&self, group_id_hex: &str, name: &str) -> Result<String, CoreError> {
+        let host = self.host_new_local(group_id_hex, name).await?;
+        self.send_site(&[group_id_hex, &host]).await?;
+        Ok(host)
+    }
+
+    /// [`Self::host_new`]'s writes, local: the mint and both halves of `part_of`.
+    async fn host_new_local(&self, group_id_hex: &str, name: &str) -> Result<String, CoreError> {
         self.require_kind(group_id_hex, "group")?;
         if self.group_owner_id(&self.object_group_id(group_id_hex)?)? != self.id.identity_pk() {
             return Err(CoreError::Coordinator("only the Site's owner makes its Host".into()));
         }
         let draft = crate::mint::MintDraft { name: name.to_string(), ..Default::default() };
         let host = self.mint(ObjectKind::Host, &draft).await?;
-        self.compose(group_id_hex, &host, HOST_ROLE, unix_millis() as i64).await?;
+        let at = unix_millis() as i64;
+        self.apply_local(group_id_hex, crate::parts::OP_SET_PART, crate::parts::set_part_args(&host, HOST_ROLE, at)).await?;
+        self.apply_local(&host, crate::parent::OP_SET_PARENT, crate::parent::set_parent_args(group_id_hex, HOST_ROLE, at))
+            .await?;
         Ok(host)
     }
 
@@ -7952,27 +7962,46 @@ impl Node {
     // the Group, its Host on both ends of `part_of`, the face, the pictures, then the
     // address published with the Arc on the Host. Each step is its own call so a client
     // that stopped part-way repeats only what is left.
+    //
+    // ONE SEND PER ACT (the relay-write gate, 8 Nov): every write here is local
+    // (`apply_local`), and each call ends by sending what it wrote (`send_site`), once per
+    // object it touched. A write that would change nothing is not made, so an act that
+    // changes nothing sends nothing.
 
     /// The Site's Host: the one it names, or a new one. A retry makes no second Host.
     pub async fn site_host(&self, site_hex: &str) -> Result<String, CoreError> {
         if let Some(host) = self.host_of(site_hex)? {
             return Ok(host);
         }
-        let name = self.folded_group(&self.object_group_id(site_hex)?)?.state().display_name;
-        self.host_new(site_hex, &name).await
+        let name = self.group_state_of(&self.object_group_id(site_hex)?)?.display_name;
+        let host = self.host_new_local(site_hex, &name).await?;
+        self.send_site(&[site_hex, &host]).await?;
+        Ok(host)
     }
 
     fn host_of(&self, site_hex: &str) -> Result<Option<String>, CoreError> {
         self.require_kind(site_hex, "group")?;
-        let site = self.folded_group(&self.object_group_id(site_hex)?)?.state();
+        let site = self.group_state_of(&self.object_group_id(site_hex)?)?;
         Ok(site.parts.iter().find(|(_, p)| p.role == HOST_ROLE).map(|(id, _)| id.clone()))
+    }
+
+    /// Send what a Site act wrote: each object's outbox, once.
+    async fn send_site(&self, objects: &[&str]) -> Result<usize, CoreError> {
+        let mut sent = 0;
+        for (i, o) in objects.iter().enumerate() {
+            if !objects[..i].contains(o) {
+                sent += self.publish_pending(o).await?;
+            }
+        }
+        Ok(sent)
     }
 
     /// The face and its pictures, written by the owner or an admin (`group.editFace`,
     /// `host.editMedia`). The face is held to `face.schema.json`, and every picture to
     /// `host.setMedia`'s rule, before the first delta; an empty picture clears its slot.
-    /// A published Site's page is hydrated again, so the Arc serves the edit. Returns
-    /// whether it was.
+    /// Only what differs from what the Site holds is written: the face if it changed,
+    /// each slot whose picture changed, and a published page hydrated again only if what
+    /// it would carry changed. Returns whether the page was hydrated.
     pub async fn site_edit_face(
         &self,
         site_hex: &str,
@@ -7988,29 +8017,37 @@ impl Node {
             crate::host::check_media(slot, data, mime).map_err(CoreError::Coordinator)?;
         }
         let host = self.host_of(site_hex)?.ok_or_else(|| CoreError::Coordinator("this Site has no Host".into()))?;
+        let held = self.host_state_of(&self.object_group_id(&host)?)?;
+        let media: Vec<&(String, String, String)> = media
+            .iter()
+            .filter(|(slot, mime, data)| match held.media.get(slot) {
+                Some(m) => !(m.mime == *mime && m.data == *data),
+                None => !data.is_empty(),
+            })
+            .collect();
         let on_host = self.group_roster(&host)?.contains(&self.id.identity_pk());
         if !media.is_empty() && !on_host {
             return Err(CoreError::Coordinator(
                 "you may edit this Site's face but not its pictures: you are not on its Host".into(),
             ));
         }
-        let mut args = coordinator::Args::new();
-        args.insert("face".into(), coordinator::ArgVal::Text(face.to_string()));
-        self.apply(site_hex, group::OP_EDIT_FACE, args).await?;
+        if self.group_state_of(&self.object_group_id(site_hex)?)?.face != face {
+            let mut args = coordinator::Args::new();
+            args.insert("face".into(), coordinator::ArgVal::Text(face.to_string()));
+            self.apply_local(site_hex, group::OP_EDIT_FACE, args).await?;
+        }
         for (slot, mime, data) in media {
-            self.apply(&host, crate::host::OP_EDIT_MEDIA, crate::host::set_media_args(slot, data, mime)).await?;
+            self.apply_local(&host, crate::host::OP_EDIT_MEDIA, crate::host::set_media_args(slot, data, mime)).await?;
         }
-        let published = on_host && self.folded_host(&self.object_group_id(&host)?)?.state().publication.is_published();
-        if published {
-            self.hydrate_face(site_hex, &host).await?;
-        }
-        Ok(published)
+        let hydrated = on_host && held.publication.is_published() && self.hydrate_if_changed(site_hex, &host).await?;
+        self.send_site(&[site_hex, &host]).await?;
+        Ok(hydrated)
     }
 
     /// The page as the Host carries it (`host.hydrate` key `face`): the Site's name,
     /// shape and purpose, and its face published as `face_spec::bundle` publishes it.
     pub fn site_bundle(&self, site_hex: &str) -> Result<String, CoreError> {
-        let site = self.folded_group(&self.object_group_id(site_hex)?)?.state();
+        let site = self.group_state_of(&self.object_group_id(site_hex)?)?;
         let b = match site.face.as_str() {
             "" => serde_json::json!({
                 "v": 1,
@@ -8026,18 +8063,24 @@ impl Node {
         Ok(b.to_string())
     }
 
-    async fn hydrate_face(&self, site_hex: &str, host: &str) -> Result<(), CoreError> {
-        let now = unix_millis();
+    /// Hydrate the Host's `face` item, locally, unless it already carries this bundle.
+    async fn hydrate_if_changed(&self, site_hex: &str, host: &str) -> Result<bool, CoreError> {
         let bundle = self.site_bundle(site_hex)?;
-        self.apply(host, crate::host::OP_HYDRATE, crate::host::hydrate_args(HOST_FACE_KEY, &bundle, now as i64, now, false))
+        let held = self.host_state_of(&self.object_group_id(host)?)?;
+        if held.face().is_some_and(|f| f.payload == bundle) {
+            return Ok(false);
+        }
+        let now = unix_millis();
+        self.apply_local(host, crate::host::OP_HYDRATE, crate::host::hydrate_args(HOST_FACE_KEY, &bundle, now as i64, now, false))
             .await?;
-        Ok(())
+        Ok(true)
     }
 
     /// Publish the Site at `slug`, served by the Arc whose pairing bundle (`/v1/bundle`)
-    /// is `arc_bundle`: the Arc added to the Host if it is not on it, then the page and the
-    /// address (`host_publish`). The address must already be the account's at the Arc's
-    /// auth service; that claim is the client's, as it is the Door's.
+    /// is `arc_bundle`: the Arc added to the Host if it is not on it (an MLS commit, sent
+    /// as one), then the page if it changed and the address if it moved. The address must
+    /// already be the account's at the Arc's auth service; that claim is the client's, as
+    /// it is the Door's.
     pub async fn site_publish(&self, site_hex: &str, slug: &str, arc_bundle: &str) -> Result<(), CoreError> {
         if !crate::publication::valid_slug(slug) {
             return Err(CoreError::Coordinator(format!("'{slug}' is not a valid address")));
@@ -8047,17 +8090,22 @@ impl Node {
         if !self.group_roster(&host)?.contains(&arc) {
             self.group_add_member(&host, arc_bundle).await?;
         }
-        let bundle = self.site_bundle(site_hex)?;
-        self.host_publish(&host, slug, &hex::encode(arc), &bundle, &[]).await
+        self.hydrate_if_changed(site_hex, &host).await?;
+        let held = self.host_state_of(&self.object_group_id(&host)?)?.publication;
+        if held.slug != slug || held.publisher != Some(arc) {
+            self.apply_local(&host, crate::publication::OP_PUBLISH, crate::publication::publish_args(slug, &arc)).await?;
+        }
+        self.send_site(&[&host]).await?;
+        Ok(())
     }
 
     /// The Site's face for its editor, and where it is published.
     pub fn site_face(&self, site_hex: &str) -> Result<SiteFace, CoreError> {
-        let face = self.folded_group(&self.object_group_id(site_hex)?)?.state().face;
+        let face = self.group_state_of(&self.object_group_id(site_hex)?)?.face;
         let Some(host) = self.host_of(site_hex)? else {
             return Ok(SiteFace { face, ..Default::default() });
         };
-        let st = self.folded_host(&self.object_group_id(&host)?)?.state();
+        let st = self.host_state_of(&self.object_group_id(&host)?)?;
         Ok(SiteFace {
             face,
             media: st.media.iter().map(|(s, m)| (s.clone(), m.mime.clone(), m.data.clone())).collect(),

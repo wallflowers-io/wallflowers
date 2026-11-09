@@ -5,6 +5,7 @@
 //!   a step repeated                                         →  nothing made twice
 //!   the face edited after publication                       →  the Arc serves the edit
 //!   an admin edits the face, not on the Host                →  the face counts, pictures refused
+//!   a Save or a Publish                                      →  one send per op it changed; none if none
 //!   a device that has never seen it, from the words         →  the same face, address, Host, pictures
 
 use crate::common;
@@ -77,7 +78,8 @@ async fn a_site_made_and_published_by_one_sequence_is_served_and_its_edits_too()
 }
 
 /// The phone made and published a Site; a device signed in from the words while the phone
-/// is still about reads all of it, once the owner's device restates what it owns (NC-65).
+/// is still about reads all of it, pictures included, once the phone's own sync has
+/// restated what it owns (NC-65: sync_once step 5c).
 #[tokio::test]
 async fn a_device_restored_from_the_words_reads_the_whole_site() {
     let mut h = Harness::people(&[("ada", &["phone"]), ("arc", &["node"])]).await;
@@ -98,13 +100,63 @@ async fn a_device_restored_from_the_words_reads_the_whole_site() {
         .await
         .unwrap();
     h.settle().await;
-    h.with(phone, |n| async move { n.restate_for_joiners().await }).await.unwrap();
-    h.settle().await;
     let seen = h.node(sim).site_face(&site).unwrap();
     assert_eq!(seen.face, paper);
     assert_eq!(seen.host.as_deref(), Some(host.as_str()));
     assert_eq!((seen.slug.as_str(), seen.published), ("riverside", true));
     assert_eq!(seen.media.iter().map(|m| m.0.as_str()).collect::<Vec<_>>(), vec!["mark"]);
+}
+
+/// THE RELAY-WRITE GATE (8 Nov): a Save or a Publish sends each op it changed once, and a
+/// Save that changes nothing sends nothing. Counted where every publish is counted
+/// (`Node::published`), across the act and its own send.
+#[tokio::test]
+async fn a_save_or_a_publish_sends_only_what_it_changed() {
+    let h = Harness::people(&[("ada", &["phone"]), ("bo", &["phone"]), ("arc", &["node"])]).await;
+    let (ada, bo, arc) = (h.device("ada", "phone"), h.device("bo", "phone"), h.device("arc", "node"));
+    let site = h.with(ada, |n| async move { n.mint(ObjectKind::Group, &draft()).await }).await.unwrap();
+    h.add_to_forum(ada, bo, &site).await;
+    h.node(ada).site_host(&site).await.unwrap();
+    let bundle = h.node(arc).build_contact_bundle().unwrap();
+    h.node(ada).site_publish(&site, "riverside", &bundle).await.unwrap();
+    h.settle().await;
+
+    let sent = |h: &Harness| h.node(ada).published();
+    let mark = vec![("mark".to_string(), "image/png".to_string(), PNG_B64.to_string())];
+    let every = face("every-part.json");
+
+    // The face, a picture and the page: three ops, three sends.
+    let before = sent(&h);
+    h.node(ada).site_edit_face(&site, &every, &mark).await.unwrap();
+    assert_eq!(sent(&h) - before, 3, "group.editFace, host.editMedia, host.hydrate");
+    h.settle().await;
+
+    // The same Save again: nothing changed, nothing sent.
+    let before = sent(&h);
+    assert!(!h.node(ada).site_edit_face(&site, &every, &mark).await.unwrap(), "no hydrate");
+    assert_eq!(sent(&h) - before, 0, "an unchanged Save sends nothing");
+
+    // Only the picture: one op.
+    let other = vec![("mark".to_string(), "image/png".to_string(), PNG_B64.replace("A60e6kg", "A60e6kh"))];
+    let before = sent(&h);
+    h.node(ada).site_edit_face(&site, &every, &other).await.unwrap();
+    assert_eq!(sent(&h) - before, 1, "host.editMedia alone: the page carries no picture");
+    h.settle().await;
+
+    // Only the face: it and the page.
+    let paper = face("preset-paper.json");
+    let before = sent(&h);
+    assert!(h.node(ada).site_edit_face(&site, &paper, &[]).await.unwrap());
+    assert_eq!(sent(&h) - before, 2, "group.editFace, host.hydrate");
+    h.settle().await;
+
+    // Publish again, the same address: nothing.
+    let before = sent(&h);
+    h.node(ada).site_publish(&site, "riverside", &bundle).await.unwrap();
+    assert_eq!(sent(&h) - before, 0, "a Publish that moves nothing sends nothing");
+    let before = sent(&h);
+    h.node(ada).site_host(&site).await.unwrap();
+    assert_eq!(sent(&h) - before, 0, "nor does asking for the Host again");
 }
 
 #[tokio::test]
