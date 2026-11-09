@@ -16,6 +16,7 @@ use crate::common;
 
 use common::Harness;
 use pacific_core::group::{ContactCard, GroupShape};
+use pacific_core::resumption::HeadInput;
 
 /// The record exists from the identity's first breath, and it is the FIRST
 /// vertebra — everything else hangs off a spine whose base is the person.
@@ -144,4 +145,86 @@ async fn the_record_is_nameable_and_not_yet_recoverable() {
          it: no archive key record, no seed-reachable MLS state — {r:?}"
     );
     assert!(!r.speakable);
+}
+
+/// THE 28 OCTOBER CASE (RCA, 8 Nov). A device recovered from the words joins the record
+/// and writes to it while the first device has written since. On Ralph's record the two
+/// took one seat, the fold stopped, and every sync re-named every object for a week. The
+/// relay's slot now orders them (ICD `mls.sequencing.slot`): the record folds on both,
+/// says the same on both, and a settled record is not written again.
+#[tokio::test]
+async fn a_recovered_device_does_not_fork_a_record_written_since() {
+    let mut h = Harness::new(&["Ana"]).await;
+    let phone = 0;
+    h.node(phone).object_new("forum", "thursday").expect("mint");
+    h.sync(phone).await;
+    let words = h.with_sync(phone, |n| n.recovery_key()).expect("a minted identity has words");
+    let head = h.with_sync(phone, |n| n.head_update().unwrap());
+
+    h.node(phone)
+        .set_my_profile("Ana Ruiz", GroupShape::Individual, &ContactCard::default())
+        .await
+        .expect("the phone writes to the record");
+    let (sim, _) = h
+        .sign_in_from_words("Ana", "sim", &words, Some(HeadInput { blob: head.sealed, declared_position: head.position }))
+        .await
+        .expect("the sim signs in from the words");
+    h.node(sim)
+        .set_my_profile("Ana R.", GroupShape::Individual, &ContactCard::default())
+        .await
+        .expect("and writes to it too");
+    h.settle().await;
+    h.settle().await;
+
+    let me = h.node(phone).self_object().unwrap().unwrap();
+    assert_eq!(h.node(sim).self_object().unwrap().unwrap(), me, "one record, on both");
+    let name = |u: usize| {
+        let view = h.node(u).object_view(&me).unwrap_or_else(|e| panic!("{} cannot fold the record: {e}", h.device_name(u)));
+        serde_json::from_str::<serde_json::Value>(&view).unwrap()["display_name"].as_str().unwrap_or_default().to_string()
+    };
+    assert_eq!(name(phone), name(sim), "one record says one thing");
+    assert!(["Ana Ruiz", "Ana R."].contains(&name(phone).as_str()), "{}", name(phone));
+
+    let rows = |u: usize| h.node(u).object_log(&me).unwrap().len();
+    let settled = (rows(phone), rows(sim));
+    h.settle().await;
+    assert_eq!((rows(phone), rows(sim)), settled, "a settled record is not written again");
+}
+
+/// A RECORD THAT WILL NOT FOLD IS NOT RE-NAMED ON EVERY SYNC. Read as an empty list, a
+/// failed fold had each pass name every object again onto the log that would not fold.
+#[tokio::test]
+async fn a_record_that_will_not_fold_is_not_written_to() {
+    let h = Harness::new(&["Ana"]).await;
+    h.node(0).object_new("forum", "one").expect("mint");
+    h.sync(0).await;
+    let n = h.node(0);
+    let me = n.self_object().unwrap().unwrap();
+
+    // A link no fork explains: a sequenced delta chained to one this device never held.
+    let mut a = pacific_core::coordinator::Args::new();
+    a.insert("displayName".into(), pacific_core::coordinator::ArgVal::Text("from nowhere".into()));
+    a.insert("shape".into(), pacific_core::coordinator::ArgVal::Text("individual".into()));
+    let orphan = pacific_core::coordinator::sequenced_delta(
+        pacific_core::object::ObjectKind::Group.type_id() as u32,
+        pacific_core::group::OP_SET_PROFILE,
+        a,
+        0,
+        999,
+        [0xEE; 32],
+    );
+    // Stored as received (sent, so not this device's to author again), unsigned, as
+    // compliance_noncompliant_objects_are_named does.
+    let gid = hex::decode(&me).unwrap();
+    n.dir.append_delta(&gid, &orphan.id(), &n.id.identity_pk(), &orphan.canonical_bytes(), 0).unwrap();
+    n.dir.mark_delivered(&gid, &orphan.id()).unwrap();
+    assert!(n.object_view(&me).is_err(), "the record no longer folds");
+
+    let before = n.object_log(&me).unwrap().len();
+    let err = n.reconcile_joined().await.expect_err("nothing is named on a record that will not fold");
+    assert!(format!("{err}").contains("ChainBroken"), "{err}");
+    h.sync(0).await;
+    h.sync(0).await;
+    let log = n.object_log(&me).unwrap();
+    assert_eq!(log.len(), before, "and no sync writes to it: {:?}", &log[before.min(log.len())..]);
 }

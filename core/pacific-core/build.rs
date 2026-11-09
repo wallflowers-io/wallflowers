@@ -22,6 +22,10 @@ fn main() {
     let describe_max = describe["args"]["description"]["maxBytes"]
         .as_u64()
         .expect("the ICD states forum.editDescription's description.maxBytes");
+    // The owner's one order: the slot a sequenced delta claims before it is sent.
+    let slot = &icd["mls"]["sequencing"]["slot"];
+    let slot_label = slot["label"].as_str().expect("the ICD states mls.sequencing.slot.label");
+    let slot_rounds = slot["rounds"].as_u64().expect("the ICD states mls.sequencing.slot.rounds");
     let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_consts.rs");
     std::fs::write(
         out,
@@ -29,7 +33,9 @@ fn main() {
             "/// `mls.intro.kinds.history.cap`, from the ICD at build.\npub const HISTORY_CAP: usize = {history_cap};\n\
              /// `mls.intro.kinds.history.cardsTotal`, from the ICD at build.\npub const HISTORY_CARDS_TOTAL: usize = {cards_total};\n\
              /// `kinds.forum.ops.\"forum.editDescription\".op`, from the ICD at build.\npub const FORUM_EDIT_DESCRIPTION: u32 = {describe_op};\n\
-             /// `kinds.forum.ops.\"forum.editDescription\".args.description.maxBytes`, from the ICD at build.\npub const FORUM_DESCRIPTION_MAX: usize = {describe_max};\n"
+             /// `kinds.forum.ops.\"forum.editDescription\".args.description.maxBytes`, from the ICD at build.\npub const FORUM_DESCRIPTION_MAX: usize = {describe_max};\n\
+             /// `mls.sequencing.slot.label`, from the ICD at build.\npub const SEQ_SLOT_LABEL: &str = {slot_label:?};\n\
+             /// `mls.sequencing.slot.rounds`, from the ICD at build.\npub const SEQ_SLOT_ROUNDS: usize = {slot_rounds};\n"
         ),
     )
     .expect("icd_consts.rs");

@@ -164,6 +164,15 @@ pub trait Mailbox: Send + Sync {
     /// names, and it feeds the local visualiser, never telemetry.
     async fn tag_counts(&self) -> Result<Vec<(String, u64)>>;
 
+    /// Write one row and commit it: whether the store can take a write now. What
+    /// `/health` reports (see `health.rs`).
+    async fn probe(&self) -> Result<()>;
+
+    /// The directory the store's file lives in, for the disk check. `None` in memory.
+    fn dir(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+
     /// One line naming WHICH BACKEND this is, for the boot log.
     ///
     /// Required rather than defaulted. An operator reading the log must never have

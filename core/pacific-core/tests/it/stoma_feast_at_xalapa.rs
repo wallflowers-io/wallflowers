@@ -107,8 +107,8 @@ async fn the_feast_is_set_up_on_one_device_and_amended_from_another() {
     // devices restore one identity. What it must do FIRST is sync — the spine positions
     // deltas by `(epoch, seq)` computed from THIS DEVICE's fold, so a laptop that has
     // not seen the phone's four deltas will reuse their seats. `settle` above is that
-    // sync, and `two_unsynced_devices_of_the_owner_fork_the_spine_for_everyone` is what
-    // happens when it is missing.
+    // sync; when it is missing, the relay's slot settles the seat instead
+    // (`two_unsynced_devices_of_the_owner_do_not_fork_the_spine`).
     h.node(laptop)
         .apply(
             &feast,
@@ -253,38 +253,28 @@ async fn szonja_works_the_door_and_cannot_sell() {
     );
 }
 
-/// THE HAZARD, pinned exactly the way `m21` pins the message-ref collision: TWO OF ONE
-/// PERSON'S DEVICES THAT HAVE NOT SYNCED WILL FORK AN OWNER-SEQUENCED SPINE, AND THE
-/// DAMAGE FALLS ON EVERYONE.
+/// TWO OF ONE PERSON'S DEVICES THAT HAVE NOT SYNCED DO NOT FORK AN OWNER-SEQUENCED SPINE.
 ///
 /// `event_next_seq` derives `(seq, prev)` from THIS DEVICE's fold of the spine. Both of
-/// axel's devices are the owner, so both pass every authority check; if the laptop has
-/// not folded the phone's delta it computes the same seat, and the two deltas collide at
-/// `(epoch, seq)`. `SequencedSpine::deliver` returns `ForkDetected`, and
-/// `fold::fold_entries` propagates that with `?` — so `event_state` HARD-ERRORS.
-/// Not a lost edit: the object stops being readable, for the owner's other device, for
-/// the owner's own phone, and for szonja, who did nothing.
+/// axel's devices are the owner, so both pass every authority check, and a laptop that
+/// has not folded the phone's delta computes the same seat. Until 8 Nov this test pinned
+/// what followed: both deltas reached everyone at one `(epoch, seq)`, the fold stopped on
+/// `ForkDetected`, and the feast was unreadable for good, for szonja too, who did nothing.
+/// On Ralph's own record that became a week-long write loop.
 ///
-/// THREE THINGS MAKE IT WORSE THAN THE `m21` COLLISION, and they are why it is worth a
-/// test of its own:
-///   * the commutative collision loses one message; this loses the whole object;
-///   * `event_author`'s dry-run probe cannot see it — the probe folds the AUTHOR's log,
-///     which has no conflict, so the write is accepted and reported as success;
-///   * there is no repair path in core. The log is append-only and nothing prunes it.
+/// THE SCHEME CHANGED, as this comment said it would have to: a sequenced delta claims
+/// its seat's slot on the relay before it is sent, first writer wins (ICD
+/// `mls.sequencing.slot`; RFC 9750 §5.2.1), as the spine's links and every MLS commit
+/// already did. The laptop's rename waits in its outbox while it is asleep. Back on the
+/// network it finds the phone holding the seat, takes the phone's rename, and is authored
+/// again at the next one: both renames stand, in the order the relay saw them, and the
+/// laptop's first attempt never left it.
 ///
-/// SINCE 2b3746e (NC-65's guard) THE LAPTOP MUST HOLD THE CHAIN FIRST. A device that joined
-/// after the object began and holds no head is refused its sequenced ops
-/// (`an_owners_late_device_is_refused_rather_than_forking_an_empty_spine`, below). So the
-/// phone writes once, and both devices fold that head, before the laptop goes to sleep:
-/// the guard cannot see a fork between two devices that each hold the chain, and this is
-/// that fork.
-///
-/// WHAT WOULD FIX IT is a per-leaf discriminator in the spine position, or a lease on the
-/// spine, or a relay commit-slot for sequenced deltas the way there already is one for
-/// MLS commits. That is a decision, not a patch, so this states the cost instead of
-/// hiding it. The day the scheme changes, this test fails and somebody comes back here.
+/// SINCE 2b3746e (NC-65's guard) THE LAPTOP MUST HOLD THE CHAIN FIRST
+/// (`an_owners_late_device_is_refused_rather_than_forking_an_empty_spine`, below), which is
+/// why the phone writes once, and both devices fold it, before the laptop goes to sleep.
 #[tokio::test]
-async fn two_unsynced_devices_of_the_owner_fork_the_spine_for_everyone() {
+async fn two_unsynced_devices_of_the_owner_do_not_fork_the_spine() {
     let h = Harness::people(&[("axel", &["phone", "laptop"]), ("szonja", &["phone"])]).await;
     let phone = h.device("axel", "phone");
     let laptop = h.device("axel", "laptop");
@@ -325,7 +315,8 @@ async fn two_unsynced_devices_of_the_owner_fork_the_spine_for_everyone() {
         .await
         .unwrap();
 
-    // The laptop renames it too, from a fold that has never seen the phone's rename.
+    // The laptop renames it too, from a fold that has never seen the phone's rename. It is
+    // accepted, and waits: no relay, so no slot, so nothing sent.
     h.node(laptop)
         .apply(
             &feast,
@@ -333,36 +324,38 @@ async fn two_unsynced_devices_of_the_owner_fork_the_spine_for_everyone() {
             event::set_profile_args("Feast Cádiz", None, START_MS, None, None, None, None),
         )
         .await
-        .expect(
-            "the write is ACCEPTED — the dry-run probe folds the laptop's own log, where \
-             there is no conflict yet. If this now fails, a spine-position check was \
-             added at author time and the rest of this test is the thing to rewrite",
-        );
+        .expect("a write made offline is accepted, and queued");
 
-    // Back on the network: now both deltas reach everyone, at one (epoch, seq).
+    // Back on the network: the seat is the phone's, and the laptop's rename follows it.
     h.rejoin(laptop);
     h.settle().await;
+    h.settle().await;
 
+    let renames = |u| {
+        h.node(u)
+            .object_log(&feast)
+            .unwrap()
+            .iter()
+            .filter(|(op, ..)| *op == OP_SET_PROFILE)
+            .count()
+    };
     for u in [phone, laptop, szonja] {
-        let err = h.node(u).event_state(&feast).expect_err(&format!(
-            "{} still folds Feast Xalapa. If the spine now tolerates two deltas at one \
-             (epoch, seq), delete this test and say so in m21 as well",
+        let st = h.node(u).event_state(&feast).unwrap_or_else(|e| {
+            panic!("{} cannot fold the feast: {e}", h.device_name(u))
+        });
+        assert_eq!(
+            st.title, "Feast Cádiz",
+            "{}: the laptop's rename, authored again after the phone's, is the last",
             h.device_name(u)
-        ));
-        assert!(
-            format!("{err}").contains("ForkDetected"),
-            "{} failed for some other reason: {err}",
+        );
+        assert_eq!(
+            renames(u),
+            3,
+            "{}: Feast, Feast Xalapa and Feast Cádiz, one seat each; the laptop's first \
+             attempt at the phone's seat never left it",
             h.device_name(u)
         );
     }
-
-    // And it is PERMANENT: the log is append-only, nothing prunes it, and syncing more
-    // only spreads it. szonja is collateral — she never authored anything.
-    h.settle().await;
-    assert!(
-        h.node(szonja).event_state(&feast).is_err(),
-        "another sync does not repair a forked spine"
-    );
 }
 
 /// WHAT 2b3746e (NC-65's guard) CHANGED. This was the scenario above until then: the
@@ -483,5 +476,147 @@ async fn event_ops_five_and_six_are_the_contact_spliced_ticket_legs() {
         (11, "contact.admitTicket"),
     ] {
         assert_eq!(ContactType::op(id).expect("contact op").name, name);
+    }
+}
+
+/// TWO OF THE OWNER'S DEVICES, BOTH ONLINE, AT ONE SEAT: each commits its rename locally
+/// from the same head (the Door's write path, `apply_local`), then sends. The relay gives
+/// the seat to whichever claims it first; the other finds it taken, takes the winner, and
+/// is authored again at the next seat. Both renames stand; neither is lost.
+#[tokio::test]
+async fn the_loser_of_a_seat_is_authored_again_not_lost() {
+    let h = Harness::people(&[("axel", &["phone", "laptop"]), ("szonja", &["phone"])]).await;
+    let phone = h.device("axel", "phone");
+    let laptop = h.device("axel", "laptop");
+    let szonja = h.device("szonja", "phone");
+    h.pair(phone, szonja).await;
+    let feast = h.form_object(phone, "event", &[szonja]).await;
+    h.add_to_forum(phone, laptop, &feast).await;
+    let rename = |title: &str| event::set_profile_args(title, None, START_MS, None, None, None, None);
+    h.node(phone).apply(&feast, OP_SET_PROFILE, rename("Feast")).await.unwrap();
+    h.settle().await;
+
+    h.node(phone).apply_local(&feast, OP_SET_PROFILE, rename("Feast Xalapa")).await.unwrap();
+    h.node(laptop).apply_local(&feast, OP_SET_PROFILE, rename("Feast Cádiz")).await.unwrap();
+    h.node(phone).publish_pending(&feast).await.expect("the phone takes the seat");
+    h.node(laptop).publish_pending(&feast).await.expect("the laptop finds it taken, and goes after it");
+    h.settle().await;
+    h.settle().await;
+
+    for u in [phone, laptop, szonja] {
+        let st = h.node(u).event_state(&feast).unwrap_or_else(|e| panic!("{}: {e}", h.device_name(u)));
+        assert_eq!(st.title, "Feast Cádiz", "{}: the laptop's rename follows the phone's", h.device_name(u));
+        let renames = h.node(u).object_log(&feast).unwrap().iter().filter(|(op, ..)| *op == OP_SET_PROFILE).count();
+        assert_eq!(renames, 3, "{}: one seat each", h.device_name(u));
+    }
+}
+
+/// A FORK FROM BEFORE THE SLOT, or from a client without it: two of the owner's deltas
+/// already at one seat in everyone's log. Every device folds the same feast, the lowest
+/// DeltaId's (ICD `mls.sequencing.tiebreak`; RFC 9750 §5.2.2), and the next write goes on
+/// from it.
+#[tokio::test]
+async fn a_fork_already_written_folds_the_same_everywhere_and_is_written_past() {
+    let h = Harness::people(&[("axel", &["phone", "laptop"]), ("szonja", &["phone"])]).await;
+    let phone = h.device("axel", "phone");
+    let laptop = h.device("axel", "laptop");
+    let szonja = h.device("szonja", "phone");
+    h.pair(phone, szonja).await;
+    let feast = h.form_object(phone, "event", &[szonja]).await;
+    h.add_to_forum(phone, laptop, &feast).await;
+    h.settle().await;
+
+    let epoch = h.epoch(phone, &feast);
+    let tid = pacific_core::object::ObjectKind::Event.type_id() as u32;
+    let at_genesis = |title: &str| {
+        pacific_core::coordinator::sequenced_delta(
+            tid,
+            OP_SET_PROFILE,
+            event::set_profile_args(title, None, START_MS, None, None, None, None),
+            epoch,
+            0,
+            pacific_core::coordinator::GENESIS_PREV,
+        )
+    };
+    let (a, b) = (at_genesis("Feast Xalapa"), at_genesis("Feast Cádiz"));
+    let stands = if a.id() < b.id() { "Feast Xalapa" } else { "Feast Cádiz" };
+    let axel = h.id(phone);
+    for u in [phone, laptop, szonja] {
+        let n = h.node(u);
+        let gid = hex::decode(&feast).unwrap();
+        for d in [&a, &b] {
+            n.dir.append_delta(&gid, &d.id(), &axel, &d.canonical_bytes(), 0).unwrap();
+            n.dir.mark_delivered(&gid, &d.id()).unwrap();
+        }
+    }
+    for u in [phone, laptop, szonja] {
+        let st = h.node(u).event_state(&feast).unwrap_or_else(|e| panic!("{}: {e}", h.device_name(u)));
+        assert_eq!(st.title, stands, "{}: the lowest DeltaId stands", h.device_name(u));
+    }
+
+    h.node(laptop)
+        .apply(&feast, OP_SET_PROFILE, event::set_profile_args("Feast", None, START_MS, None, None, None, None))
+        .await
+        .expect("the owner writes on from the seat that stands");
+    h.settle().await;
+    for u in [phone, laptop, szonja] {
+        assert_eq!(h.node(u).event_state(&feast).unwrap().title, "Feast", "{}", h.device_name(u));
+    }
+}
+
+/// THE OUTBOX WALK SENDS EACH QUEUED SEQUENCED DELTA ONCE (#72 review, B1). The walk goes
+/// over a snapshot of the outbox; the first sequenced delta sends its whole queue through
+/// the slots, and the later ones in the snapshot are done, not published again. Two
+/// writes: two claims and two publishes, exactly.
+#[tokio::test]
+async fn a_queue_of_sequenced_writes_costs_one_claim_and_one_publish_each() {
+    let h = Harness::people(&[("axel", &["phone", "laptop"])]).await;
+    let phone = h.device("axel", "phone");
+    let laptop = h.device("axel", "laptop");
+    let feast = h.form_object(phone, "event", &[]).await;
+    h.add_to_forum(phone, laptop, &feast).await;
+    let rename = |title: &str| event::set_profile_args(title, None, START_MS, None, None, None, None);
+    h.node(phone).apply(&feast, OP_SET_PROFILE, rename("Feast")).await.unwrap();
+    h.settle().await;
+
+    h.node(phone).apply_local(&feast, OP_SET_PROFILE, rename("Feast Xalapa")).await.unwrap();
+    h.node(phone).apply_local(&feast, OP_SET_PROFILE, rename("Feast Cádiz")).await.unwrap();
+    let before = pacific_core::router::published();
+    h.node(phone).publish_pending(&feast).await.expect("the queue goes");
+    assert_eq!(pacific_core::router::published() - before, 4, "a claim and a publish for each of the two");
+    h.settle().await;
+    assert_eq!(h.node(laptop).event_state(&feast).unwrap().title, "Feast Cádiz");
+}
+
+/// AFTER A LOST SEAT, ONLY THE RE-AUTHORED QUEUE GOES (#72 review, B1). Two renames queued
+/// on the laptop while it slept; the phone took the seat after their predecessor. The
+/// laptop's queue is authored again from the phone's rename and sent; the snapshot's
+/// first copies, dropped, are never published, so nothing forks and nothing is set aside.
+#[tokio::test]
+async fn after_a_lost_seat_the_dropped_copies_are_never_published() {
+    let h = Harness::people(&[("axel", &["phone", "laptop"]), ("szonja", &["phone"])]).await;
+    let phone = h.device("axel", "phone");
+    let laptop = h.device("axel", "laptop");
+    let szonja = h.device("szonja", "phone");
+    h.pair(phone, szonja).await;
+    let feast = h.form_object(phone, "event", &[szonja]).await;
+    h.add_to_forum(phone, laptop, &feast).await;
+    let rename = |title: &str| event::set_profile_args(title, None, START_MS, None, None, None, None);
+    h.node(phone).apply(&feast, OP_SET_PROFILE, rename("Feast")).await.unwrap();
+    h.settle().await;
+
+    h.partition(laptop);
+    h.node(phone).apply(&feast, OP_SET_PROFILE, rename("Feast Xalapa")).await.unwrap();
+    h.node(laptop).apply(&feast, OP_SET_PROFILE, rename("Feast Cádiz")).await.unwrap();
+    h.node(laptop).apply(&feast, OP_SET_PROFILE, rename("Feast Cádiz, again")).await.unwrap();
+    h.rejoin(laptop);
+    h.settle().await;
+    h.settle().await;
+
+    for u in [phone, laptop, szonja] {
+        let st = h.node(u).event_state(&feast).unwrap_or_else(|e| panic!("{}: {e}", h.device_name(u)));
+        assert_eq!(st.title, "Feast Cádiz, again", "{}", h.device_name(u));
+        let renames = h.node(u).object_log(&feast).unwrap().iter().filter(|(op, ..)| *op == OP_SET_PROFILE).count();
+        assert_eq!(renames, 4, "{}: one of each, and no dropped copy", h.device_name(u));
     }
 }

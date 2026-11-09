@@ -449,8 +449,9 @@ CREATE TABLE IF NOT EXISTS inbox_cursor_v2 (
 
 -- The substrate source of truth: the per-object append-only delta log.
 -- `delivered` is the outbox flag: 0 = authored locally but not yet confirmed PUB'd
--- to the relay (flush on next reconnect), 1 = relay-ack'd. Only meaningful for our
--- OWN deltas; received deltas keep the default and are never re-sent.
+-- to the relay (flush on next reconnect), 1 = relay-ack'd, or received. A received
+-- row is stored at 1 (`append_delta_received`): its author may be this person on
+-- another device, and the outbox is "author is me, not yet sent".
 CREATE TABLE IF NOT EXISTS delta_log (
   group_id    BLOB NOT NULL,
   delta_id    BLOB NOT NULL,
@@ -2099,8 +2100,29 @@ impl Directory {
         Ok(n == 1)
     }
 
+    /// A row that ARRIVED — off a group mailbox, or out of a slot — stored as already
+    /// sent. `delivered` is this device's outbox, and "author is me" stopped meaning "this
+    /// device wrote it" the day a person had two: a sibling's delta, kept at the default,
+    /// was flushed again by every other device of theirs (8 Nov).
+    pub fn append_delta_received(
+        &self,
+        group_id: &[u8],
+        delta_id: &[u8; 32],
+        author_pk: &[u8; 32],
+        envelope: &[u8],
+        sig: &[u8; 64],
+        now: i64,
+    ) -> Result<bool, CoreError> {
+        let n = self.conn.execute(
+            "INSERT OR IGNORE INTO delta_log (group_id, delta_id, author_pk, envelope, author_sig, received_at, delivered)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1)",
+            params![group_id, &delta_id[..], &author_pk[..], envelope, &sig[..], now],
+        )?;
+        Ok(n == 1)
+    }
+
     /// A row that came in a history bundle, stored with the admitter it came `via` (O-75).
-    /// A row already held is ignored, as a direct one is: `false`.
+    /// A row already held is ignored, as a direct one is: `false`. Received, so sent.
     #[allow(clippy::too_many_arguments)]
     pub fn append_delta_via(
         &self,
@@ -2113,8 +2135,8 @@ impl Directory {
         now: i64,
     ) -> Result<bool, CoreError> {
         let n = self.conn.execute(
-            "INSERT OR IGNORE INTO delta_log (group_id, delta_id, author_pk, envelope, author_sig, received_at, via)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT OR IGNORE INTO delta_log (group_id, delta_id, author_pk, envelope, author_sig, received_at, via, delivered)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1)",
             params![group_id, &delta_id[..], &author_pk[..], envelope, &sig[..], now, &via[..]],
         )?;
         Ok(n == 1)
@@ -2477,6 +2499,16 @@ impl Directory {
         Ok(())
     }
 
+    /// Take one of our deltas back out of the outbox, unsent: nobody has seen it, so it is
+    /// not history. Only an undelivered row goes; a sent one is never removed.
+    pub fn drop_undelivered(&self, group_id: &[u8], delta_id: &[u8; 32]) -> Result<bool, CoreError> {
+        let n = self.conn.execute(
+            "DELETE FROM delta_log WHERE group_id=?1 AND delta_id=?2 AND delivered=0",
+            params![group_id, &delta_id[..]],
+        )?;
+        Ok(n == 1)
+    }
+
     /// Mark one of our deltas relay-ack'd (no longer in the outbox).
     pub fn mark_delivered(&self, group_id: &[u8], delta_id: &[u8; 32]) -> Result<(), CoreError> {
         self.conn.execute(
@@ -2649,6 +2681,23 @@ mod tests {
         assert!(!dir.append_delta(&g, &did, &author, b"env", 0).unwrap());
         assert_eq!(dir.load_log(&g).unwrap().len(), 1);
         assert_eq!(dir.author_delta_count(&g, &author).unwrap(), 1);
+    }
+
+    /// A delta this PERSON wrote on another device arrives with this device's author key.
+    /// It is received, not owed: never in this device's outbox.
+    #[test]
+    fn a_siblings_delta_is_received_not_resent() {
+        let dir = mem();
+        let g = [1u8; 8];
+        let me = [2u8; 32];
+        dir.append_delta(&g, &[10u8; 32], &me, b"mine", 0).unwrap();
+        dir.append_delta_received(&g, &[11u8; 32], &me, b"my other phone's", &[0u8; 64], 0).unwrap();
+        dir.append_delta_via(&g, &[12u8; 32], &me, b"in a history bundle", &[0u8; 64], &[3u8; 32], 0).unwrap();
+        assert_eq!(
+            dir.pending_outbox(&g, &me).unwrap(),
+            vec![([10u8; 32], b"mine".to_vec())],
+            "only what this device wrote and has not sent"
+        );
     }
 
     #[test]

@@ -1,11 +1,11 @@
-//! host — a Site's public copy, and the only object an Arc joins (kind 33).
+//! host — a Site's public copy, and the only object an Arc serves from (kind 33).
 //!
 //! ## Why a second object exists at all
 //!
-//! The obvious design — let the Arc read the group and render it — is the one thing
-//! the architecture forbids. An Arc that could fold a group's log would hold that
-//! group's history in plaintext, which is the breach The Seam exists to prevent. So
-//! the Arc is never added to a group. But something has to hand bytes to a browser,
+//! The obvious design — let the Arc render the group's log — would publish what members
+//! wrote to each other. The Seam kept the Arc out of the group entirely; since A-3 and
+//! O-75 (27–30 Sep 2026) it sits in the Site and the rooms it admits for, and reads
+//! them, but it serves nothing from them. Something has to hand bytes to a browser,
 //! and it has to be a full member of SOMETHING: a non-member cannot decrypt, cannot
 //! fold, and cannot be removed.
 //!
