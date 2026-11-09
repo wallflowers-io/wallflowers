@@ -26,6 +26,24 @@ use crate::seal;
 use crate::transport::RelaySession;
 use crate::CoreError;
 
+static PRESIGNED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many presigns this process has asked a relay for. Not a relay blob, so not in
+/// `router::published()`, but a settled node that keeps presigning still spends battery and
+/// object storage: the quiescence tests count it beside that (ARC_NETWORK).
+pub fn presigned() -> u64 {
+    PRESIGNED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A presigned URL for `key` on a session of its own, counted.
+async fn presign(relay: &str, key: &str, put_len: Option<u64>) -> Result<String, CoreError> {
+    PRESIGNED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut s = RelaySession::connect(relay).await?;
+    let url = s.media_url(key, put_len).await;
+    s.close().await;
+    presigned_url(relay, url?)
+}
+
 fn b64() -> base64::engine::GeneralPurpose {
     base64::engine::general_purpose::STANDARD
 }
@@ -43,10 +61,7 @@ pub async fn put(relay: &str, bytes: &[u8], mime: &str) -> Result<MediaRef, Core
     let digest: [u8; 32] = Sha256::digest(&object).into();
     let reference = MediaRef::sealed(mime, digest, object.len() as u64, key.clone(), b64().encode(k))
         .map_err(|e| CoreError::Coordinator(format!("media: {e}")))?;
-    let mut s = RelaySession::connect(relay).await?;
-    let url = s.media_url(&key, Some(object.len() as u64)).await;
-    s.close().await;
-    let url = presigned(relay, url?)?;
+    let url = presign(relay, &key, Some(object.len() as u64)).await?;
     let res = http()?
         .put(url)
         .header(reqwest::header::IF_NONE_MATCH, "*")
@@ -71,10 +86,7 @@ pub async fn get(relay: &str, r: &MediaRef) -> Result<Vec<u8>, CoreError> {
         .ok()
         .and_then(|v| v.try_into().ok())
         .ok_or_else(|| CoreError::Coordinator("media: the content key is not 32 bytes".into()))?;
-    let mut s = RelaySession::connect(relay).await?;
-    let url = s.media_url(key, None).await;
-    s.close().await;
-    let url = presigned(relay, url?)?;
+    let url = presign(relay, key, None).await?;
     let mut res = http()?.get(url).send().await.map_err(|e| CoreError::Transport(format!("media fetch: {e}")))?;
     if !res.status().is_success() {
         return Err(CoreError::Transport(format!("media fetch: object storage answered {}", res.status())));
@@ -101,7 +113,7 @@ pub async fn get(relay: &str, r: &MediaRef) -> Result<Vec<u8>, CoreError> {
 
 /// The relay's presigned URL, taken only as https, unless the relay itself is on this machine
 /// (a local stand-in): a relay is not trusted to send a device anywhere it likes in clear.
-fn presigned(relay: &str, url: String) -> Result<String, CoreError> {
+fn presigned_url(relay: &str, url: String) -> Result<String, CoreError> {
     let local = reqwest::Url::parse(relay).is_ok_and(|u| {
         u.scheme() == "ws"
             && u.username().is_empty()
@@ -126,7 +138,7 @@ fn http() -> Result<reqwest::Client, CoreError> {
 
 #[cfg(test)]
 mod tests {
-    use super::presigned;
+    use super::presigned_url as presigned;
 
     /// Plain http only from a relay on this machine, judged by its parsed host, not a prefix.
     #[test]

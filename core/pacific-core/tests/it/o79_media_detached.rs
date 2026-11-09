@@ -99,7 +99,9 @@ async fn sealed_bytes_go_up_and_come_back_to_anyone_holding_the_reference() {
     let relay = relay_presigning_for(&store).await;
     let photo = b"\xff\xd8\xff\xe0 a jpeg's bytes, as far as anyone storing them can tell".repeat(1000);
 
+    let before = media_store::presigned();
     let r = media_store::put(&relay, &photo, "image/jpeg").await.unwrap();
+    assert!(media_store::presigned() > before, "a presign is counted");
     let Delivery::Sealed { ref key, bytes, .. } = r.delivery else { panic!("a sealed reference: {r:?}") };
     let held = objects.lock().unwrap().get(&format!("/pacific-media/{key}")).cloned().expect("the object is stored under its key");
     assert_eq!(held.len() as u64, bytes);
