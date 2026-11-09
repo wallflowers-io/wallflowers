@@ -106,8 +106,10 @@ struct MapCard: View {
     /// The profile's block colour — the cells wear it translucent.
     let color: Color
     let width: CGFloat
+    /// nil = the profile's card aspect; a detail's square hero passes its own.
+    var tall: CGFloat? = nil
 
-    private var height: CGFloat { ProfileGeometry.infoHeight(width: width) }
+    private var height: CGFloat { tall ?? ProfileGeometry.infoHeight(width: width) }
 
     var body: some View {
         ZStack {

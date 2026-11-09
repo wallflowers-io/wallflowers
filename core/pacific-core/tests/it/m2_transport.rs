@@ -340,3 +340,31 @@ fn epoch_retention_is_bounded() {
         "stored epoch span bounded by the retention window (min {min_epoch}, max {max_epoch})"
     );
 }
+
+/// The client half of a door's bound (`mls.door.relay`, B3): knocks go through the Router, the
+/// chokepoint every relay write passes and is counted at, to the door's tag; a drain at v3
+/// hears how many the relay's cap has evicted.
+#[tokio::test]
+async fn a_door_drain_hears_what_the_cap_evicted() {
+    let url = spawn_relay().await;
+    let door = Address::from_seed(&[9u8; 32]);
+    let per = pacific_wire::DOOR_PER_CONN_PER_HOUR;
+    let knocks = pacific_wire::DOOR_CAP + 1;
+    for chunk in 0..knocks.div_ceil(per) {
+        let mut r = pacific_core::router::Router::open(&Routes::parse(&url)).await.unwrap();
+        let before = pacific_core::router::published();
+        let n = per.min(knocks - chunk * per);
+        for i in chunk * per..chunk * per + n {
+            r.publish_door(&door, &pacific_wire::blob_b64(format!("knock {i}").as_bytes())).await.unwrap();
+        }
+        assert_eq!(pacific_core::router::published() - before, n, "every knock is counted");
+        r.close().await;
+    }
+    let mut r = pacific_core::router::Router::open(&Routes::parse(&url)).await.unwrap();
+    let (got, evicted) = r.drain_doors(&[door.door_tag()], |_, _| Ok(0)).await.unwrap();
+    assert_eq!(got[0].len() as u64, pacific_wire::DOOR_CAP);
+    assert_eq!(evicted.get(&door.door_tag()), Some(&1));
+
+    let refused = r.publish_door(&door, &"A".repeat(pacific_wire::DOOR_MAX_BYTES as usize + 1)).await;
+    assert!(matches!(refused, Err(CoreError::Transport(ref m)) if m.ends_with("too_large")), "{refused:?}");
+}

@@ -39,20 +39,19 @@ final class FeedCardUITests: XCTestCase {
         save.tap()
         XCTAssertTrue(page("post").waitForNonExistence(timeout: 10), "the creator closes on save")
 
-        // An Event, through LIFE's +.
+        // An Event, through RED's creator (LIFE has no + since 9 Nov).
         toLife()
-        app.buttons["tab-new"].tap()
-        let field = element("new-field-name")
+        let eventCard = app.beginCreating("event")
+        let field = eventCard.descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), "the event's NAME field")
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         app.typeText(event)
         XCTAssertEqual(app.buttons["shell-life"].label, "Save Event")
         app.buttons["shell-life"].tap()
 
-        // The feed: each card's header names its maker and its kind.
-        let orb = app.buttons["feed-orb"]
-        XCTAssertTrue(orb.waitForExistence(timeout: 10), "the feed orb")
-        orb.tap()
+        // The feed — LIFE's ground while search is closed: each card's header names its
+        // maker and its kind.
+        XCTAssertTrue(app.scrollViews["life-feed"].waitForExistence(timeout: 10), "the feed")
         for (title, kind) in [(post, "Post"), (event, "Event")] {
             let card = row(titled: title)
             XCTAssertTrue(card.exists, "\(title)'s card on the feed")
@@ -103,16 +102,16 @@ final class FeedCardUITests: XCTestCase {
         XCTAssertTrue(app.buttons["shell-note"].waitForExistence(timeout: 15), "RED disc")
     }
 
-    /// LIFE up, its + making an Event. The app reopens on the tab it was left on.
+    /// LIFE up: its search in the top row. The app reopens on the tab it was left on.
     private func toLife() {
         let life = app.buttons["shell-life"]
         XCTAssertTrue(life.waitForExistence(timeout: 15), "LIFE disc")
-        let plus = app.buttons["tab-new"]
-        for _ in 0..<3 where plus.label != "New Event" {
+        let search = app.buttons["tab-search"]
+        for _ in 0..<3 where !search.exists {
             life.tap()
             Thread.sleep(forTimeInterval: 1)
         }
-        XCTAssertEqual(plus.label, "New Event", "LIFE is up")
+        XCTAssertTrue(search.exists, "LIFE is up")
     }
 
     private func shoot(_ name: String) {

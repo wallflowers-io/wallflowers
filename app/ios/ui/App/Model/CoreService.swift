@@ -831,6 +831,8 @@ final class CoreService: ObservableObject {
             // The forum→host map rides every re-list: the CHAT list joins on it, and a
             // room minted or detached anywhere must re-dress its row on the next pass.
             refreshForumHosts(),
+            // Exteriors arrive by sync from connections, so they are re-read on every pass.
+            refreshExteriors(),
         ]
         return Task { for r in reads { await r.value } }
     }
@@ -844,6 +846,17 @@ final class CoreService: ObservableObject {
     /// level down. The CHAT list joins on it so a channel's room renders as
     /// "Channel / Room"; ThreadView reads the forward set per channel for tabs.
     @Published private(set) var roomHosts: [String: RoomHostRow] = [:]
+
+    /// THE EXTERIORS THAT REACHED ME (#76): objects I am not in, carried by their members.
+    /// Read off main and published only on change, like every tick read.
+    @Published private(set) var exteriors: [ExteriorRow] = []
+
+    @discardableResult
+    func refreshExteriors() -> Task<Void, Never> {
+        offMain("re-read exteriors", { c in try c.exteriors() }) { s, fresh in
+            if fresh != s.exteriors { s.exteriors = fresh }
+        }
+    }
 
     @discardableResult
     func refreshForumHosts() -> Task<Void, Never> {
@@ -1602,8 +1615,8 @@ final class CoreService: ObservableObject {
     /// emits before its property is set, so this delivers on the next main-queue turn,
     /// when the new values are readable.
     lazy var feedInputsChanged: AnyPublisher<Void, Never> =
-        Publishers.Merge4($events.map { _ in () }, $posts.map { _ in () },
-                          $listings.map { _ in () }, $index.map { _ in () })
+        Publishers.Merge5($events.map { _ in () }, $posts.map { _ in () },
+                          $listings.map { _ in () }, $things.map { _ in () }, $index.map { _ in () })
             .receive(on: DispatchQueue.main)
             .eraseToAnyPublisher()
 
@@ -1885,6 +1898,92 @@ final class CoreService: ObservableObject {
     func eventMedia(_ objectId: String) -> EventMediaRow? {
         do { return try core.eventMedia(objectId: objectId) }
         catch { readFailed("read the event's media", error); return nil }
+    }
+
+    // MARK: - Maximised detail (what the list rows leave out, and the owner's edits)
+
+    func eventDetail(_ objectId: String) -> EventDetailRow? {
+        do { return try core.eventDetail(objectId: objectId) }
+        catch { readFailed("read the event", error, object: objectId); return nil }
+    }
+
+    func thingDetail(_ objectId: String) -> ThingDetailRow? {
+        do { return try core.thingDetail(objectId: objectId) }
+        catch { readFailed("read the listing", error, object: objectId); return nil }
+    }
+
+    func postDetail(_ objectId: String) -> PostDetailRow? {
+        do { return try core.postDetail(objectId: objectId) }
+        catch { readFailed("read the post", error, object: objectId); return nil }
+    }
+
+    /// The ICD's words for `op`'s `arg`: what a choice row offers.
+    func vocabulary(_ op: String, _ arg: String) -> [String] {
+        core.opVocabulary(op: op, arg: arg)
+    }
+
+    /// The ICD's `maxLength` for `op`'s `arg`; 0 when it states none.
+    func ceiling(_ op: String, _ arg: String) -> Int {
+        Int(core.opArgMax(op: op, arg: arg))
+    }
+
+    /// An OWNER'S EDIT to an op that replaces whole (`event.setProfile`, `thing.setProfile`,
+    /// `post.setProfile`, `post.setMedia`): the core restates the held args with `changes`
+    /// over them — an empty text clears one — and sends nothing when nothing changed.
+    /// Reaches the relay → off the main thread.
+    func edit(_ objectId: String, op: String, _ changes: [String: OpValue]) async -> Bool {
+        let c = core
+        let args = changes.map { OpArg(key: $0.key, value: $0.value) }
+        do {
+            let sent = try await Task.detached { try c.objectEdit(objectId: objectId, op: op, changes: args) }.value
+            // Every edit is traced: "sent" is a write — a kept slot claim and publish for a
+            // sequenced op — and "unchanged" sent nothing.
+            Trace.shared.log("edit", object: objectId, "\(op) \(sent.isEmpty ? "unchanged" : "sent")")
+            await refreshAfterEdit(op)
+            return true
+        } catch { fail("save your change", error, object: objectId); return false }
+    }
+
+    /// One op by its ICD name — the adds a set takes (`event.addPhoto`, `thing.addPhoto`,
+    /// `post.addAsset`), a banner, a document. Off the main thread.
+    func apply(_ objectId: String, op: String, _ args: [String: OpValue]) async -> Bool {
+        let c = core
+        let list = args.map { OpArg(key: $0.key, value: $0.value) }
+        do {
+            _ = try await Task.detached { try c.objectApply(objectId: objectId, op: op, args: list) }.value
+            await refreshAfterEdit(op)
+            return true
+        } catch { fail("save your change", error, object: objectId); return false }
+    }
+
+    /// A picture into `op`'s `arg` slot (`photo`, `asset`, `banner`), fitted under the
+    /// ICD's ceiling for that arg. A keyed set's add (`id` + `at`) when `keyed`.
+    func addPicture(_ objectId: String, op: String, arg: String, _ data: Data,
+                    keyed: Bool, alt: String = "") async -> Bool {
+        guard let fit = Self.jpegUnderCap(data, capB64: ceiling(op, arg)) else {
+            fail("add the picture", DetailRefusal.tooLarge, object: objectId)
+            return false
+        }
+        var args: [String: OpValue] = [arg: .text(v: fit.base64EncodedString()),
+                                       arg + "Mime": .text(v: "image/jpeg")]
+        if keyed {
+            args["id"] = .text(v: (0..<8).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined())
+            args["at"] = .int(v: Int64(Date().timeIntervalSince1970 * 1000))
+        }
+        if !alt.isEmpty { args["alt"] = .text(v: alt) }
+        return await apply(objectId, op: op, args)
+    }
+
+    /// The lists a kind's edit moves, re-read so the card shows what the detail does —
+    /// and AWAITED, so a page re-reading the object after its edit reads the new value,
+    /// not the list as it was before the write.
+    private func refreshAfterEdit(_ op: String) async {
+        switch op.split(separator: ".").first {
+        case "event": await refreshEvents().value
+        case "thing": await refreshThings().value
+        case "post":  await refreshPosts().value
+        default: break
+        }
     }
 
     /// Downscale to 1080px (the Me.swift avatar helper's pattern, at flyer size) and
@@ -2896,5 +2995,72 @@ final class CoreService: ObservableObject {
             await syncNow(silent: true)
             try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
         }
+    }
+}
+
+// MARK: - The exterior (#76, ICD 2.6.0)
+// What a non-member holds of an object, and its door. Every write and every door read is a
+// relay round trip, so each runs off the main thread.
+
+extension CoreService {
+    /// Write an object's visibility and, when it reaches outward, its exterior. The name is the
+    /// object's own. (The exterior's still is by reference only, and waits on the blob store's
+    /// client, #56.)
+    @discardableResult
+    func setOutside(_ objectId: String, name: String, visibility: String,
+                    description: String, door: DoorChoice) async -> Bool {
+        let c = core
+        // At Only Me there is no outside to write: the dial alone.
+        let outsideName = visibility == "private" ? "" : name
+        do {
+            // One Save: only what changed is written, and sent once.
+            _ = try await Task.detached {
+                try c.setOutside(objectId: objectId, visibility: visibility, name: outsideName,
+                                 description: description, door: door.rawValue)
+            }.value
+            return true
+        } catch { fail("write what outsiders see", error, object: objectId); return false }
+    }
+
+    /// After a mint: what the creator's Visibility face said, written when the dial was moved
+    /// outward. Only Me is the mint's own state and writes nothing.
+    func setOutside(_ objectId: String, from draft: NewDraft) async {
+        guard draft.audience == .connections || draft.audience == .network else { return }
+        await setOutside(objectId, name: draft.name, visibility: draft.audience.rawValue,
+                         description: draft.outside, door: draft.door)
+    }
+
+    /// Ask to join an object whose exterior reached me.
+    func requestJoin(_ objectId: String) async -> Bool {
+        let c = core
+        do {
+            _ = try await Task.detached { try c.requestJoin(objectId: objectId, note: "") }.value
+            refreshExteriors()
+            return true
+        } catch { fail("ask to join", error, object: objectId); return false }
+    }
+
+    func withdrawRequest(_ objectId: String) async -> Bool {
+        let c = core
+        do {
+            try await Task.detached { try c.withdrawRequest(objectId: objectId) }.value
+            refreshExteriors()
+            return true
+        } catch { fail("withdraw your ask", error, object: objectId); return false }
+    }
+
+    /// The requests waiting for me, from what this device's syncs have drained from its doors.
+    func pendingRequests() async -> [RequestRow] {
+        let c = core
+        do { return try await Task.detached { try c.pendingRequests() }.value }
+        catch { readFailed("read who is asking to join", error); return [] }
+    }
+
+    func decideRequest(_ r: RequestRow, admit: Bool) async -> Bool {
+        let c = core
+        do {
+            try await Task.detached { try c.decideRequest(objectId: r.object, request: r.request, admit: admit) }.value
+            return true
+        } catch { fail(admit ? "admit" : "decline", error, object: r.object); return false }
     }
 }

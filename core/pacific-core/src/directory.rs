@@ -464,6 +464,28 @@ CREATE TABLE IF NOT EXISTS inbox_cursor_v2 (
   PRIMARY KEY (tag, source)
 );
 
+-- THE KNOCKS AT A DOOR (#76, ICD 2.6.0 mls.door): each blob drained from a door's address
+-- (its cursor is inbox_cursor_v2's, keyed by the door's seed), kept so a door is drained
+-- once and answered from here. Not state: the relay holds every knock, so a device that has
+-- never seen a door drains it from 0; what was decided is in the object's fold.
+CREATE TABLE IF NOT EXISTS door_knock (
+  door      BLOB NOT NULL,              -- the door's address seed
+  id        BLOB NOT NULL,              -- the knock's id: SHA-256 of its blob
+  blob      BLOB NOT NULL,              -- emptied once settled: only the id is kept
+  at        INTEGER NOT NULL DEFAULT 0, -- unix s it was drained
+  attempts  INTEGER NOT NULL DEFAULT 0, -- admissions tried and failed
+  next_at   INTEGER NOT NULL DEFAULT 0, -- unix s: no admission is tried before
+  outcome   TEXT,                       -- NULL while it waits; else why it no longer does
+  PRIMARY KEY (door, id)
+);
+
+-- What a door's cap has evicted, ever, as the relay last said (mls.door.relay.evicted): kept
+-- beside the door's cursor, so a flood is named when the total rises and not on every drain.
+CREATE TABLE IF NOT EXISTS door_evicted (
+  door   BLOB PRIMARY KEY,                -- the door's address seed
+  total  INTEGER NOT NULL DEFAULT 0
+);
+
 -- The substrate source of truth: the per-object append-only delta log.
 -- `delivered` is the outbox flag: 0 = authored locally but not yet confirmed PUB'd
 -- to the relay (flush on next reconnect), 1 = relay-ack'd, or received. A received
@@ -2124,6 +2146,81 @@ impl Directory {
         Ok(())
     }
 
+    // ---- the knocks at a door (mls.door) ----
+
+    /// Keep a knock drained from a door, within the door's bound (ICD `mls.door.relay`, as the
+    /// relay keeps it): at most `cap` per door, the oldest evicted, none older than `ttl_s`.
+    /// Idempotent by its id. A flood fills neither the relay nor a member's device.
+    pub fn put_knock(&self, door: &[u8; 32], id: &[u8; 32], blob: &[u8], now: i64, cap: usize, ttl_s: i64) -> Result<(), CoreError> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO door_knock (door, id, blob, at) VALUES (?1, ?2, ?3, ?4)",
+            params![&door[..], &id[..], blob, now],
+        )?;
+        self.conn.execute(
+            "DELETE FROM door_knock WHERE door=?1 AND (at < ?2 OR rowid NOT IN
+               (SELECT rowid FROM door_knock WHERE door=?1 ORDER BY at DESC, rowid DESC LIMIT ?3))",
+            params![&door[..], now - ttl_s, cap as i64],
+        )?;
+        Ok(())
+    }
+
+    /// What a door's cap has evicted since the last total the relay gave: the rise, kept as the
+    /// new total. 0 when it has not risen, so a flood is named once, not on every drain.
+    pub fn evicted_rose(&self, door: &[u8; 32], total: u64) -> Result<u64, CoreError> {
+        let seen: i64 = self
+            .conn
+            .query_row("SELECT total FROM door_evicted WHERE door=?1", params![&door[..]], |r| r.get(0))
+            .optional()?
+            .unwrap_or(0);
+        let rose = total.saturating_sub(seen as u64);
+        if rose > 0 {
+            self.conn.execute(
+                "INSERT INTO door_evicted (door, total) VALUES (?1, ?2) ON CONFLICT(door) DO UPDATE SET total=MAX(total, excluded.total)",
+                params![&door[..], total as i64],
+            )?;
+        }
+        Ok(rose)
+    }
+
+    /// The knocks still waiting at a door: (id, blob, attempts, next_at).
+    pub fn waiting_knocks(&self, door: &[u8; 32]) -> Result<Vec<([u8; 32], Vec<u8>, u32, i64)>, CoreError> {
+        let mut st = self.conn.prepare(
+            "SELECT id, blob, attempts, next_at FROM door_knock WHERE door=?1 AND outcome IS NULL ORDER BY rowid",
+        )?;
+        let rows = st.query_map(params![&door[..]], |r| {
+            Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, i64>(2)? as u32, r.get::<_, i64>(3)?))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, blob, attempts, next_at) = row?;
+            let id: [u8; 32] = id.try_into().map_err(|_| CoreError::Directory("door_knock id width".into()))?;
+            out.push((id, blob, attempts, next_at));
+        }
+        Ok(out)
+    }
+
+    /// A knock no longer waits, and why. Its bytes go; its id stays, so it is not kept again.
+    pub fn settle_knock(&self, door: &[u8; 32], id: &[u8; 32], outcome: &str) -> Result<(), CoreError> {
+        self.conn.execute(
+            "UPDATE door_knock SET outcome=?3, blob=x'' WHERE door=?1 AND id=?2",
+            params![&door[..], &id[..], outcome],
+        )?;
+        Ok(())
+    }
+
+    /// An admission tried and failed: not tried again before `next_at`.
+    pub fn knock_failed(&self, door: &[u8; 32], id: &[u8; 32], next_at: i64) -> Result<u32, CoreError> {
+        self.conn.execute(
+            "UPDATE door_knock SET attempts=attempts+1, next_at=?3 WHERE door=?1 AND id=?2",
+            params![&door[..], &id[..], next_at],
+        )?;
+        Ok(self.conn.query_row(
+            "SELECT attempts FROM door_knock WHERE door=?1 AND id=?2",
+            params![&door[..], &id[..]],
+            |r| r.get::<_, i64>(0),
+        )? as u32)
+    }
+
     // ---- delta log (source of truth) ----
     /// INSERT OR IGNORE => idempotent dedup by (group_id, delta_id).
     /// Returns true if newly appended.
@@ -2628,6 +2725,42 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         Directory::init(&conn).unwrap();
         Directory::with(conn)
+    }
+
+    /// A door's evicted total is named when it rises, once: the same total twice is quiet.
+    #[test]
+    fn a_flood_is_named_when_it_rises() {
+        let dir = mem();
+        let door = [3u8; 32];
+        assert_eq!(dir.evicted_rose(&door, 0).unwrap(), 0, "nothing evicted");
+        assert_eq!(dir.evicted_rose(&door, 5).unwrap(), 5, "the first flood");
+        assert_eq!(dir.evicted_rose(&door, 5).unwrap(), 0, "the same total again is quiet");
+        assert_eq!(dir.evicted_rose(&door, 8).unwrap(), 3, "it rose by three");
+        assert_eq!(dir.evicted_rose(&door, 2).unwrap(), 0, "a smaller total, from a lagging relay, is no rise");
+    }
+
+    /// A flood past a door's cap leaves the store at the cap, the newest kept; a settled knock
+    /// keeps its id and not its bytes; past the TTL a knock is let go.
+    #[test]
+    fn a_door_keeps_its_bound() {
+        let dir = mem();
+        // The ICD's bound, so the test moves when the ICD does.
+        let (door, cap, ttl) = ([7u8; 32], crate::exterior::DOOR_CAP as usize, crate::exterior::DOOR_TTL_DAYS as i64 * 86_400);
+        let flood = cap as u32 + 44;
+        for i in 0..flood {
+            let mut id = [0u8; 32];
+            id[..4].copy_from_slice(&i.to_be_bytes());
+            dir.put_knock(&door, &id, &[1; 64], 1_000 + i as i64, cap, ttl).unwrap();
+        }
+        let waiting = dir.waiting_knocks(&door).unwrap();
+        assert_eq!(waiting.len(), cap, "a flood leaves the store at the cap");
+        assert_eq!(&waiting[0].0[..4], &(flood - cap as u32).to_be_bytes(), "the oldest went");
+        let first = waiting[0].0;
+        dir.settle_knock(&door, &first, "decided").unwrap();
+        let bytes: Vec<u8> = dir.conn.query_row("SELECT blob FROM door_knock WHERE id=?1", params![&first[..]], |r| r.get(0)).unwrap();
+        assert!(bytes.is_empty(), "settled, only the id is kept");
+        dir.put_knock(&door, &[0xff; 32], &[1; 64], 1_000 + ttl + 500, cap, ttl).unwrap();
+        assert_eq!(dir.waiting_knocks(&door).unwrap().len(), 1, "past the TTL, the old ones go");
     }
 
     /// `FOLD_GEN` is read as SQLite keeps it: a database just opened reads current, and one

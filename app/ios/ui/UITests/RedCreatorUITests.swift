@@ -1,7 +1,8 @@
 //  RedCreatorUITests.swift
 //  RED is the universal creator: one card per kind on a ring, turned by a swipe on the
-//  card or by the dial under it, wrapping both ways. Nothing is focused, so the keyboard
-//  stays down, and the first edit chooses the kind.
+//  card or by the dial above it, wrapping both ways. Nothing is focused, so the keyboard
+//  stays down, and the first edit chooses the kind. Each card is a tablet: nothing scrolls
+//  inside it, it scrolls whole, and no colour lies past its border.
 
 import XCTest
 
@@ -121,7 +122,96 @@ final class RedCreatorUITests: XCTestCase {
         XCTAssertTrue(page("post").waitForNonExistence(timeout: 5), "the creator left")
     }
 
+    /// Every kind's card is one tablet (Ralph, 8 Nov, #60): no scroll view inside it, no
+    /// colour past its border, and scrolling the tablet up hides the dial, down brings it.
+    func test_red_everyKindIsOneTablet() {
+        launchToShell()
+        app.buttons["shell-note"].tap()
+        XCTAssertTrue(element("new-kinds").waitForExistence(timeout: 10), "the dial")
+        assertInView("note")
+
+        for (i, kind) in Self.ring.enumerated() {
+            // Round the ring by the card, one kind a swipe.
+            if i > 0 {
+                page(Self.ring[i - 1]).swipeLeft()
+                assertInView(kind)
+            }
+            Thread.sleep(forTimeInterval: 0.4)   // the page at rest, nothing mid-slide
+            let card = page(kind)
+            XCTAssertEqual(card.descendants(matching: .scrollView).count, 0, "nothing scrolls inside \(kind)'s card")
+            XCTAssertTrue(tablet(kind).exists, "\(kind)'s card is on a tablet")
+            assertNoColourPast(card.frame, kind)
+        }
+
+        // With the keyboard up the page is short, so the card is taller than it: the tablet
+        // scrolls. A field focused is not an edit, so the dial stays. Event is two kinds on
+        // from Note: past Post comes Note.
+        page("post").swipeLeft()
+        assertInView("note")
+        page("note").swipeLeft()
+        page("group").swipeLeft()
+        assertInView("event")
+        let name = page("event").descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
+        name.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard")
+        XCTAssertTrue(element("new-kinds").exists, "a focused field is not an edit")
+        let rest = page("event").frame.minY
+        tablet("event").swipeUp()
+        XCTAssertTrue(element("new-kinds").waitForNonExistence(timeout: 3), "scrolling the tablet up hides the dial")
+        XCTAssertLessThan(page("event").frame.minY, rest - 20, "the card moved, whole")
+        shoot("tablet scrolled")
+        // One flick back down brings it, before the top is reached.
+        tablet("event").swipeDown(velocity: .slow)
+        XCTAssertTrue(element("new-kinds").waitForExistence(timeout: 3), "back down brings the dial back")
+        tablet("event").swipeDown()
+        XCTAssertGreaterThanOrEqual(page("event").frame.minY, tablet("event").frame.minY, "the card's top on its tablet again")
+    }
+
     // MARK: helpers
+
+    /// One kind's tablet: the one on screen, as `page` finds its card.
+    private func tablet(_ kind: String) -> XCUIElement {
+        let all = app.descendants(matching: .any).matching(identifier: "new-tablet-\(kind)")
+        return all.allElementsBoundByIndex.first(where: \.isHittable) ?? all.firstMatch
+    }
+
+    /// Nothing of the card's colour lies past its border: just outside its right edge (and
+    /// its bottom, where that is clear of the disc row) the screen reads as it does a few
+    /// points further out. A hard shadow 3 pt right and down was the spill.
+    private func assertNoColourPast(_ card: CGRect, _ kind: String) {
+        let shot = XCUIScreen.main.screenshot().image
+        let screen = shot.size
+        var probes: [(CGPoint, CGPoint)] = [0.25, 0.5, 0.75].map { f in
+            let y = card.minY + card.height * f
+            return (CGPoint(x: card.maxX + 1.5, y: y), CGPoint(x: card.maxX + 7, y: y))
+        }.filter { $0.0.y > 0 && $0.0.y < screen.height }
+        // Below the card only where that is clear of the disc row: the tablet runs on under
+        // the row, blurred, and the row is not the card's colour.
+        let row = ["shell-note", "shell-chat", "shell-life"].map { app.buttons[$0].frame.minY }.min() ?? screen.height
+        if card.maxY + 8 < min(screen.height, row - 12) {
+            probes += [0.25, 0.5, 0.75].map { f in
+                let x = card.minX + card.width * f
+                return (CGPoint(x: x, y: card.maxY + 1.5), CGPoint(x: x, y: card.maxY + 7))
+            }
+        }
+        for (near, far) in probes {
+            let (a, b) = (pixel(shot, near), pixel(shot, far))
+            let d = zip(a, b).map { abs($0 - $1) }.max() ?? 0
+            XCTAssertLessThan(d, 0.08, "\(kind): colour just past the border at \(near): \(a) against \(b)")
+        }
+    }
+
+    /// The colour at `p` (points, top-left origin) in a screenshot, as RGB in 0...1.
+    private func pixel(_ image: UIImage, _ p: CGPoint) -> [CGFloat] {
+        guard let cg = image.cgImage else { return [0, 0, 0] }
+        let x = Int(p.x * image.scale), y = Int(p.y * image.scale)
+        var px = [UInt8](repeating: 0, count: 4)
+        let ctx = CGContext(data: &px, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                            space: CGColorSpaceCreateDeviceRGB(),
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.draw(cg, in: CGRect(x: -x, y: y - cg.height + 1, width: cg.width, height: cg.height))
+        return px.prefix(3).map { CGFloat($0) / 255 }
+    }
 
     /// The kinds in ring order, by their accessibility suffix.
     private static let ring = ["note", "group", "event", "thing", "place", "project", "post"]

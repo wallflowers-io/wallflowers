@@ -1,6 +1,6 @@
 {
   "model": "wallflowers/delta-graph",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "summary": "The interface between a GroupObject's delta log and its projection into the",
   "glossary": {
     "kind": "what an object is: group, forum, post, …",
@@ -113,6 +113,62 @@
         "rounds": 8
       },
       "tiebreak": "Where more than one delta follows one predecessor (written before the slot, or by a client without it), the first in spine order (epoch, seq, then the lowest DeltaId) stands. The others, and every delta chained from them, are superseded: kept in the log, left out of the fold, and named."
+    },
+    "door": {
+      "summary": "A request to join, from someone who is not on the roster and may share no channel with anyone who is: sealed TO the door's public key (base.setExterior `door`), so that only a device holding base.setDoor's key, a member's, can open it. Anyone holding the exterior can knock; no one else can read the knock. Outside every group epoch, as mls.intro is; not a Delta.",
+      "address": "Address::from_seed(SHA-256(addressDomain ‖ door public key)): a public seed, so any holder of the exterior may publish there",
+      "addressDomain": "wallflowers/door/address/v1",
+      "seal": "an ephemeral X25519 key E; k = HKDF-SHA256(salt = sealDomain, ikm = X25519(E, door), info = E.public ‖ door); XChaCha20-Poly1305 under k, a random 24-byte nonce, AAD = door. Wire: E.public(32) ‖ nonce(24) ‖ ciphertext",
+      "sealDomain": "wallflowers/door/seal/v1",
+      "id": "a request's id: SHA-256 of its sealed blob, 64 hex",
+      "kinds": {
+        "request": {
+          "summary": "Let me in",
+          "cbor": {
+            "kind": "the text \"request\"",
+            "object": "bytes: the object's group id",
+            "asker": "bytes: the asker's 32-byte identity key",
+            "bundles": "array of text: the asker's own contact bundles, every one theirs, at most `bundles`; the admitter adds by one",
+            "note": "text, at most `noteMax` bytes; may be empty",
+            "at": "integer: unix ms",
+            "sig": "bytes: Ed25519 by `asker` over SHA-256(sigDomain ‖ 0x00 ‖ kind ‖ 0x00 ‖ u32be len(object) ‖ object ‖ asker ‖ u32be count(bundles) ‖ for each, u32be len ‖ bundle ‖ u32be len(note) ‖ note ‖ u64be at)"
+          }
+        },
+        "withdraw": {
+          "summary": "Forget my request",
+          "cbor": {
+            "kind": "the text \"withdraw\"",
+            "object": "bytes: the object's group id",
+            "asker": "bytes: the asker's 32-byte identity key",
+            "request": "bytes: the 32-byte id of the request withdrawn",
+            "at": "integer: unix ms",
+            "sig": "bytes: Ed25519 by `asker` over SHA-256(sigDomain ‖ 0x00 ‖ kind ‖ 0x00 ‖ u32be len(object) ‖ object ‖ asker ‖ request ‖ u64be at)"
+          }
+        }
+      },
+      "sigDomain": "wallflowers/door/v1",
+      "bundles": 4,
+      "noteMax": 280,
+      "refused": "a blob that does not open, a request whose signature fails, a bundle that is not the asker's, or one naming another object, is set aside and named, never answered",
+      "relay": {
+        "summary": "The relay's bound on a door tag (B3, ruled 9 Nov 2026), and a member's device keeps its knock store under the same numbers, so a flood fills neither. The relay sees only that a tag is a door; door_pub is public, so any holder of the exterior could derive that anyway (RFC 9420 §16.4.1).",
+        "prefix": "door:",
+        "prefixSummary": "a door's tag on the relay is \"door:\" + the hex tag of Address::from_seed(the door's address seed), a literal colon",
+        "cap": 256,
+        "evict": "oldest",
+        "capSummary": "knocks kept per door, at most; past it the OLDEST is evicted, never the newest refused, so a flood cannot lock a door: the owner's remedy against a long one is a new door (a new base.setDoor key)",
+        "ttlDays": 30,
+        "ttlSummary": "a knock is kept this long, then let go: an ask unanswered for 30 days expires, and the asker may ask again",
+        "maxBytes": 8192,
+        "maxBytesSummary": "a knock as published (base64), at most, as the relay measures it: a request with every bundle and the longest note is 4,724 as published (3,542 sealed), so 1.7× headroom",
+        "perConnectionPerHour": 4,
+        "perConnectionPerHourSummary": "knocks one relay connection may publish to one door tag in an hour",
+        "evicted": {
+          "v": 3,
+          "frame": "evicted",
+          "summary": "After a Sub's replay of a door: tag, a Sub with v >= 3 receives one {t:\"evicted\", tag, total}: the number of knocks ever evicted from that tag, monotonic. The client keeps the last total it saw and shows the difference. Below v 3 it is never sent."
+        }
+      }
     }
   },
   "conformance": {
@@ -548,9 +604,14 @@
     "visibility": {
       "summary": "who may see it",
       "on": [
+        "group",
+        "forum",
+        "project",
+        "thing",
         "place",
         "event",
-        "post"
+        "post",
+        "note"
       ],
       "ops": {
         "base.setVisibility": {
@@ -574,11 +635,16 @@
           ]
         }
       },
-      "note": "On event and post since 2.3.0 (NC-139, Ralph 30 Sep: \"A is good\"). THE DEFAULT IS PER KIND: a place with none is private, as before; an event or a post with none is `network`, because before 2.3.0 every event and post a Site created was public on its Face (O-48), and an absent value must not withdraw them. face_items hydrates an event or post into its Site's Host only at `network`; `private` and `connections` are members only and never reach the Face, and a later change to either withdraws the item there.",
+      "note": "On event and post since 2.3.0 (NC-139, Ralph 30 Sep: \"A is good\"). THE DEFAULT IS PER KIND: a place with none is private, as before; an event or a post with none is `network`, because before 2.3.0 every event and post a Site created was public on its Face (O-48), and an absent value must not withdraw them. face_items hydrates an event or post into its Site's Host only at `network`; `private` and `connections` are members only and never reach the Face, and a later change to either withdraws the item there. Since 2.6.0 on every kind with an exterior (facets.exterior), because it is what bounds how far contact.publishExterior carries one: a kind new to the facet defaults to `private`, so nothing travels until its owner says so.",
       "defaults": {
         "place": "private",
         "event": "network",
-        "post": "network"
+        "post": "network",
+        "group": "private",
+        "forum": "private",
+        "project": "private",
+        "thing": "private",
+        "note": "private"
       }
     },
     "location": {
@@ -1090,6 +1156,162 @@
       },
       "view": {
         "bundles": "{<member key>: [{kp_id, bundle, not_after}]}: live offers of members on the roster only"
+      }
+    },
+    "exterior": {
+      "summary": "what a non-member holds of an object: its name, a picture, a description, and its door",
+      "note": "#76, ICD 2.6.0 (Ralph, 9 Nov: \"the exterior is a photo, description, and a way to ask to join\"; one facet op on every kind; requests sealed to a door key). Band 0xF00E. The INTERIOR is the object's log, read by its roster; the exterior is what its owner puts outside it on purpose, as the Host is a Site's public copy. It does not rely on membership: members carry it to their connections by contact.publishExterior, verbatim and owner-signed, as far as base.setVisibility says, and a non-member asks to join through the door (mls.door). Joining is a follow request: the owner is notified, admission may wait or be declined, and only an `auto` door admits at once.",
+      "on": [
+        "group",
+        "forum",
+        "project",
+        "thing",
+        "place",
+        "event",
+        "post",
+        "note"
+      ],
+      "ops": {
+        "base.setExterior": {
+          "op": 4027449344,
+          "ego": "owner",
+          "fold": "sequenced",
+          "summary": "The object's exterior, replaced wholesale: a name, a description and a picture, and the door's public key. The owner's alone, so that a non-member can check a carried copy against the owner key and nothing else. What the interior says is never copied here by the code: the owner writes it.",
+          "args": {
+            "name": {
+              "type": "string",
+              "required": true,
+              "maxLength": 120,
+              "summary": "not empty"
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 1024,
+              "summary": "UTF-8 bytes, refused over the cap, never truncated"
+            },
+            "photo": {
+              "type": "string",
+              "summary": "a still (image mimes), BY REFERENCE ONLY: a MediaRef flattened under the prefix `photo` (MediaRef::to_args), detached (O-79), so the Delta carries the digest and keys and never the bytes; an inline still is refused (maxLength 0). A carried copy is the owner's signed row, verbatim, so whatever the row holds goes to every hop; the bytes stay in the blob store (ARC_NETWORK B1(b); Ralph, 9 Nov: \"it should be by reference\"). Present and broken is refused; absent is none",
+              "maxLength": 0,
+              "mediaRef": {
+                "prefix": "photo",
+                "suffixes": [
+                  "",
+                  "Mime",
+                  "Via",
+                  "Kind",
+                  "Digest",
+                  "Bytes",
+                  "Session",
+                  "W",
+                  "H",
+                  "Ms",
+                  "Key",
+                  "Secret"
+                ],
+                "source": "pacific-media MediaRef::to_args, as event.setBanner's `banner`"
+              }
+            },
+            "photoMime": {
+              "type": "string"
+            },
+            "photoVia": {
+              "type": "string",
+              "vocabulary": {
+                "inline": "the bytes ride in the Delta",
+                "detached": "the Delta carries a digest, the object key and the content key; the bytes are fetched from the relay's blob store (O-79)"
+              }
+            },
+            "photoKind": {
+              "type": "string"
+            },
+            "photoDigest": {
+              "type": "string"
+            },
+            "photoBytes": {
+              "type": "integer"
+            },
+            "photoSession": {
+              "type": "string"
+            },
+            "photoW": {
+              "type": "integer"
+            },
+            "photoH": {
+              "type": "integer"
+            },
+            "photoMs": {
+              "type": "integer"
+            },
+            "photoKey": {
+              "type": "string",
+              "summary": "with via=detached: the bytes' object key in the relay's blob store (O-79); absent inline"
+            },
+            "photoSecret": {
+              "type": "string",
+              "summary": "with via=detached: the content key, base64 (O-79). An exterior is meant to be read outside the roster, so this key travels with it"
+            },
+            "door": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "summary": "the door's X25519 public key, 64 hex: the half of base.setDoor's key a stranger seals a request to (mls.door). Absent: no door, and the exterior offers no way to ask"
+            }
+          }
+        },
+        "base.setDoor": {
+          "op": 4027449345,
+          "ego": "owner",
+          "fold": "sequenced",
+          "summary": "The door: the X25519 private key requests are sealed to, and how they are answered. In the log so that every member's device can open a request (the roster is who answers); NEVER projected, never carried, never in an exterior. A new key is a new door: requests sealed to the old one are not opened. Empty closes the door.",
+          "args": {
+            "key": {
+              "type": "string",
+              "required": true,
+              "pattern": "^([0-9a-f]{64})?$",
+              "summary": "the X25519 private key, 64 hex, or empty to close the door"
+            },
+            "mode": {
+              "type": "string",
+              "required": true,
+              "vocabulary": {
+                "review": "a request waits for the owner, or an admitter, to admit or decline it",
+                "auto": "the first member device that opens a valid request admits its asker"
+              }
+            }
+          }
+        },
+        "base.decideRequest": {
+          "op": 4027449346,
+          "ego": "owner|role:admitter",
+          "fold": "commutative",
+          "summary": "The answer to one request at a `review` door, so that every device of every admitter stops showing it. The first decision per request holds; a later one is inert. An admission is also the MLS Add and its base.memberJoined, written beside it. The asker is not told of a decline: a follow request is declined in silence, and theirs reads as asked until they withdraw it. A kind with no roles facet has the owner as its only admitter.",
+          "args": {
+            "request": {
+              "type": "string",
+              "required": true,
+              "pattern": "^[0-9a-f]{64}$",
+              "summary": "the request's id (mls.door.id)"
+            },
+            "asker": {
+              "type": "string",
+              "required": true,
+              "pattern": "^[0-9a-f]{64}$",
+              "summary": "the asker's identity key, 64 hex"
+            },
+            "decision": {
+              "type": "string",
+              "required": true,
+              "vocabulary": {
+                "admit": "admitted",
+                "decline": "declined"
+              }
+            },
+            "gen": {
+              "type": "integer",
+              "required": true
+            }
+          }
+        }
       }
     }
   },
@@ -1752,6 +1974,43 @@
               "type": "integer",
               "required": true,
               "summary": "per this group's log, the Lamport generation; the highest (gen, author) that counts wins"
+            }
+          }
+        },
+        "group.setRequest": {
+          "op": 23,
+          "ego": "owner",
+          "fold": "sequenced",
+          "summary": "Record on MY OWN identity record that I asked to join an object, or withdrew the ask: the sibling of group.joinedObject, so a pending request survives my opening WallFlowers on a device that has never seen it. The fold keeps the latest per object. A request is answered when the object's Welcome arrives and group.joinedObject names it; nothing is written for a decline, which is silent.",
+          "args": {
+            "object": {
+              "type": "string",
+              "required": true,
+              "pattern": "^[0-9a-f]+$"
+            },
+            "kind": {
+              "type": "string",
+              "required": true
+            },
+            "owner": {
+              "type": "string",
+              "required": true,
+              "pattern": "^[0-9a-f]{64}$",
+              "summary": "the owner the exterior named; a Welcome whose GroupContext names another is refused"
+            },
+            "request": {
+              "type": "string",
+              "required": true,
+              "pattern": "^[0-9a-f]{64}$",
+              "summary": "the request's id (mls.door.id)"
+            },
+            "at": {
+              "type": "integer",
+              "required": true
+            },
+            "withdrawn": {
+              "type": "string",
+              "summary": "`1`: withdrawn"
             }
           }
         }
@@ -2594,6 +2853,10 @@
             "photoMime": {
               "type": "string"
             }
+          },
+          "deprecated": {
+            "by": "contact.publishExterior",
+            "issue": "#88"
           }
         },
         "contact.requestTicket": {
@@ -2706,6 +2969,10 @@
               "type": "integer",
               "required": true
             }
+          },
+          "deprecated": {
+            "by": "contact.publishExterior",
+            "issue": "#90"
           }
         },
         "contact.discoverResponse": {
@@ -2738,6 +3005,10 @@
               "type": "integer",
               "required": true
             }
+          },
+          "deprecated": {
+            "by": "contact.publishExterior",
+            "issue": "#90"
           }
         },
         "contact.invite": {
@@ -2772,6 +3043,10 @@
               "type": "integer",
               "required": true
             }
+          },
+          "deprecated": {
+            "by": "contact.publishExterior",
+            "issue": "#89"
           }
         },
         "contact.inviteReply": {
@@ -2816,6 +3091,51 @@
               "summary": "per this contact's log, the Lamport generation; the highest (gen, author) that counts wins"
             }
           }
+        },
+        "contact.publishExterior": {
+          "op": 13,
+          "ego": "member",
+          "fold": "commutative",
+          "summary": "An object's exterior, carried pairwise to someone who is not on its roster: the owner's own base.setExterior row and base.setVisibility row, verbatim, so the receiver checks both against the owner key alone. Every member carries the exteriors of its objects to its connections (hops 1); a receiver carries a `network` one on to its own (hops 2). The ceiling is visibility.reach_hops: private 0, connections 1, network 2 (contact::MAX_DISCOVER_HOPS), and the fold refuses a copy past it. Per object, the newest exterior row by (epoch, seq) wins, then the fewest hops. A row whose owner did not sign it, or a copy past its reach, is refused and named.",
+          "args": {
+            "object": {
+              "type": "string",
+              "required": true,
+              "pattern": "^[0-9a-f]+$",
+              "summary": "the object's group id, hex: the group the rows' A-10 signatures bind"
+            },
+            "kind": {
+              "type": "string",
+              "required": true,
+              "summary": "the object's kind; the exterior row's typeId must be its"
+            },
+            "owner": {
+              "type": "string",
+              "required": true,
+              "pattern": "^[0-9a-f]{64}$",
+              "summary": "the owner's identity key, the author of both rows"
+            },
+            "exterior": {
+              "type": "string",
+              "required": true,
+              "summary": "the base.setExterior row, an mls.applicationPayload, standard base64"
+            },
+            "visibility": {
+              "type": "string",
+              "summary": "the base.setVisibility row, likewise; absent, the kind's default (facets.visibility.defaults)"
+            },
+            "hops": {
+              "type": "integer",
+              "required": true,
+              "summary": "the receiver's distance from the roster: 1 from a member, 1 more per carry"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true
+            }
+          },
+          "perSync": 32,
+          "perSyncSummary": "copies of this leg a device authors in one sync, at most: its own objects' first, then those it carries on; the rest go on the next sync, so a first pass or a burst of Saves is spread over ticks rather than sent in one"
         }
       }
     },
@@ -3305,6 +3625,10 @@
               "type": "string",
               "required": true
             }
+          },
+          "deprecated": {
+            "by": "base.setDoor",
+            "issue": "#91"
           }
         },
         "place.setLand": {
@@ -5778,13 +6102,20 @@
           "invalidate instead when going=0 — a withdrawn yes is an interval that ended, not an edge that never was"
         ],
         "summary": "Going, or not. Its own leg because invite and answer have different authors; changing your mind is a later gen, not a retraction. RULED 16 Sep 2026: the web interior's `rsvp {event, going}` IS this op, not a new one on the Event. It cannot be an Event op — an Event's roster is the organiser and their door staff, and buyers and guests deliberately never join it (`event.rs`), so a guest is not a member of the object they are answering about and `Coordinator::deliver` would refuse their delta as Unauthorized. The answer has to ride the pairwise channel the invitation came down, and `going` is the same boolean this leg already carries."
+      },
+      "contact.publishExterior": {
+        "carries": [
+          "arg:object → the object's exterior, held by a non-member: never a node in their graph until they join"
+        ],
+        "summary": "An object's exterior, fanned out pairwise, at most visibility.reach_hops from its roster."
       }
     },
     "homes": {
       "contact.publishListing": "thing.setPosture {posture, price, reach, area} is the fact's real home on the Thing; this leg is a fan-out copy.",
       "contact.publishProfile": "group.setProfile on the author's own identity record is the real home; this leg is a per-author LWW cache for peers who cannot read it.",
       "contact.invite": "NO HOME. An Event has six ops and not one is about people — it cannot record an invitee. The leg carries the Event's title and startMs precisely because \"the invitee may never see the real Event\".",
-      "contact.inviteReply": "NO HOME. An Event cannot record an attendee, so an RSVP exists only in the channel it was sent through."
+      "contact.inviteReply": "NO HOME. An Event cannot record an attendee, so an RSVP exists only in the channel it was sent through.",
+      "contact.publishExterior": "base.setExterior on the object is the fact's real home; this leg is a fan-out copy, verbatim and owner-signed."
     }
   },
   "reciprocity": {

@@ -123,8 +123,8 @@ enum Geohash {
     //
     // Everything above answers questions about cells. This turns a SET of them into
     // something you can fill: a unit-space rectangle per cell, plus a stable colour.
-    // Lifted out of `PlaceProfilePage.areaCells`, which had the projection right and
-    // kept it private to one card at one fixed aspect.
+    // Lifted out of the Place page's area cells, which had the projection right and
+    // kept it private to one card at one fixed aspect (now `PlaceDetail.areaCells`).
 
     /// One painted cell — its hash and where it sits in a unit square (0…1, north up).
     struct Painted: Identifiable, Hashable {

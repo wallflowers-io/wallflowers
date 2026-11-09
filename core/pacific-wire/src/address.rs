@@ -94,6 +94,24 @@ impl Address {
         let sig = self.sign_pub(&blob_b64);
         Frame::Pub { tag: self.tag_hex(), blob: blob_b64, commit, sig }
     }
+
+    /// This address as a door's tag: [`crate::DOOR_PREFIX`] then the hex, the class the relay
+    /// bounds (`mls.door.relay`). The key and the signature are the address's own.
+    pub fn door_tag(&self) -> String {
+        format!("{}{}", crate::DOOR_PREFIX, self.tag_hex())
+    }
+
+    /// A complete, signed `Pub` of a knock to this address as a door.
+    pub fn door_pub_frame(&self, blob_b64: String) -> Frame {
+        let sig = self.sign_pub(&blob_b64);
+        Frame::Pub { tag: self.door_tag(), blob: blob_b64, commit: false, sig }
+    }
+}
+
+/// Is `tag` a door's (`mls.door.relay`)? The one thing the relay learns about a tag: since
+/// a door's key is public, anyone holding the exterior could tell it anyway.
+pub fn is_door(tag: &str) -> bool {
+    tag.starts_with(crate::DOOR_PREFIX)
 }
 
 /// The bytes an address key signs: domain, the tag's 32 bytes, then the blob as it
@@ -138,6 +156,8 @@ impl PubRefusal {
 /// `verify_strict`, so a small-order key or a malleated signature is refused rather
 /// than accepted by a looser reading of the same bytes.
 pub fn verify_pub(tag_hex: &str, blob_b64: &str, sig_hex: &str) -> Result<(), PubRefusal> {
+    // A door's tag is its address's, prefixed; the address signs the same 32 bytes.
+    let tag_hex = tag_hex.strip_prefix(crate::DOOR_PREFIX).unwrap_or(tag_hex);
     let lower = tag_hex.len() == 64
         && tag_hex.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
     if !lower {
@@ -172,6 +192,20 @@ mod tests {
         };
         assert_eq!(tag, a.tag_hex());
         assert_eq!(verify_pub(&tag, &blob, &sig), Ok(()));
+    }
+
+    #[test]
+    fn a_door_tag_is_its_address_prefixed_and_verifies_as_it() {
+        let a = Address::from_seed(&seed(4));
+        let Frame::Pub { tag, blob, sig, commit } = a.door_pub_frame(crate::blob_b64(b"knock")) else {
+            panic!("door_pub_frame builds a Pub");
+        };
+        assert_eq!(tag, format!("{}{}", crate::DOOR_PREFIX, a.tag_hex()));
+        assert!(is_door(&tag) && !is_door(&a.tag_hex()) && !commit);
+        assert_eq!(verify_pub(&tag, &blob, &sig), Ok(()));
+        assert_eq!(verify_pub(&format!("{}zz", crate::DOOR_PREFIX), &blob, &sig), Err(PubRefusal::MalformedTag));
+        let other = Address::from_seed(&seed(5)).door_tag();
+        assert_eq!(verify_pub(&other, &blob, &sig), Err(PubRefusal::BadSignature));
     }
 
     #[test]

@@ -14,6 +14,10 @@ use crate::project::{ProjectState, ProjectType};
 use crate::vcard;
 use crate::{coordinator, handshake, mls, paths, router::Router, seal, CoreError};
 
+/// The exterior on a Node: writing it, carrying it, its door (#76, ICD 2.6.0).
+mod exteriors;
+pub use exteriors::{DoorRequest, ExteriorDraft, HeldExterior};
+
 /// One row of a (forum) object's folded RATIFY projection — a proposal with its
 /// deferred payload, passing rule, DERIVED outcome, ballot tallies, and this device's
 /// own ballot. The read model the ratify UI binds to.
@@ -1259,6 +1263,10 @@ impl Node {
         let Ok(gid) = self.object_group_id(object_id_hex) else {
             return false;
         };
+        // An `auto` door (ICD 2.6.0 `base.setDoor`) is the same consent, for any kind.
+        if self.admits_at_an_auto_door(object_id_hex) {
+            return true;
+        }
         match self.dir.group_kind(&gid) {
             Ok(Some(k)) if k == "place" => self
                 .place_state(object_id_hex)
@@ -1359,11 +1367,21 @@ impl Node {
         // first loss would fail whenever it met one; the loser's staged commit was
         // never applied, so folding the winner and re-staging is always safe.
         let mut round = 0;
+        let mut leaves_at_first = None;
         let (mut group, welcome, leaves_before) = loop {
             let mut group = mls::load_group(&client, &group_id)?;
             // The newcomer's leaves before this Add, so the one it makes can be named
             // if its Welcome cannot go (NC-36).
             let leaves_before = mls::leaves_of(&group, &newcomer);
+            // THE SLOT WAS LOST TO THIS SAME ADMISSION. Members racing at an open door each
+            // stage an Add for one knock and one wins (RFC 9420 §14); a loser that re-staged
+            // would graft the newcomer a second leaf, legal MLS now that one person may hold
+            // two (PerLeafIdentity). Grown since the first round, they are in: stop.
+            let first = *leaves_at_first.get_or_insert(leaves_before.len());
+            if leaves_before.len() > first {
+                sess.close().await;
+                return Err(CoreError::Coordinator("already admitted by another member".into()));
+            }
             // Capture the CURRENT (pre-add) epoch's tag + secret BEFORE the add
             // advances us, so existing members — still at that epoch — can drain the
             // commit off it.
@@ -9406,6 +9424,48 @@ impl Node {
         self.apply_with(object_id_hex, op_id, args, true).await
     }
 
+    /// AN OWNER'S EDIT to an op that replaces whole — `event.setProfile`, `thing.setProfile`,
+    /// `post.setProfile`: the held args with `changes` laid over them (an empty text clears
+    /// its arg), applied by ICD name. `None` when nothing changed, and then nothing is sent:
+    /// a sequenced write is a slot claim and a publish, kept for good (#72), so restating
+    /// what the fold already holds must cost nothing.
+    pub async fn edit(
+        &self,
+        object_id_hex: &str,
+        op: &str,
+        changes: coordinator::Args,
+    ) -> Result<Option<String>, CoreError> {
+        let held = match op {
+            "event.setProfile" => self.event_state(object_id_hex)?.profile_args(),
+            "thing.setProfile" => self.thing_state(object_id_hex)?.profile_args(),
+            "post.setProfile" => self
+                .posts()?
+                .into_iter()
+                .find(|(id, _)| id == object_id_hex)
+                .map(|(_, st)| st.profile_args())
+                .ok_or_else(|| CoreError::Directory(format!("no post {object_id_hex}")))?,
+            _ => return Err(CoreError::Coordinator(format!("'{op}' is not an edit; apply it"))),
+        };
+        let mut args = held.clone();
+        for (k, v) in changes {
+            match v {
+                coordinator::ArgVal::Text(t) if t.is_empty() => {
+                    args.remove(&k);
+                }
+                v => {
+                    args.insert(k, v);
+                }
+            }
+        }
+        if args == held {
+            return Ok(None);
+        }
+        let kind = self.object_kind(object_id_hex)?;
+        let d = crate::authoring::op_on(&kind, op)
+            .ok_or_else(|| CoreError::Coordinator(format!("a {kind} has no op '{op}'")))?;
+        Ok(Some(self.apply(object_id_hex, d.op_id, args).await?))
+    }
+
     /// THE LOCAL COMMIT of one op (O-69, the Door's write path): authored as `apply`
     /// authors it and stored, and nothing sent; `publish_pending` sends it after the
     /// answer, or the next sync does, as a write made offline. A sequenced op is authored
@@ -11124,6 +11184,15 @@ impl Node {
             Err(e) => tracing::warn!(error = %e, "market reconciliation failed this sync"),
         }
 
+        // 3b'. CARRY EXTERIORS (#76): every object's I am in, to my connections outside it, and
+        //     every `network` one that reached me, one hop on. Gated by what each channel's
+        //     own fold already holds, so a settled mesh authors nothing.
+        match boxed(|| self.carry_exteriors()).await {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(deltas = n, "carried exteriors"),
+            Err(e) => tracing::warn!(error = %e, "carrying exteriors failed this sync"),
+        }
+
         // 3c. RECONCILE discovery. Answer every live question that reached us, forward
         //     the ones whose budget still reaches someone, and relay answers back
         //     toward their asker. Every gate reads a Contact fold that already
@@ -11159,6 +11228,17 @@ impl Node {
             Ok(v) if v.is_empty() => {}
             Ok(v) => tracing::info!(count = v.len(), "admitted knockers at public doors"),
             Err(e) => tracing::warn!(error = %e, "answering doors failed this sync"),
+        }
+        // ...and every exterior door (ICD 2.6.0 mls.door), likewise on every member: each held
+        //    door drained from its cursor into the knock store, review and auto alike, so a
+        //    knock is kept here before the relay lets it go; then every `auto` door answered.
+        if let Err(e) = boxed(|| self.drain_doors()).await {
+            tracing::warn!(error = %e, "draining exterior doors failed this sync");
+        }
+        match boxed(|| self.answer_exterior_doors()).await {
+            Ok(v) if v.is_empty() => {}
+            Ok(v) => tracing::info!(count = v.len(), "admitted askers at auto doors"),
+            Err(e) => tracing::warn!(error = %e, "answering exterior doors failed this sync"),
         }
 
         // 5. REPLENISH our prekey offers. Same shape and same reason as the two passes
