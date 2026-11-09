@@ -41,6 +41,37 @@ fn main() {
     .expect("icd_consts.rs");
     w98(&icd);
     links(&icd);
+    vocabularies(&icd);
+}
+
+/// EVERY CLOSED VOCABULARY, into OUT_DIR/icd_vocabularies.rs: `(op, arg, words)` for each op
+/// arg, on a kind or a facet, that states one — what a UI offers for a choice, so no surface
+/// keeps its own copy of the words.
+fn vocabularies(icd: &serde_json::Value) {
+    let mut rows = std::collections::BTreeMap::new();
+    for section in ["kinds", "facets"] {
+        for holder in icd[section].as_object().expect("the ICD's kinds and facets").values() {
+            for (op, decl) in holder["ops"].as_object().into_iter().flatten() {
+                for (arg, a) in decl["args"].as_object().into_iter().flatten() {
+                    if let Some(v) = a["vocabulary"].as_object() {
+                        let words: Vec<String> = v.keys().map(|k| format!("{k:?}")).collect();
+                        rows.insert((op.clone(), arg.clone()), words.join(", "));
+                    }
+                }
+            }
+        }
+    }
+    let body: Vec<String> = rows.iter().map(|((op, arg), w)| format!("    ({op:?}, {arg:?}, &[{w}]),")).collect();
+    let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_vocabularies.rs");
+    std::fs::write(
+        out,
+        format!(
+            "/// Every op arg's closed vocabulary, `(op, arg, words)`, from the ICD at build.\n\
+             pub const VOCABULARIES: &[(&str, &str, &[&str])] = &[\n{}\n];\n",
+            body.join("\n")
+        ),
+    )
+    .expect("icd_vocabularies.rs");
 }
 
 /// W-98's numbers and words (EVENTS-CORE), into OUT_DIR/icd_w98.rs: the per-kind visibility

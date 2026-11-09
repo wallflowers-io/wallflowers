@@ -34,7 +34,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::coordinator::Args;
+use crate::coordinator::{ArgVal, Args};
 use crate::object::{
     Authority, Commutativity, DeltaRejection, MemberId, ObjectKind, ObjectType, Op, OpDecl,
 };
@@ -203,6 +203,35 @@ impl PostState {
     /// The visibility in force: the written one, else the kind's default from the ICD.
     pub fn visibility(&self) -> crate::visibility::Visibility {
         self.visibility.unwrap_or_else(|| crate::visibility::default_for(ObjectKind::Post.name()))
+    }
+
+    /// The held profile as `post.setProfile` args — the whole profile, which the op
+    /// replaces, so an owner's edit changes one field instead of clearing the rest.
+    pub fn profile_args(&self) -> Args {
+        let mut a = Args::new();
+        a.insert("title".into(), ArgVal::Text(self.title.clone()));
+        a.insert("form".into(), ArgVal::Text(self.form.as_str().into()));
+        let text = [("body", &self.body), ("link", &self.link), ("bodyFormat", &self.body_format), ("excerpt", &self.excerpt)];
+        for (k, v) in text.into_iter().filter(|(_, v)| !v.is_empty()) {
+            a.insert(k.into(), ArgVal::Text(v.clone()));
+        }
+        a
+    }
+
+    /// The held media as `post.setMedia` args, which the op also replaces whole.
+    pub fn media_args(&self) -> Args {
+        let mut a = Args::new();
+        let text = [
+            ("icon", &self.icon),
+            ("iconMime", &self.icon_mime),
+            ("banner", &self.banner),
+            ("bannerMime", &self.banner_mime),
+            ("bannerAlt", &self.banner_alt),
+        ];
+        for (k, v) in text.into_iter().filter(|(_, v)| !v.is_empty()) {
+            a.insert(k.into(), ArgVal::Text(v.clone()));
+        }
+        a
     }
 }
 

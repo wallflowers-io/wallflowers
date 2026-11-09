@@ -436,6 +436,16 @@ pub fn op_on(kind: &str, name: &str) -> Option<&'static OpDecl> {
         .map(|(d, _)| d)
 }
 
+mod icd_vocabularies {
+    include!(concat!(env!("OUT_DIR"), "/icd_vocabularies.rs"));
+}
+
+/// The closed vocabulary the ICD states for `op`'s `arg`; `None` when the arg is free text
+/// or not declared.
+pub fn vocabulary(op: &str, arg: &str) -> Option<&'static [&'static str]> {
+    icd_vocabularies::VOCABULARIES.iter().find(|(o, a, _)| *o == op && *a == arg).map(|(_, _, w)| *w)
+}
+
 pub fn catalogue() -> Vec<(&'static OpDecl, Vec<&'static str>)> {
     let mut on: std::collections::BTreeMap<&'static str, (&'static OpDecl, Vec<&'static str>)> = Default::default();
     for kind in kinds() {
