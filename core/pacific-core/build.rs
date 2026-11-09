@@ -26,6 +26,8 @@ fn main() {
     let slot = &icd["mls"]["sequencing"]["slot"];
     let slot_label = slot["label"].as_str().expect("the ICD states mls.sequencing.slot.label");
     let slot_rounds = slot["rounds"].as_u64().expect("the ICD states mls.sequencing.slot.rounds");
+    // A late own leaf's history: where each segment of it is kept.
+    let pool_history_label = icd["mls"]["poolHistory"]["label"].as_str().expect("the ICD states mls.poolHistory.label");
     let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_consts.rs");
     std::fs::write(
         out,
@@ -35,7 +37,8 @@ fn main() {
              /// `kinds.forum.ops.\"forum.editDescription\".op`, from the ICD at build.\npub const FORUM_EDIT_DESCRIPTION: u32 = {describe_op};\n\
              /// `kinds.forum.ops.\"forum.editDescription\".args.description.maxBytes`, from the ICD at build.\npub const FORUM_DESCRIPTION_MAX: usize = {describe_max};\n\
              /// `mls.sequencing.slot.label`, from the ICD at build.\npub const SEQ_SLOT_LABEL: &str = {slot_label:?};\n\
-             /// `mls.sequencing.slot.rounds`, from the ICD at build.\npub const SEQ_SLOT_ROUNDS: usize = {slot_rounds};\n"
+             /// `mls.sequencing.slot.rounds`, from the ICD at build.\npub const SEQ_SLOT_ROUNDS: usize = {slot_rounds};\n\
+             /// `mls.poolHistory.label`, from the ICD at build.\npub const POOL_HISTORY_LABEL: &str = {pool_history_label:?};\n"
         ),
     )
     .expect("icd_consts.rs");

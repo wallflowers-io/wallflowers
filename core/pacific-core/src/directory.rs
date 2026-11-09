@@ -282,6 +282,22 @@ CREATE TABLE IF NOT EXISTS standing_restated (
   digest    BLOB NOT NULL
 );
 
+-- The rows of each object that a pool-history segment carries (ICD mls.poolHistory), as this
+-- device knows: those it wrote into one and those it read from one. A segment holds only rows
+-- no earlier one does, so each row is on the relay in at most one.
+CREATE TABLE IF NOT EXISTS pool_carried (
+  group_id  BLOB NOT NULL,
+  delta_id  BLOB NOT NULL,
+  PRIMARY KEY (group_id, delta_id)
+);
+
+-- The pool leaves of each object whose segment this device has read or written: read once.
+CREATE TABLE IF NOT EXISTS pool_segment_read (
+  group_id  BLOB NOT NULL,
+  pool      BLOB NOT NULL,
+  PRIMARY KEY (group_id, pool)
+);
+
 CREATE TABLE IF NOT EXISTS bundle_offer (
   kp_id     BLOB PRIMARY KEY,
   group_id  BLOB NOT NULL
@@ -1096,6 +1112,45 @@ impl Directory {
             params![group_id, digest],
         )?;
         Ok(())
+    }
+
+    /// Note rows of `group_id` as carried by a pool-history segment (ICD `mls.poolHistory`).
+    pub fn mark_carried(&self, group_id: &[u8], ids: &[[u8; 32]]) -> Result<(), CoreError> {
+        let tx = self.conn.unchecked_transaction()?;
+        for id in ids {
+            tx.execute("INSERT OR IGNORE INTO pool_carried (group_id, delta_id) VALUES (?1, ?2)", params![group_id, &id[..]])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// The rows of `group_id` a pool-history segment carries, as this device knows.
+    pub fn carried(&self, group_id: &[u8]) -> Result<std::collections::HashSet<[u8; 32]>, CoreError> {
+        let mut stmt = self.conn.prepare("SELECT delta_id FROM pool_carried WHERE group_id = ?1")?;
+        let ids = stmt
+            .query_map(params![group_id], |r| r.get::<_, Vec<u8>>(0))?
+            .filter_map(|v| v.ok().and_then(|v| <[u8; 32]>::try_from(v).ok()))
+            .collect();
+        Ok(ids)
+    }
+
+    /// Note the segment of pool leaf `pool` on `group_id` as read, or written, by this device.
+    pub fn mark_segment_read(&self, group_id: &[u8], pool: &[u8; 32]) -> Result<(), CoreError> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO pool_segment_read (group_id, pool) VALUES (?1, ?2)",
+            params![group_id, &pool[..]],
+        )?;
+        Ok(())
+    }
+
+    /// The pool leaves of `group_id` whose segment this device has read or written.
+    pub fn segments_read(&self, group_id: &[u8]) -> Result<std::collections::HashSet<[u8; 32]>, CoreError> {
+        let mut stmt = self.conn.prepare("SELECT pool FROM pool_segment_read WHERE group_id = ?1")?;
+        let pools = stmt
+            .query_map(params![group_id], |r| r.get::<_, Vec<u8>>(0))?
+            .filter_map(|v| v.ok().and_then(|v| <[u8; 32]>::try_from(v).ok()))
+            .collect();
+        Ok(pools)
     }
 
     /// Record that this device offered the key package `kp_id` on `group_id`.

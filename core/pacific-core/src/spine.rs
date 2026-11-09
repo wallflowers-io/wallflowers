@@ -98,6 +98,11 @@ pub struct PoolLeaf {
     pub kp_data: Vec<u8>,
     /// The epoch the leaf joined at: the floor of what it reads.
     pub epoch: u64,
+    /// How many parts the leaf's history segment has (ICD `mls.poolHistory`): what the
+    /// object held before `epoch`, written before this entry. 0 for none, and for a leaf
+    /// named before segments existed.
+    #[serde(default)]
+    pub history: u32,
 }
 
 /// Never the private halves: a log line is not a place for a signing key.
@@ -396,6 +401,7 @@ mod tests {
             kp_id: vec![4],
             kp_data: vec![5, 6],
             epoch: 3,
+            history: 2,
         };
         let e = Entry::new(
             5,
