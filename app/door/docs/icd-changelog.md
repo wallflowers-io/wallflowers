@@ -8,6 +8,20 @@ Method: deploy.md § 10.
 Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on an object that exists, or
 `POST /v2/mint` to make one. `GET /v2/icd` serves the model production runs; model.html lists every op and its args.
 
+## 2.9.0
+
+<!-- generated 2.9.0: icd-changelog.mjs --write; do not edit between the markers -->
+- Draft (when an object was made, #58), from `402c771`; its ICD `a03bc478b9160ebac70f79b00ff1789f57586e2d82c4c5b2c015ec434905a3d2`, not a release until its icd/* tag
+- Against 2.6.0 (`2c1067380ed4d2e2…`):
+  - changed: group.publishListing: +createdAt (integer)
+  - model sections changed besides ops: mls
+<!-- end generated 2.9.0 -->
+
+When an object was made (#58): `mls.groupContextExtensions.createdAt`, the time in the object's MLS GroupContext,
+set when it is created and never changed, by its creator's clock. `GET /v2/graph` gives each object's `createdAt`
+(absent for one made before this release). `group.publishListing` takes an optional `createdAt`, the Thing's, so a
+Site listing says when its Thing was made.
+
 ## 2.6.0
 
 <!-- generated 2.6.0: icd-changelog.mjs --write; do not edit between the markers -->
