@@ -748,6 +748,23 @@ pub async fn serve_with_policy(
     limits: Limits,
     obs: Option<Observer>,
 ) {
+    // Object storage is read from the environment here rather than taken as a
+    // parameter, so the existing `serve_with_store` signature (and every test that
+    // drives it) is unchanged. Unset means media offload is simply off, and every
+    // request for it is refused with `unconfigured` rather than quietly dropped.
+    serve_with_media(listener, store, retention, limits, obs, Media::from_env()).await
+}
+
+/// [`serve_with_policy`] with its object storage given rather than read from the
+/// environment: a test's stand-in, without setting process-wide variables.
+pub async fn serve_with_media(
+    listener: TcpListener,
+    store: Box<dyn Mailbox>,
+    retention: Retention,
+    limits: Limits,
+    obs: Option<Observer>,
+    media: Option<Media>,
+) {
     info!(
         max_blob_bytes = limits.max_blob_bytes,
         max_store_bytes = limits.max_store_bytes,
@@ -760,11 +777,7 @@ pub async fn serve_with_policy(
     let metrics = hub.lock().await.metrics.clone();
     let health = Arc::new(health::Health::new(limits.min_disk_free_pct));
     tokio::spawn(health_loop(hub.clone(), metrics.clone(), health.clone()));
-    // Object storage is read from the environment here rather than taken as a
-    // parameter, so the existing `serve_with_store` signature (and every test that
-    // drives it) is unchanged. Unset means media offload is simply off, and every
-    // request for it is refused with `unconfigured` rather than quietly dropped.
-    let media: Option<Arc<Media>> = Media::from_env().map(Arc::new);
+    let media: Option<Arc<Media>> = media.map(Arc::new);
     if let Some(m) = &media {
         info!(
             max_object_bytes = m.max_bytes(),

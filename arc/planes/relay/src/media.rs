@@ -94,8 +94,11 @@ impl MediaError {
 /// never silently accepted and dropped.
 #[derive(Debug, Clone)]
 pub struct Media {
-    /// Host only — the scheme is always https and is added by the presigner.
+    /// Host only — the scheme is https, added by the presigner.
     host: String,
+    /// Plain http, for an endpoint on this machine only: a local stand-in in tests and
+    /// the harness. Never for a remote host, where the URL would cross a network in clear.
+    plain: bool,
     bucket: String,
     region: String,
     creds: Credentials,
@@ -141,10 +144,8 @@ impl Media {
         // Accept a full URL or a bare host; the presigner signs the host only, and
         // a stray scheme or trailing slash folded into it is an unsigned-request bug
         // that only shows up as a 403 from R2.
-        let host = endpoint
-            .as_deref()
-            .unwrap()
-            .trim()
+        let raw = endpoint.as_deref().unwrap().trim();
+        let host = raw
             .trim_start_matches("https://")
             .trim_start_matches("http://")
             .trim_end_matches('/')
@@ -153,6 +154,7 @@ impl Media {
         // The storage safety net. `RELAY_R2_BUDGET_BYTES=0` disables the cap, using
         // the same "0 means off" idiom as `RELAY_RETENTION_SECS` — and gets the same
         // loud warning, because an uncapped bucket bills without limit.
+        let plain = raw.starts_with("http://") && is_loopback(&host);
         let bucket_name = bucket.unwrap();
         let budget_bytes = env_str("RELAY_R2_BUDGET_BYTES")
             .and_then(|v| v.parse().ok())
@@ -177,6 +179,7 @@ impl Media {
 
         Some(Self {
             host,
+            plain,
             bucket: bucket_name,
             region: env_str("RELAY_R2_REGION").unwrap_or_else(|| "auto".into()),
             creds: Credentials {
@@ -206,6 +209,7 @@ impl Media {
     ) -> Self {
         Self {
             host: host.into(),
+            plain: false,
             bucket: bucket.into(),
             region: "auto".into(),
             creds,
@@ -214,6 +218,13 @@ impl Media {
             budget: None,
             poll: budget::DEFAULT_POLL,
         }
+    }
+
+    /// Presign plain-http URLs, for a stand-in on this machine. Refused (left https) for any
+    /// host that is not loopback.
+    pub fn plain_on_loopback(mut self) -> Self {
+        self.plain = is_loopback(&self.host);
+        self
     }
 
     /// Attach a storage budget. Used by `from_env` and by tests that exercise the
@@ -239,7 +250,7 @@ impl Media {
         if let Some(token) = continuation {
             query.push(("continuation-token".to_string(), token.to_string()));
         }
-        presign(
+        self.scheme(presign(
             &Presign {
                 method: "GET",
                 host: &self.host,
@@ -251,7 +262,7 @@ impl Media {
                 now: Utc::now(),
             },
             &self.creds,
-        )
+        ))
     }
 
     /// Interval between usage measurements.
@@ -298,7 +309,7 @@ impl Media {
     }
 
     fn sign(&self, method: &str, key: &str, extra: &[(String, String)]) -> String {
-        presign(
+        self.scheme(presign(
             &Presign {
                 method,
                 host: &self.host,
@@ -310,8 +321,26 @@ impl Media {
                 now: Utc::now(),
             },
             &self.creds,
-        )
+        ))
     }
+
+    /// The presigner writes https; the scheme is not signed, so a loopback stand-in's URL is
+    /// the same signature over plain http.
+    fn scheme(&self, url: String) -> String {
+        match (self.plain, url.strip_prefix("https://")) {
+            (true, Some(rest)) => format!("http://{rest}"),
+            _ => url,
+        }
+    }
+}
+
+/// `127.0.0.1`, `localhost` or `[::1]`, with or without a port.
+fn is_loopback(host: &str) -> bool {
+    let name = match host.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or(""),
+        None => host.split(':').next().unwrap_or(""),
+    };
+    matches!(name, "127.0.0.1" | "localhost" | "::1")
 }
 
 /// Keys are opaque 32-byte identifiers rendered as lowercase hex — the same shape
@@ -355,6 +384,19 @@ mod tests {
 
     fn key() -> String {
         "ab".repeat(32)
+    }
+
+    /// Plain http only for a stand-in on this machine; a remote host stays https.
+    #[test]
+    fn plain_http_is_for_loopback_only() {
+        let at = |host: &str| {
+            Media::new(host, "b", Credentials { access_key_id: "k".into(), secret_access_key: "s".into() }, 1024, Duration::from_secs(300))
+                .plain_on_loopback()
+        };
+        assert!(at("127.0.0.1:9000").presign_get(&key()).unwrap().starts_with("http://127.0.0.1:9000/b/"));
+        assert!(at("[::1]:9000").presign_get(&key()).unwrap().starts_with("http://[::1]:9000/"));
+        assert!(at("acct.r2.cloudflarestorage.com").presign_get(&key()).unwrap().starts_with("https://"));
+        assert!(at("127.0.0.1.evil.example").presign_get(&key()).unwrap().starts_with("https://"));
     }
 
     #[test]
