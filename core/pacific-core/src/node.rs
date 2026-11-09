@@ -2258,10 +2258,12 @@ impl Node {
                 log: &log,
                 watermark,
             };
-            let built = crate::authoring::build(&kind, old.op_id, old.args.clone(), &ctx).map(|mut d| {
-                d.visibility = old.visibility.clone();
-                d
-            });
+            let built = crate::authoring::build(&kind, old.op_id, old.args.clone(), &ctx)
+                .map_err(|r| CoreError::Coordinator(r.to_string()))
+                .map(|mut d| {
+                    d.visibility = old.visibility.clone();
+                    d
+                });
             match built {
                 Ok(new) if new.id() == old_id => {
                     out.push((old_id, new.canonical_bytes(), new.prev));
