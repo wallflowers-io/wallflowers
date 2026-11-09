@@ -102,7 +102,12 @@ pub async fn get(relay: &str, r: &MediaRef) -> Result<Vec<u8>, CoreError> {
 /// The relay's presigned URL, taken only as https, unless the relay itself is on this machine
 /// (a local stand-in): a relay is not trusted to send a device anywhere it likes in clear.
 fn presigned(relay: &str, url: String) -> Result<String, CoreError> {
-    let local = ["ws://127.0.0.1:", "ws://localhost:", "ws://[::1]:"].iter().any(|p| relay.starts_with(p));
+    let local = reqwest::Url::parse(relay).is_ok_and(|u| {
+        u.scheme() == "ws"
+            && u.username().is_empty()
+            && u.password().is_none()
+            && matches!(u.host_str(), Some("127.0.0.1" | "localhost" | "[::1]"))
+    });
     if url.starts_with("https://") || (local && url.starts_with("http://")) {
         Ok(url)
     } else {
@@ -117,4 +122,20 @@ fn http() -> Result<reqwest::Client, CoreError> {
         .timeout(std::time::Duration::from_secs(900))
         .build()
         .map_err(|e| CoreError::Transport(format!("media: {e}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::presigned;
+
+    /// Plain http only from a relay on this machine, judged by its parsed host, not a prefix.
+    #[test]
+    fn plain_http_only_from_a_local_relay() {
+        let http = || "http://127.0.0.1:9000/b/k".to_string();
+        assert!(presigned("ws://127.0.0.1:4000", http()).is_ok());
+        assert!(presigned("ws://[::1]:4000/v1/relay", http()).is_ok());
+        assert!(presigned("ws://localhost:1@evil.example", http()).is_err(), "userinfo is not a local relay");
+        assert!(presigned("wss://arc.wallflowers.io/v1/relay", http()).is_err());
+        assert!(presigned("wss://arc.wallflowers.io/v1/relay", "https://acct.r2.cloudflarestorage.com/b/k".into()).is_ok());
+    }
 }
