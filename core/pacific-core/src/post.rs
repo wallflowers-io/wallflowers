@@ -217,22 +217,6 @@ impl PostState {
         }
         a
     }
-
-    /// The held media as `post.setMedia` args, which the op also replaces whole.
-    pub fn media_args(&self) -> Args {
-        let mut a = Args::new();
-        let text = [
-            ("icon", &self.icon),
-            ("iconMime", &self.icon_mime),
-            ("banner", &self.banner),
-            ("bannerMime", &self.banner_mime),
-            ("bannerAlt", &self.banner_alt),
-        ];
-        for (k, v) in text.into_iter().filter(|(_, v)| !v.is_empty()) {
-            a.insert(k.into(), ArgVal::Text(v.clone()));
-        }
-        a
-    }
 }
 
 pub struct PostType;

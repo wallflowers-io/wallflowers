@@ -1048,7 +1048,7 @@ public protocol CoreProtocol : AnyObject {
     
     /**
      * An owner's edit to an op that REPLACES WHOLE — `event.setProfile`, `thing.setProfile`,
-     * `post.setProfile`, `post.setMedia`: the held args, with `changes` laid over them (an
+     * `post.setProfile`: the held args, with `changes` laid over them (an
      * empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
      * the answer is "". Any other op is refused: it is `object_apply`'s.
      */
@@ -2668,7 +2668,7 @@ open func objectApply(objectId: String, op: String, args: [OpArg])throws  -> Str
     
     /**
      * An owner's edit to an op that REPLACES WHOLE — `event.setProfile`, `thing.setProfile`,
-     * `post.setProfile`, `post.setMedia`: the held args, with `changes` laid over them (an
+     * `post.setProfile`: the held args, with `changes` laid over them (an
      * empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
      * the answer is "". Any other op is refused: it is `object_apply`'s.
      */
@@ -15889,7 +15889,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_object_apply() != 28345) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_object_edit() != 16193) {
+    if (uniffi_pacific_ffi_checksum_method_core_object_edit() != 376) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_object_mark_read() != 14131) {

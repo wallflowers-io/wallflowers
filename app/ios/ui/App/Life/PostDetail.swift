@@ -48,9 +48,6 @@ struct PostDetailSource: DetailSource {
         if owner {
             rows.append(r.choice("Kind", more?.form ?? "", op: profile, arg: "form"))
             rows.append(r.choice("Body format", more?.bodyFormat ?? "", op: profile, arg: "bodyFormat"))
-            if !row.banner.isEmpty {
-                rows.append(r.text("Picture's words", more?.bannerAlt ?? "", op: "post.setMedia", arg: "bannerAlt"))
-            }
         }
         if row.reactions > 0 {
             rows.append(DetailRow(label: "Reactions", value: "\(row.reactions) reactions"))

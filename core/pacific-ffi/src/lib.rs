@@ -2283,7 +2283,7 @@ impl Core {
     }
 
     /// An owner's edit to an op that REPLACES WHOLE — `event.setProfile`, `thing.setProfile`,
-    /// `post.setProfile`, `post.setMedia`: the held args, with `changes` laid over them (an
+    /// `post.setProfile`: the held args, with `changes` laid over them (an
     /// empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
     /// the answer is "". Any other op is refused: it is `object_apply`'s.
     pub fn object_edit(&self, object_id: String, op: String, changes: Vec<OpArg>) -> Result<String, FfiError> {
@@ -2291,14 +2291,14 @@ impl Core {
         let held = match op.as_str() {
             "event.setProfile" => node.event_state(&object_id)?.profile_args(),
             "thing.setProfile" => node.thing_state(&object_id)?.profile_args(),
-            "post.setProfile" | "post.setMedia" => {
+            "post.setProfile" => {
                 let st = node
                     .posts()?
                     .into_iter()
                     .find(|(id, _)| *id == object_id)
                     .map(|(_, st)| st)
                     .ok_or_else(|| FfiError::Core(format!("no post {object_id}")))?;
-                if op == "post.setProfile" { st.profile_args() } else { st.media_args() }
+                st.profile_args()
             }
             _ => return Err(FfiError::Core(format!("'{op}' is not an edit; apply it"))),
         };

@@ -66,6 +66,11 @@ struct DetailSurface: View {
                     .offset(grown ? .zero : offset(in: page))
                     .opacity(grown || session.origin != nil ? 1 : 0)
                     .accessibilityIdentifier("detail-page")
+                    // The card's square it grew from, "x,y,w,h" in points — what a test
+                    // holds the grow to.
+                    .accessibilityValue(session.origin.map {
+                        "\(Int($0.minX)),\(Int($0.minY)),\(Int($0.width)),\(Int($0.height))"
+                    } ?? "")
             }
         }
         .ignoresSafeArea()
@@ -432,8 +437,10 @@ struct DetailSurface: View {
 // MARK: - The owner's row
 
 /// One writable row, in the creator's grammar. It commits when the person is done
-/// with it — Return, leaving the field, a choice picked, a switch thrown — and the
-/// page reads the value back from the fold.
+/// with it — Return, leaving the field, a choice picked, a switch thrown, a date
+/// SET — and the page reads the value back from the fold. Every commit is a
+/// sequenced write that is kept for good, so a value is sent once: never per step
+/// of a wheel, and never twice for one Return (which also blurs the field).
 private struct DetailEditRow: View {
     let row: DetailRow
     let edit: DetailEdit
@@ -443,6 +450,8 @@ private struct DetailEditRow: View {
     @State private var text = ""
     @State private var date = Date()
     @State private var dated = false
+    /// The last value sent, so a Return and the blur it causes send one write.
+    @State private var sent: String?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -454,12 +463,12 @@ private struct DetailEditRow: View {
                         .lineLimit(edit.input == .multiline ? 1...8 : 1...1)
                         .focused($focused)
                         .submitLabel(.done)
-                        .onSubmit { commit(text) }
-                        .onChange(of: focused) { _, now in if !now { commit(text) } }
+                        .onSubmit { send(text) }
+                        .onChange(of: focused) { _, now in if !now { send(text) } }
                 case .choice(let words):
                     Menu {
-                        ForEach(words, id: \.self) { w in Button(w) { commit(w) } }
-                        if !edit.current.isEmpty { Button("Clear", role: .destructive) { commit("") } }
+                        ForEach(words, id: \.self) { w in Button(w) { send(w) } }
+                        if !edit.current.isEmpty { Button("Clear", role: .destructive) { send("") } }
                     } label: {
                         Text(edit.current)
                             .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
@@ -467,13 +476,22 @@ private struct DetailEditRow: View {
                     }
                 case .toggle:
                     Toggle("", isOn: Binding(get: { edit.current == "1" },
-                                             set: { commit($0 ? "1" : "") }))
+                                             set: { send($0 ? "1" : "") }))
                         .labelsHidden()
                 case .date:
                     if dated {
-                        DatePicker("", selection: $date)
-                            .labelsHidden()
-                            .onChange(of: date) { _, d in commit(String(Int64(d.timeIntervalSince1970 * 1000))) }
+                        // The wheel only moves `date`; SET sends it, once.
+                        HStack {
+                            DatePicker("", selection: $date).labelsHidden()
+                            Spacer(minLength: 8)
+                            if dateValue != edit.current {
+                                Button { send(dateValue) } label: {
+                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
+                                }
+                                .accessibilityLabel("Set")
+                                .accessibilityIdentifier("detail-set-\(row.id)")
+                            }
+                        }
                     } else {
                         Button { dated = true } label: {
                             Image(systemName: "plus").foregroundStyle(Theme.textSecondary)
@@ -484,14 +502,23 @@ private struct DetailEditRow: View {
             .font(.system(size: 15))
             .foregroundStyle(Theme.textPrimary)
             .disabled(busy)
+            .accessibilityIdentifier("detail-edit-\(row.id)")
         }
         .onAppear(perform: seed)
         .onChange(of: edit.current) { _, _ in seed() }
-        .accessibilityIdentifier("detail-edit-\(row.id)")
+    }
+
+    private var dateValue: String { String(Int64(date.timeIntervalSince1970 * 1000)) }
+
+    private func send(_ value: String) {
+        guard value != (sent ?? edit.current) else { return }
+        sent = value
+        commit(value)
     }
 
     private func seed() {
         text = edit.current
+        sent = nil
         if case .date = edit.input, let ms = Int64(edit.current), ms > 0 {
             date = Date(timeIntervalSince1970: Double(ms) / 1000)
             dated = true
@@ -506,6 +533,7 @@ private struct DetailTitleField: View {
     var commit: (String) -> Void
 
     @State private var text = ""
+    @State private var sent: String?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -516,14 +544,17 @@ private struct DetailTitleField: View {
             .onChange(of: focused) { _, now in if !now { commitIfNamed() } }
             .disabled(busy)
             .onAppear { text = edit.current }
-            .onChange(of: edit.current) { _, now in text = now }
+            .onChange(of: edit.current) { _, now in text = now; sent = nil }
     }
 
     /// A title is required by every kind's profile op: an emptied field puts the
     /// held one back rather than sending a write the fold must refuse.
     private func commitIfNamed() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.isEmpty { text = edit.current } else { commit(t) }
+        if t.isEmpty { text = edit.current; return }
+        guard t != (sent ?? edit.current) else { return }
+        sent = t
+        commit(t)
     }
 }
 
