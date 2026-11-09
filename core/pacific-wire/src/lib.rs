@@ -201,8 +201,9 @@ pub enum Frame {
     },
     /// relay→client: the presign was refused. `reason` is a stable token —
     /// `unconfigured` (relay has no object storage), `bad_key` (not opaque
-    /// 32-byte hex), `too_large` (over the relay's cap), `over_budget` or
-    /// `budget_stale`. Only ever sent to a `Sub { v >= 2 }`.
+    /// 32-byte hex), `too_large` (over the relay's cap), `over_budget`,
+    /// `budget_stale` or `rate_limited` (this connection's presigns are paced).
+    /// Only ever sent to a `Sub { v >= 2 }`.
     MediaErr { key: String, reason: String },
     /// relay→client: end of the stored backlog for the current `Sub`; live follows.
     Eose,
