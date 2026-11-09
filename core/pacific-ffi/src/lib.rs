@@ -559,6 +559,10 @@ pub struct PostRow {
     pub retracted: bool,
     pub reactions: u32,
     pub comments: u32,
+    /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+    /// where present they win over this row's inline picture, which stays for older objects.
+    pub icon_ref: Option<MediaRefRow>,
+    pub banner_ref: Option<MediaRefRow>,
 }
 
 /// The draft behind every `+` — what the UI has collected when the user commits.
@@ -875,6 +879,10 @@ pub struct ThingRow {
     /// The listing's FACE — one still, base64 ("" = none; the card renders stripes).
     pub photo: String,
     pub photo_mime: String,
+    /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+    /// where present they win over this row's inline picture, which stays for older objects.
+    pub icon_ref: Option<MediaRefRow>,
+    pub banner_ref: Option<MediaRefRow>,
 }
 
 /// One row of the hops-aware place listing: a Place I hold (`holder == ""`, hops 0)
@@ -1049,6 +1057,10 @@ pub struct EventRow {
     /// written — the reader asks `recurrence_summary` / `recurrence_occurrences`
     /// for what it needs, which are already here and already tested.
     pub recurrence: String,
+    /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+    /// where present they win over this row's inline picture, which stays for older objects.
+    pub icon_ref: Option<MediaRefRow>,
+    pub banner_ref: Option<MediaRefRow>,
 }
 
 /// One event photo crossing the FFI.
@@ -1056,6 +1068,21 @@ pub struct EventRow {
 pub struct EventPhotoRow {
     pub data: String,
     pub mime: String,
+}
+
+/// A folded media slot as a row: its sealed reference, or `None` for an empty, unwritten or
+/// inline slot (an inline picture rides the row's own base64 field).
+fn ref_row(m: &Option<pacific_core::media::MediaRef>) -> Option<MediaRefRow> {
+    match m.as_ref().map(|m| (&m.mime, &m.delivery)) {
+        Some((mime, pacific_core::media::Delivery::Sealed { digest, bytes, key, secret })) => Some(MediaRefRow {
+            mime: mime.clone(),
+            digest: hex::encode(digest),
+            bytes: *bytes,
+            key: key.clone(),
+            secret: secret.clone(),
+        }),
+        _ => None,
+    }
 }
 
 /// A detached, sealed media reference (O-79, `media.detached`, #56): what a Delta carries in
@@ -1443,6 +1470,10 @@ pub struct GroupRow {
     /// short mp4 — the group page's wall, beside the avatar's face.
     pub cover: String,
     pub cover_mime: String,
+    /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+    /// where present they win over this row's inline picture, which stays for older objects.
+    pub icon_ref: Option<MediaRefRow>,
+    pub banner_ref: Option<MediaRefRow>,
 }
 
 /// One row of the LIFE ▸ GROUPS listing: a Group identity record, folded — the
@@ -1656,6 +1687,8 @@ fn group_row(v: pacific_core::group::GroupView) -> GroupRow {
         avatar_color: v.card.avatar_color,
         cover: v.cover,
         cover_mime: v.cover_mime,
+        icon_ref: ref_row(&v.base_media.icon),
+        banner_ref: ref_row(&v.base_media.banner),
         emails: labeled_rows(v.card.emails),
         phones: labeled_rows(v.card.phones),
         urls: labeled_rows(v.card.urls),
@@ -2126,10 +2159,9 @@ impl Core {
     /// includes the kinds that exist but are not minted from a draft — `contact` is
     /// formed by PAIRING and `conversation` by consuming a Contact's prekeys.
     ///
-    /// Mints the object and authors its op-0 profile delta, nothing more. Posture,
-    /// tickets, media and venue are separate ops with their own authority; the caller
-    /// authors them after, so a failure is reportable against the step that failed
-    /// rather than leaving a half-configured object behind one opaque error.
+    /// Mints the object, its op-0 profile delta, and the Separate fields the draft carries:
+    /// the icon and banner (uploaded first, so a failed upload creates nothing), an Event's
+    /// venue and a Place's fix (`Node::mint`). Posture and tickets are the caller's.
     pub fn object_mint(&self, kind: String, draft: MintDraft) -> Result<String, FfiError> {
         let k = pacific_core::mint::kind_from_name(&kind)
             .ok_or_else(|| FfiError::Core(format!("unknown object kind '{kind}'")))?;
@@ -2299,6 +2331,8 @@ impl Core {
                 area: st.area.unwrap_or_default(),
                 photo: st.photo,
                 photo_mime: st.photo_mime,
+                icon_ref: ref_row(&st.base_media.icon),
+                banner_ref: ref_row(&st.base_media.banner),
             })
             .collect())
     }
@@ -2432,6 +2466,8 @@ impl Core {
                 // A Post's comments live in the Forum it hosts (m34), so the
                 // count is that room's, not a field here. `forums` names it.
                 comments: 0,
+                icon_ref: ref_row(&st.base_media.icon),
+                banner_ref: ref_row(&st.base_media.banner),
             })
             .collect())
     }
@@ -2483,6 +2519,9 @@ impl Core {
                 has_clip: !st.media.clip.is_empty(),
                 lineup: st.lineup.clone(),
                 recurrence: st.recurrence.clone(),
+                icon_ref: ref_row(&st.base_media.icon),
+                // The facet's, else `event.setBanner`'s where it is detached.
+                banner_ref: ref_row(&st.base_media.banner).or_else(|| ref_row(&st.banner)),
             });
         }
         Ok(out)
