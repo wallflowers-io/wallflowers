@@ -1776,7 +1776,7 @@ impl Node {
             if self.dir.pending_outbox(&gid, &me)?.is_empty() {
                 continue;
             }
-            match self.publish_pending(&hex::encode(&gid)).await {
+            match self.publish_pending_as(&hex::encode(&gid), true).await {
                 Ok(k) => sent += k,
                 Err(e) => tracing::warn!(target: "pacific::sync", group = %hex::encode(&gid), error = %e,
                                          "a local commit stays in the outbox for the next sync"),
@@ -1789,8 +1789,20 @@ impl Node {
     /// answer): the group drained to head, a waiting proposal committed, and each of this
     /// device's undelivered Deltas sealed at the live epoch, published on the held
     /// session and marked delivered on its Ack. A link that fails leaves them in the
-    /// outbox for the next sync, as a write made offline does. The count sent.
+    /// outbox for the next sync, as a write made offline does. The count sent: rows that
+    /// left the outbox, not rows walked.
+    ///
+    /// A WRITE TO A NAMED OBJECT TRIES NOW (#75): a queue backed off after a lost slot is
+    /// claimed on this call all the same, and a failure is an error, never a quiet `Ok` —
+    /// the Door answers a write as relayed on this (NC-93). RFC 9420 §14 backs off the
+    /// loser, not the person.
     pub async fn publish_pending(&self, object_id_hex: &str) -> Result<usize, CoreError> {
+        self.publish_pending_as(object_id_hex, false).await
+    }
+
+    /// [`Self::publish_pending`]; `patient` honours a slot backoff, as a sweep or a tick
+    /// does (`publish_all_pending`), leaving that object's sequenced rows queued.
+    async fn publish_pending_as(&self, object_id_hex: &str, patient: bool) -> Result<usize, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
         if self.dir.group_leaf_count(&group_id)? <= 1 {
             return Ok(0);
@@ -1810,13 +1822,12 @@ impl Node {
             let client = mls::build_client_sqlite(&paths::db_path(), sid, sk)?;
             group = self.load_member_group(&client, &group_id)?;
         }
-        let mut sent = 0;
-        for (did, env) in self.dir.pending_outbox(&group_id, &me)? {
-            self.flush_one(&mut sess, &mut group, &group_id, &did, &env).await?;
-            sent += 1;
+        let queued = self.dir.pending_outbox(&group_id, &me)?;
+        for (did, env) in &queued {
+            self.flush_one(&mut sess, &mut group, &group_id, did, env, patient).await?;
         }
         self.done_with(sess, home).await;
-        Ok(sent)
+        Ok(queued.len().saturating_sub(self.dir.pending_outbox(&group_id, &me)?.len()))
     }
 
     async fn post_to_group(
@@ -1959,7 +1970,7 @@ impl Node {
             if let Ok(mut sess) = Router::open(&routes).await {
                 for (did, env) in self.dir.pending_outbox(group_id, &me)? {
                     let _ = self
-                        .flush_one(&mut sess, &mut group, group_id, &did, &env)
+                        .flush_one(&mut sess, &mut group, group_id, &did, &env, true)
                         .await;
                 }
                 sess.close().await;
@@ -2069,7 +2080,7 @@ impl Node {
                 }
             }
             if let Err(e) = self
-                .flush_one(&mut sess, group, group_id, &delta_id, &envelope)
+                .flush_one(&mut sess, group, group_id, &delta_id, &envelope, false)
                 .await
             {
                 // STILL A WARN, AND STILL NOT THE CALLER'S BUSINESS: the outbox's
@@ -2132,7 +2143,8 @@ impl Node {
     /// still queued, the whole queue on its object goes, each through its slot; if it is
     /// not (sent by an earlier step of the same walk, or replaced after a lost slot), it is
     /// done — publishing the snapshot's copy would send it twice, or send a dropped one and
-    /// fork. Re-emission of sent deltas calls [`Self::publish_one`] itself.
+    /// fork. Re-emission of sent deltas calls [`Self::publish_one`] itself. `patient`: a
+    /// sweep or a tick, which leaves a backed-off queue waiting; a person's write is not.
     async fn flush_one(
         &self,
         sess: &mut Router,
@@ -2140,10 +2152,11 @@ impl Node {
         group_id: &[u8],
         delta_id: &[u8; 32],
         envelope: &[u8],
+        patient: bool,
     ) -> Result<(), CoreError> {
         if coordinator::decode_delta(envelope)?.seq.is_some() {
             if self.dir.pending_outbox(group_id, &self.id.identity_pk())?.iter().any(|(d, _)| d == delta_id) {
-                return self.flush_sequenced(sess, group, group_id).await;
+                return self.flush_sequenced(sess, group, group_id, patient).await;
             }
             return Ok(());
         }
@@ -2159,10 +2172,13 @@ impl Node {
     /// anything: it climbs, takes the winner into the log, and authors that delta and
     /// every one queued after it again from the new head. An op the new head refuses is
     /// said, not sent.
-    async fn flush_sequenced(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8]) -> Result<(), CoreError> {
-        // A queue that could not take its slot waits before it is claimed again: one
-        // failure costs one pass, not a pass per queued delta or per sync tick.
-        if matches!(self.live_state().slot_backoff.get(group_id), Some((until, _)) if std::time::Instant::now() < *until) {
+    async fn flush_sequenced(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8], patient: bool) -> Result<(), CoreError> {
+        // A queue that could not take its slot waits before a sweep or a tick claims it
+        // again: one failure costs one pass, not a pass per queued delta or per sync tick.
+        // A person's own write is not made to wait (#75).
+        if patient && matches!(self.live_state().slot_backoff.get(group_id), Some((until, _)) if std::time::Instant::now() < *until) {
+            tracing::info!(target: "pacific::sync", group = %hex::encode(&group_id[..group_id.len().min(6)]),
+                           "sequenced writes wait out the slot backoff; a write to this object sends them now");
             return Ok(());
         }
         let out = self.claim_and_send(sess, group, group_id).await;
@@ -2185,7 +2201,7 @@ impl Node {
             let mut lost = false;
             let queue = if round == 0 { self.queued_sequenced(group_id)? } else { self.requeue_sequenced(group, group_id)? };
             for (did, envelope, prev) in queue {
-                let slot = seq_slot(&root, group_id, &prev);
+                let slot = sequenced_slot(&root, group_id, &prev);
                 let won = match sess.publish_commit(&slot, &pacific_wire::blob_b64(&self.slot_claim(&root, &slot, group_id, &did, &envelope)?)).await? {
                     Some(_) => true,
                     // Taken: by this delta (a resend after its claim was acked), or by another.
@@ -11374,7 +11390,7 @@ impl Node {
         //     LEAVES, not members — see `Directory::group_leaf_count`.
         if self.dir.group_leaf_count(group_id)? > 1 {
             for (did, env) in self.dir.pending_outbox(group_id, &self.id.identity_pk())? {
-                let _ = self.flush_one(sess, &mut group, group_id, &did, &env).await;
+                let _ = self.flush_one(sess, &mut group, group_id, &did, &env, true).await;
             }
         }
 
@@ -11425,7 +11441,7 @@ impl Node {
                     unix_now(),
                 )?;
                 let _ = self
-                    .flush_one(sess, &mut group, group_id, &delta_id, &envelope)
+                    .flush_one(sess, &mut group, group_id, &delta_id, &envelope, true)
                     .await;
             }
         }
@@ -12043,11 +12059,11 @@ fn pool_keys_in(group: &mls::Group) -> std::collections::HashSet<[u8; 32]> {
 }
 
 /// THE SLOT a sequenced delta claims on one object: the place after its predecessor
-/// (ICD `mls.sequencing.slot`). Two deltas after one `prev` are a fork wherever their
+/// (ICD `mls.sequencing.slot`), as any implementation of the ICD derives it. Two deltas after one `prev` are a fork wherever their
 /// `(epoch, seq)` fall, so `prev` is the key. From the owner's storage root, so only the
 /// owner's own devices, the sequenced spine's only writers, can claim or read it; the
 /// relay sees a tag.
-fn seq_slot(root: &[u8; 32], group_id: &[u8], prev: &[u8; 32]) -> Address {
+pub fn sequenced_slot(root: &[u8; 32], group_id: &[u8], prev: &[u8; 32]) -> Address {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
     h.update(crate::icd_consts::SEQ_SLOT_LABEL.as_bytes());
