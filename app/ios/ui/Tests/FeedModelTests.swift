@@ -21,22 +21,21 @@ final class FeedModelTests: XCTestCase {
                              lineup: [], recurrence: "")
     }
 
-    private func listing(_ title: String, hops: UInt32 = 0, deadline: Int64 = 0,
-                         createdAt: Int64? = nil) -> ListingRow {
+    private func listing(_ title: String, hops: UInt32 = 0, deadline: Int64 = 0) -> ListingRow {
         ListingRow(origin: "o", thingId: title, posture: "wants", title: title,
                    descriptor: "", price: "", deadline: deadline, area: "", hops: hops,
-                   via: "", photo: "", photoMime: "", createdAt: createdAt)
+                   via: "", photo: "", photoMime: "")
     }
 
     func testEachRowCarriesWhenItsObjectWasMade() {
         let rows = FeedAssembler.rows(
             events: [event("soon", start: now + hour), event("old", start: now + 2 * hour)],
-            listings: [listing("amp", createdAt: now - 3 * hour)],
+            listings: [listing("amp")],
             nowMs: now,
             createdOf: { $0 == "soon" ? now - hour : nil })
         let made = Dictionary(uniqueKeysWithValues: rows.map { ($0.title, $0.createdAt) })
         XCTAssertEqual(made["soon"], now - hour)
-        XCTAssertEqual(made["amp"], now - 3 * hour, "a listing carries its Thing's")
+        XCTAssertEqual(made["amp"], .some(nil), "a pairwise listing carries no time (#88's exterior will)")
         XCTAssertEqual(made["old"], .some(nil), "made before the time was kept: none")
     }
 

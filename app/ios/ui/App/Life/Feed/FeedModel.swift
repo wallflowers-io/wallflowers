@@ -166,8 +166,7 @@ enum FeedAssembler {
                 objectID: nil,
                 bannerB64: l.photo,
                 authorRoute: .person(l.origin),
-                authorID: l.origin,
-                createdAt: l.createdAt))
+                authorID: l.origin))
         }
         return out.sorted { $0.whenMs == $1.whenMs ? $0.id < $1.id : $0.whenMs < $1.whenMs }
     }

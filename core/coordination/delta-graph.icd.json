@@ -2593,10 +2593,6 @@
             },
             "photoMime": {
               "type": "string"
-            },
-            "createdAt": {
-              "type": "integer",
-              "summary": "the Thing's mls.groupContextExtensions.createdAt, unix ms; absent when the Thing has none"
             }
           }
         },

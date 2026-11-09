@@ -6233,7 +6233,6 @@ impl Node {
             // paths be ordered against each other.
             let group_id = self.object_group_id(&thing_id)?;
             let rev = self.dir.log_len(&group_id)? as u64;
-            let created_at = self.dir.group_created_at(&group_id)?;
             // A WITHDRAWAL cannot read its reach off the Thing: clearing a posture resets
             // the audience to private (so a later posture cannot inherit an unstated one),
             // and a private tombstone could never chase a listing that travelled the
@@ -6294,7 +6293,6 @@ impl Node {
                     withdrawn,
                     (!state.photo.is_empty())
                         .then_some((state.photo.as_str(), state.photo_mime.as_str())),
-                    created_at,
                 );
                 match self
                     .contact_author_into(group_id, crate::contact::OP_PUBLISH_LISTING, args)
@@ -6421,7 +6419,6 @@ impl Node {
                     // The face travels UNCHANGED with every forward — listing content,
                     // exactly like the title.
                     (!l.photo.is_empty()).then_some((l.photo.as_str(), l.photo_mime.as_str())),
-                    l.created_at,
                 );
                 match self
                     .contact_author_into(group_id, crate::contact::OP_PUBLISH_LISTING, args)

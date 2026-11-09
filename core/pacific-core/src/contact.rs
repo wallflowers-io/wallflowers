@@ -219,10 +219,6 @@ pub struct Listing {
     pub photo: String,
     /// MIME of `photo`; "" when no photo.
     pub photo_mime: String,
-    /// When the Thing was made (its `createdAt`, unix ms), carried unchanged by every
-    /// forward; `None` when the Thing has none.
-    #[serde(default)]
-    pub created_at: Option<i64>,
 }
 
 /// A question travelling the graph: "list your GroupObjects of `kind`, matching `tags`".
@@ -599,7 +595,6 @@ pub fn publish_listing_args(
     withdrawn: bool,
     // photo: the Thing's (photo b64, mime) — `None` when the origin listed without one.
     photo: Option<(&str, &str)>,
-    created_at: Option<i64>,
 ) -> Args {
     let mut a = Args::new();
     a.insert("origin".into(), ArgVal::Text(hex::encode(origin)));
@@ -621,9 +616,6 @@ pub fn publish_listing_args(
     if let Some((photo, mime)) = photo {
         a.insert("photo".into(), ArgVal::Text(photo.to_string()));
         a.insert("photoMime".into(), ArgVal::Text(mime.to_string()));
-    }
-    if let Some(t) = created_at {
-        a.insert("createdAt".into(), ArgVal::Int(t));
     }
     a
 }
@@ -1050,11 +1042,6 @@ impl ObjectType for ContactType {
                 if foreign_media_exceeds(&photo, &photo_mime, crate::media::Slot::Avatar) {
                     return Err(DeltaRejection::MalformedArgs);
                 }
-                let created_at = match crate::arg_reads::get(op.args, "createdAt") {
-                    Some(ArgVal::Int(t)) if *t > 0 => Some(*t),
-                    None | Some(ArgVal::Int(_)) => None,
-                    _ => return Err(DeltaRejection::MalformedArgs),
-                };
 
                 // ---- LWW: newest revision wins; among equals, the SHORTEST path wins ----
                 //
@@ -1087,7 +1074,6 @@ impl ObjectType for ContactType {
                         withdrawn,
                         photo,
                         photo_mime,
-                        created_at,
                     },
                 );
                 Ok(())
@@ -1699,7 +1685,6 @@ mod tests {
                 rev,
                 withdrawn,
                 None,
-                None,
             ),
             0,
             Some(gen),
@@ -2002,7 +1987,6 @@ mod tests {
             0,
             0,
             false,
-            None,
             None,
         );
         let st = folded(vec![(

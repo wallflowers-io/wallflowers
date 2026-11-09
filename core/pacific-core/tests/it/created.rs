@@ -1,7 +1,7 @@
 //! WHEN AN OBJECT WAS MADE (`mls.groupContextExtensions.createdAt`). The time rides the
 //! GroupContext, so a member added later and a device restored from the words read it
-//! without holding any log from before they joined; and a listing carries its Thing's
-//! time to people who are not on the Thing's roster, down every hop.
+//! without holding any log from before they joined. (A Site listing carries its Thing's
+//! time: `w98_site_listings.rs`.)
 
 use crate::common;
 
@@ -9,7 +9,6 @@ use common::Harness;
 use pacific_core::mint::MintDraft;
 use pacific_core::object::{ObjectKind, COMMENTS};
 use pacific_core::resumption::HeadInput;
-use pacific_core::thing::{Posture, Reach};
 
 fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
@@ -59,26 +58,4 @@ async fn a_member_added_later_and_a_restored_device_read_when_it_was_made() {
         held,
         "the restored device reads the same times"
     );
-}
-
-#[tokio::test]
-async fn a_listing_carries_its_things_time_down_every_hop() {
-    let h = Harness::new(&["Ada", "Bob", "Cleo"]).await;
-    let (ada, bob, cleo) = (0, 1, 2);
-    h.pair(ada, bob).await;
-    h.pair(bob, cleo).await;
-    h.settle().await;
-
-    let thing = h.mint_thing(ada, "ladder").await;
-    let at = created(&h, ada, ObjectKind::Thing, &thing).expect("the Thing has its time");
-    h.set_posture(ada, &thing, Posture::Offers, None, Reach::Network).await;
-    h.publish_market(ada).await;
-    h.settle().await;
-    h.publish_market(bob).await;
-    h.settle().await;
-
-    for (u, who) in [(bob, "Bob, a connection"), (cleo, "Cleo, a hop further")] {
-        let l = h.discovered(u).into_iter().find(|l| l.thing_id == thing).expect(who);
-        assert_eq!(l.created_at, Some(at), "{who} reads when Ada's Thing was made");
-    }
 }

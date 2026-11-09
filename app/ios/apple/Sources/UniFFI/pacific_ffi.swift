@@ -7562,10 +7562,6 @@ public struct ListingRow {
      */
     public var photo: String
     public var photoMime: String
-    /**
-     * When the Thing was made, unix ms; `None` when it carries no `createdAt`.
-     */
-    public var createdAt: Int64?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -7597,10 +7593,7 @@ public struct ListingRow {
         /**
          * The origin's photo for this listing, carried unchanged through every forward.
          * "" when they listed without one.
-         */photo: String, photoMime: String, 
-        /**
-         * When the Thing was made, unix ms; `None` when it carries no `createdAt`.
-         */createdAt: Int64?) {
+         */photo: String, photoMime: String) {
         self.origin = origin
         self.thingId = thingId
         self.posture = posture
@@ -7613,7 +7606,6 @@ public struct ListingRow {
         self.via = via
         self.photo = photo
         self.photoMime = photoMime
-        self.createdAt = createdAt
     }
 }
 
@@ -7657,9 +7649,6 @@ extension ListingRow: Equatable, Hashable {
         if lhs.photoMime != rhs.photoMime {
             return false
         }
-        if lhs.createdAt != rhs.createdAt {
-            return false
-        }
         return true
     }
 
@@ -7676,7 +7665,6 @@ extension ListingRow: Equatable, Hashable {
         hasher.combine(via)
         hasher.combine(photo)
         hasher.combine(photoMime)
-        hasher.combine(createdAt)
     }
 }
 
@@ -7699,8 +7687,7 @@ public struct FfiConverterTypeListingRow: FfiConverterRustBuffer {
                 hops: FfiConverterUInt32.read(from: &buf), 
                 via: FfiConverterString.read(from: &buf), 
                 photo: FfiConverterString.read(from: &buf), 
-                photoMime: FfiConverterString.read(from: &buf), 
-                createdAt: FfiConverterOptionInt64.read(from: &buf)
+                photoMime: FfiConverterString.read(from: &buf)
         )
     }
 
@@ -7717,7 +7704,6 @@ public struct FfiConverterTypeListingRow: FfiConverterRustBuffer {
         FfiConverterString.write(value.via, into: &buf)
         FfiConverterString.write(value.photo, into: &buf)
         FfiConverterString.write(value.photoMime, into: &buf)
-        FfiConverterOptionInt64.write(value.createdAt, into: &buf)
     }
 }
 

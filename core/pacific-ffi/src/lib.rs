@@ -852,8 +852,6 @@ pub struct ListingRow {
     /// "" when they listed without one.
     pub photo: String,
     pub photo_mime: String,
-    /// When the Thing was made, unix ms; `None` when it carries no `createdAt`.
-    pub created_at: Option<i64>,
 }
 
 /// One THING the market list binds to: the object id, its name/descriptor, and the
@@ -2951,7 +2949,6 @@ impl Core {
                 via: hex::encode(l.via),
                 photo: l.photo,
                 photo_mime: l.photo_mime,
-                created_at: l.created_at,
             })
             .collect())
     }
