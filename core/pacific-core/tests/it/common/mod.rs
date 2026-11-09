@@ -35,6 +35,8 @@ use pacific_core::node::RatifyView;
 use pacific_core::router::Routes;
 use pacific_core::Node;
 
+pub mod media;
+
 /// The replica-invariant CONTENT of a folded view: every field except the
 /// sender-relative `receipt` code (each device fills that for its own messages
 /// only, so it never agrees across devices). Convergence assertions compare this.
@@ -142,9 +144,19 @@ impl Harness {
     /// since `mls::PerLeafIdentity` (A1a) it works; `m21_one_person_two_devices.rs`
     /// is where it is proved, and `add_device` is how a scenario does it later.
     pub async fn people(spec: &[(&str, &[&str])]) -> Self {
+        Self::people_on(spec, spawn_relay().await).await
+    }
+
+    /// [`Harness::people`] on a relay that presigns media for a stand-in object store
+    /// (`common::media`), so its devices put and get detached media (O-79, #56).
+    pub async fn people_with_media(spec: &[(&str, &[&str])]) -> (Self, media::Objects) {
+        let (store, objects) = media::object_store().await;
+        (Self::people_on(spec, media::relay_presigning_for(&store).await).await, objects)
+    }
+
+    async fn people_on(spec: &[(&str, &[&str])], relay: String) -> Self {
         let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         pacific_core::fold_cache::set_measure(counting::allocated);
-        let relay = spawn_relay().await;
         let mut users: Vec<User> = Vec::new();
         let mut people: Vec<Person> = Vec::new();
 

@@ -810,6 +810,8 @@ pub struct GroupView {
     /// The cover banner (base64 + mime); "" when none.
     pub cover: String,
     pub cover_mime: String,
+    /// The media facet's icon and banner (#112), winning over `cover` where written.
+    pub base_media: crate::object_media::Media,
     /// Can we currently reach this identity over MLS? (on-platform.)
     pub can_sync: bool,
 }
@@ -854,6 +856,7 @@ impl GroupState {
             offices,
             cover: self.cover.clone(),
             cover_mime: self.cover_mime.clone(),
+            base_media: self.base_media.clone(),
             can_sync: matches!(self.presence, Presence::OnPlatform(_)),
         }
     }
