@@ -572,6 +572,8 @@ struct SearchField: View {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear")
+                .accessibilityIdentifier("search-clear")
             }
         }
         .padding(.leading, 20)      // matches the composer's text inset

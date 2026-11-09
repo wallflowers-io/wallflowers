@@ -375,15 +375,13 @@ struct TabChrome: ViewModifier {
     func body(content: Content) -> some View {
         content
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if let search { searchBar(search) } else { precessingBar }
-            }
-            // Open, the field takes the bar's row edge to edge. A toolbar item cannot (iOS
-            // 26 sizes a principal item to its content), so the bar steps aside and the
-            // row takes its height, leaving the content where it was.
-            .toolbarVisibility(searchOpen ? .hidden : .automatic, for: .navigationBar)
+            .toolbar { if search == nil { precessingBar } }
+            // The search layout draws its own row in the bar's place. A toolbar cannot carry
+            // it: iOS 26 sizes a principal item to its content, and a bar hidden while open
+            // kept its old items' touch areas (✕ sat where the bell was, and never fired).
+            .toolbarVisibility(search == nil ? .automatic : .hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
-                if let search, searchOpen { searchRow(search) }
+                if let search { searchRow(search) }
             }
             // The bell opens the CONVERGENCE deck on REAL proposals: things your graph holds
             // that you have not accepted yet. Accepting mints a Thing GroupObject, which is
@@ -450,53 +448,55 @@ struct TabChrome: ViewModifier {
         }
     }
 
-    private var searchOpen: Bool { search?.open.wrappedValue ?? false }
-
-    /// The open search: the field across the row, ✕ at its end. The bar's own height.
-    private func searchRow(_ search: TabSearch) -> some View {
-        HStack(spacing: 12) {
-            SearchField(text: search.text, inBar: true)
-            Button {
-                search.text.wrappedValue = ""
-                withAnimation(Motion.searchHide) { search.open.wrappedValue = false }
-            } label: {
-                Image(systemName: "xmark").fontWeight(.semibold)
-                    .foregroundStyle(Brand.accent)
-            }
-            .accessibilityLabel("Close search")
-            .accessibilityIdentifier("tab-search-close")
-        }
-        .padding(.horizontal, 16)
-        .frame(height: 44)
+    /// The inline bar's height, so the row sits where a bar's items would.
+    private var barHeight: CGFloat {
+        if #available(iOS 26.0, *) { return 54 } else { return 44 }
     }
 
-    /// LIFE's bar, closed: | account · search bell |. Open, it steps aside (`searchRow`).
-    @ToolbarContentBuilder private func searchBar(_ search: TabSearch) -> some ToolbarContent {
-        if !search.open.wrappedValue {
-            // The account keeps the corner's bare-circle treatment, now on the west.
-            if #available(iOS 26.0, *) {
-                ToolbarItem(placement: .topBarLeading) { accountCorner }
-                    .sharedBackgroundVisibility(.hidden)
+    /// LIFE's row: | account · search bell |, and open, the field across it with ✕.
+    /// Hosted by the navigation stack's inset, the row escapes the shell's hiding of a
+    /// parked screen (a second bell on CHAT), so it draws only while LIFE is up; parked,
+    /// its band stays, empty, so nothing moves.
+    @ViewBuilder private func searchRow(_ search: TabSearch) -> some View {
+        HStack(spacing: 12) {
+            if shellState.screen != .life {
+                Spacer()
+            } else if search.open.wrappedValue {
+                SearchField(text: search.text, inBar: true)
+                Button {
+                    search.text.wrappedValue = ""
+                    withAnimation(Motion.searchHide) { search.open.wrappedValue = false }
+                } label: {
+                    Image(systemName: "xmark").fontWeight(.semibold)
+                        .foregroundStyle(Brand.accent)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close search")
+                .accessibilityIdentifier("tab-search-close")
             } else {
-                ToolbarItem(placement: .topBarLeading) { accountCorner }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
+                accountCorner
+                Spacer()
                 Button {
                     withAnimation(Motion.searchHide) { search.open.wrappedValue = true }
                 } label: {
                     Image(systemName: "magnifyingglass").fontWeight(.semibold)
                         .foregroundStyle(Brand.accent)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Search")
                 .accessibilityIdentifier("tab-search")
-            }
-            if showsNotifications {
-                if #available(iOS 26.0, *) {
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                if showsNotifications {
+                    BellButton { trayOpen = true }
+                        .frame(width: 36, height: 36)
                 }
-                ToolbarItem(placement: .topBarTrailing) { BellButton { trayOpen = true } }
             }
         }
+        .padding(.horizontal, 20)
+        .frame(height: barHeight)
     }
 
     // MARK: - Top-circle precession

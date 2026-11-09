@@ -47,12 +47,14 @@ final class LifeSearchUITests: XCTestCase {
         XCTAssertEqual(listRows(), 0, "the typed list filters by the same text")
 
         // A seeded title matches in the list.
-        field.clearAndType("QA Fixture")
+        app.buttons["search-clear"].tap()
+        field.typeText("QA Fixture")
         XCTAssertTrue(waitListRows(timeout: 6), "the list keeps what the text matches")
         shoot("search-list-filtered")
 
         // ✕: text cleared, rail gone, feed back unfiltered, the bar back to | P · S N |.
         app.buttons["tab-search-close"].tap()
+        shoot("search-closed-by-x")
         XCTAssertTrue(waitGround("life-feed"), "the feed returns")
         XCTAssertTrue(waitAnyFeedRows(timeout: 8), "unfiltered")
         XCTAssertFalse(app.buttons["jewel-events"].exists, "the rail goes")
@@ -103,11 +105,12 @@ final class LifeSearchUITests: XCTestCase {
         if !life.isSelected { life.tap() }
     }
 
-    /// Rows by identifier prefix, as FeedUITests counts them: the card is one combined
-    /// element the OS may expose as otherElement or staticText.
+    /// Rows by identifier prefix. The card is one combined element with the button trait
+    /// (it opens its object); the OS may still expose it as otherElement or staticText.
     private func rows(_ prefix: String) -> Int {
         let match = NSPredicate(format: "identifier BEGINSWITH %@", prefix)
-        return app.otherElements.matching(match).count + app.staticTexts.matching(match).count
+        return app.buttons.matching(match).count + app.otherElements.matching(match).count
+             + app.staticTexts.matching(match).count
     }
     private func anyFeedRows() -> Int { rows("feed-row-") }
     private func listRows() -> Int { rows("list-row-") }
@@ -153,16 +156,5 @@ final class LifeSearchUITests: XCTestCase {
             if present { b.tap(); return true }
         }
         return false
-    }
-}
-
-private extension XCUIElement {
-    /// Delete what the field holds and type anew — it keeps its text across a jewel tap.
-    func clearAndType(_ text: String) {
-        tap()
-        if let current = value as? String, !current.isEmpty {
-            typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
-        }
-        typeText(text)
     }
 }
