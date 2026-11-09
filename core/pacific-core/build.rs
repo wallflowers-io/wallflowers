@@ -42,6 +42,7 @@ fn main() {
     w98(&icd);
     links(&icd);
     vocabularies(&icd);
+    exterior(&icd);
 }
 
 /// EVERY CLOSED VOCABULARY AND CEILING, into OUT_DIR/icd_vocabularies.rs: `(op, arg, words)`
@@ -156,4 +157,69 @@ fn links(icd: &serde_json::Value) {
         format!("/// `kinds.contact.ops.\"contact.setLink\".op`, from the ICD at build.\npub const OP_SET_LINK: u32 = {set_link};\n"),
     )
     .expect("icd_links.rs");
+}
+
+/// THE EXTERIOR (#76, ICD 2.6.0): the facet's op ids, caps and words, the leg's op id, the
+/// asker's request op, and `mls.door`, into `icd_exterior.rs`.
+fn exterior(icd: &serde_json::Value) {
+    let facet = &icd["facets"]["exterior"]["ops"];
+    let op = |v: &serde_json::Value, what: &str| v["op"].as_u64().unwrap_or_else(|| panic!("the ICD states {what}'s op"));
+    let max = |o: &str, arg: &str| {
+        facet[o]["args"][arg]["maxLength"].as_u64().unwrap_or_else(|| panic!("the ICD states {o}.{arg}'s maxLength"))
+    };
+    let words = |v: &serde_json::Value, what: &str| -> String {
+        let w: Vec<String> = v.as_object().unwrap_or_else(|| panic!("the ICD states {what}'s vocabulary")).keys().map(|k| format!("{k:?}")).collect();
+        format!("&[{}]", w.join(", "))
+    };
+    let on: Vec<String> = icd["facets"]["exterior"]["on"]
+        .as_array()
+        .expect("the ICD states facets.exterior.on")
+        .iter()
+        .map(|k| format!("{:?}", k.as_str().expect("a kind")))
+        .collect();
+    let door = &icd["mls"]["door"];
+    let text = |k: &str| door[k].as_str().unwrap_or_else(|| panic!("the ICD states mls.door.{k}")).to_string();
+    let num = |k: &str| door[k].as_u64().unwrap_or_else(|| panic!("the ICD states mls.door.{k}"));
+    let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_exterior.rs");
+    std::fs::write(
+        out,
+        format!(
+            "/// `facets.exterior.on`: the kinds that have an exterior.\npub const EXTERIOR_KINDS: &[&str] = &[{}];\n\
+             /// `facets.exterior` op ids.\n\
+             pub const OP_SET_EXTERIOR: u32 = {};\npub const OP_SET_DOOR: u32 = {};\npub const OP_DECIDE_REQUEST: u32 = {};\n\
+             /// `contact.publishExterior`'s and `group.setRequest`'s op ids, and the leg's `perSync`.\n\
+             pub const OP_PUBLISH_EXTERIOR: u32 = {};\npub const OP_SET_REQUEST: u32 = {};\npub const CARRIES_PER_SYNC: usize = {};\n\
+             /// `base.setExterior` caps: each arg's `maxLength`.\n\
+             pub const NAME_MAX: usize = {};\npub const DESCRIPTION_MAX: usize = {};\npub const PHOTO_MAX: usize = {};\n\
+             /// Vocabularies, as the ICD names them.\n\
+             pub const DOOR_MODES: &[&str] = {};\npub const DECISIONS: &[&str] = {};\n\
+             /// `mls.door`.\n\
+             pub const DOOR_ADDRESS_DOMAIN: &str = {:?};\npub const DOOR_SEAL_DOMAIN: &str = {:?};\npub const DOOR_SIG_DOMAIN: &str = {:?};\n\
+             pub const DOOR_BUNDLES: usize = {};\npub const DOOR_NOTE_MAX: usize = {};\n\
+             /// `mls.door.relay`: what a door keeps, at most, and its tag's prefix on the relay.\n\
+             pub const DOOR_CAP: usize = {};\npub const DOOR_TTL_DAYS: i64 = {};\npub const DOOR_MAX_BYTES: usize = {};\npub const DOOR_TAG_PREFIX: &str = {:?};\n",
+            on.join(", "),
+            op(&facet["base.setExterior"], "base.setExterior"),
+            op(&facet["base.setDoor"], "base.setDoor"),
+            op(&facet["base.decideRequest"], "base.decideRequest"),
+            op(&icd["kinds"]["contact"]["ops"]["contact.publishExterior"], "contact.publishExterior"),
+            op(&icd["kinds"]["group"]["ops"]["group.setRequest"], "group.setRequest"),
+            icd["kinds"]["contact"]["ops"]["contact.publishExterior"]["perSync"].as_u64().expect("the ICD states contact.publishExterior's perSync"),
+            max("base.setExterior", "name"),
+            max("base.setExterior", "description"),
+            max("base.setExterior", "photo"),
+            words(&facet["base.setDoor"]["args"]["mode"]["vocabulary"], "base.setDoor's mode"),
+            words(&facet["base.decideRequest"]["args"]["decision"]["vocabulary"], "base.decideRequest's decision"),
+            text("addressDomain"),
+            text("sealDomain"),
+            text("sigDomain"),
+            num("bundles"),
+            num("noteMax"),
+            door["relay"]["cap"].as_u64().expect("the ICD states mls.door.relay.cap"),
+            door["relay"]["ttlDays"].as_u64().expect("the ICD states mls.door.relay.ttlDays"),
+            door["relay"]["maxBytes"].as_u64().expect("the ICD states mls.door.relay.maxBytes"),
+            door["relay"]["prefix"].as_str().expect("the ICD states mls.door.relay.prefix"),
+        ),
+    )
+    .expect("icd_exterior.rs");
 }

@@ -815,10 +815,14 @@ struct LifeView: View {
     ///
     /// The non-egoic kinds MAXIMISE: the card's square grows into the object's page
     /// (`Design/Detail`). A Space and a person are profiles, pushed onto the stack.
-    /// A card with no object id is an exterior one — a copy of something this device
-    /// is not a member of — and opens nothing until the exterior is specified (#76).
+    /// A card with no object id is something this device is not a member of: it opens
+    /// its exterior (#76), not a detail.
     private func openObject(_ item: FeedItem) {
-        guard let oid = item.objectID else { return }
+        // Not held: its exterior, if one reached me (#76). Otherwise nothing is behind it.
+        guard let oid = item.objectID else {
+            if let ext = item.exterior { ExteriorDetail.open(ext.object, core: core, shell: shell) }
+            return
+        }
         let origin = CardFrames.shared.frames[item.id]
         switch item.category {
         case .groups: path.append(GroupLink(id: oid))
@@ -844,6 +848,7 @@ struct LifeView: View {
         return NewSession(kind: kind) { draft in
             guard let id = core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
             else { return nil }          // core surfaced the error; the surface stays up
+            await core.setOutside(id, from: draft)
             await afterMint(kind, id: id, draft: draft)
             return .saved
         }

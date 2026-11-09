@@ -8,6 +8,26 @@ Method: deploy.md § 10.
 Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on an object that exists, or
 `POST /v2/mint` to make one. `GET /v2/icd` serves the model production runs; model.html lists every op and its args.
 
+## 2.6.0
+
+<!-- generated 2.6.0: icd-changelog.mjs --write; do not edit between the markers -->
+- Draft (the exterior and the door, #76), from `386a632`; its ICD `75de632bfbb95e2337a9efe386a923f791af42f52cf95db31d01f25fe6d4a92a`, not a release until its icd/* tag
+- Against 2.5.0 (`5e51f052ad216850…`):
+  - added: base.decideRequest (facet exterior, op 4027449346, owner|role:admitter, commutative)
+  - added: base.setDoor (facet exterior, op 4027449345, owner, sequenced)
+  - added: base.setExterior (facet exterior, op 4027449344, owner, sequenced)
+  - added: contact.publishExterior (contact, op 13, member, commutative)
+  - added: group.setRequest (group, op 23, owner, sequenced)
+  - model sections changed besides ops: facets, legs, mls
+<!-- end generated 2.6.0 -->
+
+The exterior of a GroupObject (#76): what a non-member holds of an object, and a way to ask to join. `facets.exterior`
+(`base.setExterior`, `base.setDoor`, `base.decideRequest`) on every kind that has one, carried to non-members by
+`contact.publishExterior` as far as `base.setVisibility` says, and asked through `mls.door`, a request sealed to the
+door's key. Not open to a site in this release: WallFlowers' iOS app writes an exterior, carries it and answers its door.
+Deprecated, each linking its new route: `contact.publishListing`, `contact.invite`, `contact.discoverRequest`/`Response`,
+`place.setDoorbell`.
+
 ## 2.5.0
 
 <!-- generated 2.5.0: icd-changelog.mjs --write; do not edit between the markers -->

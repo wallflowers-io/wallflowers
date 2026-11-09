@@ -831,6 +831,8 @@ final class CoreService: ObservableObject {
             // The forum→host map rides every re-list: the CHAT list joins on it, and a
             // room minted or detached anywhere must re-dress its row on the next pass.
             refreshForumHosts(),
+            // Exteriors arrive by sync from connections, so they are re-read on every pass.
+            refreshExteriors(),
         ]
         return Task { for r in reads { await r.value } }
     }
@@ -844,6 +846,17 @@ final class CoreService: ObservableObject {
     /// level down. The CHAT list joins on it so a channel's room renders as
     /// "Channel / Room"; ThreadView reads the forward set per channel for tabs.
     @Published private(set) var roomHosts: [String: RoomHostRow] = [:]
+
+    /// THE EXTERIORS THAT REACHED ME (#76): objects I am not in, carried by their members.
+    /// Read off main and published only on change, like every tick read.
+    @Published private(set) var exteriors: [ExteriorRow] = []
+
+    @discardableResult
+    func refreshExteriors() -> Task<Void, Never> {
+        offMain("re-read exteriors", { c in try c.exteriors() }) { s, fresh in
+            if fresh != s.exteriors { s.exteriors = fresh }
+        }
+    }
 
     @discardableResult
     func refreshForumHosts() -> Task<Void, Never> {
@@ -2982,5 +2995,72 @@ final class CoreService: ObservableObject {
             await syncNow(silent: true)
             try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
         }
+    }
+}
+
+// MARK: - The exterior (#76, ICD 2.6.0)
+// What a non-member holds of an object, and its door. Every write and every door read is a
+// relay round trip, so each runs off the main thread.
+
+extension CoreService {
+    /// Write an object's visibility and, when it reaches outward, its exterior. The name is the
+    /// object's own. (The exterior's still is by reference only, and waits on the blob store's
+    /// client, #56.)
+    @discardableResult
+    func setOutside(_ objectId: String, name: String, visibility: String,
+                    description: String, door: DoorChoice) async -> Bool {
+        let c = core
+        // At Only Me there is no outside to write: the dial alone.
+        let outsideName = visibility == "private" ? "" : name
+        do {
+            // One Save: only what changed is written, and sent once.
+            _ = try await Task.detached {
+                try c.setOutside(objectId: objectId, visibility: visibility, name: outsideName,
+                                 description: description, door: door.rawValue)
+            }.value
+            return true
+        } catch { fail("write what outsiders see", error, object: objectId); return false }
+    }
+
+    /// After a mint: what the creator's Visibility face said, written when the dial was moved
+    /// outward. Only Me is the mint's own state and writes nothing.
+    func setOutside(_ objectId: String, from draft: NewDraft) async {
+        guard draft.audience == .connections || draft.audience == .network else { return }
+        await setOutside(objectId, name: draft.name, visibility: draft.audience.rawValue,
+                         description: draft.outside, door: draft.door)
+    }
+
+    /// Ask to join an object whose exterior reached me.
+    func requestJoin(_ objectId: String) async -> Bool {
+        let c = core
+        do {
+            _ = try await Task.detached { try c.requestJoin(objectId: objectId, note: "") }.value
+            refreshExteriors()
+            return true
+        } catch { fail("ask to join", error, object: objectId); return false }
+    }
+
+    func withdrawRequest(_ objectId: String) async -> Bool {
+        let c = core
+        do {
+            try await Task.detached { try c.withdrawRequest(objectId: objectId) }.value
+            refreshExteriors()
+            return true
+        } catch { fail("withdraw your ask", error, object: objectId); return false }
+    }
+
+    /// The requests waiting for me, from what this device's syncs have drained from its doors.
+    func pendingRequests() async -> [RequestRow] {
+        let c = core
+        do { return try await Task.detached { try c.pendingRequests() }.value }
+        catch { readFailed("read who is asking to join", error); return [] }
+    }
+
+    func decideRequest(_ r: RequestRow, admit: Bool) async -> Bool {
+        let c = core
+        do {
+            try await Task.detached { try c.decideRequest(objectId: r.object, request: r.request, admit: admit) }.value
+            return true
+        } catch { fail(admit ? "admit" : "decline", error, object: r.object); return false }
     }
 }
