@@ -136,6 +136,9 @@ pub mod place;
 pub mod post;
 pub mod project;
 pub mod recurrence;
+/// Detached media: sealed bytes in the relay's object storage (O-79, #56).
+#[cfg(feature = "transport")]
+pub mod media_store;
 #[cfg(feature = "transport")]
 pub mod router;
 pub mod seal;

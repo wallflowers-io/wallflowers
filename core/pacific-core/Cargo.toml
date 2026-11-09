@@ -22,7 +22,7 @@ storage = ["dep:rusqlite", "dep:rand_core"]
 lode = ["storage", "dep:lodedb-core"]
 
 # Dialling a relay: tokio, tungstenite, rustls.
-transport = ["dep:tokio", "dep:tokio-tungstenite", "dep:rustls", "dep:futures-util"]
+transport = ["dep:tokio", "dep:tokio-tungstenite", "dep:rustls", "dep:futures-util", "dep:reqwest"]
 
 # The MLS engine. NO LONGER REQUIRES `storage`. It used to, because
 # `mls::build_client` opened the SQLite GroupStateStorage / KeyPackageStorage
@@ -95,6 +95,10 @@ thiserror.workspace = true
 lodedb-core = { git = "https://github.com/Egoist-Machines/LodeDB.git", tag = "v2.0.2", optional = true }
 
 # THE ICD'S NUMBERS, read at build (build.rs): serde_json to parse the model.
+# Detached media (O-79, #56): the presigned PUT and GET to object storage. Under `transport`,
+# so the wasm build carries no HTTP client.
+reqwest = { workspace = true, optional = true }
+
 [build-dependencies]
 serde_json.workspace = true
 

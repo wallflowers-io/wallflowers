@@ -192,6 +192,28 @@ impl RelaySession {
         Ok(out)
     }
 
+    /// A presigned URL for one object (O-79): an upload of exactly `put_len` bytes, or with
+    /// `None` a download. Declares [`pacific_wire::V_MEDIA`] first with an EMPTY `Sub`, which
+    /// ends this session's subscriptions: use a session of its own (`media_store` does).
+    pub async fn media_url(&mut self, key: &str, put_len: Option<u64>) -> Result<String, CoreError> {
+        self.send(&Frame::Sub { tags: vec![], since: 0, v: pacific_wire::V_MEDIA }).await?;
+        while self.next_frame().await? != Frame::Eose {}
+        self.send(&match put_len {
+            Some(len) => Frame::MediaPut { key: key.to_string(), len },
+            None => Frame::MediaGet { key: key.to_string() },
+        })
+        .await?;
+        loop {
+            match self.next_frame().await? {
+                Frame::MediaUrl { key: k, url, .. } if k == key => return Ok(url),
+                Frame::MediaErr { key: k, reason } if k == key => {
+                    return Err(CoreError::Transport(format!("the relay refused to presign: {reason}")))
+                }
+                _ => continue,
+            }
+        }
+    }
+
     /// The socket, for the one reader that holds it (`live::Live`): dialled by `connect`,
     /// so every connection to a relay still starts in one place.
     pub(crate) fn into_socket(self) -> WebSocketStream<MaybeTlsStream<TcpStream>> {
