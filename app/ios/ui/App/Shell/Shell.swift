@@ -328,6 +328,13 @@ extension View {
     func accountToolbar() -> some View { modifier(AccountToolbar()) }
 }
 
+/// LIFE's search, carried by its top bar: the search circle opens it, and the open
+/// field takes the whole row.
+struct TabSearch {
+    var text: Binding<String>
+    var open: Binding<Bool>
+}
+
 /// The UNIVERSAL tab chrome — one inline top bar shared by every primary tab: the tab
 /// name RIGHT-ALIGNED next to a universal `+` for creating that tab's object (note / chat
 /// / project). Inline (no large title) so the avatar and the title share one row instead
@@ -349,51 +356,27 @@ struct TabChrome: ViewModifier {
     /// nil ⇒ the screen creates nothing and shows NO `+` (the Notes page lists and
     /// searches; composing a note belongs to the shell's NOTE disc).
     let onNew: (() -> Void)?
+    /// non-nil ⇒ the SEARCH layout (LIFE, 9 Nov): account west, search and bell east, no
+    /// `+` and no precession. Open, the field takes the whole row.
+    let search: TabSearch?
     @State private var trayOpen = false
 
     init(title: String, newLabel: String, showsTitle: Bool, showsNotifications: Bool,
-         newTint: Color? = nil, onNew: (() -> Void)?) {
+         newTint: Color? = nil, onNew: (() -> Void)?, search: TabSearch? = nil) {
         self.title = title
         self.newLabel = newLabel
         self.showsTitle = showsTitle
         self.showsNotifications = showsNotifications
         self.newTint = newTint
         self.onNew = onNew
+        self.search = search
     }
 
     func body(content: Content) -> some View {
         content
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if showsTitle {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Text(title).font(.title3.weight(.bold))
-                    }
-                }
-                // THE PRECESSION (10 Aug order): the top bar's three circles — CREATE ·
-                // BELL · ACCOUNT — sit on three perches (WEST pill · EAST-INNER · EAST
-                // CORNER). Cycling the tabs advances every circle ONE perch clockwise, so
-                // a full NOTE→CHAT→LIFE cycle is one full revolution and each circle
-                // visits every perch before coming home. A perch whose circle this screen
-                // doesn't carry (no `+`, no bell) simply sits empty for that tab.
-                ToolbarItem(placement: .topBarLeading) {
-                    perchContent(circleAt(0))
-                }
-                if #available(iOS 26.0, *) {
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    perchContent(circleAt(1))
-                }
-                // The corner keeps its bare-circle treatment (glass ring stripped on
-                // iOS 26) for WHICHEVER circle precession parks there.
-                if #available(iOS 26.0, *) {
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                    ToolbarItem(placement: .topBarTrailing) { perchContent(circleAt(2)) }
-                        .sharedBackgroundVisibility(.hidden)
-                } else {
-                    ToolbarItem(placement: .topBarTrailing) { perchContent(circleAt(2)) }
-                }
+                if let search { searchBar(search) } else { precessingBar }
             }
             // The bell opens the CONVERGENCE deck on REAL proposals: things your graph holds
             // that you have not accepted yet. Accepting mints a Thing GroupObject, which is
@@ -425,6 +408,84 @@ struct TabChrome: ViewModifier {
             shellState.openSettings()
         }
         .accessibilityIdentifier("account-button")
+    }
+
+    /// NOTE and CHAT's bar: the tab title (when shown) and the three precessing circles.
+    @ToolbarContentBuilder private var precessingBar: some ToolbarContent {
+        if showsTitle {
+            ToolbarItem(placement: .topBarTrailing) {
+                Text(title).font(.title3.weight(.bold))
+            }
+        }
+        // THE PRECESSION (10 Aug order): the top bar's three circles — CREATE ·
+        // BELL · ACCOUNT — sit on three perches (WEST pill · EAST-INNER · EAST
+        // CORNER). Cycling the tabs advances every circle ONE perch clockwise, so
+        // a full NOTE→CHAT→LIFE cycle is one full revolution and each circle
+        // visits every perch before coming home. A perch whose circle this screen
+        // doesn't carry (no `+`, no bell) simply sits empty for that tab.
+        ToolbarItem(placement: .topBarLeading) {
+            perchContent(circleAt(0))
+        }
+        if #available(iOS 26.0, *) {
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            perchContent(circleAt(1))
+        }
+        // The corner keeps its bare-circle treatment (glass ring stripped on
+        // iOS 26) for WHICHEVER circle precession parks there.
+        if #available(iOS 26.0, *) {
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+            ToolbarItem(placement: .topBarTrailing) { perchContent(circleAt(2)) }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .topBarTrailing) { perchContent(circleAt(2)) }
+        }
+    }
+
+    /// LIFE's bar: | account · search bell |, and open, the field across the row.
+    @ToolbarContentBuilder private func searchBar(_ search: TabSearch) -> some ToolbarContent {
+        if search.open.wrappedValue {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 12) {
+                    SearchField(text: search.text, inBar: true)
+                    Button {
+                        search.text.wrappedValue = ""
+                        withAnimation(Motion.searchHide) { search.open.wrappedValue = false }
+                    } label: {
+                        Image(systemName: "xmark").fontWeight(.semibold)
+                            .foregroundStyle(Brand.accent)
+                    }
+                    .accessibilityLabel("Close search")
+                    .accessibilityIdentifier("tab-search-close")
+                }
+                .frame(maxWidth: .infinity)
+            }
+        } else {
+            // The account keeps the corner's bare-circle treatment, now on the west.
+            if #available(iOS 26.0, *) {
+                ToolbarItem(placement: .topBarLeading) { accountCorner }
+                    .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: .topBarLeading) { accountCorner }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    withAnimation(Motion.searchHide) { search.open.wrappedValue = true }
+                } label: {
+                    Image(systemName: "magnifyingglass").fontWeight(.semibold)
+                        .foregroundStyle(Brand.accent)
+                }
+                .accessibilityLabel("Search")
+                .accessibilityIdentifier("tab-search")
+            }
+            if showsNotifications {
+                if #available(iOS 26.0, *) {
+                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                }
+                ToolbarItem(placement: .topBarTrailing) { BellButton { trayOpen = true } }
+            }
+        }
     }
 
     // MARK: - Top-circle precession
@@ -506,11 +567,12 @@ extension View {
     }
 
     /// The same top bar for a screen that CREATES nothing — title (and optionally the
-    /// bell), no `+`.
-    func tabChrome(_ title: String, showsTitle: Bool = true, showsNotifications: Bool = false) -> some View {
+    /// bell), no `+`. With `search`, LIFE's search layout instead (see `TabChrome.search`).
+    func tabChrome(_ title: String, showsTitle: Bool = true, showsNotifications: Bool = false,
+                   search: TabSearch? = nil) -> some View {
         modifier(TabChrome(title: title, newLabel: "",
                            showsTitle: showsTitle, showsNotifications: showsNotifications,
-                           newTint: nil, onNew: nil))
+                           newTint: nil, onNew: nil, search: search))
     }
 }
 
