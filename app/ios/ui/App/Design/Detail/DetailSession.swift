@@ -65,11 +65,44 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
     @Published var sharing = false
 
     @Published private(set) var exit: NewExit?
+    /// An owner's write in flight — its row goes still so it cannot be written twice.
+    @Published private(set) var saving: String?
 
-    init(noun: String, source: any DetailSource, primary: DetailPrimary = .comment) {
+    /// The card's square, in screen space, that the page grows out of and shrinks back
+    /// into. nil = it was not opened from a card, and it rises in place.
+    let origin: CGRect?
+
+    init(noun: String, source: any DetailSource, primary: DetailPrimary = .comment,
+         origin: CGRect? = nil) {
         self.noun = noun
         self.source = source
         self.primary = primary
+        self.origin = origin
+    }
+
+    // MARK: The owner's writes
+
+    /// Each lands through its op and is READ BACK from the fold, never mirrored, so
+    /// the page cannot show a value the log does not hold.
+    func edit(_ edit: DetailEdit, to value: String) async {
+        guard saving == nil, value != edit.current else { return }
+        saving = edit.op + "." + edit.arg
+        if await source.edit(edit, to: value) { headline = await source.headline() }
+        saving = nil
+    }
+
+    func addPicture(_ data: Data) async {
+        guard saving == nil else { return }
+        saving = DetailAdd.picture.rawValue
+        if await source.addPicture(data) { headline = await source.headline() }
+        saving = nil
+    }
+
+    func setDocument(_ data: Data, name: String) async {
+        guard saving == nil else { return }
+        saving = DetailAdd.document.rawValue
+        if await source.setDocument(data, name: name) { headline = await source.headline() }
+        saving = nil
     }
 
     // MARK: Loading
