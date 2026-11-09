@@ -74,7 +74,7 @@ final class EventsPageUITests: XCTestCase {
 
         let match = NSPredicate(format: "identifier BEGINSWITH 'list-row-event:' AND label CONTAINS %@",
                                 "QA Fixture")
-        let row = app.otherElements.matching(match).firstMatch
+        let row = app.buttons.matching(match).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10), "the seeded future event lists")
         row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
 
