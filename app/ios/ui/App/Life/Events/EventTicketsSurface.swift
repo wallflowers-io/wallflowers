@@ -118,7 +118,7 @@ struct EventTicketsSurface: View {
             Text("FREE")
                 .font(.system(size: 13, weight: .bold))
                 .tracking(1.1)
-                .foregroundStyle(EventsPage.accentSoft)
+                .foregroundStyle(EventsChannel.accentSoft)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)

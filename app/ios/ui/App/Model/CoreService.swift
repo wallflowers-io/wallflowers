@@ -1632,7 +1632,7 @@ final class CoreService: ObservableObject {
 
     /// eventId -> the peer whose channel carries the invitation. An answer has to be
     /// authored to SOMEBODY; this is who.
-    /// Published: `EventsPage.canCommit` reads it as it draws, and it now lands off main.
+    /// No reader since the events page went (#119).
     @Published private(set) var inviteChannels: [String: String] = [:]
 
     /// Re-fold the invitations on every connection. Cheap enough to run on the sync
