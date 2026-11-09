@@ -53,6 +53,8 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
     @Published private(set) var headline: DetailHeadline?
     @Published private(set) var author: DetailAuthor?
     @Published private(set) var comments: [DetailComment] = []
+    /// The device holds the comments section, so the page has one.
+    @Published private(set) var commentsHeld = false
     @Published private(set) var targets: [DetailShareTarget] = []
 
     /// The comment being typed. This is the only thing on the surface a person can
@@ -65,11 +67,48 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
     @Published var sharing = false
 
     @Published private(set) var exit: NewExit?
+    /// An owner's write in flight — its row goes still so it cannot be written twice.
+    @Published private(set) var saving: String?
 
-    init(noun: String, source: any DetailSource, primary: DetailPrimary = .comment) {
+    /// The card's square, in screen space, that the page grows out of and shrinks back
+    /// into. nil = it was not opened from a card, and it rises in place.
+    let origin: CGRect?
+
+    init(noun: String, source: any DetailSource, primary: DetailPrimary = .comment,
+         origin: CGRect? = nil) {
         self.noun = noun
         self.source = source
         self.primary = primary
+        self.origin = origin
+    }
+
+    // MARK: The owner's writes
+
+    /// Each lands through its op and is READ BACK from the fold, never mirrored, so
+    /// the page cannot show a value the log does not hold.
+    /// false = it did not land, so the row may send the same value again.
+    @discardableResult
+    func edit(_ edit: DetailEdit, to value: String) async -> Bool {
+        guard saving == nil, value != edit.current else { return false }
+        saving = edit.op + "." + edit.arg
+        let landed = await source.edit(edit, to: value)
+        if landed { headline = await source.headline() }
+        saving = nil
+        return landed
+    }
+
+    func addPicture(_ data: Data) async {
+        guard saving == nil else { return }
+        saving = DetailAdd.picture.rawValue
+        if await source.addPicture(data) { headline = await source.headline() }
+        saving = nil
+    }
+
+    func setDocument(_ data: Data, name: String) async {
+        guard saving == nil else { return }
+        saving = DetailAdd.document.rawValue
+        if await source.setDocument(data, name: name) { headline = await source.headline() }
+        saving = nil
     }
 
     // MARK: Loading
@@ -81,6 +120,7 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
         headline = await source.headline()
         author = await source.author()
         comments = await source.comments()
+        commentsHeld = await source.commentsHeld()
         targets = await source.shareTargets()
     }
 

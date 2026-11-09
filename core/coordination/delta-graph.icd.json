@@ -154,7 +154,7 @@
         "ttlDays": 30,
         "ttlSummary": "a knock is kept this long, then let go: an ask unanswered for 30 days expires, and the asker may ask again",
         "maxBytes": 8192,
-        "maxBytesSummary": "a knock's sealed bytes, at most; a request with every bundle and the longest note is 3,542 (4,724 published), so 1.7× headroom",
+        "maxBytesSummary": "a knock as published (base64), at most, as the relay measures it: a request with every bundle and the longest note is 4,724 as published (3,542 sealed), so 1.7× headroom",
         "perConnectionPerHour": 4,
         "perConnectionPerHourSummary": "knocks one relay connection may publish to one door tag in an hour",
         "evicted": {

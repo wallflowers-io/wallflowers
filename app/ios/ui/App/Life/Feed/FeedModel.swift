@@ -127,11 +127,11 @@ enum FeedAssembler {
     }
 
     static func rows(events: [PacificCore.EventRow], listings: [ListingRow],
-                     posts: [PostRow] = [], exteriors: [ExteriorRow] = [], nowMs: Int64,
+                     things: [ThingRow] = [], posts: [PostRow] = [], exteriors: [ExteriorRow] = [], nowMs: Int64,
                      makerOf: (String) -> Maker? = { _ in nil },
                      nameFor: (String) -> String = { String($0.prefix(8)) }) -> [FeedItem] {
         var out: [FeedItem] = []
-        out.reserveCapacity(events.count + listings.count + posts.count)
+        out.reserveCapacity(events.count + listings.count + things.count + posts.count)
 
         // POSTS. A Post has no `when` of its own — it is not scheduled, it was written —
         // so it rides at `nowMs`, exactly as a standing listing does, and interleaves with
@@ -164,9 +164,29 @@ enum FeedAssembler {
         for e in events where e.endMs >= nowMs || e.startMs >= nowMs {
             out.append(item(for: e, maker: makerOf(e.id)))
         }
+        // MY OWN LISTINGS: Things I hold, folds I am in. `listings` is everyone else's
+        // and excludes mine, so without these a Listing I make never reaches a card.
+        for t in things {
+            let maker = makerOf(t.id)
+            out.append(FeedItem(
+                id: "thing:\(t.id)",
+                category: .trade,
+                title: t.name,
+                author: maker?.name ?? "",
+                location: t.area,
+                footer: Self.posture(t.posture, deadline: t.deadline),
+                whenMs: t.deadline == 0 ? nowMs : t.deadline,
+                provenance: .member,
+                objectID: t.id,
+                bannerB64: t.photo,
+                authorRoute: maker?.id.map(AuthorRoute.person),
+                authorID: maker?.id))
+        }
         // A listing and an exterior of the same Thing are one thing: its card carries both.
         let outside = Dictionary(exteriors.map { ($0.object, $0) }, uniquingKeysWith: { a, _ in a })
         var shown = Set<String>()
+        // A Thing I hold is opened, never asked into: no exterior card beside it.
+        for t in things where outside[t.id] != nil { shown.insert(t.id) }
         for l in listings {
             if outside[l.thingId] != nil { shown.insert(l.thingId) }
             out.append(FeedItem(
@@ -175,8 +195,7 @@ enum FeedAssembler {
                 title: l.title,
                 author: nameFor(l.origin),
                 location: l.area,
-                footer: l.deadline == 0 ? l.posture.uppercased()
-                                        : "\(l.posture.uppercased()) · \(Self.stamp(l.deadline))",
+                footer: Self.posture(l.posture, deadline: l.deadline),
                 whenMs: l.deadline == 0 ? nowMs : l.deadline,
                 // ALWAYS over hops. `.member` means a fold this device is IN, and it
                 // drew the filled mark for a direct connection's listing — which is
@@ -227,6 +246,11 @@ enum FeedAssembler {
     static func filter(_ rows: [FeedItem], locked: Set<EventCategory>) -> [FeedItem] {
         guard !locked.isEmpty else { return rows }
         return rows.filter { locked.contains($0.category) }
+    }
+
+    /// A listing's honest "when": its posture, and its deadline when it has one.
+    private static func posture(_ posture: String, deadline: Int64) -> String {
+        [posture.uppercased(), stamp(deadline)].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     private static func stamp(_ ms: Int64) -> String {

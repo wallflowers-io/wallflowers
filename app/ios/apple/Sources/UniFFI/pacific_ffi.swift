@@ -716,6 +716,11 @@ public protocol CoreProtocol : AnyObject {
     func dmTranscript(peerId: String) throws  -> [String]
     
     /**
+     * The rest of one Event — its maximised detail's read, beside its `EventRow`.
+     */
+    func eventDetail(objectId: String) throws  -> EventDetailRow
+    
+    /**
      * DOOR: one scanned QR → one verdict, joined in core. Verifies the signature
      * against the signer THIS device's fold names (the listing's delegate, else the
      * owner), then joins ledger ∩ redemptions. "unknown" is AMBER, not red — this
@@ -1044,6 +1049,23 @@ public protocol CoreProtocol : AnyObject {
     func myProfile() throws  -> ProfileRow
     
     /**
+     * Apply one op to an object, BY ITS ICD NAME (`"event.editProfile"`), with its ICD
+     * arg names — the Door's `apply` step (`authoring::op_on`), so an edit has one path
+     * and no per-op writer to drift from the catalogue. Refused when the object's kind
+     * has no such op; the fold judges authority and args. Reaches the relay → call OFF
+     * the main thread.
+     */
+    func objectApply(objectId: String, op: String, args: [OpArg]) throws  -> String
+    
+    /**
+     * An owner's edit to an op that REPLACES WHOLE — `event.setProfile`, `thing.setProfile`,
+     * `post.setProfile`: the held args, with `changes` laid over them (an
+     * empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
+     * the answer is "". Any other op is refused: it is `object_apply`'s.
+     */
+    func objectEdit(objectId: String, op: String, changes: [OpArg]) throws  -> String
+    
+    /**
      * One object of mine's exterior, as its owner wrote it; None until one is written.
      */
     func objectExterior(objectId: String) throws  -> MyExterior?
@@ -1165,6 +1187,18 @@ public protocol CoreProtocol : AnyObject {
      * so the chat list needs no per-row `object_title` round trip.
      */
     func objects(kind: ObjectKind?) throws  -> [ObjectRow]
+    
+    /**
+     * The ICD's `maxLength` for `op`'s `arg` — characters for text, base64 characters for
+     * inline media. 0 when the ICD states none.
+     */
+    func opArgMax(op: String, arg: String)  -> UInt64
+    
+    /**
+     * The ICD's words for `op`'s `arg` — what a choice row offers. Empty when the arg is
+     * free text.
+     */
+    func opVocabulary(op: String, arg: String)  -> [String]
     
     /**
      * Accept a pending connection (double-opt-in): mark the peer Connected.
@@ -1359,6 +1393,11 @@ public protocol CoreProtocol : AnyObject {
      * GroupObjects are the durable truth.
      */
     func places() throws  -> [PlaceRow]
+    
+    /**
+     * The rest of one Post — its maximised detail's read, beside its `PostRow`.
+     */
+    func postDetail(objectId: String) throws  -> PostDetailRow
     
     /**
      * One Post, folded to display shape.
@@ -1646,6 +1685,11 @@ public protocol CoreProtocol : AnyObject {
      * Drop a thing's posture (and with it any price/deadline, which only qualify one).
      */
     func thingClearPosture(objectId: String) throws  -> String
+    
+    /**
+     * The rest of one Thing — its maximised detail's read, beside its `ThingRow`.
+     */
+    func thingDetail(objectId: String) throws  -> ThingDetailRow
     
     /**
      * Mint a THING and give it a name in one call — what the swipe deck does on ACCEPT.
@@ -1998,6 +2042,17 @@ open func dmTranscript(peerId: String)throws  -> [String] {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_dm_transcript(self.uniffiClonePointer(),
         FfiConverterString.lower(peerId),$0
+    )
+})
+}
+    
+    /**
+     * The rest of one Event — its maximised detail's read, beside its `EventRow`.
+     */
+open func eventDetail(objectId: String)throws  -> EventDetailRow {
+    return try  FfiConverterTypeEventDetailRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_event_detail(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
     )
 })
 }
@@ -2681,6 +2736,39 @@ open func myProfile()throws  -> ProfileRow {
 }
     
     /**
+     * Apply one op to an object, BY ITS ICD NAME (`"event.editProfile"`), with its ICD
+     * arg names — the Door's `apply` step (`authoring::op_on`), so an edit has one path
+     * and no per-op writer to drift from the catalogue. Refused when the object's kind
+     * has no such op; the fold judges authority and args. Reaches the relay → call OFF
+     * the main thread.
+     */
+open func objectApply(objectId: String, op: String, args: [OpArg])throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_object_apply(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(op),
+        FfiConverterSequenceTypeOpArg.lower(args),$0
+    )
+})
+}
+    
+    /**
+     * An owner's edit to an op that REPLACES WHOLE — `event.setProfile`, `thing.setProfile`,
+     * `post.setProfile`: the held args, with `changes` laid over them (an
+     * empty text clears that arg), applied by name. Nothing changed ⇒ nothing is sent, and
+     * the answer is "". Any other op is refused: it is `object_apply`'s.
+     */
+open func objectEdit(objectId: String, op: String, changes: [OpArg])throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_object_edit(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(op),
+        FfiConverterSequenceTypeOpArg.lower(changes),$0
+    )
+})
+}
+    
+    /**
      * One object of mine's exterior, as its owner wrote it; None until one is written.
      */
 open func objectExterior(objectId: String)throws  -> MyExterior? {
@@ -2908,6 +2996,32 @@ open func objects(kind: ObjectKind? = nil)throws  -> [ObjectRow] {
     return try  FfiConverterSequenceTypeObjectRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_objects(self.uniffiClonePointer(),
         FfiConverterOptionTypeObjectKind.lower(kind),$0
+    )
+})
+}
+    
+    /**
+     * The ICD's `maxLength` for `op`'s `arg` — characters for text, base64 characters for
+     * inline media. 0 when the ICD states none.
+     */
+open func opArgMax(op: String, arg: String) -> UInt64 {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_pacific_ffi_fn_method_core_op_arg_max(self.uniffiClonePointer(),
+        FfiConverterString.lower(op),
+        FfiConverterString.lower(arg),$0
+    )
+})
+}
+    
+    /**
+     * The ICD's words for `op`'s `arg` — what a choice row offers. Empty when the arg is
+     * free text.
+     */
+open func opVocabulary(op: String, arg: String) -> [String] {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_pacific_ffi_fn_method_core_op_vocabulary(self.uniffiClonePointer(),
+        FfiConverterString.lower(op),
+        FfiConverterString.lower(arg),$0
     )
 })
 }
@@ -3270,6 +3384,17 @@ open func placeSetVisibility(objectId: String, visibility: String)throws  -> Str
 open func places()throws  -> [PlaceRow] {
     return try  FfiConverterSequenceTypePlaceRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_places(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * The rest of one Post — its maximised detail's read, beside its `PostRow`.
+     */
+open func postDetail(objectId: String)throws  -> PostDetailRow {
+    return try  FfiConverterTypePostDetailRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_post_detail(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
     )
 })
 }
@@ -3822,6 +3947,17 @@ open func systems()throws  -> [SystemRow] {
 open func thingClearPosture(objectId: String)throws  -> String {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_thing_clear_posture(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+})
+}
+    
+    /**
+     * The rest of one Thing — its maximised detail's read, beside its `ThingRow`.
+     */
+open func thingDetail(objectId: String)throws  -> ThingDetailRow {
+    return try  FfiConverterTypeThingDetailRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_thing_detail(self.uniffiClonePointer(),
         FfiConverterString.lower(objectId),$0
     )
 })
@@ -4700,6 +4836,98 @@ public func FfiConverterTypeMeshPolicyHandle_lift(_ pointer: UnsafeMutableRawPoi
 #endif
 public func FfiConverterTypeMeshPolicyHandle_lower(_ value: MeshPolicyHandle) -> UnsafeMutableRawPointer {
     return FfiConverterTypeMeshPolicyHandle.lower(value)
+}
+
+
+/**
+ * One act of the lineup register (`event.setLineup`): the performer's member key or
+ * object id, hex — never a name; the reader names it from the performer's own card.
+ */
+public struct ActRow {
+    public var performer: String
+    public var role: String
+    /**
+     * Epoch ms, 0 = not said.
+     */
+    public var start: Int64
+    public var end: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(performer: String, role: String, 
+        /**
+         * Epoch ms, 0 = not said.
+         */start: Int64, end: Int64) {
+        self.performer = performer
+        self.role = role
+        self.start = start
+        self.end = end
+    }
+}
+
+
+
+extension ActRow: Equatable, Hashable {
+    public static func ==(lhs: ActRow, rhs: ActRow) -> Bool {
+        if lhs.performer != rhs.performer {
+            return false
+        }
+        if lhs.role != rhs.role {
+            return false
+        }
+        if lhs.start != rhs.start {
+            return false
+        }
+        if lhs.end != rhs.end {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(performer)
+        hasher.combine(role)
+        hasher.combine(start)
+        hasher.combine(end)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeActRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ActRow {
+        return
+            try ActRow(
+                performer: FfiConverterString.read(from: &buf), 
+                role: FfiConverterString.read(from: &buf), 
+                start: FfiConverterInt64.read(from: &buf), 
+                end: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ActRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.performer, into: &buf)
+        FfiConverterString.write(value.role, into: &buf)
+        FfiConverterInt64.write(value.start, into: &buf)
+        FfiConverterInt64.write(value.end, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeActRow_lift(_ buf: RustBuffer) throws -> ActRow {
+    return try FfiConverterTypeActRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeActRow_lower(_ value: ActRow) -> RustBuffer {
+    return FfiConverterTypeActRow.lower(value)
 }
 
 
@@ -5879,6 +6107,195 @@ public func FfiConverterTypeEncodedDelta_lift(_ buf: RustBuffer) throws -> Encod
 #endif
 public func FfiConverterTypeEncodedDelta_lower(_ value: EncodedDelta) -> RustBuffer {
     return FfiConverterTypeEncodedDelta.lower(value)
+}
+
+
+/**
+ * What `EventRow` leaves out — the rest of an Event's ops, for its maximised detail.
+ */
+public struct EventDetailRow {
+    /**
+     * IANA zone, "" = the device's.
+     */
+    public var tz: String
+    public var allDay: Bool
+    /**
+     * "" = scheduled.
+     */
+    public var status: String
+    /**
+     * The online venue, "" = none.
+     */
+    public var online: String
+    public var videoUrl: String
+    public var ticketUrl: String
+    /**
+     * How `descriptor` is written ("" = plain).
+     */
+    public var descriptorFormat: String
+    /**
+     * `event.setBanner`, else the media facet's still.
+     */
+    public var banner: MediaRow?
+    /**
+     * `event.setClip`, else the media facet's motion.
+     */
+    public var clip: MediaRow?
+    /**
+     * The media facet's strip, then the `event.addPhoto` set in `at` order.
+     */
+    public var photos: [MediaRow]
+    /**
+     * The co-hosts' lineup register; empty = the profile's `lineup` stands.
+     */
+    public var acts: [ActRow]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * IANA zone, "" = the device's.
+         */tz: String, allDay: Bool, 
+        /**
+         * "" = scheduled.
+         */status: String, 
+        /**
+         * The online venue, "" = none.
+         */online: String, videoUrl: String, ticketUrl: String, 
+        /**
+         * How `descriptor` is written ("" = plain).
+         */descriptorFormat: String, 
+        /**
+         * `event.setBanner`, else the media facet's still.
+         */banner: MediaRow?, 
+        /**
+         * `event.setClip`, else the media facet's motion.
+         */clip: MediaRow?, 
+        /**
+         * The media facet's strip, then the `event.addPhoto` set in `at` order.
+         */photos: [MediaRow], 
+        /**
+         * The co-hosts' lineup register; empty = the profile's `lineup` stands.
+         */acts: [ActRow]) {
+        self.tz = tz
+        self.allDay = allDay
+        self.status = status
+        self.online = online
+        self.videoUrl = videoUrl
+        self.ticketUrl = ticketUrl
+        self.descriptorFormat = descriptorFormat
+        self.banner = banner
+        self.clip = clip
+        self.photos = photos
+        self.acts = acts
+    }
+}
+
+
+
+extension EventDetailRow: Equatable, Hashable {
+    public static func ==(lhs: EventDetailRow, rhs: EventDetailRow) -> Bool {
+        if lhs.tz != rhs.tz {
+            return false
+        }
+        if lhs.allDay != rhs.allDay {
+            return false
+        }
+        if lhs.status != rhs.status {
+            return false
+        }
+        if lhs.online != rhs.online {
+            return false
+        }
+        if lhs.videoUrl != rhs.videoUrl {
+            return false
+        }
+        if lhs.ticketUrl != rhs.ticketUrl {
+            return false
+        }
+        if lhs.descriptorFormat != rhs.descriptorFormat {
+            return false
+        }
+        if lhs.banner != rhs.banner {
+            return false
+        }
+        if lhs.clip != rhs.clip {
+            return false
+        }
+        if lhs.photos != rhs.photos {
+            return false
+        }
+        if lhs.acts != rhs.acts {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(tz)
+        hasher.combine(allDay)
+        hasher.combine(status)
+        hasher.combine(online)
+        hasher.combine(videoUrl)
+        hasher.combine(ticketUrl)
+        hasher.combine(descriptorFormat)
+        hasher.combine(banner)
+        hasher.combine(clip)
+        hasher.combine(photos)
+        hasher.combine(acts)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEventDetailRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EventDetailRow {
+        return
+            try EventDetailRow(
+                tz: FfiConverterString.read(from: &buf), 
+                allDay: FfiConverterBool.read(from: &buf), 
+                status: FfiConverterString.read(from: &buf), 
+                online: FfiConverterString.read(from: &buf), 
+                videoUrl: FfiConverterString.read(from: &buf), 
+                ticketUrl: FfiConverterString.read(from: &buf), 
+                descriptorFormat: FfiConverterString.read(from: &buf), 
+                banner: FfiConverterOptionTypeMediaRow.read(from: &buf), 
+                clip: FfiConverterOptionTypeMediaRow.read(from: &buf), 
+                photos: FfiConverterSequenceTypeMediaRow.read(from: &buf), 
+                acts: FfiConverterSequenceTypeActRow.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EventDetailRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.tz, into: &buf)
+        FfiConverterBool.write(value.allDay, into: &buf)
+        FfiConverterString.write(value.status, into: &buf)
+        FfiConverterString.write(value.online, into: &buf)
+        FfiConverterString.write(value.videoUrl, into: &buf)
+        FfiConverterString.write(value.ticketUrl, into: &buf)
+        FfiConverterString.write(value.descriptorFormat, into: &buf)
+        FfiConverterOptionTypeMediaRow.write(value.banner, into: &buf)
+        FfiConverterOptionTypeMediaRow.write(value.clip, into: &buf)
+        FfiConverterSequenceTypeMediaRow.write(value.photos, into: &buf)
+        FfiConverterSequenceTypeActRow.write(value.acts, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEventDetailRow_lift(_ buf: RustBuffer) throws -> EventDetailRow {
+    return try FfiConverterTypeEventDetailRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEventDetailRow_lower(_ value: EventDetailRow) -> RustBuffer {
+    return FfiConverterTypeEventDetailRow.lower(value)
 }
 
 
@@ -8480,6 +8897,119 @@ public func FfiConverterTypeMediaInput_lower(_ value: MediaInput) -> RustBuffer 
 
 
 /**
+ * One picture, clip or document on a maximised detail. INLINE ONLY: a detached or
+ * sealed ref (O-79) has no fetch path at this boundary yet (#56), so it does not cross —
+ * a row with no bytes would render as a promise the reader cannot keep.
+ */
+public struct MediaRow {
+    public var mime: String
+    /**
+     * base64.
+     */
+    public var data: String
+    /**
+     * Pixels, 0 when unknown.
+     */
+    public var width: UInt32
+    public var height: UInt32
+    /**
+     * The author's words for it, "" when none.
+     */
+    public var alt: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(mime: String, 
+        /**
+         * base64.
+         */data: String, 
+        /**
+         * Pixels, 0 when unknown.
+         */width: UInt32, height: UInt32, 
+        /**
+         * The author's words for it, "" when none.
+         */alt: String) {
+        self.mime = mime
+        self.data = data
+        self.width = width
+        self.height = height
+        self.alt = alt
+    }
+}
+
+
+
+extension MediaRow: Equatable, Hashable {
+    public static func ==(lhs: MediaRow, rhs: MediaRow) -> Bool {
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.data != rhs.data {
+            return false
+        }
+        if lhs.width != rhs.width {
+            return false
+        }
+        if lhs.height != rhs.height {
+            return false
+        }
+        if lhs.alt != rhs.alt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(mime)
+        hasher.combine(data)
+        hasher.combine(width)
+        hasher.combine(height)
+        hasher.combine(alt)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaRow {
+        return
+            try MediaRow(
+                mime: FfiConverterString.read(from: &buf), 
+                data: FfiConverterString.read(from: &buf), 
+                width: FfiConverterUInt32.read(from: &buf), 
+                height: FfiConverterUInt32.read(from: &buf), 
+                alt: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MediaRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterString.write(value.data, into: &buf)
+        FfiConverterUInt32.write(value.width, into: &buf)
+        FfiConverterUInt32.write(value.height, into: &buf)
+        FfiConverterString.write(value.alt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRow_lift(_ buf: RustBuffer) throws -> MediaRow {
+    return try FfiConverterTypeMediaRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRow_lower(_ value: MediaRow) -> RustBuffer {
+    return FfiConverterTypeMediaRow.lower(value)
+}
+
+
+/**
  * One row of the local object list: the object id (hex MLS group id), kind, and
  * the group's display name ("" when unnamed — the UI derives a label from the
  * roster in that case, never from the id hex).
@@ -9500,6 +10030,75 @@ public func FfiConverterTypeOfficeRow_lower(_ value: OfficeRow) -> RustBuffer {
 
 
 /**
+ * One arg of `Core::object_apply`, keyed by its ICD name.
+ */
+public struct OpArg {
+    public var key: String
+    public var value: OpValue
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(key: String, value: OpValue) {
+        self.key = key
+        self.value = value
+    }
+}
+
+
+
+extension OpArg: Equatable, Hashable {
+    public static func ==(lhs: OpArg, rhs: OpArg) -> Bool {
+        if lhs.key != rhs.key {
+            return false
+        }
+        if lhs.value != rhs.value {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(key)
+        hasher.combine(value)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOpArg: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OpArg {
+        return
+            try OpArg(
+                key: FfiConverterString.read(from: &buf), 
+                value: FfiConverterTypeOpValue.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OpArg, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterTypeOpValue.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpArg_lift(_ buf: RustBuffer) throws -> OpArg {
+    return try FfiConverterTypeOpArg.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpArg_lower(_ value: OpArg) -> RustBuffer {
+    return FfiConverterTypeOpArg.lower(value)
+}
+
+
+/**
  * One op's declaration — the metadata the app can enumerate.
  */
 public struct OpSpec {
@@ -10305,6 +10904,147 @@ public func FfiConverterTypePlaceRow_lift(_ buf: RustBuffer) throws -> PlaceRow 
 #endif
 public func FfiConverterTypePlaceRow_lower(_ value: PlaceRow) -> RustBuffer {
     return FfiConverterTypePlaceRow.lower(value)
+}
+
+
+/**
+ * What `PostRow` leaves out — the rest of a Post's ops, for its maximised detail.
+ */
+public struct PostDetailRow {
+    /**
+     * article | link | image | pdf
+     */
+    public var form: String
+    public var link: String
+    /**
+     * How `body` is written ("" = plain).
+     */
+    public var bodyFormat: String
+    public var excerpt: String
+    public var bannerAlt: String
+    public var bannerMime: String
+    /**
+     * `post.setDocument`; its alt is the document's name.
+     */
+    public var document: MediaRow?
+    /**
+     * The `post.addAsset` set in `at` order.
+     */
+    public var assets: [MediaRow]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * article | link | image | pdf
+         */form: String, link: String, 
+        /**
+         * How `body` is written ("" = plain).
+         */bodyFormat: String, excerpt: String, bannerAlt: String, bannerMime: String, 
+        /**
+         * `post.setDocument`; its alt is the document's name.
+         */document: MediaRow?, 
+        /**
+         * The `post.addAsset` set in `at` order.
+         */assets: [MediaRow]) {
+        self.form = form
+        self.link = link
+        self.bodyFormat = bodyFormat
+        self.excerpt = excerpt
+        self.bannerAlt = bannerAlt
+        self.bannerMime = bannerMime
+        self.document = document
+        self.assets = assets
+    }
+}
+
+
+
+extension PostDetailRow: Equatable, Hashable {
+    public static func ==(lhs: PostDetailRow, rhs: PostDetailRow) -> Bool {
+        if lhs.form != rhs.form {
+            return false
+        }
+        if lhs.link != rhs.link {
+            return false
+        }
+        if lhs.bodyFormat != rhs.bodyFormat {
+            return false
+        }
+        if lhs.excerpt != rhs.excerpt {
+            return false
+        }
+        if lhs.bannerAlt != rhs.bannerAlt {
+            return false
+        }
+        if lhs.bannerMime != rhs.bannerMime {
+            return false
+        }
+        if lhs.document != rhs.document {
+            return false
+        }
+        if lhs.assets != rhs.assets {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(form)
+        hasher.combine(link)
+        hasher.combine(bodyFormat)
+        hasher.combine(excerpt)
+        hasher.combine(bannerAlt)
+        hasher.combine(bannerMime)
+        hasher.combine(document)
+        hasher.combine(assets)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePostDetailRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PostDetailRow {
+        return
+            try PostDetailRow(
+                form: FfiConverterString.read(from: &buf), 
+                link: FfiConverterString.read(from: &buf), 
+                bodyFormat: FfiConverterString.read(from: &buf), 
+                excerpt: FfiConverterString.read(from: &buf), 
+                bannerAlt: FfiConverterString.read(from: &buf), 
+                bannerMime: FfiConverterString.read(from: &buf), 
+                document: FfiConverterOptionTypeMediaRow.read(from: &buf), 
+                assets: FfiConverterSequenceTypeMediaRow.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PostDetailRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.form, into: &buf)
+        FfiConverterString.write(value.link, into: &buf)
+        FfiConverterString.write(value.bodyFormat, into: &buf)
+        FfiConverterString.write(value.excerpt, into: &buf)
+        FfiConverterString.write(value.bannerAlt, into: &buf)
+        FfiConverterString.write(value.bannerMime, into: &buf)
+        FfiConverterOptionTypeMediaRow.write(value.document, into: &buf)
+        FfiConverterSequenceTypeMediaRow.write(value.assets, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePostDetailRow_lift(_ buf: RustBuffer) throws -> PostDetailRow {
+    return try FfiConverterTypePostDetailRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePostDetailRow_lower(_ value: PostDetailRow) -> RustBuffer {
+    return FfiConverterTypePostDetailRow.lower(value)
 }
 
 
@@ -11698,6 +12438,137 @@ public func FfiConverterTypeSystemRow_lower(_ value: SystemRow) -> RustBuffer {
 
 
 /**
+ * What `ThingRow` leaves out — the rest of a Thing's ops, for its maximised detail.
+ */
+public struct ThingDetailRow {
+    /**
+     * "" = not said.
+     */
+    public var condition: String
+    public var description: String
+    /**
+     * The `thing.addPhoto` set in `at` order; the face (`thing.setPhoto`) rides `ThingRow`.
+     */
+    public var photos: [MediaRow]
+    /**
+     * "" = no disposition stated.
+     */
+    public var disposition: String
+    /**
+     * Whom it is held for, member key hex, "" = nobody named.
+     */
+    public var dispositionFor: String
+    /**
+     * Epoch ms, 0 = open-ended.
+     */
+    public var dispositionUntil: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * "" = not said.
+         */condition: String, description: String, 
+        /**
+         * The `thing.addPhoto` set in `at` order; the face (`thing.setPhoto`) rides `ThingRow`.
+         */photos: [MediaRow], 
+        /**
+         * "" = no disposition stated.
+         */disposition: String, 
+        /**
+         * Whom it is held for, member key hex, "" = nobody named.
+         */dispositionFor: String, 
+        /**
+         * Epoch ms, 0 = open-ended.
+         */dispositionUntil: Int64) {
+        self.condition = condition
+        self.description = description
+        self.photos = photos
+        self.disposition = disposition
+        self.dispositionFor = dispositionFor
+        self.dispositionUntil = dispositionUntil
+    }
+}
+
+
+
+extension ThingDetailRow: Equatable, Hashable {
+    public static func ==(lhs: ThingDetailRow, rhs: ThingDetailRow) -> Bool {
+        if lhs.condition != rhs.condition {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.photos != rhs.photos {
+            return false
+        }
+        if lhs.disposition != rhs.disposition {
+            return false
+        }
+        if lhs.dispositionFor != rhs.dispositionFor {
+            return false
+        }
+        if lhs.dispositionUntil != rhs.dispositionUntil {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(condition)
+        hasher.combine(description)
+        hasher.combine(photos)
+        hasher.combine(disposition)
+        hasher.combine(dispositionFor)
+        hasher.combine(dispositionUntil)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeThingDetailRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ThingDetailRow {
+        return
+            try ThingDetailRow(
+                condition: FfiConverterString.read(from: &buf), 
+                description: FfiConverterString.read(from: &buf), 
+                photos: FfiConverterSequenceTypeMediaRow.read(from: &buf), 
+                disposition: FfiConverterString.read(from: &buf), 
+                dispositionFor: FfiConverterString.read(from: &buf), 
+                dispositionUntil: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ThingDetailRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.condition, into: &buf)
+        FfiConverterString.write(value.description, into: &buf)
+        FfiConverterSequenceTypeMediaRow.write(value.photos, into: &buf)
+        FfiConverterString.write(value.disposition, into: &buf)
+        FfiConverterString.write(value.dispositionFor, into: &buf)
+        FfiConverterInt64.write(value.dispositionUntil, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThingDetailRow_lift(_ buf: RustBuffer) throws -> ThingDetailRow {
+    return try FfiConverterTypeThingDetailRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThingDetailRow_lower(_ value: ThingDetailRow) -> RustBuffer {
+    return FfiConverterTypeThingDetailRow.lower(value)
+}
+
+
+/**
  * One THING the market list binds to: the object id, its name/descriptor, and the
  * posture it stands in (`""` = tracked but taking no market position, which is a real
  * state, not a missing value). `price` is present only on an ACTIVE posture.
@@ -12938,6 +13809,79 @@ extension ObjectKind: Equatable, Hashable {}
 
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * The wire's two arg types (`pacific_media::ArgVal`).
+ */
+
+public enum OpValue {
+    
+    case text(v: String
+    )
+    case int(v: Int64
+    )
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOpValue: FfiConverterRustBuffer {
+    typealias SwiftType = OpValue
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OpValue {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .text(v: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .int(v: try FfiConverterInt64.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OpValue, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .text(v):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(v, into: &buf)
+            
+        
+        case let .int(v):
+            writeInt(&buf, Int32(2))
+            FfiConverterInt64.write(v, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpValue_lift(_ buf: RustBuffer) throws -> OpValue {
+    return try FfiConverterTypeOpValue.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpValue_lower(_ value: OpValue) -> RustBuffer {
+    return FfiConverterTypeOpValue.lower(value)
+}
+
+
+
+extension OpValue: Equatable, Hashable {}
+
+
+
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
@@ -13053,6 +13997,30 @@ fileprivate struct FfiConverterOptionTypeMediaInput: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeMediaInput.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeMediaRow: FfiConverterRustBuffer {
+    typealias SwiftType = MediaRow?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMediaRow.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMediaRow.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -13248,6 +14216,31 @@ fileprivate struct FfiConverterSequenceData: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterData.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeActRow: FfiConverterRustBuffer {
+    typealias SwiftType = [ActRow]
+
+    public static func write(_ value: [ActRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeActRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ActRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ActRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeActRow.read(from: &buf))
         }
         return seq
     }
@@ -13881,6 +14874,31 @@ fileprivate struct FfiConverterSequenceTypeLocationRow: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeMediaRow: FfiConverterRustBuffer {
+    typealias SwiftType = [MediaRow]
+
+    public static func write(_ value: [MediaRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeMediaRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [MediaRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [MediaRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeMediaRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeMintFieldRow: FfiConverterRustBuffer {
     typealias SwiftType = [MintFieldRow]
 
@@ -13948,6 +14966,31 @@ fileprivate struct FfiConverterSequenceTypeOfficeRow: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeOfficeRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeOpArg: FfiConverterRustBuffer {
+    typealias SwiftType = [OpArg]
+
+    public static func write(_ value: [OpArg], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOpArg.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OpArg] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OpArg]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOpArg.read(from: &buf))
         }
         return seq
     }
@@ -15598,6 +16641,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_dm_transcript() != 7677) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_event_detail() != 51784) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_event_door_check() != 60366) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15748,6 +16794,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_my_profile() != 42179) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_object_apply() != 28345) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_object_edit() != 376) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_object_exterior() != 52822) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15794,6 +16846,12 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_objects() != 55043) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_op_arg_max() != 18458) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_op_vocabulary() != 3899) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_pair_accept() != 18910) {
@@ -15869,6 +16927,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_places() != 24947) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_post_detail() != 1004) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_posts() != 61003) {
@@ -15986,6 +17047,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_thing_clear_posture() != 36123) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_thing_detail() != 37180) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_thing_mint() != 445) {

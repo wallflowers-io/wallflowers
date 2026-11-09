@@ -49,7 +49,8 @@
     "levels": [
       { "v": 0, "adds": ["pub", "sub", "msg", "ack", "eose"], "meaning": "the mailbox. Every build ever shipped." },
       { "v": 1, "adds": ["gap"], "meaning": "retention is announced: the replayed backlog may be incomplete." },
-      { "v": 2, "adds": ["media_put", "media_get", "media_url", "media_err"], "meaning": "presigned object-storage offload. No shipping client declares this yet." }
+      { "v": 2, "adds": ["media_put", "media_get", "media_url", "media_err"], "meaning": "presigned object-storage offload. No shipping client declares this yet." },
+      { "v": 3, "adds": ["evicted"], "meaning": "a door tag's bound is announced: how many knocks its cap has evicted (mls.door.relay)." }
     ]
   },
   "frames": [
@@ -162,6 +163,16 @@
       "doc": "The presign was refused. reason is a stable token: unconfigured | bad_key | too_large | over_budget | budget_stale.",
       "encodings": [
         "{\"t\":\"media_err\",\"key\":\"ab\",\"reason\":\"too_large\"}"
+      ],
+      "accepts": []
+    },
+    {
+      "t": "evicted",
+      "dir": "to_client",
+      "min_v": 3,
+      "doc": "After the replay of a door tag, the number of knocks ever evicted from it by its cap. Monotonic; at most once per door tag per Sub, before eose.",
+      "encodings": [
+        "{\"t\":\"evicted\",\"tag\":\"door:aa\",\"total\":3}"
       ],
       "accepts": []
     }

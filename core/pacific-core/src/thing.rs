@@ -333,6 +333,22 @@ impl ThingState {
     }
 }
 
+impl ThingState {
+    /// The held profile as `thing.setProfile` args — the whole profile, which the op
+    /// replaces, so an owner's edit changes one field instead of clearing the rest.
+    pub fn profile_args(&self) -> crate::coordinator::Args {
+        let mut a = crate::coordinator::Args::new();
+        a.insert("name".into(), ArgVal::Text(self.name.clone()));
+        a.insert("category".into(), ArgVal::Text(self.category.as_str().into()));
+        let condition = self.condition.clone().unwrap_or_default();
+        let text = [("descriptor", &self.descriptor), ("condition", &condition), ("description", &self.description)];
+        for (k, v) in text.into_iter().filter(|(_, v)| !v.is_empty()) {
+            a.insert(k.into(), ArgVal::Text(v.clone()));
+        }
+        a
+    }
+}
+
 pub struct ThingType;
 
 const OPS: &[OpDecl] = &[

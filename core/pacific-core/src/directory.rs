@@ -477,6 +477,13 @@ CREATE TABLE IF NOT EXISTS door_knock (
   PRIMARY KEY (door, id)
 );
 
+-- What a door's cap has evicted, ever, as the relay last said (mls.door.relay.evicted): kept
+-- beside the door's cursor, so a flood is named when the total rises and not on every drain.
+CREATE TABLE IF NOT EXISTS door_evicted (
+  door   BLOB PRIMARY KEY,                -- the door's address seed
+  total  INTEGER NOT NULL DEFAULT 0
+);
+
 -- The substrate source of truth: the per-object append-only delta log.
 -- `delivered` is the outbox flag: 0 = authored locally but not yet confirmed PUB'd
 -- to the relay (flush on next reconnect), 1 = relay-ack'd, or received. A received
@@ -2140,6 +2147,24 @@ impl Directory {
         Ok(())
     }
 
+    /// What a door's cap has evicted since the last total the relay gave: the rise, kept as the
+    /// new total. 0 when it has not risen, so a flood is named once, not on every drain.
+    pub fn evicted_rose(&self, door: &[u8; 32], total: u64) -> Result<u64, CoreError> {
+        let seen: i64 = self
+            .conn
+            .query_row("SELECT total FROM door_evicted WHERE door=?1", params![&door[..]], |r| r.get(0))
+            .optional()?
+            .unwrap_or(0);
+        let rose = total.saturating_sub(seen as u64);
+        if rose > 0 {
+            self.conn.execute(
+                "INSERT INTO door_evicted (door, total) VALUES (?1, ?2) ON CONFLICT(door) DO UPDATE SET total=MAX(total, excluded.total)",
+                params![&door[..], total as i64],
+            )?;
+        }
+        Ok(rose)
+    }
+
     /// The knocks still waiting at a door: (id, blob, attempts, next_at).
     pub fn waiting_knocks(&self, door: &[u8; 32]) -> Result<Vec<([u8; 32], Vec<u8>, u32, i64)>, CoreError> {
         let mut st = self.conn.prepare(
@@ -2685,13 +2710,25 @@ mod tests {
         Directory::with(conn)
     }
 
+    /// A door's evicted total is named when it rises, once: the same total twice is quiet.
+    #[test]
+    fn a_flood_is_named_when_it_rises() {
+        let dir = mem();
+        let door = [3u8; 32];
+        assert_eq!(dir.evicted_rose(&door, 0).unwrap(), 0, "nothing evicted");
+        assert_eq!(dir.evicted_rose(&door, 5).unwrap(), 5, "the first flood");
+        assert_eq!(dir.evicted_rose(&door, 5).unwrap(), 0, "the same total again is quiet");
+        assert_eq!(dir.evicted_rose(&door, 8).unwrap(), 3, "it rose by three");
+        assert_eq!(dir.evicted_rose(&door, 2).unwrap(), 0, "a smaller total, from a lagging relay, is no rise");
+    }
+
     /// A flood past a door's cap leaves the store at the cap, the newest kept; a settled knock
     /// keeps its id and not its bytes; past the TTL a knock is let go.
     #[test]
     fn a_door_keeps_its_bound() {
         let dir = mem();
         // The ICD's bound, so the test moves when the ICD does.
-        let (door, cap, ttl) = ([7u8; 32], crate::exterior::icd::DOOR_CAP, crate::exterior::icd::DOOR_TTL_DAYS * 86_400);
+        let (door, cap, ttl) = ([7u8; 32], crate::exterior::DOOR_CAP as usize, crate::exterior::DOOR_TTL_DAYS as i64 * 86_400);
         let flood = cap as u32 + 44;
         for i in 0..flood {
             let mut id = [0u8; 32];

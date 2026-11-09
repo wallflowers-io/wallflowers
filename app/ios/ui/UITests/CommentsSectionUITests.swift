@@ -43,11 +43,13 @@ final class CommentsSectionUITests: XCTestCase {
         for _ in 0..<12 where !row.waitForExistence(timeout: 2) { mid.press(forDuration: 0.05, thenDragTo: up) }
         XCTAssertTrue(row.exists, "the event's feed row")
         row.tap()
-        XCTAssertTrue(app.staticTexts["detail-title"].waitForExistence(timeout: 10), "the event's page")
-        XCTAssertEqual(app.staticTexts["detail-title"].label, name)
+        // The owner's title is the heading's own field.
+        let title = app.descendants(matching: .any).matching(identifier: "detail-title").firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 10), "the event's page")
+        XCTAssertEqual(title.value as? String, name)
 
-        // Comment; BLUE sends.
-        let say = app.textFields.firstMatch   // the page's one field
+        // Comment, in the page's comments section; BLUE sends.
+        let say = app.descendants(matching: .any).matching(identifier: "detail-comment-field").firstMatch
         XCTAssertTrue(say.waitForExistence(timeout: 10), "the comment field")
         say.tap()
         say.typeText(comment)
@@ -55,9 +57,9 @@ final class CommentsSectionUITests: XCTestCase {
         XCTAssertEqual(send.label, "Send")
         XCTAssertTrue(send.isEnabled, "BLUE sends a comment")
         send.tap()
-        let said = app.staticTexts[comment]
+        let said = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == 'detail-comment' AND label CONTAINS %@", comment)).firstMatch
         XCTAssertTrue(said.waitForExistence(timeout: 10), "the comment shows on its event")
-        app.staticTexts["detail-title"].tap()   // the card back to its top
         XCTAssertTrue(said.isHittable, "the comment is on screen")
         shoot("event-with-comment")
 

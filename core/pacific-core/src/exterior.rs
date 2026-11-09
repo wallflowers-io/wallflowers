@@ -26,6 +26,8 @@ pub(crate) mod icd {
     include!(concat!(env!("OUT_DIR"), "/icd_exterior.rs"));
 }
 pub use icd::{OP_DECIDE_REQUEST, OP_SET_DOOR, OP_SET_EXTERIOR};
+/// `mls.door.relay`, read from the ICD once, by pacific-wire, which the relay reads too.
+pub use pacific_wire::{DOOR_CAP, DOOR_MAX_BYTES, DOOR_PREFIX, DOOR_TTL_DAYS};
 
 
 pub const SET_EXTERIOR: OpDecl = OpDecl {

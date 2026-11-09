@@ -30,7 +30,7 @@ struct ExteriorDetailSource: DetailSource {
     let ownerPhoto: Data?
 
     func headline() async -> DetailHeadline? {
-        DetailHeadline(title: row.name, facts: row.description.isEmpty ? [] : [row.description])
+        DetailHeadline(title: row.name, rows: [DetailRow(label: "Description", value: row.description)])
     }
 
     func author() async -> DetailAuthor? {

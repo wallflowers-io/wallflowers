@@ -3,9 +3,9 @@
 //  creator (a simulated fix makes it PLACED), its pin on THE map — reached by the
 //  PLACE jewel in LIFE's search rail — the pin's
 //  bottom sheet — the quick resolution — and the sheet's tap-through to the
-//  Place Profile page: headline, the location card whose area cells derive from
-//  the Place's own GeoPoint, and the walk-up bar (the POV, reachable from the
-//  page). Coordinate-tap discipline throughout: beside the rail the
+//  Place's maximised detail: its title, the square drawn from area cells derived
+//  from the Place's own GeoPoint, and the walk-up bar (the POV, reachable from
+//  the page). Coordinate-tap discipline throughout: beside the rail the
 //  hittability oracle is flaky while real touches land fine (the
 //  GroupsPageUITests lesson), so taps go by coordinate, as a finger does.
 
@@ -92,14 +92,16 @@ final class PlaceProfileUITests: XCTestCase {
         XCTAssertTrue(open.waitForExistence(timeout: 6), "the sheet's tap-through")
         open.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
 
-        XCTAssertTrue(waitAny(["place-profile"], timeout: 10), "the Place Profile page")
-        XCTAssertTrue(app.otherElements["profile-headline"].waitForExistence(timeout: 8),
-                      "the headline card")
-        // The location card exists ⇔ area cells derived from the Place's own
-        // GeoPoint (the page draws no map card for an unplaced Place).
-        XCTAssertTrue(waitAny(["profile-map"], timeout: 8),
-                      "the location card's area cells render from the GeoPoint")
-        shoot("place-profile")
+        // The sheet opens the Place's maximised detail.
+        let media = app.descendants(matching: .any)["detail-media"]
+        XCTAssertTrue(media.waitForExistence(timeout: 10), "the Place's detail")
+        XCTAssertTrue(app.descendants(matching: .any)["detail-title"].waitForExistence(timeout: 8),
+                      "the Place's title")
+        // Its square is the area ⇔ cells derived from the Place's own GeoPoint (an
+        // unplaced Place draws stripes, and the square says nothing of an area).
+        expectation(for: NSPredicate(format: "label CONTAINS 'map of its area'"), evaluatedWith: media)
+        waitForExpectations(timeout: 8)
+        shoot("place-detail")
 
         // POV reachable from the page: the walk-up bar opens PlacePOVView. A
         // coordinate-minted place has no scan — "No interior" is the honest

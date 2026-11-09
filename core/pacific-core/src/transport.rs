@@ -192,6 +192,55 @@ impl RelaySession {
         Ok(out)
     }
 
+    /// PUB one knock to `door` as a door's tag ([`Address::door_tag`]), held by the relay to
+    /// `mls.door.relay`'s bound; wait for `Ack`. A refusal carries its reason: `too_large`
+    /// past the knock cap, `rate_limited` past this connection's knocks an hour.
+    pub async fn publish_door(&mut self, door: &Address, blob_b64: String) -> Result<u64, CoreError> {
+        self.send(&door.door_pub_frame(blob_b64)).await?;
+        loop {
+            match self.next_frame().await? {
+                Frame::Ack { seq, ok: true, .. } => return Ok(seq),
+                Frame::Ack { ok: false, reason, .. } => {
+                    return Err(CoreError::Transport(format!(
+                        "the relay refused a knock: {}",
+                        reason.as_deref().unwrap_or("no reason given (protocol violation)")
+                    )));
+                }
+                _ => continue,
+            }
+        }
+    }
+
+    /// [`RelaySession::drain_many`] for door tags ([`Address::door_tag`]), declaring
+    /// [`pacific_wire::V_DOOR`] so the relay also says how many knocks each door has lost
+    /// to its cap, ever (`Evicted`): the second value, per tag, absent when none.
+    pub async fn drain_doors(
+        &mut self,
+        subs: &[(String, u64)],
+    ) -> Result<(Vec<Vec<(String, u64, String)>>, std::collections::BTreeMap<String, u64>), CoreError> {
+        for (tag, since) in subs {
+            DRAINS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.send(&Frame::Sub { tags: vec![tag.clone()], since: *since, v: pacific_wire::V_DOOR }).await?;
+        }
+        let mut out = Vec::with_capacity(subs.len());
+        let mut evicted = std::collections::BTreeMap::new();
+        for (tag, _) in subs {
+            let mut got = Vec::new();
+            loop {
+                match self.next_frame().await? {
+                    Frame::Msg { tag: t, seq, blob } if t == *tag => got.push((t, seq, blob)),
+                    Frame::Evicted { tag: t, total } if t == *tag => {
+                        evicted.insert(t, total);
+                    }
+                    Frame::Eose => break,
+                    _ => continue,
+                }
+            }
+            out.push(got);
+        }
+        Ok((out, evicted))
+    }
+
     /// The socket, for the one reader that holds it (`live::Live`): dialled by `connect`,
     /// so every connection to a relay still starts in one place.
     pub(crate) fn into_socket(self) -> WebSocketStream<MaybeTlsStream<TcpStream>> {

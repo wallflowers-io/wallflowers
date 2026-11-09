@@ -41,7 +41,46 @@ fn main() {
     .expect("icd_consts.rs");
     w98(&icd);
     links(&icd);
+    vocabularies(&icd);
     exterior(&icd);
+}
+
+/// EVERY CLOSED VOCABULARY AND CEILING, into OUT_DIR/icd_vocabularies.rs: `(op, arg, words)`
+/// and `(op, arg, maxLength)` for each op arg, on a kind or a facet, that states one — what a
+/// UI offers for a choice and how long a value may be, so no surface keeps its own copy.
+fn vocabularies(icd: &serde_json::Value) {
+    let mut words = std::collections::BTreeMap::new();
+    let mut ceilings = std::collections::BTreeMap::new();
+    for section in ["kinds", "facets"] {
+        for holder in icd[section].as_object().expect("the ICD's kinds and facets").values() {
+            for (op, decl) in holder["ops"].as_object().into_iter().flatten() {
+                for (arg, a) in decl["args"].as_object().into_iter().flatten() {
+                    if let Some(v) = a["vocabulary"].as_object() {
+                        let w: Vec<String> = v.keys().map(|k| format!("{k:?}")).collect();
+                        words.insert((op.clone(), arg.clone()), w.join(", "));
+                    }
+                    if let Some(n) = a["maxLength"].as_u64() {
+                        ceilings.insert((op.clone(), arg.clone()), n);
+                    }
+                }
+            }
+        }
+    }
+    let words: Vec<String> = words.iter().map(|((op, arg), w)| format!("    ({op:?}, {arg:?}, &[{w}]),")).collect();
+    let ceilings: Vec<String> = ceilings.iter().map(|((op, arg), n)| format!("    ({op:?}, {arg:?}, {n}),")).collect();
+    let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_vocabularies.rs");
+    std::fs::write(
+        out,
+        format!(
+            "/// Every op arg's closed vocabulary, `(op, arg, words)`, from the ICD at build.\n\
+             pub const VOCABULARIES: &[(&str, &str, &[&str])] = &[\n{}\n];\n\
+             /// Every op arg's `maxLength`, `(op, arg, n)`, from the ICD at build.\n\
+             pub const MAX_LENGTHS: &[(&str, &str, u64)] = &[\n{}\n];\n",
+            words.join("\n"),
+            ceilings.join("\n")
+        ),
+    )
+    .expect("icd_vocabularies.rs");
 }
 
 /// W-98's numbers and words (EVENTS-CORE), into OUT_DIR/icd_w98.rs: the per-kind visibility
@@ -156,9 +195,7 @@ fn exterior(icd: &serde_json::Value) {
              pub const DOOR_MODES: &[&str] = {};\npub const DECISIONS: &[&str] = {};\n\
              /// `mls.door`.\n\
              pub const DOOR_ADDRESS_DOMAIN: &str = {:?};\npub const DOOR_SEAL_DOMAIN: &str = {:?};\npub const DOOR_SIG_DOMAIN: &str = {:?};\n\
-             pub const DOOR_BUNDLES: usize = {};\npub const DOOR_NOTE_MAX: usize = {};\n\
-             /// `mls.door.relay`: what a door keeps, at most, and its tag's prefix on the relay.\n\
-             pub const DOOR_CAP: usize = {};\npub const DOOR_TTL_DAYS: i64 = {};\npub const DOOR_MAX_BYTES: usize = {};\npub const DOOR_TAG_PREFIX: &str = {:?};\n",
+             pub const DOOR_BUNDLES: usize = {};\npub const DOOR_NOTE_MAX: usize = {};\n",
             on.join(", "),
             op(&facet["base.setExterior"], "base.setExterior"),
             op(&facet["base.setDoor"], "base.setDoor"),
@@ -176,10 +213,6 @@ fn exterior(icd: &serde_json::Value) {
             text("sigDomain"),
             num("bundles"),
             num("noteMax"),
-            door["relay"]["cap"].as_u64().expect("the ICD states mls.door.relay.cap"),
-            door["relay"]["ttlDays"].as_u64().expect("the ICD states mls.door.relay.ttlDays"),
-            door["relay"]["maxBytes"].as_u64().expect("the ICD states mls.door.relay.maxBytes"),
-            door["relay"]["prefix"].as_str().expect("the ICD states mls.door.relay.prefix"),
         ),
     )
     .expect("icd_exterior.rs");

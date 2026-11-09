@@ -1013,6 +1013,40 @@ impl Profile {
     }
 }
 
+impl EventState {
+    /// The held profile as `event.setProfile` args. The op replaces the whole profile, so
+    /// an owner's edit starts here and changes one field instead of clearing the rest.
+    pub fn profile_args(&self) -> Args {
+        let mut a = Args::new();
+        a.insert("title".into(), ArgVal::Text(self.title.clone()));
+        a.insert("startMs".into(), ArgVal::Int(self.start_ms));
+        if let Some(e) = self.end_ms {
+            a.insert("endMs".into(), ArgVal::Int(e));
+        }
+        if self.all_day {
+            a.insert("allDay".into(), ArgVal::Int(1));
+        }
+        let text = [
+            ("descriptor", &self.descriptor),
+            ("ticketUrl", &self.ticket_url),
+            ("venue", &self.venue),
+            ("recurrence", &self.recurrence),
+            ("tz", &self.tz),
+            ("online", &self.online),
+            ("status", &self.status),
+            ("videoUrl", &self.video_url),
+            ("descriptorFormat", &self.descriptor_format),
+        ];
+        for (k, v) in text.into_iter().filter(|(_, v)| !v.is_empty()) {
+            a.insert(k.into(), ArgVal::Text(v.clone()));
+        }
+        if !self.lineup.is_empty() {
+            a.insert("lineup".into(), ArgVal::Text(self.lineup.join("\n")));
+        }
+        a
+    }
+}
+
 /// `event.setLineup`'s acts: a JSON list of at most the ICD's `maxItems`, each exactly one of
 /// `member` and `object` (64 hex), a role from the ICD's vocabulary, and optional `start` and
 /// `end` (unix ms, end not before start). Any other key, a performer twice, or anything

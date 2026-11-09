@@ -63,6 +63,19 @@ final class FeedModelTests: XCTestCase {
         XCTAssertEqual(rows[1].category, .events)
     }
 
+    /// A Thing I hold is mine: a member's card that opens its object. `listings` excludes it.
+    func testMyOwnThingIsAMembersTradeCardThatOpens() {
+        let mine = ThingRow(id: "t1", name: "lamp", descriptor: "", category: "artifact",
+                            posture: "", price: "", deadline: 0, reach: "private",
+                            area: "", photo: "", photoMime: "")
+        let rows = FeedAssembler.rows(events: [], listings: [], things: [mine], nowMs: now)
+        XCTAssertEqual(rows.map(\.title), ["lamp"])
+        XCTAssertEqual(rows[0].category, .trade)
+        XCTAssertEqual(rows[0].provenance, .member)
+        XCTAssertEqual(rows[0].objectID, "t1")
+        XCTAssertEqual(rows[0].footer, "")
+    }
+
     func testProvenanceFollowsHops() {
         let rows = FeedAssembler.rows(events: [], listings: [listing("deck", hops: 2)], nowMs: now)
         XCTAssertEqual(rows[0].provenance, .hops(2))

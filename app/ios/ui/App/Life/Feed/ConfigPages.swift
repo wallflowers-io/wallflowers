@@ -79,8 +79,9 @@ struct TypedListPage: View {
                          whenMs: 0, provenance: .member, objectID: $0.peerId)
             }
         case .trade:
-            return FeedAssembler.rows(events: [], listings: core.listings,
-                                      exteriors: core.exteriors.filter { $0.kind == "thing" }, nowMs: now)
+            return FeedAssembler.rows(events: [], listings: core.listings, things: core.things,
+                                      exteriors: core.exteriors.filter { $0.kind == "thing" }, nowMs: now,
+                                      makerOf: core.index.maker(of:))
         // CHANNELS lists nothing HERE: a channel belongs to a Space, so its list
         // is the Space profile's lane, not a global typed list. Empty is the
         // honest answer rather than a flattened cross-Space roll-up.
