@@ -8,24 +8,10 @@ Method: deploy.md § 10.
 Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on an object that exists, or
 `POST /v2/mint` to make one. `GET /v2/icd` serves the model production runs; model.html lists every op and its args.
 
-## 2.7.0
-
-<!-- generated 2.7.0: icd-changelog.mjs --write; do not edit between the markers -->
-- Draft (media.detached, detached media sealed and read, #56), from `5268627`; its ICD `a9eac5c92bf6f0a484a33f526170c94df20d11109f4b6d436746334bcbe2f7e0`, not a release until its icd/* tag
-- Against 2.6.0 (`75de632bfbb95e23…`):
-  - model sections changed besides ops: media, mls
-<!-- end generated 2.7.0 -->
-
-Detached media (#56): `media.detached` states how a media object outside the Delta is sealed and read, so that any
-implementation opens what another wrote. XChaCha20-Poly1305 under a fresh content key, the object key as AAD, the
-digest over the stored object, uploads create-only, fetched by key alone. No op changes: every media op's `<p>Secret`
-already carried the content key; it now says how the bytes are sealed with it. A site uploads media through
-WallFlowers' app; there is no Community API route for it in this release.
-
 ## 2.6.0
 
 <!-- generated 2.6.0: icd-changelog.mjs --write; do not edit between the markers -->
-- Draft (the exterior and the door, #76), from `386a632`; its ICD `75de632bfbb95e2337a9efe386a923f791af42f52cf95db31d01f25fe6d4a92a`, not a release until its icd/* tag
+- Draft (the exterior and the door, #76), from `a5b4bb2`; its ICD `2c1067380ed4d2e2ab6f7b2350994c5957f47ef745b4c866cfb154df0ad7bc85`, not a release until its icd/* tag
 - Against 2.5.0 (`5e51f052ad216850…`):
   - added: base.decideRequest (facet exterior, op 4027449346, owner|role:admitter, commutative)
   - added: base.setDoor (facet exterior, op 4027449345, owner, sequenced)
