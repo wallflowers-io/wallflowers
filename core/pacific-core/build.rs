@@ -156,9 +156,7 @@ fn exterior(icd: &serde_json::Value) {
              pub const DOOR_MODES: &[&str] = {};\npub const DECISIONS: &[&str] = {};\n\
              /// `mls.door`.\n\
              pub const DOOR_ADDRESS_DOMAIN: &str = {:?};\npub const DOOR_SEAL_DOMAIN: &str = {:?};\npub const DOOR_SIG_DOMAIN: &str = {:?};\n\
-             pub const DOOR_BUNDLES: usize = {};\npub const DOOR_NOTE_MAX: usize = {};\n\
-             /// `mls.door.relay`: what a door keeps, at most, and its tag's prefix on the relay.\n\
-             pub const DOOR_CAP: usize = {};\npub const DOOR_TTL_DAYS: i64 = {};\npub const DOOR_MAX_BYTES: usize = {};\npub const DOOR_TAG_PREFIX: &str = {:?};\n",
+             pub const DOOR_BUNDLES: usize = {};\npub const DOOR_NOTE_MAX: usize = {};\n",
             on.join(", "),
             op(&facet["base.setExterior"], "base.setExterior"),
             op(&facet["base.setDoor"], "base.setDoor"),
@@ -176,10 +174,6 @@ fn exterior(icd: &serde_json::Value) {
             text("sigDomain"),
             num("bundles"),
             num("noteMax"),
-            door["relay"]["cap"].as_u64().expect("the ICD states mls.door.relay.cap"),
-            door["relay"]["ttlDays"].as_u64().expect("the ICD states mls.door.relay.ttlDays"),
-            door["relay"]["maxBytes"].as_u64().expect("the ICD states mls.door.relay.maxBytes"),
-            door["relay"]["prefix"].as_str().expect("the ICD states mls.door.relay.prefix"),
         ),
     )
     .expect("icd_exterior.rs");

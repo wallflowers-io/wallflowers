@@ -255,12 +255,14 @@ impl Node {
 
     async fn knock(&self, door_pub: &[u8; 32], knock: &Knock) -> Result<[u8; 32], CoreError> {
         let blob = door::seal_to(door_pub, &door::encode(&self.id, knock));
-        if blob.len() > ext::icd::DOOR_MAX_BYTES {
-            return Err(CoreError::Coordinator(format!("a knock of {} bytes is over the door's {}", blob.len(), ext::icd::DOOR_MAX_BYTES)));
+        let published = pacific_wire::blob_b64(&blob);
+        if published.len() as u64 > ext::DOOR_MAX_BYTES {
+            return Err(CoreError::Coordinator(format!("a knock of {} bytes is over the door's {}", published.len(), ext::DOOR_MAX_BYTES)));
         }
         let id = door::id_of(&blob);
         let mut sess = self.home_session().await?;
-        let out = sess.publish(&Address::from_seed(&door::address_seed(door_pub)), &pacific_wire::blob_b64(&blob)).await;
+        // At the door's tag: the relay holds it to the door's bound, and members drain it there.
+        let out = sess.publish_door(&Address::from_seed(&door::address_seed(door_pub)), &published).await;
         self.keep_session(sess);
         out.map(|_| id)
     }
@@ -331,26 +333,32 @@ impl Node {
             return Ok(0);
         }
         let seeds: Vec<[u8; 32]> = doors.iter().map(|(_, key, _)| door::address_seed(&door::public_of(key))).collect();
-        let tags: Vec<String> = seeds.iter().map(|s| Address::from_seed(s).tag_hex()).collect();
+        let tags: Vec<String> = seeds.iter().map(|s| Address::from_seed(s).door_tag()).collect();
         let dir = &self.dir;
         let mut sess = self.home_session().await?;
         let drained = sess
-            .drain_many(&tags, |tag, source| {
+            .drain_doors(&tags, |tag, source| {
                 let i = tags.iter().position(|t| t == tag).expect("a tag asked for");
                 dir.cursor(&seeds[i], source)
             })
             .await;
         self.keep_session(sess);
-        let (now, ttl) = (unix_now(), ext::icd::DOOR_TTL_DAYS * 86_400);
+        let (drained, lost) = drained?;
+        // A FLOOD, SEEN: what each door has lost to its cap, ever. Named, so an owner's device
+        // says when a door is being flooded; rotating the door is the owner's remedy.
+        for (tag, total) in lost.iter().filter(|(_, n)| **n > 0) {
+            tracing::warn!(door = %tag, evicted = total, "a door's cap has evicted knocks");
+        }
+        let (now, ttl) = (unix_now(), ext::DOOR_TTL_DAYS as i64 * 86_400);
         let mut new = 0;
-        for (seed, msgs) in seeds.iter().zip(drained?) {
+        for (seed, msgs) in seeds.iter().zip(drained) {
             for m in msgs {
                 match pacific_wire::blob_unb64(&m.blob) {
-                    Ok(blob) if blob.len() <= ext::icd::DOOR_MAX_BYTES => {
-                        self.dir.put_knock(seed, &door::id_of(&blob), &blob, now, ext::icd::DOOR_CAP, ttl)?;
+                    Ok(blob) if m.blob.len() as u64 <= ext::DOOR_MAX_BYTES => {
+                        self.dir.put_knock(seed, &door::id_of(&blob), &blob, now, ext::DOOR_CAP as usize, ttl)?;
                         new += 1;
                     }
-                    Ok(blob) => tracing::debug!(bytes = blob.len(), "a door blob over the bound; set aside"),
+                    Ok(_) => tracing::debug!(bytes = m.blob.len(), "a door blob over the bound; set aside"),
                     Err(e) => tracing::debug!(error = %e, "a door blob that is not base64; set aside"),
                 }
                 self.dir.advance_cursor(seed, m.source, m.seq)?;

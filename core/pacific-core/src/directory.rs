@@ -2691,7 +2691,7 @@ mod tests {
     fn a_door_keeps_its_bound() {
         let dir = mem();
         // The ICD's bound, so the test moves when the ICD does.
-        let (door, cap, ttl) = ([7u8; 32], crate::exterior::icd::DOOR_CAP, crate::exterior::icd::DOOR_TTL_DAYS * 86_400);
+        let (door, cap, ttl) = ([7u8; 32], crate::exterior::DOOR_CAP as usize, crate::exterior::DOOR_TTL_DAYS as i64 * 86_400);
         let flood = cap as u32 + 44;
         for i in 0..flood {
             let mut id = [0u8; 32];
