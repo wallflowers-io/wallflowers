@@ -4,6 +4,7 @@
  "title": "A Site's face",
  "$comment": "The face document group.editFace carries (ICD group.setFace: a JSON object, at most 16384 bytes). Every writer builds to this and every reader draws from it: the webapp's editor (face.js), the iOS editor, core's check before a site_* write (pacific-core face_spec.rs), and the Arc's renderer (arc/lib/face-render). Pictures are not here: they are the Host's media slots (host.editMedia: mark, cover, logo, wallpaper), so every picture field is empty. The keywords used are a subset core checks: type, properties, required, additionalProperties false, enum, const, minimum, maximum, maxLength, maxItems, items, oneOf by `type` const, $ref to $defs. x-wf-format names a check by value: hex-colour (#RRGGBB), font and sticker (the ids x-wf-builtins lists, and those in the editor's generated face-assets.js). x-wf-labels and the x-wf-* tables are what an editor shows.",
  "x-wf-maxBytes": 16384,
+ "x-wf-address": "https://wallflowers.io/",
  "type": "object",
  "properties": {
   "look": {

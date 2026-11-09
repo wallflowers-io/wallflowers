@@ -60,13 +60,66 @@ pub fn sticker_ids() -> &'static BTreeSet<String> {
     &spec().stickers
 }
 
+fn icd() -> &'static Value {
+    static ICD: OnceLock<Value> = OnceLock::new();
+    ICD.get_or_init(|| serde_json::from_str(include_str!("../../coordination/delta-graph.icd.json")).expect("the ICD"))
+}
+
+/// What an editor builds from: the schema, the fonts and stickers a face may name with
+/// what each is called, and the fields each feed may show — its source ops' ICD args less
+/// the schema's `hide`, as face.js `fieldsOf` lists them.
+pub fn catalogue() -> Value {
+    let s = schema();
+    let (fonts_js, stickers_js) = {
+        let a = assets(FACE_ASSETS_JS).expect("face-assets.js carries its tables");
+        (a["fonts"].clone(), a["stickers"].clone())
+    };
+    let built = |table: &str, group: &str| -> Vec<Value> {
+        s["x-wf-builtins"][table]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|r| serde_json::json!({ "id": r[0], "name": r[1], "group": group, "file": "" }))
+            .collect()
+    };
+    let pick = |v: &Value| -> Vec<Value> {
+        v.as_array()
+            .into_iter()
+            .flatten()
+            .map(|r| serde_json::json!({ "id": r["id"], "name": r["name"], "group": r["group"], "file": r["file"].as_str().unwrap_or("") }))
+            .collect()
+    };
+    let fonts: Vec<Value> = built("fonts", "Built in").into_iter().chain(pick(&fonts_js)).collect();
+    let stickers: Vec<Value> = built("stickers", "Doodles").into_iter().chain(pick(&stickers_js)).collect();
+    let op_args = |op: &str| -> Option<serde_json::Map<String, Value>> {
+        ["kinds", "facets"].iter().find_map(|t| {
+            icd()[*t].as_object()?.values().find_map(|k| k["ops"][op]["args"].as_object().cloned())
+        })
+    };
+    let mut feeds = serde_json::Map::new();
+    for (source, feed) in s["x-wf-feeds"].as_object().into_iter().flatten() {
+        let hide: Vec<&str> = feed["hide"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+        let mut seen = BTreeSet::new();
+        let mut out = Vec::new();
+        for op in feed["ops"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+            for (k, a) in op_args(op).unwrap_or_default() {
+                if hide.contains(&k.as_str()) || !seen.insert(k.clone()) {
+                    continue;
+                }
+                out.push(serde_json::json!({ "key": k, "op": op, "required": a["required"].as_bool().unwrap_or(false) }));
+            }
+        }
+        feeds.insert(source.clone(), Value::Array(out));
+    }
+    serde_json::json!({ "schema": s, "fonts": fonts, "stickers": stickers, "feeds": feeds })
+}
+
 /// The kinds with a public page: those the ICD makes of a `host` part. A Site, today; the
 /// rest is the ICD's to say (#62), and a client offers a page wherever this says.
 pub fn kinds_with_a_page() -> &'static [String] {
     static KINDS: OnceLock<Vec<String>> = OnceLock::new();
     KINDS.get_or_init(|| {
-        let icd: Value = serde_json::from_str(include_str!("../../coordination/delta-graph.icd.json")).expect("the ICD");
-        icd["kinds"]
+        icd()["kinds"]
             .as_object()
             .into_iter()
             .flatten()

@@ -664,3 +664,12 @@ fn the_editors_faces_draw() {
     let working = render_face(&parse(&bundle(read(dir.join("every-part.json"))), "Host").unwrap(), &ctx("riverside", &[], &[], false));
     assert!(!working.contains(">Tickets<"), "a working copy is not a page");
 }
+
+/// The address a published face is served at is the schema's (`x-wf-address`), which the
+/// editors show as the Site's link.
+#[test]
+fn the_page_is_served_where_the_schema_says() {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../core/coordination/face.schema.json");
+    let schema: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+    assert_eq!(schema["x-wf-address"], format!("{PUBLIC_ORIGIN}/"));
+}
