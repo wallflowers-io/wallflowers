@@ -839,18 +839,32 @@ impl Directory {
             [],
         );
         let _ = conn.execute("DROP TABLE IF EXISTS inbox_cursor", []);
-        // After the migrations: the triggers name columns some of them add.
-        let gens: i64 = conn.query_row(
-            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'fold_gen'",
-            [],
-            |r| r.get(0),
-        )?;
-        conn.execute_batch(FOLD_STORE)?;
-        conn.execute_batch(FOLD_GEN)?;
-        // Generations that start again from nothing could meet a kept fold of an earlier
-        // count: the kept folds go with them.
-        if gens == 0 {
-            conn.execute("DELETE FROM fold_store", [])?;
+        // After the migrations: the triggers name columns some of them add. ONE OPEN AT A
+        // TIME redoes them, in an immediate transaction: two opens of one database at once
+        // (the app's first, a test's relaunch beside it) interleaved their DROP and CREATE
+        // and failed with "trigger … already exists". A second waits its turn (busy_timeout).
+        conn.execute_batch("BEGIN IMMEDIATE")?;
+        let triggers = || -> Result<(), CoreError> {
+            let gens: i64 = conn.query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'fold_gen'",
+                [],
+                |r| r.get(0),
+            )?;
+            conn.execute_batch(FOLD_STORE)?;
+            conn.execute_batch(FOLD_GEN)?;
+            // Generations that start again from nothing could meet a kept fold of an
+            // earlier count: the kept folds go with them.
+            if gens == 0 {
+                conn.execute("DELETE FROM fold_store", [])?;
+            }
+            Ok(())
+        };
+        match triggers() {
+            Ok(()) => conn.execute_batch("COMMIT")?,
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(e);
+            }
         }
         Ok(())
     }
@@ -2556,6 +2570,23 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         Directory::init(&conn).unwrap();
         Directory::with(conn)
+    }
+
+    /// Opens of one database at once all succeed: each redoes the fold triggers, and two
+    /// interleaving their DROP and CREATE failed on the first read ("trigger … already
+    /// exists"), as the app's first opens did at sign-up and a test's relaunch beside it.
+    #[test]
+    fn opens_at_once_all_succeed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pacific.db");
+        Directory::open_at(&path).unwrap();
+        let failed: Vec<String> = std::thread::scope(|s| {
+            let opens: Vec<_> = (0..8)
+                .map(|_| s.spawn(|| (0..25).filter_map(|_| Directory::open_at(&path).err().map(|e| e.to_string())).collect::<Vec<_>>()))
+                .collect();
+            opens.into_iter().flat_map(|t| t.join().unwrap()).collect()
+        });
+        assert!(failed.is_empty(), "{} of 200 opens failed: {:?}", failed.len(), failed.first());
     }
 
     /// O-69: the fold generation moves on every change to a row the fold reads (a Delta
