@@ -378,6 +378,13 @@ struct TabChrome: ViewModifier {
             .toolbar {
                 if let search { searchBar(search) } else { precessingBar }
             }
+            // Open, the field takes the bar's row edge to edge. A toolbar item cannot (iOS
+            // 26 sizes a principal item to its content), so the bar steps aside and the
+            // row takes its height, leaving the content where it was.
+            .toolbarVisibility(searchOpen ? .hidden : .automatic, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let search, searchOpen { searchRow(search) }
+            }
             // The bell opens the CONVERGENCE deck on REAL proposals: things your graph holds
             // that you have not accepted yet. Accepting mints a Thing GroupObject, which is
             // what puts it in the LIFE market.
@@ -443,25 +450,29 @@ struct TabChrome: ViewModifier {
         }
     }
 
-    /// LIFE's bar: | account · search bell |, and open, the field across the row.
-    @ToolbarContentBuilder private func searchBar(_ search: TabSearch) -> some ToolbarContent {
-        if search.open.wrappedValue {
-            ToolbarItem(placement: .principal) {
-                HStack(spacing: 12) {
-                    SearchField(text: search.text, inBar: true)
-                    Button {
-                        search.text.wrappedValue = ""
-                        withAnimation(Motion.searchHide) { search.open.wrappedValue = false }
-                    } label: {
-                        Image(systemName: "xmark").fontWeight(.semibold)
-                            .foregroundStyle(Brand.accent)
-                    }
-                    .accessibilityLabel("Close search")
-                    .accessibilityIdentifier("tab-search-close")
-                }
-                .frame(maxWidth: .infinity)
+    private var searchOpen: Bool { search?.open.wrappedValue ?? false }
+
+    /// The open search: the field across the row, ✕ at its end. The bar's own height.
+    private func searchRow(_ search: TabSearch) -> some View {
+        HStack(spacing: 12) {
+            SearchField(text: search.text, inBar: true)
+            Button {
+                search.text.wrappedValue = ""
+                withAnimation(Motion.searchHide) { search.open.wrappedValue = false }
+            } label: {
+                Image(systemName: "xmark").fontWeight(.semibold)
+                    .foregroundStyle(Brand.accent)
             }
-        } else {
+            .accessibilityLabel("Close search")
+            .accessibilityIdentifier("tab-search-close")
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 44)
+    }
+
+    /// LIFE's bar, closed: | account · search bell |. Open, it steps aside (`searchRow`).
+    @ToolbarContentBuilder private func searchBar(_ search: TabSearch) -> some ToolbarContent {
+        if !search.open.wrappedValue {
             // The account keeps the corner's bare-circle treatment, now on the west.
             if #available(iOS 26.0, *) {
                 ToolbarItem(placement: .topBarLeading) { accountCorner }
