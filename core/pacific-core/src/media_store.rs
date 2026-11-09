@@ -54,6 +54,10 @@ fn b64() -> base64::engine::GeneralPurpose {
     base64::engine::general_purpose::STANDARD
 }
 
+// The ICD's media.detached is the construction this module runs: a content key and a nonce
+// of the sizes it states.
+const _: () = assert!(crate::icd_consts::MEDIA_KEY_BYTES == 32 && crate::icd_consts::MEDIA_NONCE_BYTES == seal::NONCE_LEN);
+
 fn random32() -> Result<[u8; 32], CoreError> {
     let mut b = [0u8; 32];
     getrandom::getrandom(&mut b).map_err(|e| CoreError::Seal(format!("no randomness: {e}")))?;

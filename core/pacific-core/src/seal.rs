@@ -21,7 +21,7 @@ use crate::CoreError;
 /// The MLS exporter label for the seal key (distinct from the relay-tag labels).
 pub const SEAL_LABEL: &[u8] = b"pacific/seal/v1";
 const SEAL_INFO_PREFIX: &[u8] = b"pacific/seal/v1";
-const NONCE_LEN: usize = 24;
+pub const NONCE_LEN: usize = 24;
 
 /// Derive the 32-byte XChaCha key from the shared conn_secret + dest_tag.
 fn derive_key(conn_secret: &[u8; 32], dest_tag: &[u8; 32]) -> [u8; 32] {
