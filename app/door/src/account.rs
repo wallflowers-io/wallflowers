@@ -522,42 +522,26 @@ fn draft_shape(kind: pacific_core::object::ObjectKind) -> DraftOut {
 /// object through the core's one renderer; one that will not fold is named with the
 /// core's words, not dropped.
 fn graph_of(node: &Node) -> Result<serde_json::Value, String> {
-    let mut objects = Vec::new();
-    // EVERY GROUP THIS ACCOUNT IS IN, connections included: `objects_named` leaves
-    // them out by design, and they are the one edge a person makes by hand.
-    let mut held: Vec<(String, String, String)> = node.objects_named().map_err(|e| e.to_string())?;
-    // A pair holds a CHANNEL and a CHAT; the door names the role, the page does not
-    // read kinds to guess it.
-    let mut peers: std::collections::HashMap<String, String> = Default::default();
-    let mut roles: std::collections::HashMap<String, &str> = Default::default();
-    for (peer, peer_name, _connected) in node.connections().unwrap_or_default() {
-        if let Ok(Some((id, kind))) = node.connection_object(&peer) {
-            peers.insert(id.clone(), hex::encode(peer));
-            roles.insert(id.clone(), "channel");
-            if !held.iter().any(|(h, _, _)| *h == id) {
-                held.push((id, kind, peer_name));
-            }
-        }
-        if let Ok(Some(id)) = node.conversation_with(&peer) {
-            peers.insert(id.clone(), hex::encode(peer));
-            roles.insert(id, "chat");
-        }
-    }
-    for (id, kind, name) in held {
-        let owner = node.object_owner(&id).ok().flatten().map(hex::encode).unwrap_or_default();
-        let members: Vec<String> =
-            node.object_members(&id).unwrap_or_default().iter().map(hex::encode).collect();
-        let (view, why) = match node.object_view(&id) {
-            Ok(v) => (serde_json::from_str(&v).unwrap_or(serde_json::Value::Null), None),
-            Err(e) => (serde_json::Value::Null, Some(e.to_string())),
-        };
-        objects.push(serde_json::json!({
-            "id": id, "kind": kind, "name": name,
-            "owner": owner, "members": members,
-            "peer": peers.get(&id), "role": roles.get(&id),
-            "folds": why.is_none(), "why": why, "view": view,
-        }));
-    }
+    // THE CORE'S ONE SWEEP (`Node::object_rows`): every group this account is in,
+    // connections included, each with its owner, members and view.
+    let objects: Vec<serde_json::Value> = node
+        .object_rows(None)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|o| {
+            let (view, why) = match o.view {
+                Ok(v) => (serde_json::from_str(&v).unwrap_or(serde_json::Value::Null), None),
+                Err(e) => (serde_json::Value::Null, Some(e)),
+            };
+            serde_json::json!({
+                "id": o.id, "kind": o.kind, "name": o.name,
+                "owner": o.owner.map(hex::encode).unwrap_or_default(),
+                "members": o.members.iter().map(hex::encode).collect::<Vec<_>>(),
+                "peer": o.peer.map(hex::encode), "role": o.link,
+                "folds": why.is_none(), "why": why, "view": view,
+            })
+        })
+        .collect();
     let spine: Vec<serde_json::Value> = node
         .spine_entries()
         .unwrap_or_default()

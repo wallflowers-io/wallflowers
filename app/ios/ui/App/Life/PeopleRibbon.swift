@@ -5,7 +5,7 @@
 //  colour carrying their initials. Tapping a jewel binds that person as the PEOPLE dimension; a
 //  white rim marks the bound contact.
 //
-//  The contacts are the real 1:1 connections (`core.peerPhoto`/`peerColor` per peer). Until any
+//  The contacts are the real 1:1 connections (`core.index.photo`/`color` per peer). Until any
 //  exist, a seeded family stands in so the locked ribbon is never blank on a fresh device —
 //  the same honest-fallback the top-down map uses (`PlaceAnnotation.demo`).
 

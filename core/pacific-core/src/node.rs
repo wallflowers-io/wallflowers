@@ -430,10 +430,14 @@ pub struct HistorySent {
 type HistoryPlan = (Option<crate::history::Bundle>, Vec<crate::history::Bundle>, HistorySent);
 
 /// How long an admitter waits for a Site not yet on its Node (NC-140), inside the Door's 20 s
-/// call to the Arc, and the pause between its checks ([`Node::site_ready`]). The wait holds no
-/// lock: each check takes the Node alone, and the admission after it.
+/// call to the Arc, and the pause between its checks ([`Node::intro_fetch`], with no lock, then
+/// [`Node::site_take`] under it). The wait holds no lock: each check's ingest takes the Node
+/// alone, and the admission after it.
 pub const SITE_WAIT: std::time::Duration = std::time::Duration::from_millis(2500);
 pub const SITE_WAIT_PAUSE: std::time::Duration = std::time::Duration::from_millis(400);
+/// An intro mailbox fetched outside the node lock ([`Node::intro_fetch`]), for [`Node::site_take`].
+pub struct IntroFetched(Vec<crate::router::Drained>);
+
 /// A Site not on this Node after the wait: `NotReady`'s words, which the Arc answers 503.
 pub const SITE_NOT_HERE: &str = "the Site is not on this Arc yet; try again";
 
@@ -759,7 +763,7 @@ impl Node {
         let kp = mls::make_key_package_bytes(&client)?;
         let intro = self.dir.my_intro_tag()?;
         let bundle = handshake::build_bundle(&self.id, kp, intro, &name)?;
-        bundle.encode()
+        Ok(bundle.encode()?)
     }
 
     // ---- `pacific pair --scan <bundle>` (scanner: create group + send Welcome) ----
@@ -1772,7 +1776,7 @@ impl Node {
             if self.dir.pending_outbox(&gid, &me)?.is_empty() {
                 continue;
             }
-            match self.publish_pending(&hex::encode(&gid)).await {
+            match self.publish_pending_as(&hex::encode(&gid), true).await {
                 Ok(k) => sent += k,
                 Err(e) => tracing::warn!(target: "pacific::sync", group = %hex::encode(&gid), error = %e,
                                          "a local commit stays in the outbox for the next sync"),
@@ -1785,8 +1789,20 @@ impl Node {
     /// answer): the group drained to head, a waiting proposal committed, and each of this
     /// device's undelivered Deltas sealed at the live epoch, published on the held
     /// session and marked delivered on its Ack. A link that fails leaves them in the
-    /// outbox for the next sync, as a write made offline does. The count sent.
+    /// outbox for the next sync, as a write made offline does. The count sent: rows that
+    /// left the outbox, not rows walked.
+    ///
+    /// A WRITE TO A NAMED OBJECT TRIES NOW (#75): a queue backed off after a lost slot is
+    /// claimed on this call all the same, and a failure is an error, never a quiet `Ok` —
+    /// the Door answers a write as relayed on this (NC-93). RFC 9420 §14 backs off the
+    /// loser, not the person.
     pub async fn publish_pending(&self, object_id_hex: &str) -> Result<usize, CoreError> {
+        self.publish_pending_as(object_id_hex, false).await
+    }
+
+    /// [`Self::publish_pending`]; `patient` honours a slot backoff, as a sweep or a tick
+    /// does (`publish_all_pending`), leaving that object's sequenced rows queued.
+    async fn publish_pending_as(&self, object_id_hex: &str, patient: bool) -> Result<usize, CoreError> {
         let group_id = self.object_group_id(object_id_hex)?;
         if self.dir.group_leaf_count(&group_id)? <= 1 {
             return Ok(0);
@@ -1806,13 +1822,12 @@ impl Node {
             let client = mls::build_client_sqlite(&paths::db_path(), sid, sk)?;
             group = self.load_member_group(&client, &group_id)?;
         }
-        let mut sent = 0;
-        for (did, env) in self.dir.pending_outbox(&group_id, &me)? {
-            self.flush_one(&mut sess, &mut group, &group_id, &did, &env).await?;
-            sent += 1;
+        let queued = self.dir.pending_outbox(&group_id, &me)?;
+        for (did, env) in &queued {
+            self.flush_one(&mut sess, &mut group, &group_id, did, env, patient).await?;
         }
         self.done_with(sess, home).await;
-        Ok(sent)
+        Ok(queued.len().saturating_sub(self.dir.pending_outbox(&group_id, &me)?.len()))
     }
 
     async fn post_to_group(
@@ -1955,7 +1970,7 @@ impl Node {
             if let Ok(mut sess) = Router::open(&routes).await {
                 for (did, env) in self.dir.pending_outbox(group_id, &me)? {
                     let _ = self
-                        .flush_one(&mut sess, &mut group, group_id, &did, &env)
+                        .flush_one(&mut sess, &mut group, group_id, &did, &env, true)
                         .await;
                 }
                 sess.close().await;
@@ -2065,7 +2080,7 @@ impl Node {
                 }
             }
             if let Err(e) = self
-                .flush_one(&mut sess, group, group_id, &delta_id, &envelope)
+                .flush_one(&mut sess, group, group_id, &delta_id, &envelope, false)
                 .await
             {
                 // STILL A WARN, AND STILL NOT THE CALLER'S BUSINESS: the outbox's
@@ -2128,7 +2143,8 @@ impl Node {
     /// still queued, the whole queue on its object goes, each through its slot; if it is
     /// not (sent by an earlier step of the same walk, or replaced after a lost slot), it is
     /// done — publishing the snapshot's copy would send it twice, or send a dropped one and
-    /// fork. Re-emission of sent deltas calls [`Self::publish_one`] itself.
+    /// fork. Re-emission of sent deltas calls [`Self::publish_one`] itself. `patient`: a
+    /// sweep or a tick, which leaves a backed-off queue waiting; a person's write is not.
     async fn flush_one(
         &self,
         sess: &mut Router,
@@ -2136,10 +2152,11 @@ impl Node {
         group_id: &[u8],
         delta_id: &[u8; 32],
         envelope: &[u8],
+        patient: bool,
     ) -> Result<(), CoreError> {
         if coordinator::decode_delta(envelope)?.seq.is_some() {
             if self.dir.pending_outbox(group_id, &self.id.identity_pk())?.iter().any(|(d, _)| d == delta_id) {
-                return self.flush_sequenced(sess, group, group_id).await;
+                return self.flush_sequenced(sess, group, group_id, patient).await;
             }
             return Ok(());
         }
@@ -2155,10 +2172,13 @@ impl Node {
     /// anything: it climbs, takes the winner into the log, and authors that delta and
     /// every one queued after it again from the new head. An op the new head refuses is
     /// said, not sent.
-    async fn flush_sequenced(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8]) -> Result<(), CoreError> {
-        // A queue that could not take its slot waits before it is claimed again: one
-        // failure costs one pass, not a pass per queued delta or per sync tick.
-        if matches!(self.live_state().slot_backoff.get(group_id), Some((until, _)) if std::time::Instant::now() < *until) {
+    async fn flush_sequenced(&self, sess: &mut Router, group: &mut mls::Group, group_id: &[u8], patient: bool) -> Result<(), CoreError> {
+        // A queue that could not take its slot waits before a sweep or a tick claims it
+        // again: one failure costs one pass, not a pass per queued delta or per sync tick.
+        // A person's own write is not made to wait (#75).
+        if patient && matches!(self.live_state().slot_backoff.get(group_id), Some((until, _)) if std::time::Instant::now() < *until) {
+            tracing::info!(target: "pacific::sync", group = %hex::encode(&group_id[..group_id.len().min(6)]),
+                           "sequenced writes wait out the slot backoff; a write to this object sends them now");
             return Ok(());
         }
         let out = self.claim_and_send(sess, group, group_id).await;
@@ -2181,7 +2201,7 @@ impl Node {
             let mut lost = false;
             let queue = if round == 0 { self.queued_sequenced(group_id)? } else { self.requeue_sequenced(group, group_id)? };
             for (did, envelope, prev) in queue {
-                let slot = seq_slot(&root, group_id, &prev);
+                let slot = sequenced_slot(&root, group_id, &prev);
                 let won = match sess.publish_commit(&slot, &pacific_wire::blob_b64(&self.slot_claim(&root, &slot, group_id, &did, &envelope)?)).await? {
                     Some(_) => true,
                     // Taken: by this delta (a resend after its claim was acked), or by another.
@@ -4909,6 +4929,35 @@ impl Node {
                 Err(e)
             }
         }
+    }
+
+    /// #79: AN ADMITTER'S CHECK, SPLIT AT THE NODE LOCK. For a Site not on this Node, the
+    /// intro mailbox fetched on the held session, writing nothing, so the caller makes it
+    /// outside its lock; then, under it, [`Node::site_take`].
+    pub async fn intro_fetch(&self, site_hex: &str) -> Result<IntroFetched, CoreError> {
+        if self.holds(site_hex) {
+            return Ok(IntroFetched(Vec::new()));
+        }
+        let mut sess = self.home_session().await?;
+        match self.fetch_intro(&mut sess).await {
+            Ok(msgs) => {
+                self.keep_session(sess);
+                Ok(IntroFetched(msgs))
+            }
+            Err(e) => {
+                sess.close().await;
+                Err(e)
+            }
+        }
+    }
+
+    /// What [`Node::intro_fetch`] brought, ingested as a drain's (each Welcome joined, past
+    /// what a sync took since), then whether the Site is on this Node.
+    pub fn site_take(&self, site_hex: &str, fetched: IntroFetched) -> Result<bool, CoreError> {
+        if self.ingest_intro(fetched.0)? > 0 {
+            self.live_state().joined = true;
+        }
+        Ok(self.holds(site_hex))
     }
 
     /// Drain a Site and the parts it names over the home session: one pipelined round, and a
@@ -9564,25 +9613,6 @@ impl Node {
         Ok(out)
     }
 
-    /// Every Forum's back-edge, `(forum, parent, role)`, from the Forum's OWN fold
-    /// (`base.setParent`): a member who holds the Forum and not its parent can still
-    /// say what it is for. One sweep, so the chat list does no per-row fold.
-    pub fn forum_parents(&self) -> Result<Vec<(String, String, String)>, CoreError> {
-        let mut out = Vec::new();
-        for (gid, kind) in self.dir.list_objects()? {
-            if kind != "forum" {
-                continue;
-            }
-            let Ok(state) = self.forum_state(&gid) else {
-                continue;
-            };
-            if let Some(p) = &state.parent {
-                out.push((hex::encode(&gid), p.parent.clone(), p.role.clone()));
-            }
-        }
-        Ok(out)
-    }
-
     // ======================================================================
     // COMPLIANCE — an object either folds, or it does not
     // ======================================================================
@@ -11195,14 +11225,29 @@ impl Node {
         }
         let confirmed = self.live_since(&intro_hex);
         self.live_state().tag_drains += 1;
+        let intro_msgs = self.fetch_intro(sess).await?;
+        let joined = self.ingest_intro(intro_msgs)?;
+        self.live_drained(intro_hex, confirmed);
+        Ok(joined)
+    }
+
+    /// The intro mailbox past its cursors, on `sess`: relay I/O and cursor reads, no write.
+    async fn fetch_intro(&self, sess: &mut Router) -> Result<Vec<crate::router::Drained>, CoreError> {
+        let (intro_tag, intro_hex) = self.intro_wire()?;
         let dir = &self.dir;
-        let intro_msgs = sess
-            .drain(&[intro_hex.clone()], |source| {
-                dir.cursor(&intro_tag, source)
-            })
-            .await?;
+        sess.drain(&[intro_hex], |source| dir.cursor(&intro_tag, source)).await
+    }
+
+    /// Ingest what `fetch_intro` brought, in its order: each Welcome joined or quarantined, its
+    /// cursor advanced. One at or below its cursor was taken since the fetch (#79: an admitter
+    /// fetches outside the node lock, and the sync loop may take it first) and is passed by.
+    fn ingest_intro(&self, intro_msgs: Vec<crate::router::Drained>) -> Result<usize, CoreError> {
+        let (intro_tag, _) = self.intro_wire()?;
         let mut joined = 0;
         for m in intro_msgs {
+            if m.seq <= self.dir.cursor(&intro_tag, m.source)? {
+                continue;
+            }
             let (seq, blob_b64) = (m.seq, m.blob);
             match self.process_intro_blob(&intro_tag, &blob_b64) {
                 Ok(()) => joined += 1,
@@ -11222,7 +11267,6 @@ impl Node {
             }
             self.dir.advance_cursor(&intro_tag, m.source, seq)?;
         }
-        self.live_drained(intro_hex, confirmed);
         Ok(joined)
     }
 
@@ -11327,8 +11371,15 @@ impl Node {
         //     LEAVES, not members — see `Directory::group_leaf_count`.
         if self.dir.group_leaf_count(group_id)? > 1 {
             for (did, env) in self.dir.pending_outbox(group_id, &self.id.identity_pk())? {
-                let _ = self.flush_one(sess, &mut group, group_id, &did, &env).await;
+                let _ = self.flush_one(sess, &mut group, group_id, &did, &env, true).await;
             }
+        }
+
+        // A pairing channel carries prekeys, profiles and legs, and no messages: drained and
+        // flushed, it is done. Folded as a chat it was refused (`chat_type_id`), and every
+        // sync named every connection a failure.
+        if matches!(self.dir.group_kind(group_id)?.as_deref().and_then(crate::fold::lens_for), Some(ObjectKind::Contact)) {
+            return Ok(());
         }
 
         // (d) fold ONCE, over the roster: rebuild the transcript AND emit a single
@@ -11371,7 +11422,7 @@ impl Node {
                     unix_now(),
                 )?;
                 let _ = self
-                    .flush_one(sess, &mut group, group_id, &delta_id, &envelope)
+                    .flush_one(sess, &mut group, group_id, &delta_id, &envelope, true)
                     .await;
             }
         }
@@ -11989,11 +12040,11 @@ fn pool_keys_in(group: &mls::Group) -> std::collections::HashSet<[u8; 32]> {
 }
 
 /// THE SLOT a sequenced delta claims on one object: the place after its predecessor
-/// (ICD `mls.sequencing.slot`). Two deltas after one `prev` are a fork wherever their
+/// (ICD `mls.sequencing.slot`), as any implementation of the ICD derives it. Two deltas after one `prev` are a fork wherever their
 /// `(epoch, seq)` fall, so `prev` is the key. From the owner's storage root, so only the
 /// owner's own devices, the sequenced spine's only writers, can claim or read it; the
 /// relay sees a tag.
-fn seq_slot(root: &[u8; 32], group_id: &[u8], prev: &[u8; 32]) -> Address {
+pub fn sequenced_slot(root: &[u8; 32], group_id: &[u8], prev: &[u8; 32]) -> Address {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
     h.update(crate::icd_consts::SEQ_SLOT_LABEL.as_bytes());

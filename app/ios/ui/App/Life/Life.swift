@@ -485,8 +485,8 @@ struct LifeView: View {
         let real = connections.map { c -> ContactJewel in
             let name = c.displayName.isEmpty ? String(c.peerId.prefix(12)) + "…" : c.displayName
             return ContactJewel(id: c.peerId, name: name,
-                                photo: core.peerPhoto(c.peerId),
-                                color: core.peerColor(c.peerId) ?? LifeFilter.people.color)
+                                photo: core.index.photo(c.peerId),
+                                color: core.index.color(c.peerId) ?? LifeFilter.people.color)
         }
         return real.isEmpty ? ContactJewel.demo : real
     }
@@ -499,7 +499,7 @@ struct LifeView: View {
 
 
     /// Connection display names keyed by identity hex — built once per render, not per row.
-    private var peerNames: [String: String] { core.peerNamesByIdentity() }
+    private var peerNames: [String: String] { core.index.names }
 
     /// DEBUG-only headless drives of the pages simctl cannot reach by tapping
     /// (`-pacificOpenEvent` / `-pacificOpenListing`). Lifted OUT of `body`'s
@@ -588,15 +588,13 @@ struct LifeView: View {
                                    onNew: (filter.newKind == nil && filter != .people) ? nil : onNew)
                 }
         }
-        // The feed assembles once per sync tick, once per filter change, and whenever one of
-        // its inputs lands: they are read off the main thread, after the page has drawn, and
-        // a device that cannot reach the relay never ticks. (`onChange`, not the publishers:
-        // a @Published publisher fires before the property is set.) The equality gate inside
-        // the store makes redundant passes free.
+        // The feed assembles once per sync tick, once per filter change, and whenever one
+        // of its inputs changes: a mint lands with no sync, and a device that cannot reach
+        // the relay never ticks. (`feedInputsChanged` delivers on the next main-queue turn,
+        // after the @Published property is set.) The equality gate inside the store makes
+        // repeats free.
         .onReceive(core.$syncTick) { _ in feedStore.refresh(core: core, query: lifeQuery) }
-        .onChange(of: core.events) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
-        .onChange(of: core.posts) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
-        .onChange(of: core.listings) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
+        .onReceive(core.feedInputsChanged) { feedStore.refresh(core: core, query: lifeQuery) }
         .onChange(of: lifeQuery.locked) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
         .onChange(of: lifeQuery.bound) { _, _ in feedStore.refresh(core: core, query: lifeQuery) }
         .task {

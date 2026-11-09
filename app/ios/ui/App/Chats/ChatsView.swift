@@ -285,7 +285,7 @@ struct ChatsView: View {
             // since the last pass must arrive already wearing (or shedding) its group.
             await core.refreshForumHosts().value
             // An object's comments section is reached from the object, not listed here (#34).
-            let groups = core.groupObjects.filter { !core.isCommentsSection($0.id) }
+            let groups = core.groupObjects.filter { !core.index.isCommentsSection($0.id) }
             let snap = await core.chatSnapshot(groups: groups)
             guard !Task.isCancelled else { return }
             rows = build(groups: groups, snap)
@@ -298,10 +298,7 @@ struct ChatsView: View {
 
         // One roster-name map for the whole rebuild, not one lookup per row. Blocked peers
         // included: a blocked member's group messages still render, with a name.
-        var peerNames: [String: String] = [:]
-        for c in snap.connections where !c.displayName.isEmpty {
-            peerNames[CoreService.identityHex(c.peerId)] = c.displayName
-        }
+        let peerNames = core.index.names
 
         for o in groups {
             let rows = snap.messages[o.id] ?? []
@@ -311,7 +308,7 @@ struct ChatsView: View {
             // (a Project ChatRoom, a dev-link room) gets a roster-derived label; the id
             // hex is an address and is never shown as a name.
             let title = o.name.isEmpty
-                ? core.derivedGroupName(members: snap.members[o.id] ?? [], names: peerNames) : o.name
+                ? core.derivedGroupName(members: core.index.object(o.id)?.members ?? [], names: peerNames) : o.name
             let snip = ChatRow.lastSnippet(rows)
             let lastTs = Int64(rows.last?.ts ?? 0)
             // A group-hosted forum wears its group; a channel-hosted room wears
@@ -347,7 +344,6 @@ struct ChatsView: View {
             let snip = ChatRow.lastSnippet(rows)
             let lastTs = Int64(rows.last?.ts ?? 0)
             chatIndex.ingest(conversation: c.peerId, kind: .chat, msgs: rows)
-            let card = snap.profiles[c.peerId]?.card
             out.append(ConvRowVM(
                 conversation: Conversation(id: c.peerId, kind: .dm, title: title, tint: tintFor(c.peerId)),
                 snippet: snip.isEmpty ? (c.connected ? "Connected — say hello" : "Pending connection") : snip,
@@ -355,8 +351,8 @@ struct ChatsView: View {
                 time: Self.activityLabel(lastTs),
                 lastTs: lastTs,
                 tags: chatIndex.tags(conversation: c.peerId, msgs: rows),
-                photo: card.flatMap { $0.photo.isEmpty ? nil : Data(base64Encoded: $0.photo) },
-                blockColor: card.flatMap { $0.avatarColor.isEmpty ? nil : Color(hex: $0.avatarColor) }
+                photo: core.index.photo(c.peerId),
+                blockColor: core.index.color(c.peerId)
             ))
         }
 

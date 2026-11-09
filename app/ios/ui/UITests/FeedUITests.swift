@@ -125,20 +125,20 @@ final class FeedUITests: XCTestCase {
     }
 
     /// Feed rows of one kind, by identifier prefix. The card is ONE combined
-    /// accessibility element (FeedView applies `.combine` for exactly this), but
-    /// the OS is free to expose it as otherElement OR staticText — count both,
+    /// accessibility element (FeedView applies `.combine` for exactly this) and a Button
+    /// (it opens the object), but the OS may expose it as a staticText — count both,
     /// never a broad `.any` descendants sweep of the whole LIFE hierarchy
     /// (GroupsPageUITests' hard-won note: that snapshot can take the runner down).
     private func feedRows(ofKind kind: String) -> Int {
         let match = NSPredicate(format: "identifier BEGINSWITH %@", "feed-row-\(kind):")
-        return app.otherElements.matching(match).count
+        return app.buttons.matching(match).count
              + app.staticTexts.matching(match).count
     }
 
     /// Rows of ANY kind — the identifier space without the kind facet.
     private func anyFeedRows() -> Int {
         let match = NSPredicate(format: "identifier BEGINSWITH 'feed-row-'")
-        return app.otherElements.matching(match).count
+        return app.buttons.matching(match).count
              + app.staticTexts.matching(match).count
     }
 

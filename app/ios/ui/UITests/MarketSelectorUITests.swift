@@ -72,7 +72,7 @@ final class ListingEditorUITests: XCTestCase {
         app.buttons["jewel-groups"].tap()
         XCTAssertTrue(waitGround(app, "typed-list-groups"), "the groups list")
         let rowMatch = NSPredicate(format: "identifier BEGINSWITH 'list-row-group:'")
-        var row = app.otherElements.matching(rowMatch).firstMatch
+        var row = app.buttons.matching(rowMatch).firstMatch
         if !row.waitForExistence(timeout: 6) {
             row = app.staticTexts.matching(rowMatch).firstMatch
         }

@@ -104,7 +104,7 @@ private struct ConnectionRowLabel: View {
     var body: some View {
         HStack(spacing: 12) {
             Avatar(initials: Avatar.initials(name), tint: tintFor(c.peerId), size: 40,
-                   photo: core.peerPhoto(c.peerId), color: core.peerColor(c.peerId))
+                   photo: core.index.photo(c.peerId), color: core.index.color(c.peerId))
             VStack(alignment: .leading, spacing: 1) {
                 Text(name).foregroundStyle(.primary)
                 Text(c.connected ? "Connected" : "Pending")

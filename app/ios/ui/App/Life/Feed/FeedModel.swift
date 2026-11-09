@@ -55,6 +55,8 @@ struct FeedItem: Identifiable, Equatable {
     /// row cannot honestly answer (no identity crosses the read model for it) —
     /// the name renders as plain text, never a dead button.
     var authorRoute: AuthorRoute? = nil
+    /// The author's identity hex, for the header's avatar; nil when the card has no person.
+    var authorID: String? = nil
 
     /// Equality is the per-tick republish gate — comparing full banners would run
     /// megabytes of string compare every 3s (the audit's 70MB landmine), so media
@@ -64,7 +66,7 @@ struct FeedItem: Identifiable, Equatable {
             && a.author == b.author && a.location == b.location && a.footer == b.footer
             && a.whenMs == b.whenMs && a.provenance == b.provenance
             && a.objectID == b.objectID && a.bannerB64.count == b.bannerB64.count
-            && a.authorRoute == b.authorRoute
+            && a.authorRoute == b.authorRoute && a.authorID == b.authorID
     }
 }
 
@@ -74,8 +76,8 @@ enum FeedAssembler {
     /// re-admits them later; standing listings ride at `nowMs` so they interleave
     /// with the near future instead of pinning to an epoch.
     // Module-qualified: a private `EventRow: View` in EventRibbon.swift shadows the FFI type.
-    // `selfName` authors the own-fold rows; `nameFor` resolves a listing origin's
-    // identity hex to a display name (the connections roster).
+    // `makerOf` names who made an object (ObjectIndex.maker: the group's first owner);
+    // `nameFor` resolves a listing origin's identity hex to a display name.
     /// ONE EVENT AS A CARD — the feed's own projection of an Event, extracted so a
     /// second surface can render the same card without re-deriving its fields.
     ///
@@ -84,25 +86,31 @@ enum FeedAssembler {
     /// profile listing the events that Space carries, past ones included — calls this
     /// directly. The date rule belongs to the feed, the projection belongs to the
     /// object, and they are not the same decision.
-    static func item(for e: PacificCore.EventRow,
-                     selfName: String = "me", selfID: String? = nil) -> FeedItem {
+    static func item(for e: PacificCore.EventRow, maker: Maker?) -> FeedItem {
         FeedItem(
             id: "event:\(e.id)",
             category: .events,
             title: e.title,
-            author: selfName,
+            author: maker?.name ?? "",
             location: e.venuePlaceName.isEmpty ? e.venue : e.venuePlaceName,
             footer: Self.stamp(e.startMs),
             whenMs: e.startMs,
             provenance: .member,
             objectID: e.id,
             bannerB64: e.banner,
-            authorRoute: selfID.map(AuthorRoute.person))
+            authorRoute: maker?.id.map(AuthorRoute.person),
+            authorID: maker?.id)
+    }
+
+    /// Who a card names as its author: a name, and the person's identity when there is one.
+    struct Maker: Equatable {
+        let name: String
+        let id: String?
     }
 
     static func rows(events: [PacificCore.EventRow], listings: [ListingRow],
                      posts: [PostRow] = [], nowMs: Int64,
-                     selfName: String = "me", selfID: String? = nil,
+                     makerOf: (String) -> Maker? = { _ in nil },
                      nameFor: (String) -> String = { String($0.prefix(8)) }) -> [FeedItem] {
         var out: [FeedItem] = []
         out.reserveCapacity(events.count + listings.count + posts.count)
@@ -119,22 +127,24 @@ enum FeedAssembler {
         // and the row shows the tombstone — dropping it here would make "taken down"
         // indistinguishable from "never existed".
         for p in posts {
+            let maker = makerOf(p.id)
             out.append(FeedItem(
                 id: "post:\(p.id)",
                 category: .posts,
                 title: p.retracted ? "Taken down" : (p.title.isEmpty ? p.body : p.title),
-                author: selfName,
+                author: maker?.name ?? "",
                 location: "",
                 footer: "",
                 whenMs: nowMs,
                 provenance: .member,
                 objectID: p.id,
                 bannerB64: p.retracted ? "" : p.banner,
-                authorRoute: selfID.map(AuthorRoute.person)))
+                authorRoute: maker?.id.map(AuthorRoute.person),
+                authorID: maker?.id))
         }
 
         for e in events where e.endMs >= nowMs || e.startMs >= nowMs {
-            out.append(item(for: e, selfName: selfName, selfID: selfID))
+            out.append(item(for: e, maker: makerOf(e.id)))
         }
         for l in listings {
             out.append(FeedItem(
@@ -153,7 +163,8 @@ enum FeedAssembler {
                 provenance: .hops(l.hops),
                 objectID: nil,
                 bannerB64: l.photo,
-                authorRoute: .person(l.origin)))
+                authorRoute: .person(l.origin),
+                authorID: l.origin))
         }
         return out.sorted { $0.whenMs == $1.whenMs ? $0.id < $1.id : $0.whenMs < $1.whenMs }
     }

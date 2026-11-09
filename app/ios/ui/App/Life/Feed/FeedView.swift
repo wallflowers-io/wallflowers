@@ -44,6 +44,8 @@ struct FeedView: View {
                         // the same lesson (a row nothing can query is a row nothing
                         // can regression-test). `.combine` keeps the texts readable.
                         .accessibilityElement(children: .combine)
+                        // Tapping it opens the object: it is a button to VoiceOver and to a test.
+                        .accessibilityAddTraits(.isButton)
                         .accessibilityIdentifier("feed-row-\(row.id)")
                 }
                 if shown.isEmpty {

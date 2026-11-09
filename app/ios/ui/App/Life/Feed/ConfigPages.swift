@@ -32,6 +32,8 @@ struct TypedListPage: View {
                     // One addressable element per card (see FeedView's row) —
                     // XCUITest cannot query the identifier on a bare composite.
                     .accessibilityElement(children: .combine)
+                    // Tapping it opens the object: it is a button to VoiceOver and to a test.
+                    .accessibilityAddTraits(.isButton)
                     .accessibilityIdentifier("list-row-\(item.id)")
                 }
                 if items.isEmpty {
@@ -58,8 +60,7 @@ struct TypedListPage: View {
             }
         case .events:
             return FeedAssembler.rows(events: core.events, listings: [], nowMs: now,
-                                      selfName: core.displayName.isEmpty ? "me" : core.displayName,
-                                      selfID: core.myIdentityHex)
+                                      makerOf: core.index.maker(of:))
         case .places:
             return core.places.map {
                 FeedItem(id: "place:\($0.id)", category: .places, title: $0.name,
@@ -117,14 +118,14 @@ private struct DirectoryBar: View {
 
     private var photo: Data? {
         guard let oid = item.objectID else { return nil }
-        if kind == "PERSON" { return core.peerPhoto(oid) }
+        if kind == "PERSON" { return core.index.photo(oid) }
         guard let row = core.orgs.first(where: { $0.id == oid }), !row.photo.isEmpty else { return nil }
         return Data(base64Encoded: row.photo)
     }
 
     private var color: Color? {
         guard let oid = item.objectID else { return nil }
-        if kind == "PERSON" { return core.peerColor(oid) }
+        if kind == "PERSON" { return core.index.color(oid) }
         guard let row = core.orgs.first(where: { $0.id == oid }), !row.avatarColor.isEmpty else { return nil }
         return Color(hex: row.avatarColor)
     }

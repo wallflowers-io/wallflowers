@@ -9,8 +9,11 @@ use common::Harness;
 use pacific_core::object::{ObjectKind, COMMENTS};
 use pacific_core::resumption::HeadInput;
 
-fn comments_of(rows: &[(String, String, String)], parent: &str) -> Vec<String> {
-    rows.iter().filter(|(_, p, r)| p == parent && r == COMMENTS).map(|(f, _, _)| f.clone()).collect()
+fn comments_of(rows: &[pacific_core::summary::ObjectSummary], parent: &str) -> Vec<String> {
+    rows.iter()
+        .filter(|r| r.parent.as_ref().is_some_and(|p| p.parent == parent && p.role == COMMENTS))
+        .map(|r| r.id.clone())
+        .collect()
 }
 
 #[tokio::test]
@@ -21,7 +24,7 @@ async fn a_posts_comments_forum_names_its_post_on_a_fresh_device() {
     let post = h.with(phone, |n| async move { n.mint(ObjectKind::Post, &draft).await }).await.expect("the phone mints");
     h.settle().await;
 
-    let on_phone = comments_of(&h.with_sync(phone, |n| n.forum_parents()).unwrap(), &post);
+    let on_phone = comments_of(&h.with_sync(phone, |n| n.object_rows(Some(ObjectKind::Forum))).unwrap(), &post);
     assert_eq!(on_phone.len(), 1, "one comments Forum, from its own fold: {on_phone:?}");
     assert_eq!(h.with_sync(phone, |n| n.object_kind(&on_phone[0])).unwrap(), "forum");
 
@@ -34,7 +37,7 @@ async fn a_posts_comments_forum_names_its_post_on_a_fresh_device() {
         .unwrap();
 
     assert_eq!(
-        comments_of(&h.with_sync(sim, |n| n.forum_parents()).unwrap(), &post),
+        comments_of(&h.with_sync(sim, |n| n.object_rows(Some(ObjectKind::Forum))).unwrap(), &post),
         on_phone,
         "the device that has never seen it reads the same edge"
     );

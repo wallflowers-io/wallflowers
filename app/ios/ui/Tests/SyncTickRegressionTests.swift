@@ -21,6 +21,11 @@ private func msg(_ text: String, gen: UInt64) -> ChatMsg {
             receipt: 0, up: 0, down: 0, myVote: 0)
 }
 
+private func objectRow(id: String, kind: String, name: String, members: [String] = []) -> ObjectRow {
+    ObjectRow(id: id, kind: kind, name: name, owner: "", creator: "", members: members,
+              parent: "", parentRole: "", peer: "", link: "")
+}
+
 private func eventRow(id: String, title: String,
                       venuePlace: String = "", venueName: String = "") -> EventRow {
     EventRow(id: id, title: title, descriptor: "", startMs: 0, endMs: 0, venue: "",
@@ -69,13 +74,10 @@ struct ProjectionFingerprintTests {
 
 struct ObjectProjectionTests {
     @Test func snapshotsMapKindsRostersAndVenues() {
-        let inputs = CoreService.ProjectionInputs(
-            connections: [ConnectionRow(peerId: "space1beef", displayName: "Ada", connected: true)],
-            members: ["g1": ["beef"], "e1": []],
-            groups: [:])
-        let objects = [ObjectRow(id: "g1", kind: "group", name: "Crew"),
-                       ObjectRow(id: "e1", kind: "event", name: "raw-name"),
-                       ObjectRow(id: "f1", kind: "forum", name: "Room")]
+        let inputs = CoreService.ProjectionInputs(names: ["space1beef": "Ada"], groups: [:])
+        let objects = [objectRow(id: "g1", kind: "group", name: "Crew", members: ["beef"]),
+                       objectRow(id: "e1", kind: "event", name: "raw-name"),
+                       objectRow(id: "f1", kind: "forum", name: "Room")]
         let events = [eventRow(id: "e1", title: "Launch", venuePlace: "p1", venueName: "ARC")]
 
         let snaps = ObjectProjection.snapshots(objects: objects, events: events, inputs: inputs)
@@ -85,7 +87,7 @@ struct ObjectProjectionTests {
         #expect(g.id == "g1" && g.kind == "group" && g.name == "Crew")
         #expect(g.members.count == 1)
         #expect(g.members[0].space == "ed25519:beef")
-        // Labelled via the connection row — and the row's id arrives in a
+        // Labelled via the names map — and its key arrives in a
         // DIFFERENT rendering to the roster's, which is the point: the lookup
         // normalises, so the label survives the mismatch.
         #expect(g.members[0].name == "Ada")
