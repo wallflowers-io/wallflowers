@@ -40,6 +40,7 @@
 		1313A24B9D224EAF21610E8E /* Outline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A8BD6B8E187AA291B6ED8ED /* Outline.swift */; };
 		137E084CACAA964F9BE737B0 /* CompassBand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24DA2B66E1EAEEA10E351AE0 /* CompassBand.swift */; };
 		13D75AD4D1797B95C9D7F7D7 /* Bloom.metal in Sources */ = {isa = PBXBuildFile; fileRef = 894D388AD5553ACE89B89DEF /* Bloom.metal */; };
+		149A3702C006D3FBBE83FAE9 /* EventsChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFC7E717ACA9CEE2FA647BBE /* EventsChannel.swift */; };
 		150A19E74C66778BBC1C835A /* SysiphusField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415A1300C1B09E5254828E2C /* SysiphusField.swift */; };
 		16292468A1567C4EBBB1C5B1 /* EventTicketsSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0680D7F4813CE4878577C9A0 /* EventTicketsSurface.swift */; };
 		16CBE9FFC4BE0487AADEAFEC /* PublicPlace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E972DB66A25938E905A4AB5 /* PublicPlace.swift */; };
@@ -74,7 +75,6 @@
 		26029EB9A2D4F183A7ECF0FE /* CoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8F2CDDB66E8B069C66823C /* CoreService.swift */; };
 		26667BDB8C812769DF6DA8B9 /* EventDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE93760BB2F69DE72FDB5AB /* EventDetail.swift */; };
 		2763DD641FCD3E61069E9675 /* SystemsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268614F4854E751F2216AF17 /* SystemsView.swift */; };
-		27F1BF2C0E0E14A6800AF516 /* EventTicketingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 872B295B145F99AE293CAF70 /* EventTicketingUITests.swift */; };
 		2817FEB7C711CD165AFBF112 /* ScanRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EA6559F168EFCF44DA17CE0 /* ScanRow.swift */; };
 		281C0A08F9B5424A8B3B2FF5 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA4C0262BD21D7C9DC2D520 /* FeedView.swift */; };
 		28FEAD34C599DBDAA24C69BB /* Deliberation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E119140806D205130D019F30 /* Deliberation.swift */; };
@@ -175,6 +175,7 @@
 		57F8A0CFF0E3BD519F8AE3CB /* ProfileCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DD8F0E384322B08106D8FD5 /* ProfileCards.swift */; };
 		5860ED4091FB7C7C6EACF523 /* CalendarEventsSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24797765763069982DEDCF3E /* CalendarEventsSource.swift */; };
 		58EF6BFCDCC686B781DC2108 /* SelectorPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38EF892BFD006CD23BAC9E3A /* SelectorPill.swift */; };
+		5A76BC128FE77E39382613D8 /* EventsChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFC7E717ACA9CEE2FA647BBE /* EventsChannel.swift */; };
 		5A87F1AEA9C98BF84B725B65 /* beachcrimes.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 590428E327A58CFA7A4A3008 /* beachcrimes.jpg */; };
 		5AB9A93291F53CEC7512B5AF /* IdentityKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F94F8FA2F0C4E122D4F8F2 /* IdentityKey.swift */; };
 		5B611701F34B37C07C934F5E /* InviteSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0B80632CC01398C2713685F /* InviteSheet.swift */; };
@@ -268,12 +269,14 @@
 		8A2F79C959698E0A08777FA6 /* Life.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89E50936428D963576BB0306 /* Life.swift */; };
 		8B0B50B4BF58A18C26DA8AAE /* OutlineEditSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0999CA7B2D2064E526C4C0 /* OutlineEditSheets.swift */; };
 		8BE5DEC7ABF1F24E5E62C110 /* DevLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = C073BC24434E7A6F6C43D054 /* DevLinks.swift */; };
+		8C48E85F62B9C06FAB0DEF21 /* EventReminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5590A024EF1BBB2A37E8957D /* EventReminders.swift */; };
 		8C8142E8C52E01CB3B471DC8 /* EventSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6FA87D3657B0721523490F3 /* EventSeeder.swift */; };
 		8CB3CB3AA5425235C4295AD3 /* VenueProposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A413BA49BE7769BBAB9F6193 /* VenueProposer.swift */; };
 		8CD0CC596DE17099EC07C180 /* FirstBootUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5237B9073AD9D7C3051DC1DA /* FirstBootUITests.swift */; };
 		8F5A7B9AC3259F564CEB0999 /* Signal.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0F3832F9E6DC0CF373D91C /* Signal.swift */; };
 		916266CF37D7CE3BF12970D1 /* SignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEAE36E73AB921F4839CC1D4 /* SignIn.swift */; };
 		9179566D02E84FD202D6E3AF /* ProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0FB2FC115669D42155F4ECF /* ProfileModels.swift */; };
+		91FC43DAA9BD976F7CA31B29 /* EventReminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5590A024EF1BBB2A37E8957D /* EventReminders.swift */; };
 		921F7615F17BE2E4AFA1C7FE /* ProposalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251229A3205414F3F2DEE38B /* ProposalStore.swift */; };
 		9261823BE5AF4123B57B670B /* ArtClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF7D92F2AFD6A0A14AAFEDE /* ArtClient.swift */; };
 		926B99B88911F7F9C119743F /* ObjectCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0BFF63FC1B209543B7A30A /* ObjectCard.swift */; };
@@ -291,7 +294,6 @@
 		999F13801281E32F727DA47A /* SysiphusEnrichmentBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE3134052BD3046B580DF5C1 /* SysiphusEnrichmentBridge.swift */; };
 		9BB2117DA533E2F2102E9FA4 /* LiveSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 221DD701C94B2E3CE2A2F9F9 /* LiveSync.swift */; };
 		9CEA526928347CB09F193A9B /* NearScopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B391E4685F1133774E6227C4 /* NearScopeTests.swift */; };
-		9E692F7BE393164CC0D84E44 /* EventsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4901621AD4B67784BE0C1B1 /* EventsPage.swift */; };
 		9EEDD888D30C72FC38094F76 /* ArcMembership.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BA628E11335728C2FE1137 /* ArcMembership.swift */; };
 		9F291DCAACF540A901975D99 /* Offices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077B7DF18F3F28C68E2B4E35 /* Offices.swift */; };
 		A05052262E7ED87A2F288F6B /* ChatIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A80800FA67A1E811FFF66C5 /* ChatIndex.swift */; };
@@ -375,7 +377,6 @@
 		D0EE80AFA58937C29D1F8424 /* MusicEventsSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15CAE5613A104757A6B3F836 /* MusicEventsSource.swift */; };
 		D101BDC2BDBA3A3B4C403553 /* MusicEnrichmentBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84818DB9F967FEF390586539 /* MusicEnrichmentBridge.swift */; };
 		D120F3D60ACFA355C7EC060B /* ExteriorDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F66C9A5E64038BA9401D8C4 /* ExteriorDetail.swift */; };
-		D35B54A32ED8E79CCAD4AA97 /* EventsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4901621AD4B67784BE0C1B1 /* EventsPage.swift */; };
 		D437DA2073AC97905A58EE11 /* MarketCommitments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09C723A200770A15089F4D9D /* MarketCommitments.swift */; };
 		D4EBEDDC8605CB5572C039A4 /* MusicClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F522078122333939623CCB /* MusicClient.swift */; };
 		D669A141955B484C0FB6C6BD /* ObjectCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0BFF63FC1B209543B7A30A /* ObjectCard.swift */; };
@@ -581,6 +582,7 @@
 		520381E61FCE3492499AF790 /* ConfigPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigPages.swift; sourceTree = "<group>"; };
 		5237B9073AD9D7C3051DC1DA /* FirstBootUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstBootUITests.swift; sourceTree = "<group>"; };
 		53E0583C8E86ED534F892160 /* ModeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeStore.swift; sourceTree = "<group>"; };
+		5590A024EF1BBB2A37E8957D /* EventReminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventReminders.swift; sourceTree = "<group>"; };
 		55AFACB263B611C235AF9B4B /* ProjectCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCard.swift; sourceTree = "<group>"; };
 		564854D8ABC9819DA4BD538D /* EnrichedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichedText.swift; sourceTree = "<group>"; };
 		56B16534A4D91753C9BBC42F /* NoteTags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteTags.swift; sourceTree = "<group>"; };
@@ -632,7 +634,6 @@
 		84CEC27BBCB197CE4E7E1335 /* Waker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Waker.swift; sourceTree = "<group>"; };
 		8564CE8AA90D2EF572290E25 /* DetailSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailSurface.swift; sourceTree = "<group>"; };
 		863D3D2AA7C809B3D77984DF /* FeedUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedUITests.swift; sourceTree = "<group>"; };
-		872B295B145F99AE293CAF70 /* EventTicketingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTicketingUITests.swift; sourceTree = "<group>"; };
 		879037BF1D89096FD290718F /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		894D388AD5553ACE89B89DEF /* Bloom.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Bloom.metal; sourceTree = "<group>"; };
 		89E50936428D963576BB0306 /* Life.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Life.swift; sourceTree = "<group>"; };
@@ -725,7 +726,6 @@
 		E08655C2C8C8B27C2993E395 /* EventPlacePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventPlacePicker.swift; sourceTree = "<group>"; };
 		E119140806D205130D019F30 /* Deliberation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Deliberation.swift; sourceTree = "<group>"; };
 		E42DFD54A018DE7FB53F5011 /* New.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = New.swift; sourceTree = "<group>"; };
-		E4901621AD4B67784BE0C1B1 /* EventsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsPage.swift; sourceTree = "<group>"; };
 		E53BBA16ABAA04D4F0820CB9 /* VenueProposalUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenueProposalUITests.swift; sourceTree = "<group>"; };
 		E7EA38C09971C6D782B07FEA /* ScanCodeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanCodeSheet.swift; sourceTree = "<group>"; };
 		E9B23E8C2B3881D81FAF6528 /* EventsPageUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsPageUITests.swift; sourceTree = "<group>"; };
@@ -740,6 +740,7 @@
 		EDE93760BB2F69DE72FDB5AB /* EventDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetail.swift; sourceTree = "<group>"; };
 		EEEC585D5A498B35D3061F83 /* Shell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shell.swift; sourceTree = "<group>"; };
 		EF058CEF42C458E3ABD42785 /* Failure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Failure.swift; sourceTree = "<group>"; };
+		EFC7E717ACA9CEE2FA647BBE /* EventsChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsChannel.swift; sourceTree = "<group>"; };
 		F02B8452493BBE2184EEC72B /* MaximisedDetailUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaximisedDetailUITests.swift; sourceTree = "<group>"; };
 		F14BF9F203B6B13C1D708305 /* GraphService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphService.swift; sourceTree = "<group>"; };
 		F2B52C888917D57E4F009E88 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
@@ -921,7 +922,6 @@
 				6814ED50F848AFCB8ACAE310 /* CommentsSectionUITests.swift */,
 				DD7CFE534E707737137A448E /* EventMintUITests.swift */,
 				E9B23E8C2B3881D81FAF6528 /* EventsPageUITests.swift */,
-				872B295B145F99AE293CAF70 /* EventTicketingUITests.swift */,
 				F772BE8131F2271A668CC1E7 /* ExteriorUITests.swift */,
 				12DACBEA95FC60FCB2B8FB75 /* FeedCardUITests.swift */,
 				863D3D2AA7C809B3D77984DF /* FeedUITests.swift */,
@@ -1244,10 +1244,11 @@
 				EDE93760BB2F69DE72FDB5AB /* EventDetail.swift */,
 				A86C82F7EC27FCCD3464F904 /* EventInvite.swift */,
 				E08655C2C8C8B27C2993E395 /* EventPlacePicker.swift */,
+				5590A024EF1BBB2A37E8957D /* EventReminders.swift */,
 				AD50D61A463CED74A02ED28B /* EventRibbon.swift */,
+				EFC7E717ACA9CEE2FA647BBE /* EventsChannel.swift */,
 				9A5125E62873AD6B50DE212C /* EventsContract.swift */,
 				A6FA87D3657B0721523490F3 /* EventSeeder.swift */,
-				E4901621AD4B67784BE0C1B1 /* EventsPage.swift */,
 				B386D5F768834D0821556BF3 /* EventsSeed.swift */,
 				0680D7F4813CE4878577C9A0 /* EventTicketsSurface.swift */,
 				DBF8E9FFB23567CA607DAA93 /* GraphEventsSource.swift */,
@@ -1577,11 +1578,12 @@
 				26667BDB8C812769DF6DA8B9 /* EventDetail.swift in Sources */,
 				55F7C5001C5BD0223009A9A2 /* EventInvite.swift in Sources */,
 				7B5B63443E59A0A416EC0DF6 /* EventPlacePicker.swift in Sources */,
+				8C48E85F62B9C06FAB0DEF21 /* EventReminders.swift in Sources */,
 				F6CD6E871286B6A9B30AE163 /* EventRibbon.swift in Sources */,
 				77A6E491A03F7F72B2E79873 /* EventSeeder.swift in Sources */,
 				16292468A1567C4EBBB1C5B1 /* EventTicketsSurface.swift in Sources */,
+				5A76BC128FE77E39382613D8 /* EventsChannel.swift in Sources */,
 				55E0CB48C5EE5F7B566AACA2 /* EventsContract.swift in Sources */,
-				9E692F7BE393164CC0D84E44 /* EventsPage.swift in Sources */,
 				B7D469F3390F6C144FA2CE37 /* EventsSeed.swift in Sources */,
 				D120F3D60ACFA355C7EC060B /* ExteriorDetail.swift in Sources */,
 				7E46F0A569CAAB925862C123 /* Failure.swift in Sources */,
@@ -1728,7 +1730,6 @@
 				6E4A0191EC7328937FC4BD1B /* ChatGesturesUITests.swift in Sources */,
 				4C0E2E1BC4DD13CE2D468E01 /* CommentsSectionUITests.swift in Sources */,
 				23DFE4B48E64FDE014823B78 /* EventMintUITests.swift in Sources */,
-				27F1BF2C0E0E14A6800AF516 /* EventTicketingUITests.swift in Sources */,
 				68186B7E81B05F8DCA0506E5 /* EventsPageUITests.swift in Sources */,
 				42471A9C269F698ADB327BF8 /* ExteriorUITests.swift in Sources */,
 				B0A52DE15F8F0F528796F9A9 /* FeedCardUITests.swift in Sources */,
@@ -1835,11 +1836,12 @@
 				7AB5A2655A702D3609D0F571 /* EventDetail.swift in Sources */,
 				61E66AC986730A5E9EDB7A80 /* EventInvite.swift in Sources */,
 				AE411E93713C718053A35A71 /* EventPlacePicker.swift in Sources */,
+				91FC43DAA9BD976F7CA31B29 /* EventReminders.swift in Sources */,
 				6B6E8373C120888D8F3E6856 /* EventRibbon.swift in Sources */,
 				8C8142E8C52E01CB3B471DC8 /* EventSeeder.swift in Sources */,
 				CF3F3157261C03FFAC9AA503 /* EventTicketsSurface.swift in Sources */,
+				149A3702C006D3FBBE83FAE9 /* EventsChannel.swift in Sources */,
 				76241142341DC28FA87C6E06 /* EventsContract.swift in Sources */,
-				D35B54A32ED8E79CCAD4AA97 /* EventsPage.swift in Sources */,
 				6D43929A3A5D118915FB5F72 /* EventsSeed.swift in Sources */,
 				41629A3396237AFCEE3F9CBE /* ExteriorDetail.swift in Sources */,
 				EEF2DBF29DDFC325213BD0E0 /* Failure.swift in Sources */,

@@ -211,7 +211,7 @@ def _reproduce(url: str, *, method: str, key: str | None, length: int | None) ->
     segs = ["pacific-media"] + ([key] if key else [])
     return presign(method=method, host=R2_ENV["RELAY_R2_ENDPOINT"], path_segments=segs,
                    region="auto", expires_in=int(q["X-Amz-Expires"][0]),
-                   signed_headers=([("content-length", str(length))] if length is not None else []),
+                   signed_headers=([("content-length", str(length)), ("if-none-match", "*")] if length is not None else []),
                    query=[], now=now,
                    access_key_id=R2_ENV["RELAY_R2_ACCESS_KEY_ID"],
                    secret_access_key=R2_ENV["RELAY_R2_SECRET_ACCESS_KEY"])
