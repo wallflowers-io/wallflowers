@@ -31,7 +31,7 @@ fn sealed(kind: MediaKind, mime: &str) -> MediaRef {
     MediaRef {
         kind,
         mime: mime.into(),
-        delivery: Delivery::Sealed { digest: [3; 32], bytes: 900_000, key: "blobs/k".into(), secret: SECRET.into() },
+        delivery: Delivery::Sealed { digest: [3; 32], bytes: 900_000, key: "03".repeat(32), secret: SECRET.into() },
         width: 0,
         height: 0,
         duration_ms: 0,
@@ -110,7 +110,7 @@ fn no_payload_carries_the_secret_of_an_item_that_is_not_network() {
     assert_eq!(asset["assetSecret"], SECRET);
     assert_eq!(asset["alt"], "a still");
     let doc: Value = serde_json::from_str(&d["post:p1:document"]).expect("a network post's document");
-    assert_eq!(doc["documentKey"], "blobs/k");
+    assert_eq!(doc["documentKey"], "03".repeat(32));
     assert_eq!(doc["name"], "zine.pdf");
 }
 

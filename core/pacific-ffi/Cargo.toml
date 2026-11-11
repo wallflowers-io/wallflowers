@@ -33,3 +33,6 @@ zeroize = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+# The media round trip through the FFI (#56): a real relay presigning for a local stand-in.
+relay = { path = "../../arc/planes/relay" }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "io-util", "macros"] }

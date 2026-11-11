@@ -26,6 +26,12 @@ fn main() {
     let slot = &icd["mls"]["sequencing"]["slot"];
     let slot_label = slot["label"].as_str().expect("the ICD states mls.sequencing.slot.label");
     let slot_rounds = slot["rounds"].as_u64().expect("the ICD states mls.sequencing.slot.rounds");
+    // How a detached media object is sealed (media.detached, #56): the construction is seal.rs's,
+    // so the ICD's cipher must be the one the code runs.
+    let media = &icd["media"]["detached"];
+    assert_eq!(media["cipher"].as_str(), Some("XChaCha20-Poly1305"), "media.detached.cipher is seal.rs's");
+    let media_key = media["keyBytes"].as_u64().expect("the ICD states media.detached.keyBytes");
+    let media_nonce = media["nonceBytes"].as_u64().expect("the ICD states media.detached.nonceBytes");
     let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_consts.rs");
     std::fs::write(
         out,
@@ -35,7 +41,9 @@ fn main() {
              /// `kinds.forum.ops.\"forum.editDescription\".op`, from the ICD at build.\npub const FORUM_EDIT_DESCRIPTION: u32 = {describe_op};\n\
              /// `kinds.forum.ops.\"forum.editDescription\".args.description.maxBytes`, from the ICD at build.\npub const FORUM_DESCRIPTION_MAX: usize = {describe_max};\n\
              /// `mls.sequencing.slot.label`, from the ICD at build.\npub const SEQ_SLOT_LABEL: &str = {slot_label:?};\n\
-             /// `mls.sequencing.slot.rounds`, from the ICD at build.\npub const SEQ_SLOT_ROUNDS: usize = {slot_rounds};\n"
+             /// `mls.sequencing.slot.rounds`, from the ICD at build.\npub const SEQ_SLOT_ROUNDS: usize = {slot_rounds};\n\
+             /// `media.detached.keyBytes`, from the ICD at build.\npub const MEDIA_KEY_BYTES: usize = {media_key};\n\
+             /// `media.detached.nonceBytes`, from the ICD at build.\npub const MEDIA_NONCE_BYTES: usize = {media_nonce};\n"
         ),
     )
     .expect("icd_consts.rs");

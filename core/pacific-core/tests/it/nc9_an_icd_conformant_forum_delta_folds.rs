@@ -39,7 +39,7 @@ fn sample(name: &str) -> ArgVal {
         "mediaSession" => ArgVal::Text("a session".into()),
         "mediaMs" => ArgVal::Int(0),
         // O-79: a sealed ref's object key and content key.
-        "mediaKey" => ArgVal::Text("blobs/ab12".into()),
+        "mediaKey" => ArgVal::Text("ab".repeat(32)),
         "mediaSecret" => ArgVal::Text("c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0".into()),
         "text" => ArgVal::Text("the reply".into()),
         "gen" => ArgVal::Int(2),

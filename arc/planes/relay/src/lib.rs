@@ -816,6 +816,23 @@ pub async fn serve_with_policy(
     limits: Limits,
     obs: Option<Observer>,
 ) {
+    // Object storage is read from the environment here rather than taken as a
+    // parameter, so the existing `serve_with_store` signature (and every test that
+    // drives it) is unchanged. Unset means media offload is simply off, and every
+    // request for it is refused with `unconfigured` rather than quietly dropped.
+    serve_with_media(listener, store, retention, limits, obs, Media::from_env()).await
+}
+
+/// [`serve_with_policy`] with its object storage given rather than read from the
+/// environment: a test's stand-in, without setting process-wide variables.
+pub async fn serve_with_media(
+    listener: TcpListener,
+    store: Box<dyn Mailbox>,
+    retention: Retention,
+    limits: Limits,
+    obs: Option<Observer>,
+    media: Option<Media>,
+) {
     info!(
         max_blob_bytes = limits.max_blob_bytes,
         max_store_bytes = limits.max_store_bytes,
@@ -828,11 +845,7 @@ pub async fn serve_with_policy(
     let metrics = hub.lock().await.metrics.clone();
     let health = Arc::new(health::Health::new(limits.min_disk_free_pct));
     tokio::spawn(health_loop(hub.clone(), metrics.clone(), health.clone()));
-    // Object storage is read from the environment here rather than taken as a
-    // parameter, so the existing `serve_with_store` signature (and every test that
-    // drives it) is unchanged. Unset means media offload is simply off, and every
-    // request for it is refused with `unconfigured` rather than quietly dropped.
-    let media: Option<Arc<Media>> = Media::from_env().map(Arc::new);
+    let media: Option<Arc<Media>> = media.map(Arc::new);
     if let Some(m) = &media {
         info!(
             max_object_bytes = m.max_bytes(),
@@ -1079,6 +1092,7 @@ async fn handle(
     // later `Sub { v: 0 }` from a build that has already declared level 2 does not
     // un-declare it.
     let mut declared_v: u8 = V_BASE;
+    let mut presigns = limits.presigns();
 
     // reader loop: parse inbound frames and act on them.
     while let Some(msg) = source.next().await {
@@ -1229,7 +1243,11 @@ async fn handle(
             // media key is the same class of secret as a `tag`, and the telemetry
             // invariant at the top of this file admits no exceptions for it.
             Frame::MediaPut { key, len } => {
-                let (reply, ok) = presign_reply(&media, &key, Some(len));
+                let (reply, ok) = if presigns.take(1.0) {
+                    presign_reply(&media, &key, Some(len))
+                } else {
+                    (Frame::MediaErr { key, reason: "rate_limited".into() }, false)
+                };
                 if let Some(conn) = hub.lock().await.conns.get(&id) {
                     let _ = conn.out.send(reply);
                 }
@@ -1237,7 +1255,11 @@ async fn handle(
                 info!(ok, len, "media presign put");
             }
             Frame::MediaGet { key } => {
-                let (reply, ok) = presign_reply(&media, &key, None);
+                let (reply, ok) = if presigns.take(1.0) {
+                    presign_reply(&media, &key, None)
+                } else {
+                    (Frame::MediaErr { key, reason: "rate_limited".into() }, false)
+                };
                 if let Some(conn) = hub.lock().await.conns.get(&id) {
                     let _ = conn.out.send(reply);
                 }

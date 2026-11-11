@@ -208,8 +208,9 @@ pub enum Frame {
     },
     /// relay→client: the presign was refused. `reason` is a stable token —
     /// `unconfigured` (relay has no object storage), `bad_key` (not opaque
-    /// 32-byte hex), `too_large` (over the relay's cap), `over_budget` or
-    /// `budget_stale`. Only ever sent to a `Sub { v >= 2 }`.
+    /// 32-byte hex), `too_large` (over the relay's cap), `over_budget`,
+    /// `budget_stale` or `rate_limited` (this connection's presigns are paced).
+    /// Only ever sent to a `Sub { v >= 2 }`.
     MediaErr { key: String, reason: String },
     /// relay→client: after the replay of a door tag (`mls.door.relay`), the number of knocks
     /// ever evicted from it by the cap. Monotonic: a client keeps the last total it saw and

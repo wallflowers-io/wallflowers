@@ -53,6 +53,11 @@ pub struct Limits {
     /// entry: a handful a minute at the very most.
     pub conn_new_tags_per_min: f64,
     pub conn_new_tag_burst: f64,
+    /// Media presigns (`MediaPut`/`MediaGet`) per minute per connection, and the burst. Each
+    /// PUT may create an object of up to the media cap that is never deleted; a device keeps
+    /// what it has fetched (`media_store`), so an honest one asks a few times a minute.
+    pub conn_presigns_per_min: f64,
+    pub conn_presign_burst: f64,
     /// Bytes per second across every connection, and the burst. The last line: a
     /// thousand connections each within their own pace still meet this.
     pub ingest_bytes_per_sec: f64,
@@ -72,6 +77,8 @@ impl Default for Limits {
             conn_bytes_burst: 16.0 * 1024.0 * 1024.0,
             conn_new_tags_per_min: 120.0,
             conn_new_tag_burst: 300.0,
+            conn_presigns_per_min: 30.0,
+            conn_presign_burst: 30.0,
             ingest_bytes_per_sec: 32.0 * 1024.0 * 1024.0,
             ingest_bytes_burst: 128.0 * 1024.0 * 1024.0,
             min_disk_free_pct: 15,
@@ -101,6 +108,8 @@ impl Limits {
             conn_bytes_burst: f("RELAY_CONN_BYTES_BURST", d.conn_bytes_burst),
             conn_new_tags_per_min: f("RELAY_CONN_NEW_TAGS_PER_MIN", d.conn_new_tags_per_min),
             conn_new_tag_burst: f("RELAY_CONN_NEW_TAG_BURST", d.conn_new_tag_burst),
+            conn_presigns_per_min: f("RELAY_CONN_PRESIGNS_PER_MIN", d.conn_presigns_per_min),
+            conn_presign_burst: f("RELAY_CONN_PRESIGN_BURST", d.conn_presign_burst),
             ingest_bytes_per_sec: f("RELAY_INGEST_BYTES_PER_SEC", d.ingest_bytes_per_sec),
             ingest_bytes_burst: f("RELAY_INGEST_BYTES_BURST", d.ingest_bytes_burst),
             min_disk_free_pct: u("RELAY_MIN_DISK_FREE_PCT").unwrap_or(d.min_disk_free_pct),
@@ -123,6 +132,11 @@ impl Limits {
             bytes: Bucket::new(self.conn_bytes_per_sec, self.conn_bytes_burst),
             new_tags: Bucket::new(self.conn_new_tags_per_min / 60.0, self.conn_new_tag_burst),
         }
+    }
+
+    /// One connection's media presigns: held in its own task, beside its declared level.
+    pub(crate) fn presigns(&self) -> Bucket {
+        Bucket::new(self.conn_presigns_per_min / 60.0, self.conn_presign_burst)
     }
 
     pub(crate) fn ingest(&self) -> Bucket {
