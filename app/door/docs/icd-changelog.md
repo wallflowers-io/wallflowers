@@ -11,7 +11,7 @@ Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on 
 ## 2.8.0
 
 <!-- generated 2.8.0: icd-changelog.mjs --write; do not edit between the markers -->
-- Draft (createdAt in the GroupContext, #58), from `413edad`; its ICD `0eae9b116066add834ade9e18d4f66c298cc9fd872dd05b7bcb960a5423daff0`, not a release until its icd/* tag
+- Release: `icd/2.8.0`, 2026-11-11; the pin `0eae9b116066add834ade9e18d4f66c298cc9fd872dd05b7bcb960a5423daff0`
 - Against 2.7.0 (`a9eac5c92bf6f0a4…`):
   - changed: group.publishListing: +createdAt (integer)
   - model sections changed besides ops: mls
@@ -25,7 +25,7 @@ Site listing says when its Thing was made.
 ## 2.7.0
 
 <!-- generated 2.7.0: icd-changelog.mjs --write; do not edit between the markers -->
-- Draft (media.detached, detached media sealed and read, #56), from `e2c121f`; its ICD `a9eac5c92bf6f0a484a33f526170c94df20d11109f4b6d436746334bcbe2f7e0`, not a release until its icd/* tag
+- Release: `icd/2.7.0`, 2026-11-11; the pin `a9eac5c92bf6f0a484a33f526170c94df20d11109f4b6d436746334bcbe2f7e0`
 - Against 2.6.0 (`2c1067380ed4d2e2…`):
   - model sections changed besides ops: media
 <!-- end generated 2.7.0 -->
