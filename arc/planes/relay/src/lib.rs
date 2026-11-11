@@ -816,6 +816,23 @@ pub async fn serve_with_policy(
     limits: Limits,
     obs: Option<Observer>,
 ) {
+    // Object storage is read from the environment here rather than taken as a
+    // parameter, so the existing `serve_with_store` signature (and every test that
+    // drives it) is unchanged. Unset means media offload is simply off, and every
+    // request for it is refused with `unconfigured` rather than quietly dropped.
+    serve_with_media(listener, store, retention, limits, obs, Media::from_env()).await
+}
+
+/// [`serve_with_policy`] with its object storage given rather than read from the
+/// environment: a test's stand-in, without setting process-wide variables.
+pub async fn serve_with_media(
+    listener: TcpListener,
+    store: Box<dyn Mailbox>,
+    retention: Retention,
+    limits: Limits,
+    obs: Option<Observer>,
+    media: Option<Media>,
+) {
     info!(
         max_blob_bytes = limits.max_blob_bytes,
         max_store_bytes = limits.max_store_bytes,
@@ -828,11 +845,7 @@ pub async fn serve_with_policy(
     let metrics = hub.lock().await.metrics.clone();
     let health = Arc::new(health::Health::new(limits.min_disk_free_pct));
     tokio::spawn(health_loop(hub.clone(), metrics.clone(), health.clone()));
-    // Object storage is read from the environment here rather than taken as a
-    // parameter, so the existing `serve_with_store` signature (and every test that
-    // drives it) is unchanged. Unset means media offload is simply off, and every
-    // request for it is refused with `unconfigured` rather than quietly dropped.
-    let media: Option<Arc<Media>> = Media::from_env().map(Arc::new);
+    let media: Option<Arc<Media>> = media.map(Arc::new);
     if let Some(m) = &media {
         info!(
             max_object_bytes = m.max_bytes(),
@@ -842,7 +855,7 @@ pub async fn serve_with_policy(
         // The meter runs whether or not anyone uploads: the relay starts FAIL-CLOSED
         // (no measurement yet = no presigning), so this loop is what opens it.
         if m.budget().is_some() {
-            tokio::spawn(usage_loop(m.clone()));
+            tokio::spawn(usage_loop(m.clone(), health.clone()));
         }
     }
     let mut next_id: ConnId = 0;
@@ -1079,6 +1092,7 @@ async fn handle(
     // later `Sub { v: 0 }` from a build that has already declared level 2 does not
     // un-declare it.
     let mut declared_v: u8 = V_BASE;
+    let mut presigns = limits.presigns();
 
     // reader loop: parse inbound frames and act on them.
     while let Some(msg) = source.next().await {
@@ -1229,7 +1243,11 @@ async fn handle(
             // media key is the same class of secret as a `tag`, and the telemetry
             // invariant at the top of this file admits no exceptions for it.
             Frame::MediaPut { key, len } => {
-                let (reply, ok) = presign_reply(&media, &key, Some(len));
+                let (reply, ok) = if presigns.take(1.0) {
+                    presign_reply(&media, &key, Some(len))
+                } else {
+                    (Frame::MediaErr { key, reason: "rate_limited".into() }, false)
+                };
                 if let Some(conn) = hub.lock().await.conns.get(&id) {
                     let _ = conn.out.send(reply);
                 }
@@ -1237,7 +1255,11 @@ async fn handle(
                 info!(ok, len, "media presign put");
             }
             Frame::MediaGet { key } => {
-                let (reply, ok) = presign_reply(&media, &key, None);
+                let (reply, ok) = if presigns.take(1.0) {
+                    presign_reply(&media, &key, None)
+                } else {
+                    (Frame::MediaErr { key, reason: "rate_limited".into() }, false)
+                };
                 if let Some(conn) = hub.lock().await.conns.get(&id) {
                     let _ = conn.out.send(reply);
                 }
@@ -1312,10 +1334,11 @@ fn bump(metrics: &Metrics, ok: bool) {
 /// place, and once readings stop for long enough the budget goes closed on its own
 /// — the failure mode of a cost guard should be "stop spending", not "assume the
 /// bucket is empty".
-async fn usage_loop(media: Arc<Media>) {
+async fn usage_loop(media: Arc<Media>, health: Arc<health::Health>) {
     let Some(budget) = media.budget().cloned() else {
         return;
     };
+    let mut said: Option<Instant> = None;
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -1335,16 +1358,9 @@ async fn usage_loop(media: Arc<Media>) {
         match measure_usage(&client, &media, max).await {
             Ok(bytes) => {
                 budget.record(bytes, budget::now_secs());
-                let pct = bytes.saturating_mul(100).checked_div(max).unwrap_or(0);
+                let pct = health.media_measured(bytes, max, &mut said, Instant::now());
                 // Byte totals and percentages only — never a key or an object.
                 info!(used_bytes = bytes, budget_bytes = max, used_pct = pct, "storage measured");
-                if pct >= 80 {
-                    warn!(
-                        used_bytes = bytes,
-                        budget_bytes = max,
-                        "storage budget above 80% — uploads will start being refused"
-                    );
-                }
             }
             // Terse by design: the request URL is presigned (it carries a signature)
             // and the body can name objects, so neither is ever logged.

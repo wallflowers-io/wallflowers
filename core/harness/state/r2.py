@@ -31,8 +31,8 @@ LIST_PAGE_SIZE = 1000
 MAX_LIST_PAGES = 64
 #: media.rs DEFAULT_MAX_BYTES — 25 MiB, a placeholder, not a ruled product limit.
 DEFAULT_MAX_OBJECT_BYTES = 25 * 1024 * 1024
-#: media.rs DEFAULT_TTL — five minutes.
-DEFAULT_TTL_SECS = 300
+#: media.rs DEFAULT_TTL — fifteen minutes (#56, ruled 9 Nov 2026).
+DEFAULT_TTL_SECS = 900
 
 
 class Verdict(str, Enum):
@@ -301,8 +301,9 @@ class R2Relay:
                 return MediaError.OVER_BUDGET
             if verdict is Verdict.STALE:
                 return MediaError.BUDGET_STALE
+        # media.rs: an upload only creates (`if-none-match: *`), so a key cannot be overwritten.
         return self._sign("PUT", [self.bucket, key],
-                          [("content-length", str(length))], [], now)
+                          [("content-length", str(length)), ("if-none-match", "*")], [], now)
 
     def presign_get(self, key: str, now=None) -> str | MediaError:
         """The relay does NOT check existence: a blind relay has no business

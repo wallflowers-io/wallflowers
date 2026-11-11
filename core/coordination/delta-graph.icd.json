@@ -1,6 +1,6 @@
 {
   "model": "wallflowers/delta-graph",
-  "version": "2.9.0",
+  "version": "2.8.0",
   "summary": "The interface between a GroupObject's delta log and its projection into the",
   "glossary": {
     "kind": "what an object is: group, forum, post, …",
@@ -169,6 +169,23 @@
           "summary": "After a Sub's replay of a door: tag, a Sub with v >= 3 receives one {t:\"evicted\", tag, total}: the number of knocks ever evicted from that tag, monotonic. The client keeps the last total it saw and shows the difference. Below v 3 it is never sent."
         }
       }
+    }
+  },
+  "media": {
+    "summary": "Media bytes outside the Delta (O-79, #56, ruled 9 Nov 2026): every new media's bytes are an object in the relay's object storage, and the Delta carries only its reference (<p>Via = detached, <p>Digest, <p>Bytes, <p>Key, <p>Secret). Inline media already written stays readable.",
+    "detached": {
+      "summary": "How an object is made and opened, so that any implementation can read what another wrote.",
+      "cipher": "XChaCha20-Poly1305",
+      "keyBytes": 32,
+      "nonceBytes": 24,
+      "contentKey": "keyBytes random bytes, fresh for every object, never reused; the reference carries it as <p>Secret, base64",
+      "objectKey": "32 random bytes, as 64 lowercase hex: the only name the relay presigns; the reference carries it as <p>Key",
+      "aad": "the object key's 64 lowercase hex characters, as ASCII bytes: an object cannot be passed off under another name",
+      "layout": "nonce (nonceBytes, random) ‖ ciphertext with its 16-byte tag",
+      "digest": "SHA-256 of the object as stored (the ciphertext), hex, as <p>Digest; with its length (<p>Bytes) checked before the object is opened, so anyone can check a fetch without the content key",
+      "upload": "create-only: the presigned PUT is signed with if-none-match: *, so a key, once stored, cannot be overwritten",
+      "fetch": "by the object key alone, through the relay's presign: a reader needs no group (a carried exterior's photo is read by non-members). A device keeps what it has fetched and never fetches it again",
+      "commitment": "XChaCha20-Poly1305 does not commit to its key: one object can open to different bytes under different keys. A digest names an object, never its content; nothing may dedupe, match or report media by digest without a key commitment added here first"
     }
   },
   "conformance": {
@@ -2100,7 +2117,7 @@
             },
             "mediaSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             }
           },
           "episode": true
@@ -3211,7 +3228,7 @@
             },
             "mediaSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             }
           },
           "episode": true
@@ -3507,7 +3524,7 @@
             },
             "photoSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             }
           },
           "maxLive": 20,
@@ -4082,7 +4099,7 @@
             },
             "bannerSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             },
             "gen": {
               "type": "integer",
@@ -4172,7 +4189,7 @@
             },
             "photoSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             },
             "gen": {
               "type": "integer",
@@ -4275,7 +4292,7 @@
             },
             "clipSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             },
             "gen": {
               "type": "integer",
@@ -4611,7 +4628,7 @@
             },
             "documentSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             }
           },
           "view": {
@@ -4706,7 +4723,7 @@
             },
             "assetSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             }
           },
           "view": {

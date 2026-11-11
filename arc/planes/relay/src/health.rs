@@ -9,23 +9,37 @@
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+use tracing::{error, info};
+
 const UNKNOWN: u64 = u64::MAX;
+
+/// The share of the media budget at which the relay says so at ERROR, once an hour. Media
+/// is never deleted (#56, ruled 9 Nov 2026), so this is the warning before uploads stop.
+pub const MEDIA_ALARM_PCT: u64 = 80;
+
+const SAY_EVERY: Duration = Duration::from_secs(3600);
 
 pub struct Health {
     store: AtomicBool,
     free_pct: AtomicU64,
     min_free_pct: u64,
+    media_used_pct: AtomicU64,
 }
 
 impl Health {
     /// Unhealthy until the first check has run.
     pub fn new(min_free_pct: u64) -> Self {
-        Self { store: AtomicBool::new(false), free_pct: AtomicU64::new(UNKNOWN), min_free_pct }
+        Self {
+            store: AtomicBool::new(false),
+            free_pct: AtomicU64::new(UNKNOWN),
+            min_free_pct,
+            media_used_pct: AtomicU64::new(UNKNOWN),
+        }
     }
 
     pub fn set(&self, store: bool, free_pct: Option<u64>) {
@@ -42,12 +56,45 @@ impl Health {
         Some(self.free_pct.load(Ordering::Relaxed)).filter(|&p| p != UNKNOWN)
     }
 
+    /// `None` until the media meter has read the bucket, or with no media budget.
+    pub fn media_used_pct(&self) -> Option<u64> {
+        Some(self.media_used_pct.load(Ordering::Relaxed)).filter(|&p| p != UNKNOWN)
+    }
+
+    /// One reading of the media bucket; returns its share of the budget. At or above
+    /// [`MEDIA_ALARM_PCT`] it is said at ERROR (Sentry) once an hour, and once when it
+    /// falls back. It does not make the relay unhealthy: uploads still work.
+    pub fn media_measured(&self, used_bytes: u64, budget_bytes: u64, said: &mut Option<Instant>, now: Instant) -> u64 {
+        let pct = used_bytes.saturating_mul(100).checked_div(budget_bytes).unwrap_or(0);
+        self.media_used_pct.store(pct, Ordering::Relaxed);
+        if pct < MEDIA_ALARM_PCT {
+            if said.take().is_some() {
+                info!(used_pct = pct, "media storage back below its alarm");
+            }
+        } else if said.map_or(true, |t| now.duration_since(t) >= SAY_EVERY) {
+            *said = Some(now);
+            error!(
+                used_bytes,
+                budget_bytes,
+                used_pct = pct,
+                alarm_pct = MEDIA_ALARM_PCT,
+                "MEDIA STORAGE NEAR ITS BUDGET — uploads are refused when it is full"
+            );
+        }
+        pct
+    }
+
     pub fn ok(&self) -> bool {
         self.store() && self.free_pct().map_or(true, |p| p >= self.min_free_pct)
     }
 
     pub fn body(&self) -> String {
-        serde_json::json!({ "store": self.store(), "disk_free_pct": self.free_pct() }).to_string()
+        serde_json::json!({
+            "store": self.store(),
+            "disk_free_pct": self.free_pct(),
+            "media_used_pct": self.media_used_pct(),
+        })
+        .to_string()
     }
 }
 

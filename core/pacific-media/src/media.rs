@@ -311,6 +311,26 @@ impl MediaRef {
         })
     }
 
+    /// A detached, sealed reference (O-79, #56, ruled 9 Nov 2026): `key` names the object in
+    /// the relay's blob store (64 lowercase hex), the object is the bytes sealed under `secret`
+    /// (base64 of the content key) with `key` as the AAD, `digest` is SHA-256 of the stored
+    /// object and `bytes` its length.
+    pub fn sealed(mime: &str, digest: [u8; 32], bytes: u64, key: impl Into<String>, secret: impl Into<String>) -> Result<Self, MediaError> {
+        let kind = MediaKind::of_mime(mime).ok_or(MediaError::UnknownMime)?;
+        let (key, secret) = (key.into(), secret.into());
+        if !is_blob_key(&key) || !is_base64(&secret) || secret.len() > MAX_SECRET_B64 {
+            return Err(MediaError::HalfSet);
+        }
+        Ok(MediaRef {
+            kind,
+            mime: mime.to_string(),
+            delivery: Delivery::Sealed { digest, bytes, key, secret },
+            width: 0,
+            height: 0,
+            duration_ms: 0,
+        })
+    }
+
     /// Build a live-session descriptor.
     pub fn live(session: impl Into<String>) -> Result<Self, MediaError> {
         let session = session.into();
@@ -656,7 +676,8 @@ impl MediaRef {
                     None => return Some(Err(MediaError::HalfSet)),
                 };
                 // O-79: both keys, or neither (the older form). One without the other is a
-                // blob nobody can open, or a key to nothing.
+                // blob nobody can open, or a key to nothing. The key is 64 lowercase hex, the
+                // only name the relay's blob store presigns (media.detached).
                 match (text(&format!("{prefix}Key")), text(&format!("{prefix}Secret"))) {
                     (None, None) => Delivery::Detached { digest: d, bytes },
                     (Some(key), Some(secret)) if is_blob_key(key) && is_base64(secret) && secret.len() <= MAX_SECRET_B64 => {
@@ -685,14 +706,15 @@ impl MediaRef {
     }
 }
 
+/// An object key the relay's blob store presigns: 64 lowercase hex (`media.detached`).
+fn is_blob_key(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
 /// O-79's content key, base64: a 32-byte key and its sealing, with room to spare.
 const MAX_SECRET_B64: usize = 256;
 
 /// A blob store's object key: 1 to 512 printable ASCII characters, no spaces.
-fn is_blob_key(s: &str) -> bool {
-    !s.is_empty() && s.len() <= 512 && s.bytes().all(|b| b.is_ascii_graphic())
-}
-
 fn hex32(b: &[u8; 32]) -> String {
     let mut s = String::with_capacity(64);
     for x in b {
@@ -972,7 +994,7 @@ mod tests {
         let m = MediaRef {
             kind: MediaKind::Document,
             mime: "application/pdf".into(),
-            delivery: Delivery::Sealed { digest: [3u8; 32], bytes: 900_000, key: "blobs/ab12".into(), secret: "c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0".into() },
+            delivery: Delivery::Sealed { digest: [3u8; 32], bytes: 900_000, key: "03".repeat(32), secret: "c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0".into() },
             width: 0,
             height: 0,
             duration_ms: 0,
@@ -982,6 +1004,11 @@ mod tests {
         assert_eq!(a.get("documentVia"), Some(&ArgVal::Text("detached".into())));
         assert_eq!(MediaRef::from_args("document", &a).unwrap().unwrap(), m);
         assert!(m.validate(Slot::Document).is_ok(), "the Delta carries keys, not the bytes");
+        assert_eq!(MediaRef::sealed("application/pdf", [3u8; 32], 900_000, "03".repeat(32), "c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0").unwrap(), m);
+
+        let mut unnamed = a.clone();
+        unnamed.insert("documentKey".into(), ArgVal::Text("blobs/ab12".into()));
+        assert_eq!(MediaRef::from_args("document", &unnamed).unwrap(), Err(MediaError::HalfSet), "a key the blob store cannot presign");
 
         let mut old = a.clone();
         old.remove("documentKey");

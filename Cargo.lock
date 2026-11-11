@@ -3316,6 +3316,7 @@ dependencies = [
  "pacific-wire",
  "rand_core 0.6.4",
  "relay",
+ "reqwest 0.13.4",
  "rusqlite",
  "rustls",
  "serde",
@@ -3347,6 +3348,7 @@ dependencies = [
  "pacific-core",
  "pacific-counting",
  "pacific-media",
+ "relay",
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
@@ -3964,6 +3966,7 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

@@ -8,19 +8,19 @@ Method: deploy.md § 10.
 Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on an object that exists, or
 `POST /v2/mint` to make one. `GET /v2/icd` serves the model production runs; model.html lists every op and its args.
 
-## 2.9.0
+## 2.7.0
 
-<!-- generated 2.9.0: icd-changelog.mjs --write; do not edit between the markers -->
-- Draft (when an object was made, #58), from `402c771`; its ICD `a03bc478b9160ebac70f79b00ff1789f57586e2d82c4c5b2c015ec434905a3d2`, not a release until its icd/* tag
+<!-- generated 2.7.0: icd-changelog.mjs --write; do not edit between the markers -->
+- Draft (media.detached, detached media sealed and read, #56), from `e2c121f`; its ICD `a9eac5c92bf6f0a484a33f526170c94df20d11109f4b6d436746334bcbe2f7e0`, not a release until its icd/* tag
 - Against 2.6.0 (`2c1067380ed4d2e2…`):
-  - changed: group.publishListing: +createdAt (integer)
-  - model sections changed besides ops: mls
-<!-- end generated 2.9.0 -->
+  - model sections changed besides ops: media
+<!-- end generated 2.7.0 -->
 
-When an object was made (#58): `mls.groupContextExtensions.createdAt`, the time in the object's MLS GroupContext,
-set when it is created and never changed, by its creator's clock. `GET /v2/graph` gives each object's `createdAt`
-(absent for one made before this release). `group.publishListing` takes an optional `createdAt`, the Thing's, so a
-Site listing says when its Thing was made.
+Detached media (#56): `media.detached` states how a media object outside the Delta is sealed and read, so that any
+implementation opens what another wrote. XChaCha20-Poly1305 under a fresh content key, the object key as AAD, the
+digest over the stored object, uploads create-only, fetched by key alone. No op changes: every media op's `<p>Secret`
+already carried the content key; it now says how the bytes are sealed with it. A site uploads media through
+WallFlowers' app; there is no Community API route for it in this release.
 
 ## 2.6.0
 

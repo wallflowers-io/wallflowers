@@ -92,7 +92,9 @@ async fn fc11_fc13_what_the_relay_delivers_is_read_without_a_sync() {
     h.node(0).apply(&room, FORUM_POST, post("heard, not drained")).await.unwrap();
     assert!(until(|| bo.at().live_pending()), "the relay pushed ada's post to bo's held connection");
     assert!(bo.rang.load(Ordering::SeqCst) > before, "and rang");
-    let wire = || (pacific_core::transport::dials(), pacific_core::transport::drains(), pacific_core::router::published());
+    let wire = || {
+        (pacific_core::transport::dials(), pacific_core::transport::drains(), pacific_core::router::published(), pacific_core::media_store::presigned())
+    };
     let at_read = wire();
     let got = bo.at().ingest_delivered().unwrap();
     assert_eq!((got.frames, got.waiting), (1, 0), "ingested at once, nothing held back: {got:?}");

@@ -33,6 +33,12 @@ fn main() {
             .unwrap_or_else(|| panic!("the ICD states mls.groupContextExtensions.{name}.type"))
     };
     let (ext_name, ext_owner, ext_floor, ext_created_at) = (ext("name"), ext("owner"), ext("floor"), ext("createdAt"));
+    // How a detached media object is sealed (media.detached, #56): the construction is seal.rs's,
+    // so the ICD's cipher must be the one the code runs.
+    let media = &icd["media"]["detached"];
+    assert_eq!(media["cipher"].as_str(), Some("XChaCha20-Poly1305"), "media.detached.cipher is seal.rs's");
+    let media_key = media["keyBytes"].as_u64().expect("the ICD states media.detached.keyBytes");
+    let media_nonce = media["nonceBytes"].as_u64().expect("the ICD states media.detached.nonceBytes");
     let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_consts.rs");
     std::fs::write(
         out,
@@ -45,7 +51,9 @@ fn main() {
              /// `mls.sequencing.slot.rounds`, from the ICD at build.\npub const SEQ_SLOT_ROUNDS: usize = {slot_rounds};\n\
              /// `mls.groupContextExtensions.*.type`, from the ICD at build.\n\
              pub const EXT_NAME: u16 = {ext_name};\npub const EXT_OWNER: u16 = {ext_owner};\n\
-             pub const EXT_FLOOR: u16 = {ext_floor};\npub const EXT_CREATED_AT: u16 = {ext_created_at};\n"
+             pub const EXT_FLOOR: u16 = {ext_floor};\npub const EXT_CREATED_AT: u16 = {ext_created_at};\n\
+             /// `media.detached.keyBytes`, from the ICD at build.\npub const MEDIA_KEY_BYTES: usize = {media_key};\n\
+             /// `media.detached.nonceBytes`, from the ICD at build.\npub const MEDIA_NONCE_BYTES: usize = {media_nonce};\n"
         ),
     )
     .expect("icd_consts.rs");
