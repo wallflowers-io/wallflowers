@@ -383,7 +383,7 @@ struct LifeView: View {
     @StateObject private var pendingTickets = PendingTicketStore.shared
 
     /// The capsule contract for every LISTED minted event, keyed by VM id ("obj:<id>").
-    /// State in, intents out — EventsPage stays a skin.
+    /// No reader since the events page went (#119).
     private var eventTicketing: EventTicketing {
         var byId: [String: TicketVM] = [:]
         for row in core.events where row.listed {
@@ -790,7 +790,7 @@ struct LifeView: View {
     /// the whole of the map consolidation. Unlocked, the map is places alone.
     private var eventPinsOnMap: [PlaceAnnotation] {
         guard lifeQuery.isLocked(.events) else { return [] }
-        return EventsPage.venuePins(
+        return EventsChannel.venuePins(
             for: eventsSource.events(matching: lifeQuery.terms, window: .upcoming),
             places: placeAnnotations)
     }

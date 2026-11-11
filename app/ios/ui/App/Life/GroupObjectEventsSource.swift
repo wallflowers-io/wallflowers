@@ -27,14 +27,14 @@ enum GroupObjectEventsSource {
             ]
             if !row.venuePlace.isEmpty {
                 // A REFERENCED Place (event.setVenue): the id IS the Place object id,
-                // so EventsPage.venue's identity match pins it exactly.
+                // so EventsChannel.venue's identity match pins it exactly.
                 participants.append(
                     ParticipantVM(id: row.venuePlace,
                                   name: row.venuePlaceName.isEmpty ? row.venuePlace : row.venuePlaceName,
                                   category: .places,
                                   role: .at, tint: EventsSeed.tint(.places)))
             } else if !row.venue.isEmpty {
-                // Named by the row, pinned by EventsPage.venue's name-match against the
+                // Named by the row, pinned by EventsChannel.venue's name-match against the
                 // placed PLACES — the same hop a resolver-lifted venue takes.
                 participants.append(
                     ParticipantVM(id: row.venue, name: row.venue, category: .places,
