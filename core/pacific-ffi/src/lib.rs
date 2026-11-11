@@ -358,6 +358,8 @@ pub struct ObjectRow {
     pub owner: String,
     /// Who made it: the group's first owner. A handover never changes it.
     pub creator: String,
+    /// When it was made, unix ms (the GroupContext's `createdAt`); `None` before it existed.
+    pub created_at: Option<i64>,
     pub members: Vec<String>,
     /// The object it is a part of (`base.setParent`), and in what role (`comments`, `room`, …).
     pub parent: String,
@@ -2308,6 +2310,7 @@ impl Core {
             .map(|o| ObjectRow {
                 owner: hex_or_empty(o.owner),
                 creator: hex_or_empty(o.creator),
+                created_at: o.created_at,
                 members: o.members.iter().map(hex::encode).collect(),
                 parent: o.parent.as_ref().map(|p| p.parent.clone()).unwrap_or_default(),
                 parent_role: o.parent.map(|p| p.role).unwrap_or_default(),

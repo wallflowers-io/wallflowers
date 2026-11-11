@@ -11,17 +11,16 @@ Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on 
 ## 2.8.0
 
 <!-- generated 2.8.0: icd-changelog.mjs --write; do not edit between the markers -->
-- Draft (the media facet, base.setIcon and base.setBanner, #112), from `cdd9f12`; its ICD `fd2a7b546f4faa4b27da710ed1d2c315757ca599eb6dd0c54b8ee45467fb3415`, not a release until its icd/* tag
+- Draft (createdAt in the GroupContext, #58), from `413edad`; its ICD `0eae9b116066add834ade9e18d4f66c298cc9fd872dd05b7bcb960a5423daff0`, not a release until its icd/* tag
 - Against 2.7.0 (`a9eac5c92bf6f0a4…`):
-  - added: base.setBanner (facet media, op 4027514881, owner|role:admin, commutative)
-  - added: base.setIcon (facet media, op 4027514880, owner|role:admin, commutative)
-  - model sections changed besides ops: facets
+  - changed: group.publishListing: +createdAt (integer)
+  - model sections changed besides ops: mls
 <!-- end generated 2.8.0 -->
 
-The media facet (#112): `base.setIcon` and `base.setBanner` give every group, event, thing and post an icon and a
-banner, each a detached media reference (`media.detached`). The owner or an admin writes them; the last writer by
-(gen, author) holds. Where written, they win over a kind's own picture, which stays readable for what was made
-before.
+When an object was made (#58): `mls.groupContextExtensions.createdAt`, the time in the object's MLS GroupContext,
+set when it is created and never changed, by its creator's clock. `GET /v2/graph` gives each object's `createdAt`
+(absent for one made before this release). `group.publishListing` takes an optional `createdAt`, the Thing's, so a
+Site listing says when its Thing was made.
 
 ## 2.7.0
 

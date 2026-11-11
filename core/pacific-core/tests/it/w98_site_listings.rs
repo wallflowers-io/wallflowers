@@ -62,6 +62,20 @@ fn a_member_lists_their_thing_and_the_latest_stands() {
     assert!(s.state().listings.is_empty(), "withdrawn");
 }
 
+/// A listing says when its Thing was made (the Thing's `createdAt`), for members who are
+/// not on the Thing's roster; one listed without it has none, and none is made up.
+#[test]
+fn a_listing_carries_when_its_thing_was_made() {
+    let mut s = Site::new();
+    s.list(MEMBER, &thing(9), "drill", &[("createdAt", ArgVal::Int(1_794_000_000_000))]);
+    s.list(ADMIN, &thing(7), "tote", &[]);
+    let st = s.state();
+    assert_eq!(st.listings[&(MEMBER, thing(9))].created_at, Some(1_794_000_000_000));
+    assert_eq!(st.listings[&(ADMIN, thing(7))].created_at, None);
+    s.list(MEMBER, &thing(8), "saw", &[("createdAt", t("yesterday"))]);
+    assert!(!s.state().listings.contains_key(&(MEMBER, thing(8))), "a time is a number, or the listing is refused");
+}
+
 #[test]
 fn the_owner_or_an_admin_takes_a_listing_off_for_good() {
     let mut s = Site::new();
@@ -103,7 +117,7 @@ fn a_listing_is_the_models_shape() {
 #[test]
 fn the_webapps_listing_fixture_is_cores_serialisation() {
     let mut s = Site::new();
-    s.list(MEMBER, &thing(9), "A bike", &[("descriptor", t("blue, 56 cm")), ("area", t("gcpvj")), ("photo", t("cHJvYmU=")), ("photoMime", t("image/png"))]);
+    s.list(MEMBER, &thing(9), "A bike", &[("descriptor", t("blue, 56 cm")), ("area", t("gcpvj")), ("photo", t("cHJvYmU=")), ("photoMime", t("image/png")), ("createdAt", ArgVal::Int(1_794_000_000_000))]);
     s.list(ADMIN, &thing(7), "Tote", &[("site", ArgVal::Int(1))]);
     let st = s.state();
     let got = serde_json::to_string_pretty(&st.listings.values().collect::<Vec<_>>()).unwrap() + "\n";

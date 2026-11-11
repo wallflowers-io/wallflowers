@@ -536,6 +536,7 @@ fn graph_of(node: &Node) -> Result<serde_json::Value, String> {
             serde_json::json!({
                 "id": o.id, "kind": o.kind, "name": o.name,
                 "owner": o.owner.map(hex::encode).unwrap_or_default(),
+                "createdAt": o.created_at,
                 "members": o.members.iter().map(hex::encode).collect::<Vec<_>>(),
                 "peer": o.peer.map(hex::encode), "role": o.link,
                 "folds": why.is_none(), "why": why, "view": view,

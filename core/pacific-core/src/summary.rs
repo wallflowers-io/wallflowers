@@ -21,6 +21,9 @@ pub struct ObjectSummary {
     /// Who made it: the first owner the group had (`owner_history`, entry 0). A
     /// handover changes the owner, never the creator.
     pub creator: Option<[u8; 32]>,
+    /// When it was made (unix ms): the GroupContext's `createdAt`, cached in the
+    /// directory. `None` for an object made before it existed.
+    pub created_at: Option<i64>,
     pub members: Vec<[u8; 32]>,
     /// The part's half of `part_of` (`base.setParent`), from the object's own fold.
     pub parent: Option<ParentRef>,
@@ -69,6 +72,7 @@ impl Node {
             let gid = hex::decode(&id).map_err(|e| CoreError::Directory(format!("object id: {e}")))?;
             let owner = self.dir.group_owner(&gid)?.and_then(|v| <[u8; 32]>::try_from(v.as_slice()).ok());
             let creator = self.dir.owner_history(&gid)?.first().map(|(_, pk)| *pk);
+            let created_at = self.dir.group_created_at(&gid)?;
             let members = self.dir.group_members(&gid)?;
             let view = self.object_view(&id).map_err(|e| e.to_string());
             let parent = view
@@ -78,7 +82,7 @@ impl Node {
                 .and_then(|v| serde_json::from_value::<Option<ParentRef>>(v["parent"].clone()).ok())
                 .flatten();
             let (peer, link) = links.get(&id).map_or((None, None), |(p, l)| (Some(*p), Some(*l)));
-            out.push(ObjectSummary { id, kind: k, name, owner, creator, members, parent, peer, link, view });
+            out.push(ObjectSummary { id, kind: k, name, owner, creator, created_at, members, parent, peer, link, view });
         }
         Ok(out)
     }

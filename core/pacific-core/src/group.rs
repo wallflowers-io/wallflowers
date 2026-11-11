@@ -719,6 +719,9 @@ pub struct SiteListing {
     pub photo: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub photo_mime: String,
+    /// When the Thing was made (its `createdAt`, unix ms), if it carries one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<i64>,
     /// The Site's own listing, the Site sells it (`site` 1; relation sold_through).
     pub site: bool,
     pub gen: i64,
@@ -789,6 +792,7 @@ fn reduce_listing(state: &mut GroupState, op: &Op<'_>) -> Result<(), DeltaReject
     let site = int("site")?.is_some_and(|w| w != 0);
     let photo = text("photo")?;
     let photo_mime = text("photoMime")?;
+    let created_at = int("createdAt")?.filter(|t| *t > 0);
     let face = crate::media::MediaRef {
         kind: crate::media::MediaKind::Still,
         mime: photo_mime.clone(),
@@ -814,7 +818,7 @@ fn reduce_listing(state: &mut GroupState, op: &Op<'_>) -> Result<(), DeltaReject
     }
     state.listings.insert(
         key,
-        SiteListing { author: *op.author, thing_id, posture: posture.as_str().into(), title, descriptor, price, deadline, area, reach: reach.as_str().into(), rev, photo, photo_mime, site, gen },
+        SiteListing { author: *op.author, thing_id, posture: posture.as_str().into(), title, descriptor, price, deadline, area, reach: reach.as_str().into(), rev, photo, photo_mime, created_at, site, gen },
     );
     Ok(())
 }

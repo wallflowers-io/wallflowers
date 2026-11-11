@@ -100,5 +100,6 @@ jobs:
       - *clean
       - run: make check-door
         env:
-          PG_BIN: /usr/lib/postgresql/16/bin
+          # The container's Debian path; a native macOS runner's Homebrew one.
+          PG_BIN: ${{ runner.os == 'Linux' && '/usr/lib/postgresql/16/bin' || '/opt/homebrew/opt/postgresql@16/bin' }}
       - *output

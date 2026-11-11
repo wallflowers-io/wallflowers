@@ -296,9 +296,10 @@ where
         .mls_rules(PacificRules)
         // Advertise support for every GroupContext extension Pacific writes, so every
         // leaf's capabilities allow them — otherwise mls-rs rejects the add/join. A
-        // build that does not list OWNER_EXT cannot be added to a group made by one
-        // that does (§3.2): that is the rollout constraint, stated where it is caused.
-        .extension_types([GROUP_NAME_EXT, OWNER_EXT, MIN_VERSION_EXT])
+        // build that does not list OWNER_EXT (or CREATED_AT_EXT) cannot be added to a
+        // group made by one that does (§3.2): that is the rollout constraint, stated
+        // where it is caused.
+        .extension_types(CONTEXT_EXTENSIONS)
         .signing_identity(sid, sk, CIPHERSUITE);
     Ok(match life {
         Some(life) => builder.key_package_lifetime(life + std::time::Duration::from_secs(KEY_PACKAGE_SKEW_SECS)).build(),
@@ -383,17 +384,39 @@ where
     create_group_named(client, "")
 }
 
-/// Private-use MLS extension (0xF001) carrying a group's DISPLAY NAME inside its
+/// Private-use MLS extension (`mls.groupContextExtensions.name`) carrying a group's
+/// DISPLAY NAME inside its
 /// GroupContext. Because the Welcome delivers the current GroupInfo (group context +
 /// ratchet tree), a late joiner reads the CURRENT name straight from their Welcome —
 /// with NO message backfill and NO forward-secrecy break (this is the correct home
 /// for durable group STATE, unlike per-message deltas which forward secrecy withholds
 /// from joiners). Registered in the client capabilities below so mls-rs does not
 /// reject it as an `UnsupportedGroupExtension` on add/join.
-pub const GROUP_NAME_EXT: ExtensionType = ExtensionType::new(0xF001);
+pub const GROUP_NAME_EXT: ExtensionType = ExtensionType::new(crate::icd_consts::EXT_NAME);
+
+/// Private-use GroupContext extension (`mls.groupContextExtensions.createdAt`): when the
+/// object was made, unix ms as a big-endian u64, by the creator's own clock. Written at
+/// creation and never changed (`CreatedAtChanged`). It is the context's, not a delta's,
+/// because a joiner holds no log from before it joined (RFC 9750 §6.7) and does hold the
+/// context (RFC 9420 §12.4.3). A group made before it existed has none and gets none.
+pub const CREATED_AT_EXT: ExtensionType = ExtensionType::new(crate::icd_consts::EXT_CREATED_AT);
+
+/// Every GroupContext extension Pacific writes: what a client advertises, and the only
+/// types a context change may carry.
+pub const CONTEXT_EXTENSIONS: [ExtensionType; 4] = [GROUP_NAME_EXT, OWNER_EXT, MIN_VERSION_EXT, CREATED_AT_EXT];
+
+/// Unix ms by this device's clock. The browser's is read through mls-rs, to the second.
+fn now_ms() -> u64 {
+    #[cfg(not(target_arch = "wasm32"))]
+    return std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64);
+    #[cfg(target_arch = "wasm32")]
+    return MlsTime::now().seconds_since_epoch() * 1000;
+}
 
 /// The GroupContext a new group is born with: its display name (if any), its OWNER,
-/// and the protocol floor it was made at. The owner and the floor are the two things
+/// the protocol floor it was made at, and when. The owner and the floor are the two things
 /// the commit rules read (§3, §4), and a group that did not carry them from its first
 /// epoch would have to be migrated into them later (§3.3), so every group made from
 /// here on carries them from the start.
@@ -404,6 +427,7 @@ fn genesis_ctx_exts(name: &str, owner: &[u8; 32]) -> ExtensionList {
     }
     exts.set(Extension::new(OWNER_EXT, owner.to_vec()));
     exts.set(Extension::new(MIN_VERSION_EXT, PROTOCOL_VERSION.to_be_bytes().to_vec()));
+    exts.set(Extension::new(CREATED_AT_EXT, now_ms().to_be_bytes().to_vec()));
     exts
 }
 
@@ -447,6 +471,9 @@ where
 /// the context, the owner read from leaf 0 — us (§3.3). Once the peer's updated build
 /// refreshes its leaf (§11.3), our next sync writes the owner in, and every door that
 /// needs it works from then on. Nothing else about the group differs.
+///
+/// A peer whose build has the owner but not `createdAt` gets the owner and the floor,
+/// and no time: the time is never added later, so nothing waits on their update.
 pub fn create_group_with_peer<G, K>(
     client: &ClientWith<G, K>,
     peer_kp: &[u8],
@@ -460,11 +487,20 @@ where
     let kp = MlsMessage::from_bytes(peer_kp).map_err(err)?;
     // Nothing is persisted until the Add is built, so the group that could not take
     // this peer is simply dropped.
-    let mut g = client
-        .create_group(genesis_ctx_exts("", &owner), ExtensionList::default(), None)
-        .map_err(err)?;
-    let (mut g, out, legacy) = match g.commit_builder().add_member(kp.clone()).and_then(|b| b.build()) {
-        Ok(out) => (g, out, false),
+    let with = |exts: ExtensionList| {
+        let mut g = client.create_group(exts, ExtensionList::default(), None)?;
+        let out = g.commit_builder().add_member(kp.clone())?.build()?;
+        Ok::<_, MlsError>((g, out))
+    };
+    let genesis = genesis_ctx_exts("", &owner);
+    let mut timeless = genesis.clone();
+    timeless.remove(CREATED_AT_EXT);
+    let attempt = match with(genesis) {
+        Err(MlsError::UnsupportedGroupExtension(t)) if t == CREATED_AT_EXT => with(timeless),
+        other => other,
+    };
+    let (mut g, out, legacy) = match attempt {
+        Ok((g, out)) => (g, out, false),
         Err(MlsError::UnsupportedGroupExtension(t)) if t == OWNER_EXT || t == MIN_VERSION_EXT => {
             let mut lg = client
                 .create_group(ExtensionList::new(), ExtensionList::default(), None)
@@ -533,21 +569,21 @@ where
 // opinion of anything: two devices holding different prefixes of the log would then
 // judge the same commit differently, and the group would split.
 
-/// Private-use GroupContext extension (0xF002): the object's OWNER — exactly 32 bytes,
+/// Private-use GroupContext extension (`mls.groupContextExtensions.owner`): the object's OWNER — exactly 32 bytes,
 /// the identity pubkey every leaf of that person carries as its `BasicCredential` id.
 /// Written at creation (`genesis_ctx_exts`) and changed ONLY by a handover commit the
 /// current owner makes (§9). A person, not a leaf: every leaf whose credential is these
 /// 32 bytes is an owner leaf (`PerLeafIdentity`).
-pub const OWNER_EXT: ExtensionType = ExtensionType::new(0xF002);
+pub const OWNER_EXT: ExtensionType = ExtensionType::new(crate::icd_consts::EXT_OWNER);
 
-/// Private-use GroupContext extension (0xF003): the lowest Pacific protocol version
+/// Private-use GroupContext extension (`mls.groupContextExtensions.floor`): the lowest Pacific protocol version
 /// allowed to process this group's commits, as a big-endian u16. XMTP learned in
 /// July–August 2026 that a client which REJECTS a commit its newer peers accept forks
 /// the group; a client below the floor therefore PAUSES the group instead of judging
 /// it (`CoreError::UpgradeRequired`, which the drain treats as retryable). It must exist
 /// before the first rule change that needs it, which is why it arrives with the first
 /// rules. Only ever raised, and only by the owner.
-pub const MIN_VERSION_EXT: ExtensionType = ExtensionType::new(0xF003);
+pub const MIN_VERSION_EXT: ExtensionType = ExtensionType::new(crate::icd_consts::EXT_FLOOR);
 
 /// This build's Pacific protocol version — what the floor is compared against. Raise
 /// it together with any change to the commit rules, never alone.
@@ -615,6 +651,8 @@ pub enum RuleViolation {
     FloorAboveBuild { floor: u16 },
     /// A floor extension that is not exactly 2 bytes.
     BadFloor,
+    /// A context change that adds, alters or drops `createdAt`.
+    CreatedAtChanged,
 }
 
 impl std::fmt::Display for RuleViolation {
@@ -653,6 +691,7 @@ impl std::fmt::Display for RuleViolation {
                 write!(f, "cannot raise the floor to {floor} above this build's {PROTOCOL_VERSION}")
             }
             BadFloor => write!(f, "the floor extension is not exactly 2 bytes"),
+            CreatedAtChanged => write!(f, "when a group was made is set at its creation and never changed"),
         }
     }
 }
@@ -739,6 +778,22 @@ where
     K: KeyStore,
 {
     floor_in(group.context().extensions()).map_err(|e| CoreError::Mls(e.to_string()))
+}
+
+/// When a context says its group was made (unix ms), or `None` for a group made before
+/// `createdAt` existed, or one that is not 8 bytes.
+pub fn created_at_in(exts: &ExtensionList) -> Option<u64> {
+    let b: [u8; 8] = exts.get(CREATED_AT_EXT)?.extension_data.as_slice().try_into().ok()?;
+    Some(u64::from_be_bytes(b))
+}
+
+/// When the group was made, as its GroupContext says.
+pub fn group_created_at<G, K>(group: &GroupWith<G, K>) -> Option<u64>
+where
+    G: GroupStore,
+    K: KeyStore,
+{
+    created_at_in(group.context().extensions())
 }
 
 /// Refuse a group whose floor is above this build: the caller must PAUSE (retryable,
@@ -1028,9 +1083,12 @@ impl PacificRules {
                 let new = &p.proposal;
                 for e in new.iter() {
                     let t = e.extension_type;
-                    if t != GROUP_NAME_EXT && t != OWNER_EXT && t != MIN_VERSION_EXT {
+                    if !CONTEXT_EXTENSIONS.contains(&t) {
                         return Err(RuleViolation::UnknownContextExtension(t.raw_value()));
                     }
+                }
+                if new.get(CREATED_AT_EXT) != exts.get(CREATED_AT_EXT) {
+                    return Err(RuleViolation::CreatedAtChanged);
                 }
                 match new.get(OWNER_EXT) {
                     None if has_owner_ext => return Err(RuleViolation::OwnerExtensionDropped),
@@ -1774,12 +1832,12 @@ mod rules_tests {
 
     /// A device on THIS build.
     fn dev(seed: u8) -> Dev {
-        dev_with([seed; 32], &[GROUP_NAME_EXT, OWNER_EXT, MIN_VERSION_EXT])
+        dev_with([seed; 32], &CONTEXT_EXTENSIONS)
     }
 
     /// A second device of the same person: same credential, its own signing key.
     fn sibling(of: &Dev) -> Dev {
-        dev_with(of.cred, &[GROUP_NAME_EXT, OWNER_EXT, MIN_VERSION_EXT])
+        dev_with(of.cred, &CONTEXT_EXTENSIONS)
     }
 
     /// A rogue client over `d`'s own stores with mls-rs's DEFAULT rules.
@@ -1790,7 +1848,7 @@ mod rules_tests {
                 .crypto_provider(crypto())
                 .group_state_storage($d.gss.clone())
                 .key_package_repo($d.kps.clone())
-                .extension_types([GROUP_NAME_EXT, OWNER_EXT, MIN_VERSION_EXT])
+                .extension_types(CONTEXT_EXTENSIONS)
                 .signing_identity(signing_identity(&$d.cred, &$d.pk), $d.sk.clone(), CIPHERSUITE)
                 .build()
         };
@@ -1881,6 +1939,63 @@ mod rules_tests {
             Incoming::Application { data, .. } => assert_eq!(data, b"hello, old friend"),
             _ => panic!("the old build reads the group"),
         }
+        assert_eq!(group_created_at(&g), None, "a legacy group has no time");
+
+        // A build with the owner but not `createdAt`: the owner and floor, no time.
+        let mid_peer = dev_with([0xD0; 32], &[GROUP_NAME_EXT, OWNER_EXT, MIN_VERSION_EXT]);
+        let kp = make_key_package_bytes(&mid_peer.client).unwrap();
+        let (g, _c, w, legacy) = create_group_with_peer(&a.client, &kp).unwrap();
+        assert!(!legacy && has_owner_ext(&g), "not legacy: only the time is dropped");
+        assert_eq!(group_created_at(&g), None);
+        join_group(&mid_peer.client, &w).expect("the build without the time joins");
+    }
+
+    // ---- when it was made (`createdAt`) -------------------------------------------
+
+    #[test]
+    fn a_group_is_created_with_when_and_a_joiner_reads_the_same() {
+        let (a, b) = (dev(0xA6), dev(0xB6));
+        let before = now_ms();
+        let gs = group_of(&a, &[&b]);
+        let at = group_created_at(&gs[0]).expect("made with its time");
+        assert!(before <= at && at <= now_ms(), "by the creator's clock");
+        assert_eq!(group_created_at(&gs[1]), Some(at), "the joiner reads it from its Welcome, holding no log");
+    }
+
+    #[test]
+    fn a_rename_and_a_handover_keep_when_and_nothing_may_change_it() {
+        let (a, b) = (dev(0xA7), dev(0xB7));
+        let mut gs = group_of(&a, &[&b]);
+        let at = group_created_at(&gs[0]).unwrap();
+        for owner_change in [false, true] {
+            let commit = if owner_change {
+                stage_set_owner(&mut gs[0], &b.cred).unwrap()
+            } else {
+                stage_rename(&mut gs[0], "renamed").unwrap()
+            };
+            let (ga, gb) = gs.split_at_mut(1);
+            apply_mine(&mut ga[0], &commit, &mut [&mut gb[0]]);
+            assert_eq!(group_created_at(&gb[0]), Some(at), "carried by every context change");
+        }
+
+        // B owns it now, and may neither alter nor drop it.
+        let mut altered = gs[1].context().extensions().clone();
+        altered.set(Extension::new(CREATED_AT_EXT, (at - 1).to_be_bytes().to_vec()));
+        let mut dropped = gs[1].context().extensions().clone();
+        dropped.remove(CREATED_AT_EXT);
+        for exts in [altered, dropped] {
+            let e = gs[1].commit_builder().set_group_context_ext(exts).unwrap().build().unwrap_err();
+            assert!(format!("{e:?}").contains("never changed"), "{e:?}");
+        }
+
+        // Nor may it be added to a group made without it.
+        let mut timeless = genesis_ctx_exts("t", &a.cred);
+        timeless.remove(CREATED_AT_EXT);
+        let mut g = a.client.create_group(timeless, ExtensionList::default(), None).unwrap();
+        let mut added = g.context().extensions().clone();
+        added.set(Extension::new(CREATED_AT_EXT, at.to_be_bytes().to_vec()));
+        let e = g.commit_builder().set_group_context_ext(added).unwrap().build().unwrap_err();
+        assert!(format!("{e:?}").contains("never changed"), "{e:?}");
     }
 
     #[test]
@@ -2302,7 +2417,7 @@ mod rules_tests {
             old.cred,
             &old.sk,
             &old.pk,
-            &[GROUP_NAME_EXT, OWNER_EXT, MIN_VERSION_EXT],
+            &CONTEXT_EXTENSIONS,
         );
         let mut gb = load_group(&new_client, &gid(&ga)).unwrap();
         assert!(!my_leaf_supports_owner_ext(&gb));
@@ -2322,6 +2437,7 @@ mod rules_tests {
         assert!(has_owner_ext(&gb));
         assert_eq!(group_owner(&gb).unwrap(), a.cred);
         assert_eq!(group_floor(&gb).unwrap(), PROTOCOL_VERSION, "the floor arrives with the owner");
+        assert_eq!(group_created_at(&gb), None, "the time does not: it is never added later");
     }
 
     #[test]

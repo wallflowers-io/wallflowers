@@ -26,6 +26,13 @@ fn main() {
     let slot = &icd["mls"]["sequencing"]["slot"];
     let slot_label = slot["label"].as_str().expect("the ICD states mls.sequencing.slot.label");
     let slot_rounds = slot["rounds"].as_u64().expect("the ICD states mls.sequencing.slot.rounds");
+    // The GroupContext extensions Pacific writes, by their ICD names.
+    let ext = |name: &str| {
+        icd["mls"]["groupContextExtensions"][name]["type"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("the ICD states mls.groupContextExtensions.{name}.type"))
+    };
+    let (ext_name, ext_owner, ext_floor, ext_created_at) = (ext("name"), ext("owner"), ext("floor"), ext("createdAt"));
     // How a detached media object is sealed (media.detached, #56): the construction is seal.rs's,
     // so the ICD's cipher must be the one the code runs.
     let media = &icd["media"]["detached"];
@@ -42,6 +49,9 @@ fn main() {
              /// `kinds.forum.ops.\"forum.editDescription\".args.description.maxBytes`, from the ICD at build.\npub const FORUM_DESCRIPTION_MAX: usize = {describe_max};\n\
              /// `mls.sequencing.slot.label`, from the ICD at build.\npub const SEQ_SLOT_LABEL: &str = {slot_label:?};\n\
              /// `mls.sequencing.slot.rounds`, from the ICD at build.\npub const SEQ_SLOT_ROUNDS: usize = {slot_rounds};\n\
+             /// `mls.groupContextExtensions.*.type`, from the ICD at build.\n\
+             pub const EXT_NAME: u16 = {ext_name};\npub const EXT_OWNER: u16 = {ext_owner};\n\
+             pub const EXT_FLOOR: u16 = {ext_floor};\npub const EXT_CREATED_AT: u16 = {ext_created_at};\n\
              /// `media.detached.keyBytes`, from the ICD at build.\npub const MEDIA_KEY_BYTES: usize = {media_key};\n\
              /// `media.detached.nonceBytes`, from the ICD at build.\npub const MEDIA_NONCE_BYTES: usize = {media_nonce};\n"
         ),

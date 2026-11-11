@@ -157,7 +157,8 @@ impl Gateway {
     }
 
     /// The relay's own `GET /health` (relay/src/health.rs), served on its websocket's port:
-    /// whether its store takes a write and how much disk is free. `None` with no relay.
+    /// whether its store takes a write, how much disk is free, and how full the media budget
+    /// is (null with no media meter). `None` with no relay.
     async fn relay_health(&self) -> Option<serde_json::Value> {
         let ws = self.relay.as_deref()?;
         let url = format!("{}/health", ws.trim_end_matches('/').replacen("ws", "http", 1));
@@ -166,7 +167,13 @@ impl Gateway {
             Ok(r) => {
                 let ok = r.status().is_success();
                 let b: serde_json::Value = r.json().await.unwrap_or_default();
-                serde_json::json!({ "live": true, "ok": ok, "store": b["store"], "disk_free_pct": b["disk_free_pct"] })
+                serde_json::json!({
+                    "live": true,
+                    "ok": ok,
+                    "store": b["store"],
+                    "disk_free_pct": b["disk_free_pct"],
+                    "media_used_pct": b["media_used_pct"],
+                })
             }
             Err(_) => serde_json::json!({ "live": false, "ok": false }),
         })
@@ -1515,6 +1522,8 @@ mod tests {
         let (status, body) = ask(Some(relay_at(0).await)).await;
         assert_eq!((status, &body["status"]), (StatusCode::OK, &serde_json::json!("ok")), "{body}");
         assert_eq!(body["planes"]["relay"]["store"], true);
+        let relay = body["planes"]["relay"].as_object().unwrap();
+        assert_eq!(relay.get("media_used_pct"), Some(&serde_json::Value::Null), "carried, null with no media meter: {body}");
 
         let (status, body) = ask(Some(relay_at(101).await)).await;
         assert_eq!((status, &body["status"]), (StatusCode::SERVICE_UNAVAILABLE, &serde_json::json!("degraded")), "{body}");

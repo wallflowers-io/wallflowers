@@ -29,6 +29,7 @@ final class FeedStore: ObservableObject {
         let assembled = FeedAssembler.rows(events: core.events, listings: core.listings,
                                            things: core.things, posts: core.posts, exteriors: core.exteriors, nowMs: now,
                                            makerOf: index.maker(of:),
+                                           createdOf: index.createdAt(of:),
                                            nameFor: { names[$0] ?? String($0.prefix(8)) })
         let filtered = FeedAssembler.filter(assembled, locked: query.locked)
         ledger.observe(filtered, nowMs: now)

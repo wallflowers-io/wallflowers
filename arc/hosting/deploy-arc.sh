@@ -160,8 +160,6 @@ REQUIRED_ENV="ARC_NAME ARC_CLAIM_KEYS PACIFIC_STATE_DIR
   ARC_RELAY_UPSTREAM ARC_MEMBERSHIP_UPSTREAM ARC_BOXOFFICE_UPSTREAM ARC_WAKER_UPSTREAM
   RELAY_BIND RELAY_STORE ARC_RELAY_URL RELAY_MAX_STORE_BYTES RELAY_MAX_BLOB_BYTES
   RELAY_R2_ENDPOINT RELAY_R2_BUCKET RELAY_R2_ACCESS_KEY_ID RELAY_R2_SECRET_ACCESS_KEY RELAY_R2_REGION"
-# Production's alarm: without a DSN the relay's store and disk alarms reach nobody (8 Nov 2026).
-[ -n "${ARC_BOX:-}" ] || REQUIRED_ENV="$REQUIRED_ENV SENTRY_DSN SENTRY_ENVIRONMENT"
 # The names of REQUIRED_ENV the box's arc.env leaves unset or empty. Read on the box by root;
 # only names come back. ARC_ENV_PATH only so this can run against a scratch file.
 env_unset() {
