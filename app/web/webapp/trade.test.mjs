@@ -32,8 +32,11 @@ test('a Thing with a posture lists on a Site as the ICD says; one with none cann
   const a = Trade.listArgs(thing({ posture: 'Selling', price: '£40', area: 'Mill Road', photos: [{ id: '0000000000000001', mime: 'image/png', data: 'cHJvYmU=', at: 1 }] }), NOW);
   declared('group', 'group.publishListing', a);
   assert.deepEqual([a.thingId, a.title, a.posture, a.price, a.area, a.photo, a.photoMime], [THING, 'A bike', 'Selling', '£40', 'Mill Road', 'cHJvYmU=', 'image/png']);
-  assert.ok(a.rev >= 0 && !('withdrawn' in a));
+  assert.ok(a.rev >= 0 && !('withdrawn' in a) && !('createdAt' in a), 'a Thing made before createdAt lists without one');
   assert.equal(Trade.listArgs(thing({ posture: null }), NOW), null);
+  const dated = Trade.listArgs({ ...thing({ posture: 'Offers' }), createdAt: NOW - 1 }, NOW);
+  declared('group', 'group.publishListing', dated);
+  assert.equal(dated.createdAt, NOW - 1, "the Thing's own time, from /v2/graph");
 });
 
 test('withdrawing a listing restates it, withdrawn, at a later rev', () => {

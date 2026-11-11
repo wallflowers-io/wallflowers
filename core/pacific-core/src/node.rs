@@ -856,7 +856,7 @@ impl Node {
         // Whoever creates the object determines its governing Arc: stamp OUR default.
         let my_arc = self.my_default_arc();
         self.dir
-            .put_group(&group_id, kind, &self.id.identity_pk(), Some(&my_arc))?;
+            .put_group(&group_id, kind, &self.id.identity_pk(), Some(&my_arc), mls::group_created_at(&group))?;
         self.dir
             .set_group_members(&group_id, &mls::roster_identities(&group)?)?;
         // The owner from epoch 0, and this leaf's freshness (§10.2, §11).
@@ -2827,6 +2827,7 @@ impl Node {
             kind,
             &self.id.identity_pk(),
             Some(&self.my_default_arc()),
+            mls::group_created_at(&group),
         )?;
         self.dir
             .set_group_members(&group_id, &mls::roster_identities(&group)?)?;
@@ -3720,12 +3721,13 @@ impl Node {
         let owner = mls::group_owner(&group)?;
         let roster = mls::roster_identities(&group)?;
         let epoch = group.current_epoch();
+        let created_at = mls::group_created_at(&group);
         drop(group);
 
         self.dir.record_owner(gid, epoch, &owner)?;
         if self.dir.group_kind(gid)?.is_none() {
             let arc = (!way.arc.is_empty()).then_some(way.arc.as_str());
-            self.dir.put_group(gid, &way.kind, &owner, arc)?;
+            self.dir.put_group(gid, &way.kind, &owner, arc, created_at)?;
         }
         self.dir.set_group_members(gid, &roster)?;
         // THE GEN FLOOR. The pool leaf is the same author as the person's other
@@ -11660,7 +11662,7 @@ impl Node {
         }
         if self.dir.group_kind(&group_id)?.is_none() {
             self.dir
-                .put_group(&group_id, &kind, &owner_pk, payload.arc.as_deref())?;
+                .put_group(&group_id, &kind, &owner_pk, payload.arc.as_deref(), mls::group_created_at(&group))?;
             self.dir
                 .set_group_members(&group_id, &mls::roster_identities(&group)?)?;
             if kind == "connection" {

@@ -60,16 +60,19 @@ struct TypedListPage: View {
             return core.spaces.map {
                 FeedItem(id: "group:\($0.id)", category: .groups, title: $0.name,
                          author: "", location: "", footer: "",
-                         whenMs: 0, provenance: .member, objectID: $0.id)
+                         whenMs: 0, provenance: .member, objectID: $0.id,
+                         createdAt: core.index.createdAt(of: $0.id))
             }
         case .events:
             return FeedAssembler.rows(events: core.events, listings: [], nowMs: now,
-                                      makerOf: core.index.maker(of:))
+                                      makerOf: core.index.maker(of:),
+                                      createdOf: core.index.createdAt(of:))
         case .places:
             return core.places.map {
                 FeedItem(id: "place:\($0.id)", category: .places, title: $0.name,
                          author: "", location: $0.label, footer: "",
-                         whenMs: 0, provenance: .member, objectID: $0.id)
+                         whenMs: 0, provenance: .member, objectID: $0.id,
+                         createdAt: core.index.createdAt(of: $0.id))
             }
         case .people:
             return core.connectionRows().map {
@@ -81,7 +84,8 @@ struct TypedListPage: View {
         case .trade:
             return FeedAssembler.rows(events: [], listings: core.listings, things: core.things,
                                       exteriors: core.exteriors.filter { $0.kind == "thing" }, nowMs: now,
-                                      makerOf: core.index.maker(of:))
+                                      makerOf: core.index.maker(of:),
+                                      createdOf: core.index.createdAt(of:))
         // CHANNELS lists nothing HERE: a channel belongs to a Space, so its list
         // is the Space profile's lane, not a global typed list. Empty is the
         // honest answer rather than a flattened cross-Space roll-up.

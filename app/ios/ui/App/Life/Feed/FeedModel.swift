@@ -4,9 +4,9 @@
 //  Everything here is a pure function so the notch semantics are unit-testable. The
 //  assembler consumes the reads the app already publishes (events, listings); place
 //  posts and hydrated System items join when their FFI reads land — same FeedItem,
-//  new provenance. Ordering is soonest-first over `whenMs` as a stand-in for log
-//  order: EventRow/ListingRow do not yet carry their delta timestamp (SC-6 gap,
-//  recorded in the brief).
+//  new provenance. Ordering is soonest-first over `whenMs`. When each object was made
+//  rides its GroupContext (`createdAt`) and shows as the card's recency; it does not
+//  order the feed.
 //
 //  LOCK SEMANTICS (0-ANSWER-G refinement, Ralph's word): locking selectors FILTERS
 //  THE DELTAS SHOWN IN THE FEED, by kind. Empty lock set = every delta passes;
@@ -62,6 +62,8 @@ struct FeedItem: Identifiable, Equatable {
     var authorRoute: AuthorRoute? = nil
     /// The author's identity hex, for the header's avatar; nil when the card has no person.
     var authorID: String? = nil
+    /// When the object was made, unix ms (its `createdAt`); nil when it carries none.
+    var createdAt: Int64? = nil
     /// Set on a card for an object I am not in that has an exterior: the tap opens it, and
     /// "Ask to join" is its one act. nil with no `objectID` = a card with nothing behind it.
     var exterior: ExteriorRef? = nil
@@ -75,6 +77,7 @@ struct FeedItem: Identifiable, Equatable {
             && a.whenMs == b.whenMs && a.provenance == b.provenance
             && a.objectID == b.objectID && a.bannerB64.count == b.bannerB64.count
             && a.authorRoute == b.authorRoute && a.authorID == b.authorID && a.exterior == b.exterior
+            && a.createdAt == b.createdAt
     }
 }
 
@@ -104,7 +107,7 @@ enum FeedAssembler {
     /// profile listing the events that Space carries, past ones included — calls this
     /// directly. The date rule belongs to the feed, the projection belongs to the
     /// object, and they are not the same decision.
-    static func item(for e: PacificCore.EventRow, maker: Maker?) -> FeedItem {
+    static func item(for e: PacificCore.EventRow, maker: Maker?, createdAt: Int64? = nil) -> FeedItem {
         FeedItem(
             id: "event:\(e.id)",
             category: .events,
@@ -117,7 +120,8 @@ enum FeedAssembler {
             objectID: e.id,
             bannerB64: e.banner,
             authorRoute: maker?.id.map(AuthorRoute.person),
-            authorID: maker?.id)
+            authorID: maker?.id,
+            createdAt: createdAt)
     }
 
     /// Who a card names as its author: a name, and the person's identity when there is one.
@@ -129,17 +133,14 @@ enum FeedAssembler {
     static func rows(events: [PacificCore.EventRow], listings: [ListingRow],
                      things: [ThingRow] = [], posts: [PostRow] = [], exteriors: [ExteriorRow] = [], nowMs: Int64,
                      makerOf: (String) -> Maker? = { _ in nil },
+                     createdOf: (String) -> Int64? = { _ in nil },
                      nameFor: (String) -> String = { String($0.prefix(8)) }) -> [FeedItem] {
         var out: [FeedItem] = []
         out.reserveCapacity(events.count + listings.count + things.count + posts.count)
 
-        // POSTS. A Post has no `when` of its own — it is not scheduled, it was written —
-        // so it rides at `nowMs`, exactly as a standing listing does, and interleaves with
-        // the near future instead of pinning to an epoch.
-        //
-        // This is the SC-6 gap showing: ordering here stands in for LOG ORDER, and no row
-        // carries its delta timestamp yet. When they do, a Post sorts by when it was
-        // written, which is the only ordering that is actually true of it.
+        // POSTS. A Post is not scheduled, it was written: it rides at `nowMs`, as a
+        // standing listing does, and interleaves with the near future. When it was
+        // written is its `createdAt`, shown on the card.
         //
         // A RETRACTED post still appears. The author took it down, which is a statement,
         // and the row shows the tombstone — dropping it here would make "taken down"
@@ -158,11 +159,12 @@ enum FeedAssembler {
                 objectID: p.id,
                 bannerB64: p.retracted ? "" : p.banner,
                 authorRoute: maker?.id.map(AuthorRoute.person),
-                authorID: maker?.id))
+                authorID: maker?.id,
+                createdAt: createdOf(p.id)))
         }
 
         for e in events where e.endMs >= nowMs || e.startMs >= nowMs {
-            out.append(item(for: e, maker: makerOf(e.id)))
+            out.append(item(for: e, maker: makerOf(e.id), createdAt: createdOf(e.id)))
         }
         // MY OWN LISTINGS: Things I hold, folds I am in. `listings` is everyone else's
         // and excludes mine, so without these a Listing I make never reaches a card.
@@ -180,7 +182,8 @@ enum FeedAssembler {
                 objectID: t.id,
                 bannerB64: t.photo,
                 authorRoute: maker?.id.map(AuthorRoute.person),
-                authorID: maker?.id))
+                authorID: maker?.id,
+                createdAt: createdOf(t.id)))
         }
         // A listing and an exterior of the same Thing are one thing: its card carries both.
         let outside = Dictionary(exteriors.map { ($0.object, $0) }, uniquingKeysWith: { a, _ in a })
@@ -246,6 +249,25 @@ enum FeedAssembler {
     static func filter(_ rows: [FeedItem], locked: Set<EventCategory>) -> [FeedItem] {
         guard !locked.isEmpty else { return rows }
         return rows.filter { locked.contains($0.category) }
+    }
+
+    /// How long ago `createdAt` was, as the card's recency: "now", "5m", "2h", "3d",
+    /// then the date ("12 Oct"; "12 Oct 2025" in another year).
+    static func recency(_ createdAt: Int64, nowMs: Int64) -> String {
+        let s = max(0, (nowMs - createdAt) / 1000)
+        switch s {
+        case ..<60: return "now"
+        case ..<3600: return "\(s / 60)m"
+        case ..<86_400: return "\(s / 3600)h"
+        case ..<(7 * 86_400): return "\(s / 86_400)d"
+        default:
+            let then = Date(timeIntervalSince1970: Double(createdAt) / 1000)
+            let sameYear = Calendar.current.isDate(then, equalTo: Date(timeIntervalSince1970: Double(nowMs) / 1000),
+                                                   toGranularity: .year)
+            let f = DateFormatter()
+            f.dateFormat = sameYear ? "d MMM" : "d MMM yyyy"
+            return f.string(from: then)
+        }
     }
 
     /// A listing's honest "when": its posture, and its deadline when it has one.

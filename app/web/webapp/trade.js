@@ -32,6 +32,7 @@
     if (v.area) a.area = v.area;
     var p = (v.photos || [])[0];
     if (p && p.data) { a.photo = p.data; a.photoMime = p.mime; }
+    if (o.createdAt) a.createdAt = o.createdAt;
     return a;
   }
 

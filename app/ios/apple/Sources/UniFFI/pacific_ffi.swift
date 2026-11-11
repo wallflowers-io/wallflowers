@@ -9529,6 +9529,10 @@ public struct ObjectRow {
      * Who made it: the group's first owner. A handover never changes it.
      */
     public var creator: String
+    /**
+     * When it was made, unix ms (the GroupContext's `createdAt`); `None` before it existed.
+     */
+    public var createdAt: Int64?
     public var members: [String]
     /**
      * The object it is a part of (`base.setParent`), and in what role (`comments`, `room`, …).
@@ -9546,7 +9550,10 @@ public struct ObjectRow {
     public init(id: String, kind: String, name: String, owner: String, 
         /**
          * Who made it: the group's first owner. A handover never changes it.
-         */creator: String, members: [String], 
+         */creator: String, 
+        /**
+         * When it was made, unix ms (the GroupContext's `createdAt`); `None` before it existed.
+         */createdAt: Int64?, members: [String], 
         /**
          * The object it is a part of (`base.setParent`), and in what role (`comments`, `room`, …).
          */parent: String, parentRole: String, 
@@ -9558,6 +9565,7 @@ public struct ObjectRow {
         self.name = name
         self.owner = owner
         self.creator = creator
+        self.createdAt = createdAt
         self.members = members
         self.parent = parent
         self.parentRole = parentRole
@@ -9585,6 +9593,9 @@ extension ObjectRow: Equatable, Hashable {
         if lhs.creator != rhs.creator {
             return false
         }
+        if lhs.createdAt != rhs.createdAt {
+            return false
+        }
         if lhs.members != rhs.members {
             return false
         }
@@ -9609,6 +9620,7 @@ extension ObjectRow: Equatable, Hashable {
         hasher.combine(name)
         hasher.combine(owner)
         hasher.combine(creator)
+        hasher.combine(createdAt)
         hasher.combine(members)
         hasher.combine(parent)
         hasher.combine(parentRole)
@@ -9630,6 +9642,7 @@ public struct FfiConverterTypeObjectRow: FfiConverterRustBuffer {
                 name: FfiConverterString.read(from: &buf), 
                 owner: FfiConverterString.read(from: &buf), 
                 creator: FfiConverterString.read(from: &buf), 
+                createdAt: FfiConverterOptionInt64.read(from: &buf), 
                 members: FfiConverterSequenceString.read(from: &buf), 
                 parent: FfiConverterString.read(from: &buf), 
                 parentRole: FfiConverterString.read(from: &buf), 
@@ -9644,6 +9657,7 @@ public struct FfiConverterTypeObjectRow: FfiConverterRustBuffer {
         FfiConverterString.write(value.name, into: &buf)
         FfiConverterString.write(value.owner, into: &buf)
         FfiConverterString.write(value.creator, into: &buf)
+        FfiConverterOptionInt64.write(value.createdAt, into: &buf)
         FfiConverterSequenceString.write(value.members, into: &buf)
         FfiConverterString.write(value.parent, into: &buf)
         FfiConverterString.write(value.parentRole, into: &buf)

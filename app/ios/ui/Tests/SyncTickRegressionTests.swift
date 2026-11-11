@@ -22,7 +22,7 @@ private func msg(_ text: String, gen: UInt64) -> ChatMsg {
 }
 
 private func objectRow(id: String, kind: String, name: String, members: [String] = []) -> ObjectRow {
-    ObjectRow(id: id, kind: kind, name: name, owner: "", creator: "", members: members,
+    ObjectRow(id: id, kind: kind, name: name, owner: "", creator: "", createdAt: nil, members: members,
               parent: "", parentRole: "", peer: "", link: "")
 }
 

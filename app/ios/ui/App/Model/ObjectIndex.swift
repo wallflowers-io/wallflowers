@@ -30,6 +30,10 @@ struct ObjectIndex: Equatable {
 
     func object(_ id: String) -> ObjectRow? { rows.first { $0.id == id } }
 
+    /// When an object was made (unix ms, its `createdAt`); nil when unknown here or made
+    /// before the time was kept.
+    func createdAt(of id: String) -> Int64? { object(id)?.createdAt }
+
     /// A Forum that is its parent's comments section: reached from its object, never
     /// listed as a conversation.
     func isCommentsSection(_ forumId: String) -> Bool {
