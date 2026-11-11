@@ -53,10 +53,10 @@ use crate::sigv4::{presign, Credentials, Presign};
 /// bucket by accident. It has NOT been ruled on as a product limit.
 const DEFAULT_MAX_BYTES: u64 = 25 * 1024 * 1024;
 
-/// Five minutes. Long enough to start an upload on a poor connection, short
-/// enough that a leaked URL is worth little. The object stays encrypted either
-/// way — the URL is a capability to move ciphertext, not to read anything.
-const DEFAULT_TTL: Duration = Duration::from_secs(300);
+/// Fifteen minutes (#56, ruled 9 Nov 2026): a 25 MiB clip on a 0.5 Mbit/s uplink
+/// takes about seven, and five failed it. A leaked URL moves only ciphertext, of
+/// the declared length, to one key; it reads nothing.
+const DEFAULT_TTL: Duration = Duration::from_secs(900);
 
 /// Why a presign was refused. These strings cross the wire to the client, so they
 /// are stable, short, and carry nothing about other clients or the store.
@@ -429,6 +429,21 @@ mod tests {
     fn an_upload_cannot_overwrite() {
         let put = media().presign_put(&key(), 512).unwrap();
         assert!(put.contains("X-Amz-SignedHeaders=content-length%3Bhost%3Bif-none-match"), "{put}");
+    }
+
+    /// Ruled 9 Nov 2026 (#56): fifteen minutes, which a 25 MiB clip on a slow uplink fits.
+    #[test]
+    fn a_presigned_url_lives_fifteen_minutes() {
+        assert_eq!(DEFAULT_TTL, Duration::from_secs(900));
+        let m = Media::new(
+            "acct.r2.cloudflarestorage.com",
+            "pacific-media",
+            Credentials { access_key_id: "AKIAIOSFODNN7EXAMPLE".into(), secret_access_key: "x".into() },
+            1024,
+            DEFAULT_TTL,
+        );
+        assert!(m.presign_put(&key(), 512).unwrap().contains("X-Amz-Expires=900"));
+        assert!(m.presign_get(&key()).unwrap().contains("X-Amz-Expires=900"));
     }
 
     #[test]
