@@ -160,7 +160,7 @@
       "t": "media_err",
       "dir": "to_client",
       "min_v": 2,
-      "doc": "The presign was refused. reason is a stable token: unconfigured | bad_key | too_large | over_budget | budget_stale.",
+      "doc": "The presign was refused. reason is a stable token: unconfigured | bad_key | too_large | over_budget | budget_stale | rate_limited.",
       "encodings": [
         "{\"t\":\"media_err\",\"key\":\"ab\",\"reason\":\"too_large\"}"
       ],

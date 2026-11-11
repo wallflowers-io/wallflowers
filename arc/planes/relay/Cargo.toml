@@ -57,6 +57,9 @@ pacific-wire = { git = "https://codeberg.org/phezman/pacific.git", rev = "9e64f7
 # Object-storage bodies (src/blobs.rs) and the storage usage meter (`usage_loop` in src/lib.rs):
 # HTTPS over rustls, like the rest of this OpenSSL-free workspace.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# RELAY_R2_ENDPOINT parsed as a URL, so the loopback-only plain-http check cannot be fooled by
+# userinfo (`http://127.0.0.1@evil.example`).
+url = "2"
 
 # Operational telemetry. This workspace is OpenSSL-free (mls-rs uses rustcrypto),
 # so Sentry must ship over a RUSTLS transport — never native-tls. We therefore turn

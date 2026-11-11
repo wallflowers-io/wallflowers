@@ -301,8 +301,9 @@ class R2Relay:
                 return MediaError.OVER_BUDGET
             if verdict is Verdict.STALE:
                 return MediaError.BUDGET_STALE
+        # media.rs: an upload only creates (`if-none-match: *`), so a key cannot be overwritten.
         return self._sign("PUT", [self.bucket, key],
-                          [("content-length", str(length))], [], now)
+                          [("content-length", str(length)), ("if-none-match", "*")], [], now)
 
     def presign_get(self, key: str, now=None) -> str | MediaError:
         """The relay does NOT check existence: a blind relay has no business

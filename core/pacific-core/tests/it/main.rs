@@ -99,6 +99,7 @@ mod o75_history_bundles;
 mod o75_history_through_the_arc;
 mod o75_the_arc_sends_a_late_joiners_history;
 mod o77_a_member_publishes_their_card;
+mod o79_media_detached;
 mod object_rows;
 mod p1_resume_from_words;
 mod pool_chain;
