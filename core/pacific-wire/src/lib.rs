@@ -804,6 +804,8 @@ mod wire_spec {
     }
 }
 
+/// When a long-lived connection owes a ping, and when its peer is dead (sans-io).
+pub mod liveness;
 /// The Arc↔client stream: ONE object owning the tunnel on both ends (sans-io).
 pub mod tunnel;
 pub mod address;

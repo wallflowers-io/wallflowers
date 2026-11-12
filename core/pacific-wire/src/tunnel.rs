@@ -235,12 +235,12 @@ pub struct Tunnel {
     recv: BTreeMap<u32, RecvLane>,
     out: VecDeque<TunnelFrame>,
     events: VecDeque<TunnelEvent>,
-    last_rx: i64,
-    last_tx: i64,
+    live: crate::liveness::Liveness,
 }
 
 impl Tunnel {
     pub fn new(role: Role, cfg: TunnelConfig) -> Self {
+        let live = crate::liveness::Liveness::new(cfg.idle_ping_ms, cfg.dead_after_ms, 0);
         Self {
             role,
             cfg,
@@ -252,8 +252,7 @@ impl Tunnel {
             recv: BTreeMap::new(),
             out: VecDeque::new(),
             events: VecDeque::new(),
-            last_rx: 0,
-            last_tx: 0,
+            live,
         }
     }
 
@@ -361,7 +360,7 @@ impl Tunnel {
         if self.state == Attach::Closed {
             return;
         }
-        self.last_rx = now_ms;
+        self.live.heard(now_ms);
         match frame {
             TunnelFrame::Hello { space, credential, resume, windows } => {
                 if self.role != Role::Arc {
@@ -417,7 +416,7 @@ impl Tunnel {
                 self.flush_blocked(chan, now_ms);
             }
             TunnelFrame::Ping { at } => self.push(TunnelFrame::Pong { at }, now_ms),
-            TunnelFrame::Pong { .. } => {} // last_rx already updated: that was the point
+            TunnelFrame::Pong { .. } => {} // already heard: that was the point
             TunnelFrame::Close { reason } => {
                 self.state = Attach::Closed;
                 self.events.push_back(TunnelEvent::Closed { reason });
@@ -434,16 +433,16 @@ impl Tunnel {
         if self.state != Attach::Attached {
             return;
         }
-        if now_ms - self.last_rx >= self.cfg.dead_after_ms {
-            // Same rule as `transport_lost`: whatever was queued was for a socket
-            // that is demonstrably not carrying anything.
-            self.out.clear();
-            self.state = Attach::Idle;
-            self.events.push_back(TunnelEvent::PeerDead);
-            return;
-        }
-        if now_ms - self.last_tx >= self.cfg.idle_ping_ms {
-            self.push(TunnelFrame::Ping { at: now_ms }, now_ms);
+        match self.live.due(now_ms) {
+            crate::liveness::Due::Dead => {
+                // Same rule as `transport_lost`: whatever was queued was for a socket
+                // that is demonstrably not carrying anything.
+                self.out.clear();
+                self.state = Attach::Idle;
+                self.events.push_back(TunnelEvent::PeerDead);
+            }
+            crate::liveness::Due::Ping => self.push(TunnelFrame::Ping { at: now_ms }, now_ms),
+            crate::liveness::Due::Nothing => {}
         }
     }
 
@@ -501,7 +500,7 @@ impl Tunnel {
         }
         let chans: Vec<u32> = windows.iter().map(|(c, _)| *c).collect();
         for chan in chans {
-            self.flush_blocked(chan, self.last_tx);
+            self.flush_blocked(chan, self.live.last_sent());
         }
     }
 
@@ -554,7 +553,7 @@ impl Tunnel {
     }
 
     fn push(&mut self, frame: TunnelFrame, now_ms: i64) {
-        self.last_tx = now_ms;
+        self.live.sent(now_ms);
         self.out.push_back(frame);
     }
 }
