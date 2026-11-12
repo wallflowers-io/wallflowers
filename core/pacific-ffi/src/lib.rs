@@ -5051,6 +5051,49 @@ mod held_node_tests {
     }
 }
 
+/// #144: every Node the FFI opens shares the process's link. Fifteen syncs from three
+/// threads, each on a Node and runtime of its own as the app makes them, dial the relay at
+/// most the link's pool, not once or more per call.
+#[cfg(test)]
+mod link_tests {
+    use super::*;
+
+    #[test]
+    fn syncs_from_three_threads_share_the_link() {
+        let _held = STATE_DIR.lock().unwrap_or_else(|e| e.into_inner());
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let relay = rt.block_on(async {
+            let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("ws://{}", l.local_addr().unwrap());
+            tokio::spawn(relay::serve(l));
+            url
+        });
+        let dir = std::env::temp_dir().join(format!("pacific-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("PACIFIC_STATE_DIR", &dir);
+        pacific_core::node::set_default_arc(&relay).unwrap();
+        let core = Core::new(dir.to_string_lossy().to_string());
+        core.init_identity("Ada".into()).unwrap();
+        core.set_routes(relay.clone()).unwrap();
+        core.sync().expect("a first sync");
+
+        let before = pacific_core::transport::dials();
+        std::thread::scope(|s| {
+            for _ in 0..3 {
+                s.spawn(|| {
+                    for _ in 0..5 {
+                        core.sync().expect("a sync");
+                    }
+                });
+            }
+        });
+        let dialled = pacific_core::transport::dials() - before;
+        assert!(dialled <= pacific_core::link::POOL as u64, "15 syncs dialled {dialled} times");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
 /// The media round trip as the app makes it (O-79, #56): `media_put` from one device, and
 /// `media_get` of its reference from a device that has never seen the object's group.
 #[cfg(test)]
