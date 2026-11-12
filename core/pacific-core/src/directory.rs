@@ -486,6 +486,18 @@ CREATE TABLE IF NOT EXISTS door_evicted (
   total  INTEGER NOT NULL DEFAULT 0
 );
 
+-- THE HOSTED EXTERIORS THIS DEVICE HAS WRITTEN OR READ (media.hosted): per object, the newest
+-- version seen, so a reader refuses an older copy; what it said, so a writer writes only a
+-- change and a reader draws without a fetch; and when, so neither asks the relay too often.
+-- Not state: the relay holds each document, so a device that has none fetches it again.
+CREATE TABLE IF NOT EXISTS hosted_exterior (
+  object   TEXT PRIMARY KEY,                -- the object's id, hex
+  version  INTEGER NOT NULL,                -- the document's version, unix ms
+  digest   BLOB NOT NULL,                   -- SHA-256 of the body as written or read
+  at       INTEGER NOT NULL,                -- unix s it was last written or fetched
+  body     TEXT NOT NULL                    -- the fields, JSON; "" for a tombstone
+);
+
 -- The substrate source of truth: the per-object append-only delta log.
 -- `delivered` is the outbox flag: 0 = authored locally but not yet confirmed PUB'd
 -- to the relay (flush on next reconnect), 1 = relay-ack'd, or received. A received
@@ -2180,6 +2192,29 @@ impl Directory {
             )?;
         }
         Ok(rose)
+    }
+
+    /// The hosted exterior last written or read for `object`: (version, digest, at, body).
+    pub fn hosted_exterior(&self, object: &str) -> Result<Option<(i64, Vec<u8>, i64, String)>, CoreError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT version, digest, at, body FROM hosted_exterior WHERE object=?1",
+                params![object],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .optional()?)
+    }
+
+    /// Record a hosted exterior written or read. A version below the one held is not recorded.
+    pub fn put_hosted_exterior(&self, object: &str, version: i64, digest: &[u8], at: i64, body: &str) -> Result<(), CoreError> {
+        self.conn.execute(
+            "INSERT INTO hosted_exterior (object, version, digest, at, body) VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(object) DO UPDATE SET version=excluded.version, digest=excluded.digest, at=excluded.at, body=excluded.body
+             WHERE excluded.version >= hosted_exterior.version",
+            params![object, version, digest, at, body],
+        )?;
+        Ok(())
     }
 
     /// The knocks still waiting at a door: (id, blob, attempts, next_at).

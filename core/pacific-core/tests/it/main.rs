@@ -22,6 +22,7 @@ mod d58_admission_to_the_sites_rooms;
 mod devstate_seal;
 mod devstate_stale;
 mod exterior_and_the_door;
+mod exterior_hosted;
 mod g1_g2_axels_laptop;
 mod gate_a1a_key_package_binds_to_its_signer;
 mod gate_a1a_pacific_builder_admits_two_leaves;

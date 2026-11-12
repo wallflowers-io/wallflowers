@@ -137,6 +137,53 @@ pub async fn get(relay: &str, kept: Option<&Path>, r: &MediaRef) -> Result<Vec<u
     seal::open_with_key(&object, &k, key.as_bytes())
 }
 
+/// Overwrite `address`'s hosted object with `sealed` (`media.hosted`): the one upload that
+/// replaces, asked by the object's own key.
+pub async fn put_hosted(relay: &str, address: &pacific_wire::address::Address, sealed: &[u8]) -> Result<(), CoreError> {
+    PRESIGNED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let mut s = RelaySession::connect(relay).await?;
+    let url = s.media_host_url(address, sealed.len() as u64, at).await;
+    s.close().await;
+    let url = presigned_url(relay, url?)?;
+    let res = http()?
+        .put(url)
+        .body(sealed.to_vec())
+        .send()
+        .await
+        .map_err(|e| CoreError::Transport(format!("hosted upload: {e}")))?;
+    if !res.status().is_success() {
+        return Err(CoreError::Transport(format!("hosted upload: object storage answered {}", res.status())));
+    }
+    Ok(())
+}
+
+/// A hosted object's bytes as they stand, sealed, or `None` when there is none yet. Never kept:
+/// it changes, so a reader fetches it again to see a change. Never more than `maxBytes`.
+pub async fn get_hosted(relay: &str, key: &str) -> Result<Option<Vec<u8>>, CoreError> {
+    let max = crate::exterior::icd::HOSTED_MAX_BYTES as u64;
+    let url = presign(relay, key, None).await?;
+    let mut res = http()?.get(url).send().await.map_err(|e| CoreError::Transport(format!("hosted fetch: {e}")))?;
+    if res.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    if !res.status().is_success() {
+        return Err(CoreError::Transport(format!("hosted fetch: object storage answered {}", res.status())));
+    }
+    let big = || CoreError::Seal("hosted fetch: past media.hosted.maxBytes".into());
+    if res.content_length().is_some_and(|n| n > max) {
+        return Err(big());
+    }
+    let mut object = Vec::new();
+    while let Some(chunk) = res.chunk().await.map_err(|e| CoreError::Transport(format!("hosted fetch: {e}")))? {
+        if (object.len() + chunk.len()) as u64 > max {
+            return Err(big());
+        }
+        object.extend_from_slice(&chunk);
+    }
+    Ok(Some(object))
+}
+
 /// Keep an object under its key: written beside and renamed, so a reader never sees half of one.
 /// A failure costs a fetch next time, not the bytes now.
 fn keep(dir: &Path, key: &str, object: &[u8]) {

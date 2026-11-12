@@ -533,6 +533,11 @@ pub fn fields_of(ext: &Exterior, state: KindState<'_>, ctx: &FieldsCtx<'_>) -> s
     f
 }
 
+/// The fields as the JSON an app reads.
+pub fn fields_json(f: serde_json::Map<String, serde_json::Value>) -> String {
+    serde_json::Value::Object(f).to_string()
+}
+
 /// The keys a kind's hosted document may hold (`facets.exterior.fields`).
 pub fn declared_fields(kind: crate::object::ObjectKind) -> Vec<&'static str> {
     use crate::object::ObjectKind;

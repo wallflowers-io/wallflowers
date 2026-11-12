@@ -52,6 +52,87 @@ fn content(v: &[ForumMessage]) -> Vec<ForumMessage> {
 /// test shouldn't wedge the rest).
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+/// Objects held by [`object_store`], by path.
+pub type Objects = std::sync::Arc<Mutex<std::collections::HashMap<String, Vec<u8>>>>;
+
+/// OBJECT STORAGE ON THIS MACHINE, as R2 answers: a PUT with `If-None-Match: *` creates and is
+/// refused 412 over an object already there; a PUT without it overwrites; a GET returns the
+/// object or 404. Signatures are not checked: the relay's presign is tested in the relay.
+pub async fn object_store() -> (String, Objects) {
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let at = l.local_addr().unwrap().to_string();
+    let objects: Objects = Default::default();
+    let held = objects.clone();
+    tokio::spawn(async move {
+        loop {
+            let (sock, _) = l.accept().await.unwrap();
+            let held = held.clone();
+            tokio::spawn(async move {
+                let mut r = BufReader::new(sock);
+                let mut line = String::new();
+                r.read_line(&mut line).await.unwrap();
+                let mut parts = line.split_whitespace();
+                let (method, target) = (parts.next().unwrap_or("").to_string(), parts.next().unwrap_or("").to_string());
+                let path = target.split('?').next().unwrap().to_string();
+                let (mut len, mut only_create) = (0usize, false);
+                loop {
+                    let mut h = String::new();
+                    r.read_line(&mut h).await.unwrap();
+                    if h == "\r\n" || h.is_empty() {
+                        break;
+                    }
+                    let h = h.to_ascii_lowercase();
+                    if let Some(v) = h.strip_prefix("content-length:") {
+                        len = v.trim().parse().unwrap();
+                    }
+                    only_create |= h.strip_prefix("if-none-match:").is_some_and(|v| v.trim() == "*");
+                }
+                let (status, body) = match method.as_str() {
+                    "PUT" => {
+                        let mut b = vec![0u8; len];
+                        r.read_exact(&mut b).await.unwrap();
+                        let mut held = held.lock().unwrap();
+                        if only_create && held.contains_key(&path) {
+                            ("412 Precondition Failed", Vec::new())
+                        } else {
+                            held.insert(path, b);
+                            ("200 OK", Vec::new())
+                        }
+                    }
+                    "GET" => match held.lock().unwrap().get(&path) {
+                        Some(b) => ("200 OK", b.clone()),
+                        None => ("404 Not Found", Vec::new()),
+                    },
+                    _ => ("405 Method Not Allowed", Vec::new()),
+                };
+                let mut sock = r.into_inner();
+                let head = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                sock.write_all(head.as_bytes()).await.unwrap();
+                sock.write_all(&body).await.unwrap();
+            });
+        }
+    });
+    (at, objects)
+}
+
+/// A relay that presigns for `store` over plain http, as it presigns for R2.
+async fn spawn_relay_with_media(store: &str) -> String {
+    let media = relay::media::Media::new(
+        store,
+        "pacific-media",
+        relay::sigv4::Credentials { access_key_id: "k".into(), secret_access_key: "s".into() },
+        25 * 1024 * 1024,
+        std::time::Duration::from_secs(900),
+    )
+    .plain_on_loopback();
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("ws://{}", l.local_addr().unwrap());
+    let store = Box::new(relay::store::Store::open_in_memory().unwrap());
+    tokio::spawn(relay::serve_with_media(l, store, relay::Retention::default(), relay::Limits::default(), None, Some(media)));
+    url
+}
+
 async fn spawn_relay() -> String {
     let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = l.local_addr().unwrap();
@@ -143,8 +224,21 @@ impl Harness {
     /// is where it is proved, and `add_device` is how a scenario does it later.
     pub async fn people(spec: &[(&str, &[&str])]) -> Self {
         let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        pacific_core::fold_cache::set_measure(counting::allocated);
         let relay = spawn_relay().await;
+        Self::people_on(spec, guard, relay).await
+    }
+
+    /// [`Harness::new`], on a relay with object storage: the stand-in's objects come back too.
+    pub async fn with_media(names: &[&str]) -> (Self, Objects) {
+        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let (store, objects) = object_store().await;
+        let relay = spawn_relay_with_media(&store).await;
+        let spec: Vec<(&str, &[&str])> = names.iter().map(|n| (*n, &["a"][..])).collect();
+        (Self::people_on(&spec, guard, relay).await, objects)
+    }
+
+    async fn people_on(spec: &[(&str, &[&str])], guard: std::sync::MutexGuard<'static, ()>, relay: String) -> Self {
+        pacific_core::fold_cache::set_measure(counting::allocated);
         let mut users: Vec<User> = Vec::new();
         let mut people: Vec<Person> = Vec::new();
 

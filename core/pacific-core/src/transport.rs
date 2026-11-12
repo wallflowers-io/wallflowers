@@ -214,6 +214,25 @@ impl RelaySession {
         }
     }
 
+    /// A presigned OVERWRITE of `address`'s hosted object, exactly `len` bytes (`media.hosted`),
+    /// asked at `at` (unix seconds) and signed by the address's key. Declares
+    /// [`pacific_wire::V_HOST`] with an EMPTY `Sub`: use a session of its own.
+    pub async fn media_host_url(&mut self, address: &Address, len: u64, at: u64) -> Result<String, CoreError> {
+        self.send(&Frame::Sub { tags: vec![], since: 0, v: pacific_wire::V_HOST }).await?;
+        while self.next_frame().await? != Frame::Eose {}
+        let key = address.tag_hex();
+        self.send(&address.host_frame(len, at)).await?;
+        loop {
+            match self.next_frame().await? {
+                Frame::MediaUrl { key: k, url, .. } if k == key => return Ok(url),
+                Frame::MediaErr { key: k, reason } if k == key => {
+                    return Err(CoreError::Transport(format!("the relay refused to presign: {reason}")))
+                }
+                _ => continue,
+            }
+        }
+    }
+
     /// PUB one knock to `door` as a door's tag ([`Address::door_tag`]), held by the relay to
     /// `mls.door.relay`'s bound; wait for `Ack`. A refusal carries its reason: `too_large`
     /// past the knock cap, `rate_limited` past this connection's knocks an hour.

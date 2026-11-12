@@ -55,15 +55,22 @@ pub struct HeldExterior {
     pub requested: bool,
 }
 
-/// What an owner's Save says of the outside: the exterior and its door.
-#[derive(Clone, Debug)]
+/// What an owner's Save says of the outside: the exterior, its door and its settings.
+#[derive(Clone, Debug, Default)]
 pub struct ExteriorDraft {
     pub name: String,
     pub description: String,
     pub photo: Option<pacific_media::MediaRef>,
     /// `None` closes the door.
     pub door: Option<DoorMode>,
+    /// An Event's Place, as a geohash length; 0, the venue's name alone.
+    pub precision: u8,
+    /// A Post's body, link, document and assets go outside.
+    pub readable_outside: bool,
 }
+
+/// A reader fetches a hosted document at most this often.
+const READ_EVERY_S: i64 = 300;
 
 impl Node {
     /// A held object's kind, exterior facet and visibility; `None` for a kind with no exterior.
@@ -100,7 +107,14 @@ impl Node {
                 self.apply_local(object_hex, ext::OP_SET_DOOR, args).await?;
                 wrote += 1;
             }
-            let args = ext::set_exterior_args(&d.name, &d.description, d.photo.as_ref(), key.map(|k| door::public_of(&k)).as_ref());
+            // The pointer: the settings, and where the hosted document is, derived from the seed
+            // so every owner device writes the same one. A seedless identity hosts nothing.
+            let outside = ext::Outside {
+                precision: d.precision,
+                readable_outside: d.readable_outside,
+                hosted: self.hosted_keys(object_hex).map(|k| k.hosted),
+            };
+            let args = ext::set_exterior_args_with(&d.name, &d.description, d.photo.as_ref(), key.map(|k| door::public_of(&k)).as_ref(), &outside);
             let then = ext::parse(&args).map_err(|e| CoreError::Coordinator(format!("the exterior: {e:?}")))?;
             if state.exterior.as_ref() != Some(&then) {
                 self.apply_local(object_hex, ext::OP_SET_EXTERIOR, args).await?;
@@ -111,6 +125,167 @@ impl Node {
             self.publish_pending(object_hex).await?;
         }
         Ok(wrote)
+    }
+
+    /// The hosted document's keys for an object of mine; `None` for an identity with no seed.
+    fn hosted_keys(&self, object_hex: &str) -> Option<crate::hosted::Keys> {
+        self.id.seed_bytes().map(|s| crate::hosted::keys(&s, object_hex))
+    }
+
+    /// THE OUTSIDE OF A HELD OBJECT, from its fold (`exterior::fields_of`): what the hosted
+    /// document says, and what a member's own page reads, so the two cannot differ. `None` for a
+    /// kind with no exterior, or one whose owner has not written one.
+    pub fn object_fields(&self, object_hex: &str) -> Result<Option<serde_json::Map<String, serde_json::Value>>, CoreError> {
+        let Some((kind, state, _)) = self.exterior_state(object_hex)? else { return Ok(None) };
+        let Some(exterior) = state.exterior else { return Ok(None) };
+        let gid = self.object_group_id(object_hex)?;
+        let owner: [u8; 32] = self.dir.group_owner(&gid)?.and_then(|o| o.try_into().ok()).ok_or_else(|| CoreError::Directory("an object with no owner".into()))?;
+        let roster = self.dir.group_members(&gid)?;
+        let name_of = |m: &[u8; 32]| if *m == self.id.identity_pk() { self.display_name().unwrap_or_default() } else { self.peer_name(m).unwrap_or_default() };
+        let store = GroupObjectStore::new(&self.dir);
+        let fields = match kind {
+            ObjectKind::Event => {
+                let st = store.folded::<crate::event::EventType>(&gid)?.state().clone();
+                let venue_point = st
+                    .venue_ref
+                    .as_ref()
+                    .and_then(|v| hex::decode(&v.place).ok())
+                    .and_then(|place| store.folded::<crate::place::PlaceType>(&place).ok())
+                    .and_then(|p| p.state().point().cloned());
+                let ctx = ext::FieldsCtx { owner, roster: &roster, name_of: &name_of, venue_point };
+                ext::fields_of(&exterior, ext::KindState::Event(&st), &ctx)
+            }
+            ObjectKind::Post => {
+                let st = store.folded::<crate::post::PostType>(&gid)?.state().clone();
+                let ctx = ext::FieldsCtx { owner, roster: &roster, name_of: &name_of, venue_point: None };
+                ext::fields_of(&exterior, ext::KindState::Post(&st), &ctx)
+            }
+            _ => {
+                let ctx = ext::FieldsCtx { owner, roster: &roster, name_of: &name_of, venue_point: None };
+                ext::fields_of(&exterior, ext::KindState::Other, &ctx)
+            }
+        };
+        Ok(Some(fields))
+    }
+
+    /// THE HOST, once a sync, on an owner device: each object of mine whose outside changed has
+    /// its hosted document overwritten, once, in place (`media.hosted`): a new attendee or a
+    /// co-host's edit reaches every reader on their next fetch, and nothing is carried again
+    /// (Ralph, 12 Nov). Private writes a tombstone. Diff-gated, so an object writes at most once
+    /// a sync and only when its outside changed, and a settled node touches no relay.
+    #[cfg(feature = "transport")]
+    pub async fn host_exteriors(&self) -> Result<usize, CoreError> {
+        let me = self.id.identity_pk();
+        let mut wrote = 0;
+        for (gid, _) in self.dir.list_objects()? {
+            if self.dir.group_owner(&gid)?.as_deref() != Some(&me[..]) {
+                continue;
+            }
+            let object = hex::encode(&gid);
+            let Some((kind, state, vis)) = self.exterior_state(&object)? else { continue };
+            let Some(exterior) = state.exterior.clone() else { continue };
+            let Some(keys) = self.hosted_keys(&object) else { continue };
+            if exterior.outside.hosted.as_ref() != Some(&keys.hosted) {
+                // Written before the pointer existed: the next Save of the outside carries it.
+                continue;
+            }
+            let body = if vis == Visibility::Private {
+                crate::hosted::Body::Tombstone
+            } else {
+                match self.object_fields(&object)? {
+                    Some(f) => crate::hosted::Body::Fields(f),
+                    None => continue,
+                }
+            };
+            let text = match &body {
+                crate::hosted::Body::Fields(f) => serde_json::Value::Object(f.clone()).to_string(),
+                crate::hosted::Body::Tombstone => String::new(),
+            };
+            let digest: [u8; 32] = <sha2::Sha256 as sha2::Digest>::digest(text.as_bytes()).into();
+            let now = unix_now();
+            let mut last = self.dir.hosted_exterior(&object)?;
+            if last.is_none() {
+                // A device's first write learns the version already there, so its clock cannot
+                // put the document behind what readers hold.
+                if let Ok(Some(sealed)) = crate::media_store::get_hosted(&self.media_relay()?, &keys.hosted.key).await {
+                    if let Ok(d) = crate::hosted::open(&sealed, &keys.hosted, &me, &object, kind) {
+                        last = Some((d.version, Vec::new(), 0, String::new()));
+                    }
+                }
+            }
+            if last.as_ref().is_some_and(|(_, d, _, _)| d[..] == digest[..]) {
+                continue;
+            }
+            let version = (unix_now_ms() as i64).max(last.as_ref().map_or(0, |l| l.0 + 1));
+            let doc = crate::hosted::Doc { object: object.clone(), kind, version, body };
+            let sealed = crate::hosted::seal(&self.id, &keys.hosted, &doc)?;
+            match crate::media_store::put_hosted(&self.media_relay()?, &keys.address, &sealed).await {
+                Ok(()) => {
+                    self.dir.put_hosted_exterior(&object, version, &digest, now, &text)?;
+                    wrote += 1;
+                }
+                Err(e) => tracing::warn!(object = %object, error = %e, "a hosted exterior was not written; tried next sync"),
+            }
+        }
+        Ok(wrote)
+    }
+
+    /// THE OUTSIDE OF AN OBJECT THAT REACHED ME, from its hosted document: fetched at most every
+    /// few minutes, checked (`hosted::open`), and never older than the newest this device has
+    /// opened. `None` when its pointer names no document, the document is not there yet, or it
+    /// is a tombstone.
+    #[cfg(feature = "transport")]
+    pub async fn exterior_fields(&self, object_hex: &str) -> Result<Option<serde_json::Map<String, serde_json::Value>>, CoreError> {
+        self.read_exterior(object_hex, READ_EVERY_S).await
+    }
+
+    /// [`Node::exterior_fields`], fetched now: what a pull to refresh asks for.
+    #[cfg(feature = "transport")]
+    pub async fn refresh_exterior(&self, object_hex: &str) -> Result<Option<serde_json::Map<String, serde_json::Value>>, CoreError> {
+        self.read_exterior(object_hex, 0).await
+    }
+
+    #[cfg(feature = "transport")]
+    async fn read_exterior(&self, object_hex: &str, max_age_s: i64) -> Result<Option<serde_json::Map<String, serde_json::Value>>, CoreError> {
+        let Some(held) = self.exteriors()?.into_iter().find(|h| h.carried.object == object_hex) else { return Ok(None) };
+        let c = held.carried;
+        let Some(hosted) = c.exterior.outside.hosted.clone() else { return Ok(None) };
+        let last = self.dir.hosted_exterior(object_hex)?;
+        let parse = |body: &str| -> Option<serde_json::Map<String, serde_json::Value>> {
+            serde_json::from_str::<serde_json::Value>(body).ok().and_then(|v| v.as_object().cloned())
+        };
+        let now = unix_now();
+        if let Some((_, _, at, body)) = &last {
+            if now - at < max_age_s {
+                return Ok(parse(body));
+            }
+        }
+        let fetched = match crate::media_store::get_hosted(&self.media_relay()?, &hosted.key).await {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::warn!(object = %object_hex, error = %e, "a hosted exterior could not be fetched; the last one stands");
+                return Ok(last.and_then(|l| parse(&l.3)));
+            }
+        };
+        let Some(sealed) = fetched else { return Ok(last.and_then(|l| parse(&l.3))) };
+        let doc = match crate::hosted::open(&sealed, &hosted, &c.owner, object_hex, c.kind) {
+            Ok(d) if last.as_ref().is_none_or(|l| d.version >= l.0) => d,
+            Ok(_) => {
+                tracing::warn!(object = %object_hex, "a hosted exterior older than one already read; refused");
+                return Ok(last.and_then(|l| parse(&l.3)));
+            }
+            Err(e) => {
+                tracing::warn!(object = %object_hex, error = %e, "a hosted exterior that does not check; refused");
+                return Ok(last.and_then(|l| parse(&l.3)));
+            }
+        };
+        let text = match &doc.body {
+            crate::hosted::Body::Fields(f) => serde_json::Value::Object(f.clone()).to_string(),
+            crate::hosted::Body::Tombstone => String::new(),
+        };
+        let digest: [u8; 32] = <sha2::Sha256 as sha2::Digest>::digest(text.as_bytes()).into();
+        self.dir.put_hosted_exterior(object_hex, doc.version, &digest, now, &text)?;
+        Ok(parse(&text))
     }
 
     /// The exterior and its door alone.

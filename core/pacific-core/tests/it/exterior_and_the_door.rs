@@ -30,7 +30,7 @@ fn holds(h: &Harness, u: usize, obj: &str) -> Option<u32> {
 }
 
 fn draft(words: &str, door: Option<DoorMode>) -> pacific_core::node::ExteriorDraft {
-    pacific_core::node::ExteriorDraft { name: "Allotment".into(), description: words.into(), photo: None, door }
+    pacific_core::node::ExteriorDraft { name: "Allotment".into(), description: words.into(), photo: None, door, ..Default::default() }
 }
 
 async fn allotment(h: &Harness, door: Option<DoorMode>) -> String {

@@ -846,6 +846,8 @@ pub struct ExteriorRow {
     pub door: bool,
     /// Whether I have asked to join and not withdrawn.
     pub requested: bool,
+    /// Whether its owner hosts a full outside (`media.hosted`): `exterior_fields` reads it.
+    pub hosted: bool,
 }
 
 impl ExteriorRow {
@@ -861,6 +863,7 @@ impl ExteriorRow {
             hops: c.hops,
             door: c.exterior.door.is_some(),
             requested: e.requested,
+            hosted: c.exterior.outside.hosted.is_some(),
         }
     }
 }
@@ -874,6 +877,10 @@ pub struct MyExterior {
     pub door: String,
     /// "private" | "connections" | "network".
     pub visibility: String,
+    /// An Event's Place outside, as a geohash length; 0, the venue's name alone.
+    pub precision: u8,
+    /// A Post's body goes outside.
+    pub readable_outside: bool,
 }
 
 /// A request waiting at one of my doors.
@@ -3625,12 +3632,38 @@ impl Core {
             description: e.description,
             door: st.door.map(|d| d.mode.as_str().to_string()).unwrap_or_default(),
             visibility: vis.as_str().to_string(),
+            precision: e.outside.precision,
+            readable_outside: e.outside.readable_outside,
         }))
+    }
+
+    /// THE OUTSIDE OF AN OBJECT THAT REACHED ME, whole (`facets.exterior.fields`), as JSON: from
+    /// its hosted document, fetched at most every few minutes and checked against its owner.
+    /// None until its owner hosts one, or once it is withdrawn. Call OFF the Swift main thread.
+    pub fn exterior_fields(&self, object_id: String) -> Result<Option<String>, FfiError> {
+        let f = block_on(self.read()?.exterior_fields(&object_id))?;
+        Ok(f.map(pacific_core::exterior::fields_json))
+    }
+
+    /// [`exterior_fields`](Self::exterior_fields), fetched now: a pull to refresh. Call OFF the
+    /// Swift main thread.
+    pub fn refresh_exterior(&self, object_id: String) -> Result<Option<String>, FfiError> {
+        let f = block_on(self.read()?.refresh_exterior(&object_id))?;
+        Ok(f.map(pacific_core::exterior::fields_json))
+    }
+
+    /// THE OUTSIDE OF AN OBJECT I HOLD, from its fold: the same fields, the same builder, so a
+    /// member's page and a stranger's read the same thing. None for a kind with no exterior, or
+    /// before its owner writes one.
+    pub fn object_fields(&self, object_id: String) -> Result<Option<String>, FfiError> {
+        let f = self.read()?.object_fields(&object_id)?;
+        Ok(f.map(pacific_core::exterior::fields_json))
     }
 
     /// ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
     /// "connections" | "network") and, when `name` is not empty, the exterior: a description
-    /// and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+    /// and its door ("" none, "review" or "auto"), an Event's Place precision (a geohash length,
+    /// 0 for the venue's name alone) and whether a Post reads outside. Only what changed is written, and sent
     /// once. Returns how many ops were written. The exterior's still is by reference only
     /// (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
     pub fn set_outside(
@@ -3640,6 +3673,8 @@ impl Core {
         name: String,
         description: String,
         door: String,
+        precision: u8,
+        readable_outside: bool,
     ) -> Result<u32, FfiError> {
         let visibility = match visibility.as_str() {
             "" => None,
@@ -3654,7 +3689,7 @@ impl Core {
                 "" => None,
                 m => Some(pacific_core::exterior::DoorMode::parse(m).ok_or_else(|| FfiError::Core("door must be \"\" | \"review\" | \"auto\"".into()))?),
             };
-            Some(pacific_core::node::ExteriorDraft { name, description, photo: None, door })
+            Some(pacific_core::node::ExteriorDraft { name, description, photo: None, door, precision, readable_outside })
         };
         Ok(block_on(self.write()?.set_outside(&object_id, visibility, draft.as_ref()))? as u32)
     }

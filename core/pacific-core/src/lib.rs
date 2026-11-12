@@ -35,6 +35,8 @@ pub mod directory;
 pub mod event;
 /// The exterior facet: what a non-member holds of an object (ICD 2.6.0).
 pub mod exterior;
+/// The hosted exterior document: the outside at one key, overwritten in place (`media.hosted`).
+pub mod hosted;
 /// A Site's own events and posts, as its Host's live items for the public Face (O-48).
 pub mod face_items;
 pub mod geo;

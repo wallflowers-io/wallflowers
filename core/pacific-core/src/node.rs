@@ -11217,6 +11217,14 @@ impl Node {
             Err(e) => tracing::warn!(error = %e, "carrying exteriors failed this sync"),
         }
 
+        // 3b''. HOST EXTERIORS (media.hosted): each outside of mine that changed is overwritten
+        //     in place, so readers see it on their next fetch and nothing is carried again.
+        match boxed(|| self.host_exteriors()).await {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(documents = n, "hosted exteriors"),
+            Err(e) => tracing::warn!(error = %e, "hosting exteriors failed this sync"),
+        }
+
         // 3c. RECONCILE discovery. Answer every live question that reached us, forward
         //     the ones whose budget still reaches someone, and relay answers back
         //     toward their asker. Every gate reads a Contact fold that already
