@@ -59,6 +59,12 @@ static OPS: &[OpDecl] = &[
     // The parent facet (base band 0xF008), spliced: any kind can be a part (ICD `facets.parent`).
     OpDecl { op_id: crate::parent::OP_SET_PARENT, name: "base.setParent", authority: Authority::Owner, commutativity: Commutativity::Sequenced },
     OpDecl { op_id: crate::parent::OP_CLEAR_PARENT, name: "base.clearParent", authority: Authority::Owner, commutativity: Commutativity::Sequenced },
+    // The base TAGS ops (`crate::tags`; facets.tags).
+    crate::tags::TAG,
+    crate::tags::UNTAG,
+    crate::tags::HIDE_TAG,
+    crate::tags::SET_TAGGED,
+    crate::tags::CLEAR_TAGGED,
 ];
 
 /// The standing terms, or the frozen ones once accepted.
@@ -133,6 +139,8 @@ pub struct SiteSale {
 
 #[derive(Clone, Debug, Default)]
 pub struct TransactionState {
+    /// The object's tags (`facets.tags`).
+    pub tags: crate::tags::TagsState,
     pub roles: BTreeMap<MemberId, GroupRole>,
     /// An op other than a role has folded: the roles are fixed from here (T-2).
     pub began: bool,
@@ -164,6 +172,10 @@ impl ObjectType for TransactionType {
     fn reduce(st: &mut TransactionState, op: &Op<'_>) -> Result<(), DeltaRejection> {
         if st.state.is_empty() {
             st.state = machine().initial.clone();
+        }
+        if crate::tags::is_tags_op(op.op_id) {
+            let admin = Self::role_of(st, op.author) == Some(crate::group::GroupRole::Admin);
+            return crate::tags::reduce_tags(&mut st.tags, op, admin);
         }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut st.parent, op);
@@ -216,6 +228,8 @@ impl ObjectType for TransactionType {
             OP_SET_SITE if st.began || st.site.is_some() => Some("the Site is named once, before the deal begins".into()),
             OP_SET_SITE => shape("transaction.setSite", args).err(),
             OP_FRAUD_SIGNAL => Some("declared, not implemented".into()),
+            // A tag is a facet, not a step of the deal: the machine does not judge it.
+            id if crate::tags::is_tags_op(id) => None,
             id => {
                 let decl = Self::op(id)?;
                 let role = party(st, decl, author)?;
@@ -633,7 +647,7 @@ mod tests {
         st.nonconforming.iter().map(|n| format!("{}: {}", n.op, n.why)).collect()
     }
 
-    /// The machine is the ICD's: its states, and a transition for every op but the roles.
+    /// The machine is the ICD's: its states, and a transition for every op but the facets'.
     #[test]
     fn the_machine_is_the_icds() {
         let m = machine();
@@ -641,7 +655,8 @@ mod tests {
         let mut states = m.states.clone();
         states.sort();
         assert_eq!(states, ["accepted", "cancelled", "completed", "disputed", "offered", "open", "resolved"]);
-        for d in OPS.iter().filter(|d| !crate::roles::is_role_op(d.op_id) && !crate::parent::is_parent_op(d.op_id)) {
+        let facet = |id: u32| crate::roles::is_role_op(id) || crate::parent::is_parent_op(id) || crate::tags::is_tags_op(id);
+        for d in OPS.iter().filter(|d| !facet(d.op_id)) {
             assert!(m.transitions.iter().any(|t| t.op.as_deref() == Some(d.name)), "{} has a transition", d.name);
         }
         for t in &m.transitions {
@@ -662,7 +677,7 @@ mod tests {
             }
         }
         for d in OPS {
-            assert!(m.args.contains_key(d.name) || crate::roles::is_role_op(d.op_id) || crate::parent::is_parent_op(d.op_id), "{} has its args", d.name);
+            assert!(m.args.contains_key(d.name) || facet(d.op_id), "{} has its args", d.name);
         }
     }
 

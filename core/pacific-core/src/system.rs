@@ -83,6 +83,9 @@ pub struct HydratedItem {
 /// The compiled read-side state of a System.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SystemState {
+    /// The object's tags (`facets.tags`).
+    #[serde(default)]
+    pub tags: crate::tags::TagsState,
     /// What a human calls it — "Resident Advisor".
     pub name: String,
     /// The connector id the app dispatches on — "music.ra", "art.artrabbit".
@@ -137,6 +140,12 @@ const OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base TAGS ops (`crate::tags`; facets.tags).
+    crate::tags::TAG,
+    crate::tags::UNTAG,
+    crate::tags::HIDE_TAG,
+    crate::tags::SET_TAGGED,
+    crate::tags::CLEAR_TAGGED,
 ];
 
 impl ObjectType for SystemType {
@@ -148,6 +157,10 @@ impl ObjectType for SystemType {
     }
 
     fn reduce(state: &mut Self::State, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::tags::is_tags_op(op.op_id) {
+            let admin = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admin);
+            return crate::tags::reduce_tags(&mut state.tags, op, admin);
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }

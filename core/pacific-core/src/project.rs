@@ -283,6 +283,9 @@ pub struct Subscription {
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ProjectState {
+    /// The object's tags (`facets.tags`).
+    #[serde(default)]
+    pub tags: crate::tags::TagsState,
     /// THE PARTS THIS OBJECT IS MADE OF, keyed by the part's object id — its comments
     /// section is one, a real Forum GroupObject with its own roster and not a field
     /// on this one. See `crate::parts`.
@@ -659,6 +662,12 @@ static PROJECT_OPS: &[OpDecl] = &[
     crate::exterior::SET_EXTERIOR,
     crate::exterior::SET_DOOR,
     crate::exterior::DECIDE_REQUEST,
+    // The base TAGS ops (`crate::tags`; facets.tags).
+    crate::tags::TAG,
+    crate::tags::UNTAG,
+    crate::tags::HIDE_TAG,
+    crate::tags::SET_TAGGED,
+    crate::tags::CLEAR_TAGGED,
 ];
 
 /// The Project object type (#22) — the Work-tab model folded through the trait.
@@ -673,6 +682,10 @@ impl ObjectType for ProjectType {
     }
 
     fn reduce(state: &mut ProjectState, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::tags::is_tags_op(op.op_id) {
+            let admin = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admin);
+            return crate::tags::reduce_tags(&mut state.tags, op, admin);
+        }
         if crate::exterior::is_exterior_op(op.op_id) {
             let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
             return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);

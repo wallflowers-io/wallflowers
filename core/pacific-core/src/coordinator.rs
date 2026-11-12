@@ -567,6 +567,9 @@ pub struct ThreadNode {
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ForumState {
+    /// The object's tags (`facets.tags`).
+    #[serde(default)]
+    pub tags: crate::tags::TagsState,
     /// THE BACK-EDGE: the object this Forum is a part of, and in what role. `None`
     /// for a Forum that stands alone (a Channel somebody made directly). Written by
     /// the same mint that writes the parent's half, so the edge can be walked from
@@ -906,6 +909,12 @@ static CONVERSATION_OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base TAGS ops (`crate::tags`; facets.tags).
+    crate::tags::TAG,
+    crate::tags::UNTAG,
+    crate::tags::HIDE_TAG,
+    crate::tags::SET_TAGGED,
+    crate::tags::CLEAR_TAGGED,
 ];
 
 /// Forum's fixed op table: the shared chat mechanics plus its rooms, as the parts
@@ -1014,6 +1023,12 @@ static FORUM_OPS: &[OpDecl] = &[
     crate::exterior::SET_EXTERIOR,
     crate::exterior::SET_DOOR,
     crate::exterior::DECIDE_REQUEST,
+    // The base TAGS ops (`crate::tags`; facets.tags).
+    crate::tags::TAG,
+    crate::tags::UNTAG,
+    crate::tags::HIDE_TAG,
+    crate::tags::SET_TAGGED,
+    crate::tags::CLEAR_TAGGED,
 ];
 
 /// The Forum object type — the concrete contract the generic coordinator folds.
@@ -1038,6 +1053,10 @@ impl ObjectType for ForumType {
     /// args self-reject as `MalformedArgs` — skipped by the fold, never swallowed
     /// silently (the loud membership/dedup checks already ran at deliver time).
     fn reduce(state: &mut ForumState, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::tags::is_tags_op(op.op_id) {
+            let admin = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admin);
+            return crate::tags::reduce_tags(&mut state.tags, op, admin);
+        }
         if crate::exterior::is_exterior_op(op.op_id) {
             let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
             return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);
@@ -2540,9 +2559,12 @@ mod tests {
                 assert_eq!(got.commutativity, want.commutativity);
             }
         }
-        // Conversation carries the chat band and the parent ops, and nothing else:
-        // no room vocabulary on a thread.
-        assert_eq!(ConversationType::ops().len(), CHAT_OPS.len() + crate::parent::PARENT_OPS.len());
+        // Conversation carries the chat band, the parent ops and the tags ops, and nothing
+        // else: no room vocabulary on a thread.
+        assert_eq!(ConversationType::ops().len(), CHAT_OPS.len() + crate::parent::PARENT_OPS.len() + crate::tags::TAGS_OPS.len());
+        for t in crate::tags::TAGS_OPS {
+            assert!(ConversationType::op(t.op_id).is_some(), "Conversation must carry {}", t.name);
+        }
         for p in crate::parent::PARENT_OPS {
             assert!(ConversationType::op(p.op_id).is_some(), "Conversation must carry {}", p.name);
         }

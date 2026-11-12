@@ -144,6 +144,9 @@ pub struct NotePromotion {
 /// The folded notebook — the facet a Group-typed object carries.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NoteBook {
+    /// The object's tags (`facets.tags`).
+    #[serde(default)]
+    pub tags: crate::tags::TagsState,
     pub entries: BTreeMap<(MemberId, String), NoteEntry>,
     pub comments: BTreeMap<(MemberId, String), NoteComment>,
     pub reactions: BTreeMap<(MemberId, String), NoteReaction>,
@@ -797,6 +800,12 @@ pub static OPS: &[OpDecl] = &[
     crate::exterior::SET_EXTERIOR,
     crate::exterior::SET_DOOR,
     crate::exterior::DECIDE_REQUEST,
+    // The base TAGS ops (`crate::tags`; facets.tags).
+    crate::tags::TAG,
+    crate::tags::UNTAG,
+    crate::tags::HIDE_TAG,
+    crate::tags::SET_TAGGED,
+    crate::tags::CLEAR_TAGGED,
 ];
 
 /// This kind's op id → the facet id `reduce_note` still matches on. Arithmetic, not
@@ -820,6 +829,10 @@ impl ObjectType for NoteType {
     }
 
     fn reduce(state: &mut Self::State, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::tags::is_tags_op(op.op_id) {
+            let admin = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admin);
+            return crate::tags::reduce_tags(&mut state.tags, op, admin);
+        }
         if crate::exterior::is_exterior_op(op.op_id) {
             let admitter = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admitter);
             return crate::exterior::reduce_exterior(&mut state.exterior, op, admitter);
@@ -851,9 +864,11 @@ mod kind_tests {
 
     #[test]
     fn the_table_is_contiguous_from_zero_and_maps_onto_the_facet() {
-        // The kind's OWN ops, below the base band; the rest are the parent, visibility and
-        // exterior facets'.
-        let base = |id: u32| crate::parent::is_parent_op(id) || crate::visibility::is_visibility_op(id) || crate::exterior::is_exterior_op(id);
+        // The kind's OWN ops, below the base band; the rest are the parent, visibility,
+        // exterior and tags facets'.
+        let base = |id: u32| {
+            crate::parent::is_parent_op(id) || crate::visibility::is_visibility_op(id) || crate::exterior::is_exterior_op(id) || crate::tags::is_tags_op(id)
+        };
         let own: Vec<_> = OPS.iter().filter(|d| !base(d.op_id)).collect();
         for (i, decl) in own.iter().enumerate() {
             assert_eq!(decl.op_id, i as u32, "{} is out of place", decl.name);
@@ -861,7 +876,7 @@ mod kind_tests {
             assert_eq!(facet, OP_NOTE_WRITE + i as u32, "{} maps wrong", decl.name);
             assert!(is_note_op(facet), "{} maps to an id reduce_note refuses", decl.name);
         }
-        assert_eq!(OPS.len(), own.len() + crate::parent::PARENT_OPS.len() + crate::visibility::VISIBILITY_OPS.len() + crate::exterior::EXTERIOR_OPS.len(), "an op is neither the kind's nor a base facet's");
+        assert_eq!(OPS.len(), own.len() + crate::parent::PARENT_OPS.len() + crate::visibility::VISIBILITY_OPS.len() + crate::exterior::EXTERIOR_OPS.len() + crate::tags::TAGS_OPS.len(), "an op is neither the kind's nor a base facet's");
         assert_eq!(to_facet_op(own.len() as u32), None, "the map must not run past the table");
     }
 

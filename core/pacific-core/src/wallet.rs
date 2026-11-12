@@ -262,6 +262,9 @@ pub struct Count {
 /// with the log that produced it.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Wallet {
+    /// The object's tags (`facets.tags`).
+    #[serde(default)]
+    pub tags: crate::tags::TagsState,
     /// False until a policy has been set. A group with no treasury is a
     /// different thing from a treasury with nothing in it, and the two must not
     /// render the same.

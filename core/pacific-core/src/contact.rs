@@ -307,6 +307,9 @@ pub struct DiscoverResponse {
 /// op-groups, applied here within one.
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ContactState {
+    /// The object's tags (`facets.tags`).
+    #[serde(default)]
+    pub tags: crate::tags::TagsState,
     /// WHAT THE OTHER PARTY IS TO US. The standing facet (`crate::roles`), which
     /// is what collapsed `member-tether` and `arc-tether` back into `connection`:
     /// those kinds existed only because a role could not ride a Contact-folded
@@ -795,6 +798,12 @@ static CONTACT_OPS: &[OpDecl] = &[
         authority: Authority::Owner,
         commutativity: Commutativity::Sequenced,
     },
+    // The base TAGS ops (`crate::tags`; facets.tags).
+    crate::tags::TAG,
+    crate::tags::UNTAG,
+    crate::tags::HIDE_TAG,
+    crate::tags::SET_TAGGED,
+    crate::tags::CLEAR_TAGGED,
 ];
 
 /// The Contact object type (#25) — the prekey-pool + self-profile op-group folded
@@ -846,6 +855,10 @@ impl ObjectType for ContactType {
     ///
     /// Missing/ill-typed args self-reject (skipped by the fold).
     fn reduce(state: &mut ContactState, op: &Op<'_>) -> Result<(), DeltaRejection> {
+        if crate::tags::is_tags_op(op.op_id) {
+            let admin = Self::role_of(state, op.author) == Some(crate::group::GroupRole::Admin);
+            return crate::tags::reduce_tags(&mut state.tags, op, admin);
+        }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);
         }

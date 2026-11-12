@@ -581,6 +581,7 @@ mod tests {
             listings: Default::default(),
             listings_removed: Default::default(),
             exterior: Default::default(),
+            tags: Default::default(),
             visibility: None,
             asked: Default::default(),
             display_name: "Ada Lovelace".into(),
