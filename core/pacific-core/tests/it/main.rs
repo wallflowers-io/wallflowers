@@ -16,6 +16,7 @@ mod carriage_ceiling_refuses_at_the_door;
 mod catalogue_reach;
 mod catalogue_wire_values;
 mod comments_section_is_its_parents;
+mod tags_facet;
 mod compliance_noncompliant_objects_are_named;
 mod created;
 mod d58_admission_to_the_sites_rooms;
