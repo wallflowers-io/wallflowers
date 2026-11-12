@@ -8,6 +8,23 @@ Method: deploy.md § 10.
 Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on an object that exists, or
 `POST /v2/mint` to make one. `GET /v2/icd` serves the model production runs; model.html lists every op and its args.
 
+## 2.10.0
+
+<!-- generated 2.10.0: icd-changelog.mjs --write; do not edit between the markers -->
+- Draft (media.hosted and facets.exterior.fields, the hosted exterior), from `b0a17aa`; its ICD `37683e279be04a64b7ab12745e1cda59a366c53c9c61bbc902952a2fda14ddc5`, not a release until its icd/* tag
+- Against 2.8.0 (`0eae9b116066add8…`):
+  - changed: base.setExterior: +hostedKey (string); +hostedSecret (string); +precision (integer); +readableOutside (integer)
+  - model sections changed besides ops: facets, media
+<!-- end generated 2.10.0 -->
+
+The hosted exterior: an object's outside, whole, at one key in the relay's object storage, overwritten in place by
+its owner's devices, so a change reaches every reader without being carried again (`media.hosted`). What it holds of
+each kind is `facets.exterior.fields`: for an Event its when, its Place at a geohash precision its owner sets, its
+hosts, lineup, media, tickets and how many are going; for a Post its teaser, and its body only when its poster says.
+`base.setExterior` gains `precision`, `readableOutside`, `hostedKey` and `hostedSecret`: the pointer. A new relay
+frame, `media_host` at vocabulary level 4, asks for the overwrite, signed by the object's own key. There is no
+Community API route for it in this release.
+
 ## 2.8.0
 
 <!-- generated 2.8.0: icd-changelog.mjs --write; do not edit between the markers -->
