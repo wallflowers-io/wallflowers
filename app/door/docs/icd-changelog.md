@@ -11,8 +11,8 @@ Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on 
 ## 2.10.0
 
 <!-- generated 2.10.0: icd-changelog.mjs --write; do not edit between the markers -->
-- Draft (media.hosted and facets.exterior.fields, the hosted exterior), from `b0a17aa`; its ICD `37683e279be04a64b7ab12745e1cda59a366c53c9c61bbc902952a2fda14ddc5`, not a release until its icd/* tag
-- Against 2.8.0 (`0eae9b116066add8…`):
+- Draft (media.hosted and facets.exterior.fields, the hosted exterior), from `75f0272`; its ICD `806f3d921bea360fb8e91d84eea068e37249882fe225da8434f3c3b2de7d01e1`, not a release until its icd/* tag
+- Against 2.9.0 (`f5bb181cf7f7a2df…`):
   - changed: base.setExterior: +hostedKey (string); +hostedSecret (string); +precision (integer); +readableOutside (integer)
   - model sections changed besides ops: facets, media
 <!-- end generated 2.10.0 -->
