@@ -196,15 +196,15 @@ pub fn reduce_tags(state: &mut TagsState, op: &Op<'_>, admin: bool) -> Result<()
 }
 
 /// The tags as a view carries them, by (label, object): `[{label, object, count, by, hidden}]`.
-/// A hidden label is listed only when `curator` (the owner or an admin, who may show it again).
-pub fn listed(state: &TagsState, curator: bool) -> serde_json::Value {
+/// A hidden label is listed, marked: every member holds the log it came from, so hiding is the
+/// surface's to honour (drawn only for the owner and admins, who may show it again).
+pub fn listed(state: &TagsState) -> serde_json::Value {
     let mut rows: BTreeMap<(&str, Option<&str>), Vec<String>> = BTreeMap::new();
     for ((author, label), t) in state.live() {
         rows.entry((label.as_str(), t.object.as_deref())).or_default().push(hex::encode(author));
     }
     serde_json::Value::Array(
         rows.into_iter()
-            .filter(|((label, _), _)| curator || !state.is_hidden(label))
             .map(|((label, object), by)| {
                 serde_json::json!({ "label": label, "object": object, "count": by.len(), "by": by, "hidden": state.is_hidden(label) })
             })

@@ -1403,7 +1403,7 @@
             }
           },
           "view": {
-            "tags": "[{label, object, count, by, hidden}] by (label, object); a hidden label is listed only for the owner and admins to show again"
+            "tags": "[{label, object, count, by, hidden}] by (label, object); a hidden label is listed, marked, and drawn only for the owner and admins: every member holds the log it came from"
           }
         },
         "base.untag": {

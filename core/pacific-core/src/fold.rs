@@ -572,7 +572,7 @@ pub fn view_of(
         v["profiles"] = crate::profiles::view(profiles);
         Ok(v.to_string())
     };
-    Ok(match lens {
+    let (view, tags) = match lens {
         ObjectKind::Forum => {
             let st = fold_entries_owned::<ForumType>(members, owners, log)?.state();
             let mut v: serde_json::Value = serde_json::from_str(&with_profiles(messages_view(&st, reader), &st.profiles)?)
@@ -581,15 +581,14 @@ pub fn view_of(
             v["description"] = st.description.as_ref().map(|d| d.text.as_str()).filter(|t| !t.is_empty()).into();
             // THIS room's roles, as the group view names a Site's: who may edit it is the page's to know.
             v["roles"] = st.roles.iter().map(|(m, r)| serde_json::json!([hex::encode(m), r.as_str()])).collect();
-            v.to_string()
+            (v.to_string(), Some(st.tags))
         }
         // Its own type id, the same state: the ICD's word is that a conversation
         // "shares Forum's mechanics", which is about the reducer, not the object.
-        ObjectKind::Conversation => messages_view(
-            &fold_entries_owned::<crate::coordinator::ConversationType>(members, owners, log)?
-                .state(),
-            reader,
-        ),
+        ObjectKind::Conversation => {
+            let st = fold_entries_owned::<crate::coordinator::ConversationType>(members, owners, log)?.state();
+            (messages_view(&st, reader), Some(st.tags))
+        }
         ObjectKind::Group => {
             // One fold, read twice: the domain projection and the governance one
             // over the same log, orthogonal by construction.
@@ -622,7 +621,7 @@ pub fn view_of(
             // Forum's and a Host's views serve it: read alone, a sub-group says what it is part
             // of (`reciprocity`; NC-144). Null when it is part of nothing.
             v["parent"] = serde_json::to_value(&st.parent).map_err(|e| CoreError::Coordinator(e.to_string()))?;
-            v.to_string()
+            (v.to_string(), Some(st.tags))
         }
         ObjectKind::Event => {
             let st = fold_entries_owned::<EventType>(members, owners, log)?.state();
@@ -630,33 +629,36 @@ pub fn view_of(
                 .map_err(|e| CoreError::Coordinator(e.to_string()))?;
             v["parts"] = parts_view(&st.parts);
             v["backlinks"] = crate::backlink::listed(&st.backlinks);
-            v.to_string()
+            (v.to_string(), Some(st.tags))
         }
         ObjectKind::Thing => {
-            thing_view(&fold_entries_owned::<crate::thing::ThingType>(members, owners, log)?.state())
+            let st = fold_entries_owned::<crate::thing::ThingType>(members, owners, log)?.state();
+            (thing_view(&st), Some(st.tags))
         }
         // The same view the wallet facet rendered when it hung off a Group, now on
         // the object that owns it. `wallet_view` is unchanged: what moved is whose
         // state it reads, not how a treasury is drawn.
-        ObjectKind::Treasury => wallet_view(
-            &fold_entries_owned::<crate::treasury::TreasuryType>(members, owners, log)?.state(),
-        ),
+        ObjectKind::Treasury => {
+            let st = fold_entries_owned::<crate::treasury::TreasuryType>(members, owners, log)?.state();
+            (wallet_view(&st), Some(st.tags))
+        }
         // The same view the note facet rendered on a Group, now on the object that
         // owns it. `notebook_view` is unchanged.
-        ObjectKind::Note => notebook_view(
-            &fold_entries_owned::<crate::note::NoteType>(members, owners, log)?.state(),
-        ),
+        ObjectKind::Note => {
+            let st = fold_entries_owned::<crate::note::NoteType>(members, owners, log)?.state();
+            (notebook_view(&st), Some(st.tags))
+        }
         // A sale, as the fold leaves it; completion by silence is the reader's clock's
         // (`at_read`).
-        ObjectKind::Transaction => crate::transaction::view(
-            &fold_entries_owned::<crate::transaction::TransactionType>(members, owners, log)?.state(),
-        )
-        .to_string(),
+        ObjectKind::Transaction => {
+            let st = fold_entries_owned::<crate::transaction::TransactionType>(members, owners, log)?.state();
+            (crate::transaction::view(&st).to_string(), Some(st.tags))
+        }
         // What the Arc folds and serves: the name, the address, the pictures, and the
         // live items. The face bundle is `items.face`, carried verbatim.
         ObjectKind::Host => {
             let st = fold_entries_owned::<crate::host::HostType>(members, owners, log)?.state();
-            serde_json::json!({
+            let v = serde_json::json!({
                 "name": st.name,
                 "parent": st.parent,
                 "publication": serde_json::from_str::<serde_json::Value>(&publication_view(&st.publication))
@@ -666,20 +668,23 @@ pub fn view_of(
                 "items": st.live().iter().map(|i| serde_json::json!({
                     "key": i.key, "payload": i.payload, "rev": i.rev, "fetchedAt": i.fetched_at
                 })).collect::<Vec<_>>(),
-            }).to_string()
+            }).to_string();
+            (v, Some(st.tags))
         }
         // What each is, and the parts it is made of. The rest of their state is not
         // rendered yet, and is absent rather than guessed.
         ObjectKind::Place => {
             let st = fold_entries_owned::<crate::place::PlaceType>(members, owners, log)?.state();
-            serde_json::json!({ "name": st.name, "descriptor": st.descriptor,
+            let v = serde_json::json!({ "name": st.name, "descriptor": st.descriptor,
                                 "parts": parts_view(&st.parts),
-                                "backlinks": crate::backlink::listed(&st.backlinks) }).to_string()
+                                "backlinks": crate::backlink::listed(&st.backlinks) }).to_string();
+            (v, Some(st.tags))
         }
         ObjectKind::Project => {
             let st = fold_entries_owned::<crate::project::ProjectType>(members, owners, log)?.state();
-            serde_json::json!({ "title": st.title, "headline": st.headline, "goal": st.goal,
-                                "parts": parts_view(&st.parts) }).to_string()
+            let v = serde_json::json!({ "title": st.title, "headline": st.headline, "goal": st.goal,
+                                "parts": parts_view(&st.parts) }).to_string();
+            (v, Some(st.tags))
         }
         ObjectKind::Post => {
             let st = fold_entries_owned::<PostType>(members, owners, log)?.state();
@@ -694,19 +699,27 @@ pub fn view_of(
             if st.body_format.is_empty() {
                 v["body_format"] = "plain".into();
             }
-            v.to_string()
+            (v.to_string(), Some(st.tags))
         }
         // THE PAIRING CHANNEL, rendered as what it holds: the prekey pool each side
         // stocked for the other, and the card each side published. Not messages —
         // those are the conversation's. A channel drawing as "unsupported" was a
         // connection saying nothing about itself.
         ObjectKind::Contact => {
-            contact_view(&fold_entries_owned::<ContactType>(members, owners, log)?.state(), reader)
+            let st = fold_entries_owned::<ContactType>(members, owners, log)?.state();
+            (contact_view(&st, reader), Some(st.tags))
         }
         // A lens exists, so the fold and the digest are real; only the rendering
         // is not built, and it says so instead of drawing an empty object.
-        _ => r#"{"unsupported":true}"#.to_string(),
-    })
+        _ => (r#"{"unsupported":true}"#.to_string(), None),
+    };
+    // EVERY KIND'S TAGS (`facets.tags`), from the one helper: the tags on it, and the objects
+    // tagged with it (its halves of `tagged`).
+    let Some(tags) = tags else { return Ok(view) };
+    let mut v: serde_json::Value = serde_json::from_str(&view).map_err(|e| CoreError::Coordinator(e.to_string()))?;
+    v["tags"] = crate::tags::listed(&tags);
+    v["taggedBy"] = crate::tags::tagged_by(&tags);
+    Ok(v.to_string())
 }
 
 
