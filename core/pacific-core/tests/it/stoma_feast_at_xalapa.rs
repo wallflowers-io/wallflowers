@@ -690,6 +690,12 @@ async fn paced_relay(per_sec: f64, burst: f64) -> String {
 /// second rename on that call: two publishes, Ok, and the outbox empty.
 #[tokio::test]
 async fn inside_the_backoff_the_persons_write_is_sent_on_that_call() {
+    // The fault is the relay pacing this device's one connection. Since the link (#144) a
+    // device holds a pool of connections, each paced on its own, and resends a paced refusal
+    // once: so the pool is one connection, and the resend's wait shorter than the relay's
+    // refill, and the fault outlasts it as it outlasted the one send before the link.
+    std::env::set_var("LINK_POOL", "1");
+    std::env::set_var("LINK_PACED_MS", "1");
     let h = Harness::people(&[("axel", &["phone", "laptop"])]).await;
     let phone = h.device("axel", "phone");
     let laptop = h.device("axel", "laptop");

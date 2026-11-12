@@ -69,6 +69,8 @@ pub mod lode_route;
 pub mod projection;
 /// The held connection (O-69): one socket per Node, subscribed to its whole tag set.
 #[cfg(feature = "transport")]
+pub mod link;
+#[cfg(feature = "transport")]
 pub mod live;
 #[cfg(feature = "transport")]
 pub mod mailbox;

@@ -11,18 +11,17 @@
 //! set of transports is small and closed enough that dispatch costs nothing and the compiler can
 //! still see through it. Callers hold `&mut Mailbox` exactly where they held `&mut RelaySession`.
 
+use crate::link::{Answer, Ask, Station};
 use crate::mesh::MeshStore;
-use crate::transport::RelaySession;
 use crate::CoreError;
 use pacific_wire::address::Address;
 
 /// Where this device's sealed blobs go, and where it looks for other people's.
 pub enum Mailbox {
     /// A blind relay over ws/wss — infrastructure, reachable from anywhere, needs the internet.
-    /// Boxed: a live session is ~1.4 KB of socket state, and the router keeps a `Vec<Mailbox>` in
-    /// which every element would otherwise be that size — including the mesh ones, which are
-    /// nothing at all.
-    Relay(Box<RelaySession>),
+    /// A handle to the process's station for that relay (`link`), which holds the sessions:
+    /// opening and closing this dials and hangs up nothing.
+    Relay(Station),
     /// The devices around this one — no internet, no server, no operator. A HANDLE to the
     /// device's one shared store (`mesh::shared`), not a store of its own: what the mesh is
     /// carrying has to outlive any single sync, or a phone would arrive at every encounter
@@ -38,7 +37,9 @@ impl Mailbox {
     pub async fn connect(url: &str) -> Result<Self, CoreError> {
         match url.split_once(':').map(|(s, _)| s) {
             Some("ws") | Some("wss") => {
-                Ok(Self::Relay(Box::new(RelaySession::connect(url).await?)))
+                let st = crate::link::station(url);
+                st.ready().await?;
+                Ok(Self::Relay(st))
             }
             Some("mesh") => Ok(Self::Mesh),
             _ => Err(CoreError::Transport(format!(
@@ -52,7 +53,10 @@ impl Mailbox {
     /// meaning beyond "accepted locally".
     pub async fn publish(&mut self, addr: &Address, blob_b64: String) -> Result<u64, CoreError> {
         match self {
-            Self::Relay(s) => s.publish(addr, blob_b64).await,
+            Self::Relay(s) => match s.ask(Ask::Publish(addr.pub_frame(blob_b64, false))).await? {
+                Answer::Seq(seq) => Ok(seq),
+                a => Err(unexpected(a)),
+            },
             Self::Mesh => {
                 let (tag, blob) = decode(&addr.tag_hex(), &blob_b64)?;
                 store()?.carry(tag, blob, 0, now_secs());
@@ -76,7 +80,10 @@ impl Mailbox {
         blob_b64: String,
     ) -> Result<Option<u64>, CoreError> {
         match self {
-            Self::Relay(s) => s.publish_commit(addr, blob_b64).await,
+            Self::Relay(s) => match s.ask(Ask::Commit(addr.pub_frame(blob_b64, true))).await? {
+                Answer::Slot(slot) => Ok(slot),
+                a => Err(unexpected(a)),
+            },
             Self::Mesh => Err(CoreError::Transport(
                 "the mesh cannot sequence an MLS commit — membership changes still need a relay"
                     .into(),
@@ -98,7 +105,10 @@ impl Mailbox {
         since: u64,
     ) -> Result<Vec<(String, u64, String)>, CoreError> {
         match self {
-            Self::Relay(s) => s.drain(tags_hex, since).await,
+            Self::Relay(s) => match s.ask(Ask::Drain(tags_hex, since)).await? {
+                Answer::Msgs(m) => Ok(m),
+                a => Err(unexpected(a)),
+            },
             Self::Mesh => {
                 let mut tags = Vec::with_capacity(tags_hex.len());
                 for t in &tags_hex {
@@ -125,7 +135,10 @@ impl Mailbox {
     /// (`RelaySession::drain_many`); the mesh answers each from its store.
     pub async fn drain_many(&mut self, subs: &[(String, u64)]) -> Result<Vec<Vec<(String, u64, String)>>, CoreError> {
         match self {
-            Self::Relay(s) => s.drain_many(subs).await,
+            Self::Relay(s) => match s.ask(Ask::DrainMany(subs.to_vec())).await? {
+                Answer::Many(m) => Ok(m),
+                a => Err(unexpected(a)),
+            },
             Self::Mesh => {
                 let mut out = Vec::with_capacity(subs.len());
                 for (tag, since) in subs {
@@ -140,7 +153,10 @@ impl Mailbox {
     /// the mesh, which has none, does not carry knocks: refused out loud, as a mesh commit is.
     pub async fn publish_door(&mut self, door: &Address, blob_b64: String) -> Result<u64, CoreError> {
         match self {
-            Self::Relay(s) => s.publish_door(door, blob_b64).await,
+            Self::Relay(s) => match s.ask(Ask::Door(door.door_pub_frame(blob_b64))).await? {
+                Answer::Seq(seq) => Ok(seq),
+                a => Err(unexpected(a)),
+            },
             Self::Mesh => Err(CoreError::Transport("the mesh does not carry knocks — a door's bound is the relay's".into())),
         }
     }
@@ -152,7 +168,10 @@ impl Mailbox {
         subs: &[(String, u64)],
     ) -> Result<(Vec<Vec<(String, u64, String)>>, std::collections::BTreeMap<String, u64>), CoreError> {
         match self {
-            Self::Relay(s) => s.drain_doors(subs).await,
+            Self::Relay(s) => match s.ask(Ask::DrainDoors(subs.to_vec())).await? {
+                Answer::Doors(m, e) => Ok((m, e)),
+                a => Err(unexpected(a)),
+            },
             Self::Mesh => Ok((subs.iter().map(|_| Vec::new()).collect(), Default::default())),
         }
     }
@@ -174,14 +193,15 @@ impl Mailbox {
         matches!(self, Self::Relay(_))
     }
 
-    /// Close cleanly. The mesh has nothing to hang up — its store outlives any one encounter,
-    /// which is the point of carrying.
-    pub async fn close(self) {
-        match self {
-            Self::Relay(s) => s.close().await,
-            Self::Mesh => {}
-        }
-    }
+    /// Done with this mailbox. Nothing to hang up on either transport: the relay's sessions
+    /// are the link's, kept for the next operation, and the mesh's store outlives any one
+    /// encounter, which is the point of carrying.
+    pub async fn close(self) {}
+}
+
+/// An answer of the wrong kind for its ask: the link's bug, said out loud.
+fn unexpected(a: Answer) -> CoreError {
+    CoreError::Transport(format!("the link answered {a:?} out of kind"))
 }
 
 /// Lock the device's shared mesh store. A poisoned lock means another thread panicked mid-carry;

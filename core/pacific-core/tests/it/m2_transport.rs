@@ -344,6 +344,11 @@ fn epoch_retention_is_bounded() {
 /// The client half of a door's bound (`mls.door.relay`, B3): knocks go through the Router, the
 /// chokepoint every relay write passes and is counted at, to the door's tag; a drain at v3
 /// hears how many the relay's cap has evicted.
+///
+/// Each chunk of a connection's allowance is a knocker of its own. Since the link (#144) a
+/// device's connections are kept, so one cannot reset the relay's bound by dialling again;
+/// a knocker's own URL (the relay serves any path) is its own station, as a separate device
+/// has its own link.
 #[tokio::test]
 async fn a_door_drain_hears_what_the_cap_evicted() {
     let url = spawn_relay().await;
@@ -351,7 +356,8 @@ async fn a_door_drain_hears_what_the_cap_evicted() {
     let per = pacific_wire::DOOR_PER_CONN_PER_HOUR;
     let knocks = pacific_wire::DOOR_CAP + 1;
     for chunk in 0..knocks.div_ceil(per) {
-        let mut r = pacific_core::router::Router::open(&Routes::parse(&url)).await.unwrap();
+        let knocker = format!("{url}/knocker-{chunk}");
+        let mut r = pacific_core::router::Router::open(&Routes::parse(&knocker)).await.unwrap();
         let before = pacific_core::router::published();
         let n = per.min(knocks - chunk * per);
         for i in chunk * per..chunk * per + n {
