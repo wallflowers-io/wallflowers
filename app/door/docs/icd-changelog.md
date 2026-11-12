@@ -8,6 +8,25 @@ Method: deploy.md § 10.
 Every op is written the same way: `POST /v2/apply` with `{object, op, args}` on an object that exists, or
 `POST /v2/mint` to make one. `GET /v2/icd` serves the model production runs; model.html lists every op and its args.
 
+## 2.11.0
+
+<!-- generated 2.11.0: icd-changelog.mjs --write; do not edit between the markers -->
+- Draft (the tags facet, base.tag, base.untag, base.hideTag, base.setTagged and base.clearTagged; the tagged relation), from `42eee79`; its ICD `7a20b1593000256d1a35390f9ce5d140bde308a757fe5dee2deae49e93c0449c`, not a release until its icd/* tag
+- Against 2.8.0 (`0eae9b116066add8…`):
+  - added: base.clearTagged (facet tags, op 4027580420, member, commutative)
+  - added: base.hideTag (facet tags, op 4027580418, owner|role:admin, commutative)
+  - added: base.setTagged (facet tags, op 4027580419, member, commutative)
+  - added: base.tag (facet tags, op 4027580416, member, commutative)
+  - added: base.untag (facet tags, op 4027580417, member, commutative)
+  - model sections changed besides ops: facets, relations
+<!-- end generated 2.11.0 -->
+
+The tags facet (Ralph, 12 Nov 2026), on every kind. A tag is a label (the hashtag grammar: lowercase letters, digits
+and `_`) and, optionally, the object it links. Any member puts their own on with `base.tag` and takes it off with
+`base.untag`; the owner or an admin hides a label for everyone with `base.hideTag`, and a hidden label never leaves
+the object. A linked tag is the `tagged` relation: the linked object's own member writes its half with
+`base.setTagged`; until then the tag is unconfirmed. Each object's view gives `tags` and `taggedBy`.
+
 ## 2.8.0
 
 <!-- generated 2.8.0: icd-changelog.mjs --write; do not edit between the markers -->
