@@ -1038,6 +1038,18 @@ public protocol CoreProtocol : AnyObject {
     func listings() throws  -> [ListingRow]
     
     /**
+     * Fetch and open a reference's bytes. Needs only the reference: a device holding no group
+     * for the object reads it as a member does.
+     */
+    func mediaGet(r: MediaRefRow) throws  -> Data
+    
+    /**
+     * Seal `bytes`, upload them to this device's relay's object storage, and return the
+     * reference a Delta carries (O-79, #56). Nothing is written to any object here.
+     */
+    func mediaPut(bytes: Data, mime: String) throws  -> MediaRefRow
+    
+    /**
      * How the membership RECORDS and the MLS tree disagree (§10.3), or `None` when
      * they agree. Group-typed objects only.
      */
@@ -2687,6 +2699,31 @@ open func isLeaving(objectId: String)throws  -> Bool {
 open func listings()throws  -> [ListingRow] {
     return try  FfiConverterSequenceTypeListingRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_listings(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * Fetch and open a reference's bytes. Needs only the reference: a device holding no group
+     * for the object reads it as a member does.
+     */
+open func mediaGet(r: MediaRefRow)throws  -> Data {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_media_get(self.uniffiClonePointer(),
+        FfiConverterTypeMediaRefRow.lower(r),$0
+    )
+})
+}
+    
+    /**
+     * Seal `bytes`, upload them to this device's relay's object storage, and return the
+     * reference a Delta carries (O-79, #56). Nothing is written to any object here.
+     */
+open func mediaPut(bytes: Data, mime: String)throws  -> MediaRefRow {
+    return try  FfiConverterTypeMediaRefRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_media_put(self.uniffiClonePointer(),
+        FfiConverterData.lower(bytes),
+        FfiConverterString.lower(mime),$0
     )
 })
 }
@@ -8725,6 +8762,100 @@ public func FfiConverterTypeMediaInput_lift(_ buf: RustBuffer) throws -> MediaIn
 #endif
 public func FfiConverterTypeMediaInput_lower(_ value: MediaInput) -> RustBuffer {
     return FfiConverterTypeMediaInput.lower(value)
+}
+
+
+/**
+ * A detached, sealed media reference (O-79, `media.detached`, #56): what a Delta carries in
+ * place of the bytes. `digest` is hex.
+ */
+public struct MediaRefRow {
+    public var mime: String
+    public var digest: String
+    public var bytes: UInt64
+    public var key: String
+    public var secret: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(mime: String, digest: String, bytes: UInt64, key: String, secret: String) {
+        self.mime = mime
+        self.digest = digest
+        self.bytes = bytes
+        self.key = key
+        self.secret = secret
+    }
+}
+
+
+
+extension MediaRefRow: Equatable, Hashable {
+    public static func ==(lhs: MediaRefRow, rhs: MediaRefRow) -> Bool {
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.digest != rhs.digest {
+            return false
+        }
+        if lhs.bytes != rhs.bytes {
+            return false
+        }
+        if lhs.key != rhs.key {
+            return false
+        }
+        if lhs.secret != rhs.secret {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(mime)
+        hasher.combine(digest)
+        hasher.combine(bytes)
+        hasher.combine(key)
+        hasher.combine(secret)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaRefRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaRefRow {
+        return
+            try MediaRefRow(
+                mime: FfiConverterString.read(from: &buf), 
+                digest: FfiConverterString.read(from: &buf), 
+                bytes: FfiConverterUInt64.read(from: &buf), 
+                key: FfiConverterString.read(from: &buf), 
+                secret: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MediaRefRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterString.write(value.digest, into: &buf)
+        FfiConverterUInt64.write(value.bytes, into: &buf)
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterString.write(value.secret, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRefRow_lift(_ buf: RustBuffer) throws -> MediaRefRow {
+    return try FfiConverterTypeMediaRefRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRefRow_lower(_ value: MediaRefRow) -> RustBuffer {
+    return FfiConverterTypeMediaRefRow.lower(value)
 }
 
 
@@ -15509,6 +15640,12 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_listings() != 8380) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_media_get() != 53770) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_media_put() != 34334) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_membership_divergence() != 7125) {
