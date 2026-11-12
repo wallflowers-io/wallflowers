@@ -9460,7 +9460,8 @@ impl Node {
         changes: coordinator::Args,
     ) -> Result<Option<String>, CoreError> {
         let held = match op {
-            "event.setProfile" => self.event_state(object_id_hex)?.profile_args(),
+            // A co-host's edit (op 13) restates the same folded profile; its gen is stamped.
+            "event.setProfile" | "event.editProfile" => self.event_state(object_id_hex)?.profile_args(),
             "thing.setProfile" => self.thing_state(object_id_hex)?.profile_args(),
             "post.setProfile" => self
                 .posts()?

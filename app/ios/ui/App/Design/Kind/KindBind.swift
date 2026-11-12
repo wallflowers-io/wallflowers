@@ -20,14 +20,22 @@ enum KindBind {
         return await core.sendToGroup(forum, text)
     }
 
-    /// Whose it is, from the `created` edge on the creator's own log. A Space when
-    /// a Space published it, a person when a person did.
+    /// Whose it is (D16), the one rule the card and the page both name: the `created`
+    /// edge's maker (a Space when a Space published it), else the object's owner.
     static func author(of objectId: String, core: CoreService, tint: Color) -> KindAuthor? {
-        guard let creator = core.creatorOfObject(objectId) else { return nil }
-        let name = creator.name.isEmpty ? String(creator.id.prefix(8)) : creator.name
-        let isSpace = core.spaces.contains { $0.id == creator.id }
-        return KindAuthor(id: creator.id, name: name, initials: Avatar.initials(name),
-                            isSpace: isSpace, color: tint)
+        if let creator = core.creatorOfObject(objectId) {
+            let name = creator.name.isEmpty ? String(creator.id.prefix(8)) : creator.name
+            let isSpace = core.spaces.contains { $0.id == creator.id }
+            return KindAuthor(id: creator.id, name: name, initials: Avatar.initials(name),
+                              isSpace: isSpace, photo: isSpace ? nil : core.index.photo(creator.id), color: tint)
+        }
+        let owner = core.objectOwner(objectId)
+        guard !owner.isEmpty else { return nil }
+        let name = owner == core.myIdentityHex
+            ? (core.displayName.isEmpty ? "You" : core.displayName)
+            : (core.index.name(owner) ?? String(owner.prefix(8)))
+        return KindAuthor(id: owner, name: name, initials: Avatar.initials(name), isSpace: false,
+                          photo: core.index.photo(owner), color: core.index.color(owner) ?? tint)
     }
 
     /// The object's comments section: the Forum minted with it in the comments
@@ -69,7 +77,7 @@ enum KindBind {
 
     static func pictures(_ media: [MediaRow]) -> [KindPicture] {
         media.enumerated().compactMap { i, m in
-            Data(base64Encoded: m.data).map { KindPicture(id: i, data: $0, alt: m.alt) }
+            Data(base64Encoded: m.data).map { KindPicture(id: i, data: $0, alt: m.alt, key: m.id.isEmpty ? nil : m.id) }
         }
     }
 

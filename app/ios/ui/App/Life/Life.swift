@@ -480,7 +480,7 @@ struct LifeView: View {
         if let wanted = UserDefaults.standard.string(forKey: "pacificOpenEvent") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 if let row = core.events.first(where: { $0.title.localizedCaseInsensitiveContains(wanted) }) {
-                    EventDetail.open(row.id, core: core, graph: graph, shell: shell)
+                    EventInterior.open(row.id, core: core, graph: graph, shell: shell)
                 }
             }
         }
@@ -496,12 +496,12 @@ struct LifeView: View {
                         fragment.isEmpty || $0.localizedCaseInsensitiveContains(fragment)
                     }
                     if let hit = music.events.first(where: { matches($0.title) }) {
-                        EventDetail.open(listing: ReferenceListing(music: hit), core: core,
+                        EventInterior.open(listing: ReferenceListing(music: hit), core: core,
                                          graph: graph, shell: shell)
                         break
                     }
                     if let hit = art.events.first(where: { matches($0.title) }) {
-                        EventDetail.open(listing: ReferenceListing(art: hit), core: core,
+                        EventInterior.open(listing: ReferenceListing(art: hit), core: core,
                                          graph: graph, shell: shell)
                         break
                     }
@@ -683,16 +683,16 @@ struct LifeView: View {
             lifeQuery.select(.events)
             if id.hasPrefix("ra:") {
                 if let hit = music.events.first(where: { $0.id == String(id.dropFirst(3)) }) {
-                    EventDetail.open(listing: ReferenceListing(music: hit),
+                    EventInterior.open(listing: ReferenceListing(music: hit),
                                      core: core, graph: graph, shell: shell)
                 }
             } else if id.hasPrefix("art:") {
                 if let hit = art.events.first(where: { $0.id == String(id.dropFirst(4)) }) {
-                    EventDetail.open(listing: ReferenceListing(art: hit),
+                    EventInterior.open(listing: ReferenceListing(art: hit),
                                      core: core, graph: graph, shell: shell)
                 }
             } else if id.hasPrefix("obj:") {
-                EventDetail.open(String(id.dropFirst(4)), core: core, graph: graph, shell: shell)
+                EventInterior.open(String(id.dropFirst(4)), core: core, graph: graph, shell: shell)
             }
         }
     }
@@ -826,7 +826,7 @@ struct LifeView: View {
         let origin = CardFrames.shared.frames[item.id]
         switch item.category {
         case .groups: path.append(GroupLink(id: oid))
-        case .events: EventDetail.open(oid, core: core, graph: graph, shell: shell, origin: origin)
+        case .events: EventInterior.open(oid, core: core, graph: graph, shell: shell, origin: origin)
         case .trade:  ListingDetail.open(oid, core: core, shell: shell, origin: origin)
         case .posts:  PostDetail.open(oid, core: core, shell: shell, origin: origin)
         case .places: PlaceDetail.open(oid, core: core, shell: shell, origin: origin)

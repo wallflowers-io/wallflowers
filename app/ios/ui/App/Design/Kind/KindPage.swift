@@ -11,15 +11,15 @@
 //  page's own buttons — close · share · say something — exactly as on the modal it
 //  replaces (`KindSession`).
 //
-//  WHAT THE PAGE IS. Media, the title, the kind's rows, its pictures and document,
-//  whose it is, and what people said. A VIEWER sees values only. The OWNER sees
-//  each writable row in the creator's row grammar (`FieldRow`) and writes it in
-//  place; the creator takes three fields, and this is where the rest are written.
+//  WHAT THE PAGE IS. The hero (its pictures and clip, paged), the title, the kind's
+//  rows or sections, its document, whose it is, and a row into what people said.
+//  Everyone reads values (#132). Whoever may write it gets Edit beside the title, and
+//  in Edit each writable row is its field in the creator's row grammar (`FieldRow`).
 //
 //  WHY THE COMMENTS ARE FLAT. The object's log carries a real threaded projection
-//  (`ForumThreadRow.depth`, what ThreadView renders). This shows it flat, newest
-//  last, because a nesting tree is a ROOM's information architecture and this is a
-//  detail page with comments under it.
+//  (`ForumThreadRow.depth`, what ThreadView renders). The comments face shows it flat,
+//  newest last, because a nesting tree is a ROOM's information architecture and this
+//  is a detail page with comments on it.
 
 import SwiftUI
 import PhotosUI
@@ -36,9 +36,12 @@ struct KindPage: View {
     /// The page at full size. False on the first frame and again on the way out, so
     /// the square starts and ends where the card is.
     @State private var grown = false
-    @State private var picked: PhotosPickerItem?
     @State private var importing = false
     @State private var inside = false
+    /// The inline title has scrolled under the top edge: the compact one shows.
+    @State private var titleGone = false
+    /// The page's atmosphere, read off the cover's colours (computed, never stored).
+    @State private var cast: Color?
 
     private var exit: NewExit? { session.exit }
 
@@ -50,7 +53,7 @@ struct KindPage: View {
             let width = geo.size.width
             let page = geo.frame(in: .global)
             ZStack(alignment: .top) {
-                Theme.bg
+                ground
                     .opacity(grown ? 1 : 0)
                     .animation(grown ? Motion.screenIn : Motion.noteGroundOut, value: grown)
                 content(width: width)
@@ -66,6 +69,7 @@ struct KindPage: View {
                     .scaleEffect(grown ? 1 : scale(width), anchor: .topLeading)
                     .offset(grown ? .zero : offset(in: page))
                     .opacity(grown || session.origin != nil ? 1 : 0)
+                if titleGone && grown && !session.sharing && !session.commenting { compactTitle }
             }
         }
         // The screen's edges, not the keyboard's: the field you are typing in, and
@@ -79,15 +83,6 @@ struct KindPage: View {
             typing = false
             withAnimation(Self.grow) { grown = false }
         }
-        .onChange(of: picked) { _, item in
-            guard let item else { return }
-            picked = nil
-            Task {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    await session.addPicture(data)
-                }
-            }
-        }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.pdf]) { result in
             guard case .success(let url) = result else { return }
             let scoped = url.startAccessingSecurityScopedResource()
@@ -98,6 +93,36 @@ struct KindPage: View {
         .fullScreenCover(isPresented: $inside) {
             session.headline?.inside?.view { inside = false }
         }
+        .task(id: session.headline?.photo) { cast = await KindCast.of(session.headline?.photo) }
+    }
+
+    /// The ground: the theme's, warmed by the cover's own colour when it has one.
+    private var ground: some View {
+        ZStack {
+            Theme.bg
+            if let cast { cast.opacity(0.16) }
+        }
+    }
+
+    /// The title, once the inline one has gone under the top edge: information the
+    /// page no longer shows, not a second copy of it. No Back or ✕: RED closes.
+    private var compactTitle: some View {
+        Text(session.headline?.title ?? "")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(Theme.textPrimary)
+            .lineLimit(1)
+            .padding(.horizontal, 18)
+            .padding(.top, KindPage.topInset)
+            .frame(maxWidth: .infinity, minHeight: KindPage.topInset + 44, alignment: .center)
+            .background(.ultraThinMaterial)
+            .transition(.opacity)
+            .accessibilityIdentifier("detail-compact-title")
+    }
+
+    /// The status bar's height: the page runs under it.
+    static var topInset: CGFloat {
+        let window = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+        return window?.safeAreaInsets.top ?? 47
     }
 
     /// Inside the shell's departure window (`Motion.noteExit`), so the square is home
@@ -120,19 +145,23 @@ struct KindPage: View {
         ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                media(width: width)
+                hero(width: width)
                 Group {
                     if session.sharing {
                         shareFace
+                    } else if session.commenting {
+                        commentsFace
                     } else {
                         title
-                        rows
+                        body(session.headline)
                         if let way = session.headline?.inside { insideBar(way) }
                         adds
-                        gallery
                         document(width: width)
-                        if let author = session.author { authorBar(author) }
-                        comments
+                        // A kind with sections names its own people (an Event's hosts).
+                        if session.headline?.blocks.isEmpty != false, let author = session.author {
+                            authorBar(author)
+                        }
+                        commentsRow
                     }
                 }
                 .opacity(grown ? 1 : 0)
@@ -142,6 +171,7 @@ struct KindPage: View {
             .padding(.bottom, ShellMetrics.bottomBarHeight + 24)
             .overlay(alignment: .bottom) { Color.clear.frame(height: 1).id(Self.composerID) }
         }
+        .coordinateSpace(name: Self.scrollSpace)
         .scrollIndicators(.hidden)
         .scrollDisabled(!grown)
         .scrollDismissesKeyboard(.interactively)
@@ -158,28 +188,22 @@ struct KindPage: View {
     /// the comment above it sit clear of the row.
     private static let composerID = "detail-foot"
 
-    /// MEDIA — the square the card showed, at the screen's width: the picture, a
-    /// Place's area, or the stripes, which say THERE IS NO PICTURE rather than
+    /// THE HERO — the square the card showed, at the screen's width. Its pictures and
+    /// clip page (they do not scroll); a tap opens them full screen. With none, a remote
+    /// poster, a Place's area, or the stripes, which say THERE IS NO PICTURE rather than
     /// implying one is on its way.
-    @ViewBuilder private func media(width: CGFloat) -> some View {
-        Color.clear
+    @ViewBuilder private func hero(width: CGFloat) -> some View {
+        KindHero(headline: session.headline, tint: tint, width: width,
+                 editing: session.editing, busy: session.saving != nil,
+                 cover: { data in await session.setCover(data) },
+                 add: { data in await session.addPicture(data) },
+                 remove: { key in await session.removePicture(key) },
+                 clip: { data, mime in await session.setClip(data, mime: mime) })
             .frame(width: width, height: width)
-            .overlay {
-                if let bytes = session.headline?.photo, let image = UIImage(data: bytes) {
-                    Image(uiImage: image).resizable().scaledToFill()
-                } else if let url = session.headline?.photoURL {
-                    PosterImage(url: url, imageID: "detail-media-remote") { FlyerStripes() }
-                } else if let cells = session.headline?.area, !cells.isEmpty {
-                    MapCard(cells: cells, color: tint, width: width, tall: width)
-                } else {
-                    FlyerStripes()
-                }
-            }
             .clipped()
             // One element: the square, valued with the card's square it grew from,
-            // "x,y,w,h" in points — what a test holds the grow to. A container's
-            // identifier would override its children's.
-            .accessibilityElement()
+            // "x,y,w,h" in points — what a test holds the grow to.
+            .accessibilityElement(children: .contain)
             .accessibilityLabel(mediaLabel)
             .accessibilityValue(session.origin.map {
                 "\(Int($0.minX)),\(Int($0.minY)),\(Int($0.width)),\(Int($0.height))"
@@ -194,53 +218,98 @@ struct KindPage: View {
     }
 
     @ViewBuilder private var title: some View {
-        Group {
-            if let edit = session.headline?.titleEdit {
-                KindTitleField(edit: edit, busy: session.saving == edit.op + "." + edit.arg) { value in
-                    await session.edit(edit, to: value)
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Group {
+                if session.editing, let edit = session.headline?.titleEdit {
+                    KindTitleField(edit: edit, busy: session.saving == edit.op + "." + edit.arg) { value in
+                        await session.edit(edit, to: value)
+                    }
+                } else {
+                    Text(session.headline?.title ?? "")
                 }
-            } else {
-                Text(session.headline?.title ?? "")
+            }
+            .font(.system(size: 24, weight: .heavy))
+            .tracking(-0.2)
+            .foregroundStyle(Theme.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("detail-title")
+            // Edit, for whoever may write it; Done ends it. RED always closes.
+            if session.canEdit {
+                Button { session.toggleEditing() } label: {
+                    Text(session.editing ? "Done" : "Edit")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(session.editing ? Theme.bg : Theme.textPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(session.editing ? Theme.textPrimary : Theme.fill.opacity(0.6)))
+                }
+                .buttonStyle(.plain)
+                .disabled(session.saving != nil)
+                .accessibilityIdentifier("detail-edit-toggle")
             }
         }
-        .font(.system(size: 24, weight: .heavy))
-        .tracking(-0.2)
-        .foregroundStyle(Theme.textPrimary)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 18)
         .padding(.top, 18)
         .padding(.bottom, 6)
-        .accessibilityIdentifier("detail-title")
+        .onGeometryChange(for: Bool.self) { $0.frame(in: .named(Self.scrollSpace)).maxY < Self.topInset } action: {
+            gone in withAnimation(.easeOut(duration: 0.15)) { titleGone = gone }
+        }
     }
+
+    private static let scrollSpace = "kind-scroll"
 
     // MARK: Rows — values for a viewer, fields for the owner
 
-    private var rows: some View {
+    /// The kind's rows, or its sections in order.
+    @ViewBuilder private func body(_ headline: KindHeadline?) -> some View {
+        if let blocks = headline?.blocks, !blocks.isEmpty {
+            ForEach(blocks) { block in
+                switch block {
+                case .rows(_, let rows): self.rows(rows)
+                case .view(_, let build): build(context)
+                }
+            }
+        } else {
+            rows(headline?.rows ?? [])
+        }
+    }
+
+    private var context: KindContext {
+        KindContext(editing: session.editing,
+                    leave: { next in
+                        onClose()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + Motion.noteExit + 0.1, execute: next)
+                    },
+                    reload: { await session.reload() })
+    }
+
+    /// In View, each value; in Edit, each writable row as its field. A setting row
+    /// (`editOnly`) is on the page in Edit only, and an unset value is not on it in View.
+    private func rows(_ rows: [KindRow]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(session.headline?.rows ?? []) { row in
-                if let edit = row.edit {
+            ForEach(rows) { row in
+                if session.editing, let edit = row.edit {
                     KindEditRow(row: row, edit: edit, busy: session.saving == row.id) { value in
                         await session.edit(edit, to: value)
                     }
-                } else if !row.value.isEmpty {
+                } else if !session.editing && !row.editOnly && !row.value.isEmpty {
                     valueRow(row)
                 }
             }
         }
         .padding(.horizontal, 18)
+        .padding(.top, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder private func valueRow(_ row: KindRow) -> some View {
-        let text = Text(row.markdown
-                        ? (try? AttributedString(markdown: row.value,
-                                                 options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-                            ?? AttributedString(row.value)
-                        : AttributedString(row.value))
+        let text = Text(AttributedString(row.value))
             .font(.system(size: 15))
             .fixedSize(horizontal: false, vertical: true)
         Group {
-            if let link = row.link {
+            if row.markdown {
+                KindMarkdown(source: row.value)
+            } else if let link = row.link {
                 Link(destination: link) { text.foregroundStyle(Theme.accent) }
             } else if let place = row.place {
                 Button { openPlace(place) } label: {
@@ -284,19 +353,16 @@ struct KindPage: View {
 
     /// The owner's adds — a picture into the kind's set, a document onto a Post.
     @ViewBuilder private var adds: some View {
-        let offered = session.headline?.adds ?? []
-        if !offered.isEmpty {
+        let offered = (session.headline?.adds ?? []).filter { $0 == .document }
+        if session.editing, !offered.isEmpty {
             HStack(spacing: 10) {
                 ForEach(offered) { add in
                     switch add {
-                    case .picture:
-                        PhotosPicker(selection: $picked, matching: .images) {
-                            addLabel("Add picture", glyph: "photo.badge.plus")
-                        }
-                        .accessibilityIdentifier("detail-add-picture")
                     case .document:
                         Button { importing = true } label: { addLabel("Attach PDF", glyph: "doc.badge.plus") }
                             .accessibilityIdentifier("detail-add-document")
+                    default:
+                        EmptyView()
                     }
                 }
             }
@@ -313,29 +379,6 @@ struct KindPage: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(Capsule().fill(Theme.fill.opacity(0.6)))
-    }
-
-    /// The rest of the pictures, in the order the fold gives them.
-    @ViewBuilder private var gallery: some View {
-        let pictures = session.headline?.gallery ?? []
-        if !pictures.isEmpty {
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(pictures) { p in
-                        if let image = UIImage(data: p.data) {
-                            Image(uiImage: image).resizable().scaledToFill()
-                                .frame(width: 132, height: 132)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                .accessibilityLabel(p.alt)
-                        }
-                    }
-                }
-                .padding(.horizontal, 18)
-            }
-            .scrollIndicators(.hidden)
-            .padding(.top, 16)
-            .accessibilityIdentifier("detail-gallery")
-        }
     }
 
     /// A Post's PDF, read in place.
@@ -394,35 +437,60 @@ struct KindPage: View {
         }
     }
 
-    /// COMMENTS — a section of its own, on the page whenever the device holds the
-    /// object's comments section, said-in or not: its heading and count, what was
-    /// said (flat, oldest first, each in its author's own face, their name a door),
-    /// and the field to say something in. BLUE sends it.
-    @ViewBuilder private var comments: some View {
+    /// COMMENTS — a row into them, on the page whenever the device holds the object's
+    /// comments section, said-in or not. It turns the page to the comments face.
+    @ViewBuilder private var commentsRow: some View {
         if session.commentsHeld || !session.comments.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
+            Button { session.toggleComments() } label: {
                 HStack(spacing: 8) {
+                    Text(session.comments.isEmpty ? "COMMENTS" : "\(session.comments.count) COMMENTS")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .kerning(1.2)
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(.horizontal, 18)
+                .frame(height: ProfileGeometry.bar)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(Theme.surface)
+            .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+            .padding(.top, 22)
+            .accessibilityIdentifier("detail-comments-row")
+        }
+    }
+
+    /// The comments face: what was said (flat, oldest first, each in its author's own
+    /// face, their name a door), and the field to say something in. BLUE sends it. The
+    /// heading turns the page back.
+    private var commentsFace: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button { typing = false; session.toggleComments() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold))
                     Text("COMMENTS")
                     if !session.comments.isEmpty { Text("\(session.comments.count)") }
                 }
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
                 .kerning(1.4)
                 .foregroundStyle(Theme.textTertiary)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("detail-comments-heading")
-
-                ForEach(session.comments) { comment in
-                    commentRow(comment)
-                }
-                if session.takesComment && session.commentsHeld { composer }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 18)
-            .background(Theme.surface)
-            .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
-            .padding(.top, 22)
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("detail-comments-heading")
+
+            ForEach(session.comments) { comment in
+                commentRow(comment)
+            }
+            if session.takesComment && session.commentsHeld { composer }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 20)
     }
 
     private func commentRow(_ comment: KindComment) -> some View {

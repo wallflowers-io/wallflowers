@@ -80,6 +80,14 @@ fn vocabularies(icd: &serde_json::Value) {
                     if let Some(n) = a["maxLength"].as_u64() {
                         ceilings.insert((op.clone(), arg.clone()), n);
                     }
+                    // A list arg's items name their own closed words, keyed `arg.field`
+                    // (`event.setLineup`'s `acts.role`).
+                    for (field, f) in a["items"].as_object().into_iter().flatten() {
+                        if let Some(v) = f["vocabulary"].as_object() {
+                            let w: Vec<String> = v.keys().map(|k| format!("{k:?}")).collect();
+                            words.insert((op.clone(), format!("{arg}.{field}")), w.join(", "));
+                        }
+                    }
                 }
             }
         }

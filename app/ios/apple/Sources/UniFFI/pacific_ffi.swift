@@ -8925,6 +8925,10 @@ public struct MediaRow {
      * The author's words for it, "" when none.
      */
     public var alt: String
+    /**
+     * The id its set keys it by (`event.removePhoto`'s `id`), "" when it is not one of a set.
+     */
+    public var id: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -8937,12 +8941,16 @@ public struct MediaRow {
          */width: UInt32, height: UInt32, 
         /**
          * The author's words for it, "" when none.
-         */alt: String) {
+         */alt: String, 
+        /**
+         * The id its set keys it by (`event.removePhoto`'s `id`), "" when it is not one of a set.
+         */id: String) {
         self.mime = mime
         self.data = data
         self.width = width
         self.height = height
         self.alt = alt
+        self.id = id
     }
 }
 
@@ -8965,6 +8973,9 @@ extension MediaRow: Equatable, Hashable {
         if lhs.alt != rhs.alt {
             return false
         }
+        if lhs.id != rhs.id {
+            return false
+        }
         return true
     }
 
@@ -8974,6 +8985,7 @@ extension MediaRow: Equatable, Hashable {
         hasher.combine(width)
         hasher.combine(height)
         hasher.combine(alt)
+        hasher.combine(id)
     }
 }
 
@@ -8989,7 +9001,8 @@ public struct FfiConverterTypeMediaRow: FfiConverterRustBuffer {
                 data: FfiConverterString.read(from: &buf), 
                 width: FfiConverterUInt32.read(from: &buf), 
                 height: FfiConverterUInt32.read(from: &buf), 
-                alt: FfiConverterString.read(from: &buf)
+                alt: FfiConverterString.read(from: &buf), 
+                id: FfiConverterString.read(from: &buf)
         )
     }
 
@@ -8999,6 +9012,7 @@ public struct FfiConverterTypeMediaRow: FfiConverterRustBuffer {
         FfiConverterUInt32.write(value.width, into: &buf)
         FfiConverterUInt32.write(value.height, into: &buf)
         FfiConverterString.write(value.alt, into: &buf)
+        FfiConverterString.write(value.id, into: &buf)
     }
 }
 

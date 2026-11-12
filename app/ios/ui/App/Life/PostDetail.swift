@@ -46,8 +46,11 @@ struct PostDetailSource: KindSource {
             r.link("Links to", more?.link ?? "", op: profile, arg: "link"),
         ]
         if owner {
-            rows.append(r.choice("Kind", more?.form ?? "", op: profile, arg: "form"))
-            rows.append(r.choice("Body format", more?.bodyFormat ?? "", op: profile, arg: "bodyFormat"))
+            var kind = r.choice("Kind", more?.form ?? "", op: profile, arg: "form")
+            var format = r.choice("Body format", more?.bodyFormat ?? "", op: profile, arg: "bodyFormat")
+            kind.editOnly = true
+            format.editOnly = true
+            rows += [kind, format]
         }
         if row.reactions > 0 {
             rows.append(KindRow(label: "Reactions", value: "\(row.reactions) reactions"))
@@ -65,6 +68,8 @@ struct PostDetailSource: KindSource {
             rows: rows,
             adds: owner ? [.picture, .document] : [])
     }
+
+    func canEdit() async -> Bool { core.isGroupOwner(objectId) }
 
     func author() async -> KindAuthor? {
         KindBind.author(of: objectId, core: core, tint: PostDetail.tint)

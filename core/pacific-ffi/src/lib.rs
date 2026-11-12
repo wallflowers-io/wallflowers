@@ -1220,6 +1220,8 @@ pub struct MediaRow {
     pub height: u32,
     /// The author's words for it, "" when none.
     pub alt: String,
+    /// The id its set keys it by (`event.removePhoto`'s `id`), "" when it is not one of a set.
+    pub id: String,
 }
 
 fn media_row(m: &pacific_media::MediaRef, alt: &str) -> Option<MediaRow> {
@@ -1230,6 +1232,7 @@ fn media_row(m: &pacific_media::MediaRef, alt: &str) -> Option<MediaRow> {
             width: m.width,
             height: m.height,
             alt: alt.to_string(),
+            id: String::new(),
         }),
         _ => None,
     }
@@ -1242,6 +1245,7 @@ fn inline_row(mime: &str, data: &str) -> Option<MediaRow> {
         width: 0,
         height: 0,
         alt: String::new(),
+        id: String::new(),
     })
 }
 
@@ -2853,9 +2857,9 @@ impl Core {
     /// The rest of one Event — its maximised detail's read, beside its `EventRow`.
     pub fn event_detail(&self, object_id: String) -> Result<EventDetailRow, FfiError> {
         let st = self.read()?.event_state(&object_id)?;
-        let mut set: Vec<&pacific_core::event::SetPhoto> =
-            st.photo_set.iter().flat_map(|s| s.values()).collect();
-        set.sort_by_key(|p| p.at);
+        let mut set: Vec<(&String, &pacific_core::event::SetPhoto)> =
+            st.photo_set.iter().flat_map(|s| s.iter()).collect();
+        set.sort_by_key(|(_, p)| p.at);
         Ok(EventDetailRow {
             banner: st
                 .banner
@@ -2872,7 +2876,7 @@ impl Core {
                 .photos
                 .iter()
                 .filter_map(|p| inline_row(&p.mime, &p.data))
-                .chain(set.into_iter().filter_map(|p| media_row(&p.media, "")))
+                .chain(set.into_iter().filter_map(|(id, p)| media_row(&p.media, "").map(|r| MediaRow { id: id.clone(), ..r })))
                 .collect(),
             acts: st
                 .acts
