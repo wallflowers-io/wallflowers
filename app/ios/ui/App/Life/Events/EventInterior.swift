@@ -203,73 +203,9 @@ struct EventInteriorSource: KindSource {
         if !c.venuePlace.isEmpty, let named = await venueName() { c.venue = named }
         let editor = await canEdit()
         let owner = core.isGroupOwner(objectId)
-        let r = KindBind.rows(owner: editor, core: core)
-        let p = Self.profile
-        let content = c
-
-        // WHEN: in View one composed line, its series, and any exception to "scheduled";
-        // in Edit each field it is made of.
-        var when: [KindRow] = [
-            KindRow(label: "When", value: EventWhen.label(startMs: c.startMs, endMs: c.endMs, allDay: c.allDay)
-                    + EventWhen.zone(c.tz)),
-            KindRow(label: "Series", value: core.recurrenceLabel(c.recurrence)),
-        ]
-        var starts = KindRow(label: "Starts", value: "",
-                             edit: editor ? KindEdit(op: p, arg: "startMs", input: .date, current: String(c.startMs)) : nil)
-        var ends = KindRow(label: "Ends", value: "",
-                           edit: editor ? KindEdit(op: p, arg: "endMs", input: .date,
-                                                   current: c.endMs > 0 ? String(c.endMs) : "") : nil)
-        var allDay = KindRow(label: "All day", value: "",
-                             edit: editor ? KindEdit(op: p, arg: "allDay", input: .toggle, current: c.allDay ? "1" : "") : nil)
-        var zone = r.text("Time zone", c.tz, op: p, arg: "tz")
-        starts.editOnly = true; ends.editOnly = true; allDay.editOnly = true; zone.editOnly = true
-        when += [starts, ends, allDay, zone]
-        let statusEdit = r.choice("Status", c.status, op: p, arg: "status").edit
-        let exceptional = !c.status.isEmpty && c.status != "scheduled"
-        when.append(KindRow(label: "Status", value: exceptional ? c.status.uppercased() : "", edit: statusEdit))
-        when.append(r.link("Online", c.online, op: p, arg: "online"))
-        when.append(r.link("Video", c.videoUrl, op: p, arg: "videoUrl"))
-
-        var venueText = r.text("Venue", c.venue, op: p, arg: "venue")
-        venueText.editOnly = true
-
-        let about = r.text("Describe", c.descriptor, op: p, arg: "descriptor", input: .multiline, markdown: c.markdown)
-        var format = r.choice("Written in", c.markdown ? "markdown" : "", op: p, arg: "descriptorFormat")
-        format.editOnly = true
-
-        var tickets: [KindRow] = []
-        if c.priceCents > 0 {
-            tickets.append(KindRow(label: "Price", value: EventWhen.price(c.priceCents, c.currency)))
-        }
-        tickets.append(r.link("Tickets", c.ticketUrl, op: p, arg: "ticketUrl"))
-
-        let blocks: [KindBlock] = [
-            .rows("when", when),
-            .view("actions") { ctx in AnyView(EventActions(content: content, core: core, ctx: ctx)) },
-            .view("location") { ctx in
-                AnyView(EventLocation(content: content, owner: owner, ctx: ctx) { place, name in
-                    core.setEventVenue(objectId, placeId: place, name: name)
-                })
-            },
-            .rows("venue", [venueText]),
-            .view("hosts") { ctx in AnyView(EventHosts(hosts: content.hosts, ctx: ctx)) },
-            .view("lineup") { ctx in
-                AnyView(EventLineup(content: content, editor: editor, ctx: ctx, core: core) { acts in
-                    await setLineup(acts)
-                })
-            },
-            .rows("about", [about, format]),
-            .rows("tickets", tickets),
-            .view("going") { _ in AnyView(EventGoing(going: content.going, capacity: content.capacity)) },
-        ]
-        return KindHeadline(
-            title: c.title,
-            titleEdit: editor ? KindEdit(op: p, arg: "title", input: .line, current: c.title) : nil,
-            photo: c.banner,
-            gallery: c.photos,
-            clip: c.clip,
-            blocks: blocks,
-            adds: editor ? [.cover, .picture] : [])
+        return c.page(objectId: objectId, editor: editor, owner: owner, core: core,
+                      setVenue: { [core, objectId] place, name in core.setEventVenue(objectId, placeId: place, name: name) },
+                      setLineup: { acts in await setLineup(acts) })
     }
 
     func author() async -> KindAuthor? { KindBind.author(of: objectId, core: core, tint: EventInterior.tint) }
@@ -335,6 +271,83 @@ struct EventInteriorSource: KindSource {
             return (await graph.entity(id: fact.dst))?.name ?? fact.dst
         }
         return row.venuePlaceName.isEmpty ? nil : row.venuePlaceName
+    }
+}
+
+// MARK: - The page, both sides
+
+extension EventContent {
+    /// THE EVENT'S PAGE from its content: the same blocks for a member and an outsider
+    /// (Ralph, 12 Nov: the outside is complete, joining adds only authorship). `editor` and
+    /// `owner` false, and the page is read-only: EventExterior's case.
+    @MainActor
+    func page(objectId: String, editor: Bool, owner: Bool, core: CoreService,
+              setVenue: @escaping (String, String) -> Bool,
+              setLineup: @escaping ([EventContent.Act]) async -> Bool) -> KindHeadline {
+        let c = self
+        let r = KindBind.rows(owner: editor, core: core)
+        let p = EventInteriorSource.profile
+        let content = c
+
+        // WHEN: in View one composed line, its series, and any exception to "scheduled";
+        // in Edit each field it is made of.
+        var when: [KindRow] = [
+            KindRow(label: "When", value: EventWhen.label(startMs: c.startMs, endMs: c.endMs, allDay: c.allDay)
+                    + EventWhen.zone(c.tz)),
+            KindRow(label: "Series", value: core.recurrenceLabel(c.recurrence)),
+        ]
+        var starts = KindRow(label: "Starts", value: "",
+                             edit: editor ? KindEdit(op: p, arg: "startMs", input: .date, current: String(c.startMs)) : nil)
+        var ends = KindRow(label: "Ends", value: "",
+                           edit: editor ? KindEdit(op: p, arg: "endMs", input: .date,
+                                                   current: c.endMs > 0 ? String(c.endMs) : "") : nil)
+        var allDay = KindRow(label: "All day", value: "",
+                             edit: editor ? KindEdit(op: p, arg: "allDay", input: .toggle, current: c.allDay ? "1" : "") : nil)
+        var zone = r.text("Time zone", c.tz, op: p, arg: "tz")
+        starts.editOnly = true; ends.editOnly = true; allDay.editOnly = true; zone.editOnly = true
+        when += [starts, ends, allDay, zone]
+        let statusEdit = r.choice("Status", c.status, op: p, arg: "status").edit
+        let exceptional = !c.status.isEmpty && c.status != "scheduled"
+        when.append(KindRow(label: "Status", value: exceptional ? c.status.uppercased() : "", edit: statusEdit))
+        when.append(r.link("Online", c.online, op: p, arg: "online"))
+        when.append(r.link("Video", c.videoUrl, op: p, arg: "videoUrl"))
+
+        var venueText = r.text("Venue", c.venue, op: p, arg: "venue")
+        venueText.editOnly = true
+
+        let about = r.text("Describe", c.descriptor, op: p, arg: "descriptor", input: .multiline, markdown: c.markdown)
+        var format = r.choice("Written in", c.markdown ? "markdown" : "", op: p, arg: "descriptorFormat")
+        format.editOnly = true
+
+        var tickets: [KindRow] = []
+        if c.priceCents > 0 {
+            tickets.append(KindRow(label: "Price", value: EventWhen.price(c.priceCents, c.currency)))
+        }
+        tickets.append(r.link("Tickets", c.ticketUrl, op: p, arg: "ticketUrl"))
+
+        let blocks: [KindBlock] = [
+            .rows("when", when),
+            .view("actions") { ctx in AnyView(EventActions(content: content, core: core, ctx: ctx)) },
+            .view("location") { ctx in
+                AnyView(EventLocation(content: content, owner: owner, ctx: ctx, bind: setVenue))
+            },
+            .rows("venue", [venueText]),
+            .view("hosts") { ctx in AnyView(EventHosts(hosts: content.hosts, ctx: ctx)) },
+            .view("lineup") { ctx in
+                AnyView(EventLineup(content: content, editor: editor, ctx: ctx, core: core, write: setLineup))
+            },
+            .rows("about", [about, format]),
+            .rows("tickets", tickets),
+            .view("going") { _ in AnyView(EventGoing(going: content.going, capacity: content.capacity)) },
+        ]
+        return KindHeadline(
+            title: c.title,
+            titleEdit: editor ? KindEdit(op: p, arg: "title", input: .line, current: c.title) : nil,
+            photo: c.banner,
+            gallery: c.photos,
+            clip: c.clip,
+            blocks: blocks,
+            adds: editor ? [.cover, .picture] : [])
     }
 }
 
