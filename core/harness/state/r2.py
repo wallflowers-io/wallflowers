@@ -57,9 +57,11 @@ class MediaError(str, Enum):
     BAD_SIGNATURE = "bad_signature"
     NOT_A_KEY = "not_a_key"
 
-#: `media.hosted.windowSecs`, read from the ICD as pacific-wire's build.rs reads it.
-HOST_WINDOW_SECS: int = json.loads((Path(__file__).resolve().parents[2] / "coordination"
-                                    / "delta-graph.icd.json").read_text())["media"]["hosted"]["windowSecs"]
+#: `media.hosted`'s window and vocabulary level, read from the ICD as pacific-wire's build.rs reads them.
+_HOSTED = json.loads((Path(__file__).resolve().parents[2] / "coordination"
+                      / "delta-graph.icd.json").read_text())["media"]["hosted"]
+HOST_WINDOW_SECS: int = _HOSTED["windowSecs"]
+HOST_V: int = _HOSTED["v"]
 
 
 def now_secs() -> int:

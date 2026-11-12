@@ -281,7 +281,7 @@ async def f15_live(on_step: Callable | None = None) -> CaseResult:
     with Relay(_scratch("f15d"), label="f15-hosted",
                env={**R2_ENV, "RELAY_R2_BUDGET_BYTES": "0"}) as relay:
         c = await Client.connect(relay.url, "ada")
-        await c.declare(4)   # media_host is level four
+        await c.declare(r2.HOST_V)   # media_host's level, the ICD's
         owner, mallory = address.named("hosted-owner"), address.named("hosted-mallory")
         key, now = owner.tag_hex, int(datetime.now(timezone.utc).timestamp())
         got = await c.media_host(key, 1024, now, owner.sign_host(1024, now))

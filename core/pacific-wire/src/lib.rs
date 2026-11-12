@@ -56,9 +56,10 @@ pub const V_MEDIA: u8 = 2;
 /// Vocabulary level 3: adds [`Frame::Evicted`] — how many knocks a door tag has lost to its
 /// cap (`mls.door.relay`, B3). The ICD names this level; `DOOR_EVICTED_V` is held to it.
 pub const V_DOOR: u8 = 3;
-/// Vocabulary level 4: adds [`Frame::MediaHost`] — an overwrite of a hosted object, asked by its
-/// own key (`media.hosted`). The ICD names this level; `HOST_V` is held to it.
-pub const V_HOST: u8 = 4;
+/// Vocabulary level `media.hosted.v`: adds [`Frame::MediaHost`] — an overwrite of a hosted
+/// object, asked by its own key. The ICD's number, so the level renumbers there (levels go in
+/// landing order, as ICD versions do); the wire spec, the third party, is edited beside it.
+pub const V_HOST: u8 = HOST_V;
 /// The highest vocabulary level this build knows how to parse. A client may send
 /// this as `Sub.v` to opt into everything; it is NOT the default, because opting in
 /// to a frame means deciding what to DO with it.
