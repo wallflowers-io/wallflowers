@@ -47,6 +47,10 @@ use crate::Frame;
 /// can never be taken for any other signature the system produces.
 pub const PUB_SIG_DOMAIN: &[u8] = b"pacific-relay-pub:v1\n";
 
+/// The first bytes of everything a hosted object's key signs to overwrite it (`media.hosted`),
+/// so a host signature can never be taken for a `Pub`'s, or the reverse.
+pub const HOST_SIG_DOMAIN: &[u8] = b"pacific-relay-host:v1\n";
+
 /// HKDF salt turning a seed into an address's signing key. The seed is a secret
 /// the writer already holds for another reason (an exporter output, an intro
 /// secret, a root-derived value), so the key is separated from every other use of
@@ -101,6 +105,13 @@ impl Address {
         format!("{}{}", crate::DOOR_PREFIX, self.tag_hex())
     }
 
+    /// A complete, signed `MediaHost`: an overwrite of this address's object, exactly `len` bytes,
+    /// asked at `at` (unix seconds). The address is the object's key (`media.hosted`).
+    pub fn host_frame(&self, len: u64, at: u64) -> Frame {
+        let sig = hex::encode(self.key.sign(&host_payload(&self.tag(), len, at)).to_bytes());
+        Frame::MediaHost { key: self.tag_hex(), len, at, sig }
+    }
+
     /// A complete, signed `Pub` of a knock to this address as a door.
     pub fn door_pub_frame(&self, blob_b64: String) -> Frame {
         let sig = self.sign_pub(&blob_b64);
@@ -122,6 +133,17 @@ pub fn pub_payload(tag: &[u8; 32], blob_b64: &str) -> Vec<u8> {
     m.extend_from_slice(PUB_SIG_DOMAIN);
     m.extend_from_slice(tag);
     m.extend_from_slice(blob_b64.as_bytes());
+    m
+}
+
+/// The bytes a hosted object's key signs: domain, the key's 32 bytes, then `len` and `at` as
+/// big-endian u64. Fixed length throughout, so the encoding is injective.
+pub fn host_payload(key: &[u8; 32], len: u64, at: u64) -> Vec<u8> {
+    let mut m = Vec::with_capacity(HOST_SIG_DOMAIN.len() + 48);
+    m.extend_from_slice(HOST_SIG_DOMAIN);
+    m.extend_from_slice(key);
+    m.extend_from_slice(&len.to_be_bytes());
+    m.extend_from_slice(&at.to_be_bytes());
     m
 }
 
@@ -158,6 +180,19 @@ impl PubRefusal {
 pub fn verify_pub(tag_hex: &str, blob_b64: &str, sig_hex: &str) -> Result<(), PubRefusal> {
     // A door's tag is its address's, prefixed; the address signs the same 32 bytes.
     let tag_hex = tag_hex.strip_prefix(crate::DOOR_PREFIX).unwrap_or(tag_hex);
+    let (tag, key, sig) = key_and_sig(tag_hex, sig_hex)?;
+    key.verify_strict(&pub_payload(&tag, blob_b64), &sig).map_err(|_| PubRefusal::BadSignature)
+}
+
+/// May this `MediaHost` overwrite the object at `key_hex`? Only its key's holder may ask. The
+/// window on `at` is the caller's: the relay holds it to its presign lifetime.
+pub fn verify_host(key_hex: &str, len: u64, at: u64, sig_hex: &str) -> Result<(), PubRefusal> {
+    let (tag, key, sig) = key_and_sig(key_hex, sig_hex)?;
+    key.verify_strict(&host_payload(&tag, len, at), &sig).map_err(|_| PubRefusal::BadSignature)
+}
+
+/// An address's 32 bytes, its key and a signature, each checked for shape.
+fn key_and_sig(tag_hex: &str, sig_hex: &str) -> Result<([u8; 32], VerifyingKey, Signature), PubRefusal> {
     let lower = tag_hex.len() == 64
         && tag_hex.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
     if !lower {
@@ -172,8 +207,7 @@ pub fn verify_pub(tag_hex: &str, blob_b64: &str, sig_hex: &str) -> Result<(), Pu
         .map_err(|_| PubRefusal::MalformedSig)?
         .try_into()
         .map_err(|_| PubRefusal::MalformedSig)?;
-    key.verify_strict(&pub_payload(&tag, blob_b64), &Signature::from_bytes(&raw))
-        .map_err(|_| PubRefusal::BadSignature)
+    Ok((tag, key, Signature::from_bytes(&raw)))
 }
 
 #[cfg(test)]
@@ -294,6 +328,42 @@ mod tests {
             assert_eq!(addr.tag_hex(), v["tag"].as_str().unwrap());
             assert_eq!(addr.sign_pub(v["blob"].as_str().unwrap()), v["sig"].as_str().unwrap());
             assert_eq!(verify_pub(&addr.tag_hex(), v["blob"].as_str().unwrap(), v["sig"].as_str().unwrap()), Ok(()));
+        }
+    }
+
+    /// `media.hosted`: only the key's holder may overwrite its object, and a signature for one
+    /// length, moment or key is good for no other.
+    #[test]
+    fn only_a_hosted_objects_key_may_overwrite_it() {
+        let owner = Address::from_seed(&seed(10));
+        let mallory = Address::from_seed(&seed(11));
+        let Frame::MediaHost { key, len, at, sig } = owner.host_frame(4096, 1_700_000_000) else {
+            panic!("host_frame builds a MediaHost");
+        };
+        assert_eq!(verify_host(&key, len, at, &sig), Ok(()));
+        assert_eq!(verify_host(&key, len + 1, at, &sig), Err(PubRefusal::BadSignature), "a larger upload");
+        assert_eq!(verify_host(&key, len, at + 1, &sig), Err(PubRefusal::BadSignature), "a later moment");
+        let Frame::MediaHost { sig: theirs, .. } = mallory.host_frame(len, at) else { unreachable!() };
+        assert_eq!(verify_host(&key, len, at, &theirs), Err(PubRefusal::BadSignature), "someone else's key");
+        // A Pub's signature over the same 32 bytes is not a host's: the domains differ.
+        let pubsig = owner.sign_pub("aGk=");
+        assert_eq!(verify_host(&key, len, at, &pubsig), Err(PubRefusal::BadSignature));
+    }
+
+    /// The host rule as data, for the Python harness's second implementation.
+    #[test]
+    fn the_host_rule_matches_the_vector_in_the_wire_spec() {
+        let spec: serde_json::Value = serde_json::from_str(crate::WIRE_SPEC_JSON).unwrap();
+        let h = &spec["host"];
+        assert_eq!(h["sig_domain"].as_str().unwrap().as_bytes(), HOST_SIG_DOMAIN);
+        let vectors = h["vectors"].as_array().expect("host.vectors");
+        assert!(!vectors.is_empty());
+        for v in vectors {
+            let seed: [u8; 32] = hex::decode(v["seed"].as_str().unwrap()).unwrap().try_into().unwrap();
+            let (len, at) = (v["len"].as_u64().unwrap(), v["at"].as_u64().unwrap());
+            let Frame::MediaHost { key, sig, .. } = Address::from_seed(&seed).host_frame(len, at) else { unreachable!() };
+            assert_eq!(key, v["key"].as_str().unwrap());
+            assert_eq!(sig, v["sig"].as_str().unwrap());
         }
     }
 

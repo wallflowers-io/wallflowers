@@ -32,4 +32,21 @@ fn main() {
         ),
     )
     .expect("icd_door.rs");
+
+    // THE HOSTED OBJECT'S BOUND (`media.hosted`): the level its overwrite travels at, and the
+    // window a request's `at` must fall in. The relay enforces both; the client signs to them.
+    let h = &icd["media"]["hosted"];
+    let host_v = h["v"].as_u64().expect("the ICD states media.hosted.v");
+    let host_frame = h["frame"].as_str().expect("the ICD states media.hosted.frame");
+    let window = h["windowSecs"].as_u64().expect("the ICD states media.hosted.windowSecs");
+    let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_host.rs");
+    std::fs::write(
+        out,
+        format!(
+            "/// `media.hosted.v`: the level a hosted object's overwrite travels at.\npub const HOST_V: u8 = {host_v};\n\
+             /// `media.hosted.frame`.\npub const HOST_FRAME: &str = {host_frame:?};\n\
+             /// `media.hosted.windowSecs`: how far a `MediaHost`'s `at` may be from the relay's clock.\npub const HOST_WINDOW_SECS: u64 = {window};\n"
+        ),
+    )
+    .expect("icd_host.rs");
 }

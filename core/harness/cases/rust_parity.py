@@ -118,6 +118,11 @@ def rust_unit_parity(on_step: Callable | None = None) -> CaseResult:
         a = address.Address(bytes.fromhex(v["seed"]))
         ok &= a.tag_hex == v["tag"] and a.sign_pub(v["blob"]) == v["sig"]
     r.check("address_rule_matches_the_wire_spec", ok and len(address.VECTORS) > 0)
+    ok = True
+    for v in address.HOST_VECTORS:
+        a = address.Address(bytes.fromhex(v["seed"]))
+        ok &= a.tag_hex == v["key"] and a.sign_host(v["len"], v["at"]) == v["sig"]
+    r.check("the_host_rule_matches_the_vector_in_the_wire_spec", ok and len(address.HOST_VECTORS) > 0)
 
     # ── budget.rs ───────────────────────────────────────────────────────────
     r.step("budget.rs — ten tests of the meter and the list parser")
@@ -179,7 +184,9 @@ def rust_unit_parity(on_step: Callable | None = None) -> CaseResult:
             wire.to_json(wire.media_put("ab", 7)) == '{"t":"media_put","key":"ab","len":7}'
             and wire.to_json(wire.media_get("ab")) == '{"t":"media_get","key":"ab"}'
             and wire.to_json(wire.media_err("ab", "bad_key"))
-            == '{"t":"media_err","key":"ab","reason":"bad_key"}')
+            == '{"t":"media_err","key":"ab","reason":"bad_key"}'
+            and wire.to_json(wire.media_host("ab", 1024, 1700000000, "cd"))
+            == '{"t":"media_host","key":"ab","len":1024,"at":1700000000,"sig":"cd"}')
     r.check("slot_fields_are_backward_compatible",
             wire.from_json('{"t":"pub","tag":"aa","blob":"Zm9v"}') == wire.pub("aa", "Zm9v", False)
             and wire.from_json('{"t":"ack","seq":9}') == wire.ack(9, True)

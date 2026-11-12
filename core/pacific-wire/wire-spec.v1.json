@@ -23,6 +23,24 @@
       }
     ]
   },
+  "host": {
+    "doc": [
+      "The hosted object's overwrite (media.hosted in the ICD). The object's key is an address, and a",
+      "media_host carries that key's signature over the bytes below, so only the holder of its seed",
+      "may overwrite it. Both repos test against the vector: pacific-wire itself, the Python harness."
+    ],
+    "sig_domain": "pacific-relay-host:v1\n",
+    "signed": "sig_domain || key (32 bytes) || len (u64 big-endian) || at (u64 big-endian, unix seconds)",
+    "vectors": [
+      {
+        "seed": "0202020202020202020202020202020202020202020202020202020202020202",
+        "len": 4096,
+        "at": 1700000000,
+        "key": "1350e0b1517f2663ec53c9ff86b6b1a053c163379c27d969c118bddd8bbc6be5",
+        "sig": "109b0d4ba23697db4d8006cfbb1810e0b1b5a1e6e326e3d251223d604b289eea8a4aa9caaf199a0a9f4ae14a93becf0381cbc92646079088526e65529ef7930c"
+      }
+    ]
+  },
   "why": [
     "This file is the Semaphore wire spec that arc/docs/arc-api-icd-v1.html §6 points at.",
     "It exists because the relay's tests used to assert its Frame enum AGAINST ITSELF, and the",
@@ -50,7 +68,8 @@
       { "v": 0, "adds": ["pub", "sub", "msg", "ack", "eose"], "meaning": "the mailbox. Every build ever shipped." },
       { "v": 1, "adds": ["gap"], "meaning": "retention is announced: the replayed backlog may be incomplete." },
       { "v": 2, "adds": ["media_put", "media_get", "media_url", "media_err"], "meaning": "presigned object-storage offload. No shipping client declares this yet." },
-      { "v": 3, "adds": ["evicted"], "meaning": "a door tag's bound is announced: how many knocks its cap has evicted (mls.door.relay)." }
+      { "v": 3, "adds": ["evicted"], "meaning": "a door tag's bound is announced: how many knocks its cap has evicted (mls.door.relay)." },
+      { "v": 4, "adds": ["media_host"], "meaning": "a hosted object is overwritten in place, asked by its own key (media.hosted)." }
     ]
   },
   "frames": [
@@ -173,6 +192,16 @@
       "doc": "After the replay of a door tag, the number of knocks ever evicted from it by its cap. Monotonic; at most once per door tag per Sub, before eose.",
       "encodings": [
         "{\"t\":\"evicted\",\"tag\":\"door:aa\",\"total\":3}"
+      ],
+      "accepts": []
+    },
+    {
+      "t": "media_host",
+      "dir": "to_relay",
+      "min_v": 4,
+      "doc": "Presign an OVERWRITE of the hosted object at key, exactly len bytes. sig is key's signature over host.signed; at is unix seconds inside the relay's window. Answered by media_url or media_err.",
+      "encodings": [
+        "{\"t\":\"media_host\",\"key\":\"ab\",\"len\":1024,\"at\":1700000000,\"sig\":\"cd\"}"
       ],
       "accepts": []
     }

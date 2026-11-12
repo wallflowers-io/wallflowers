@@ -89,6 +89,10 @@ class Client:
         await self.send(wire.media_put(key, length))
         return await self.recv()
 
+    async def media_host(self, key: str, length: int, at: int, sig: str) -> wire.Frame:
+        await self.send(wire.media_host(key, length, at, sig))
+        return await self.recv()
+
     async def media_get(self, key: str) -> wire.Frame:
         await self.send(wire.media_get(key))
         return await self.recv()

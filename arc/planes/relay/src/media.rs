@@ -31,6 +31,17 @@
 //! hex, generated client-side like tags, and this module validates their SHAPE
 //! and nothing else.
 //!
+//! ## One exception to create-only: the hosted object
+//!
+//! A detached upload only creates (below). A HOSTED object (`media.hosted`, Ralph 12 Nov
+//! 2026) is an object's outside, overwritten in place by its owner's devices so that a
+//! change reaches every reader without being carried across the network again. Its key is
+//! an address (`pacific_wire::address`): an Ed25519 verifying key. A `MediaHost` carries
+//! that key's signature over (key, len, at), and only then is a PUT signed without
+//! `if-none-match`. Anyone who reads the object knows its key; only the holder of its seed
+//! can sign for it, so an overwrite is still not something anyone can do. The relay holds
+//! no table for it and learns what a `Pub` already tells it: a key, and that it was signed.
+//!
 //! ## Keys are validated, not trusted
 //!
 //! `require_valid_key` is the only thing standing between a presigning endpoint
@@ -47,6 +58,8 @@ use tracing::{error, warn};
 
 use crate::budget::{self, Budget, Verdict};
 use crate::sigv4::{presign, Credentials, Presign};
+use crate::wire::address::{verify_host, PubRefusal};
+use crate::wire::HOST_WINDOW_SECS;
 
 /// 25 MiB. A placeholder in the same sense as `Retention`'s window: large enough
 /// for a phone photo or a short clip, small enough that one client cannot fill a
@@ -74,6 +87,10 @@ pub enum MediaError {
     /// Distinct from `OverBudget` on purpose: the bucket may have room, but the
     /// relay cannot currently prove it, and a cost guard that cannot see says no.
     BudgetStale,
+    /// A `MediaHost`'s `at` is outside the window of the relay's clock (`media.hosted`).
+    Stale,
+    /// A `MediaHost` the hosted object's key did not sign, with the address rule's token.
+    Refused(PubRefusal),
 }
 
 impl MediaError {
@@ -85,6 +102,8 @@ impl MediaError {
             MediaError::TooLarge => "too_large",
             MediaError::OverBudget => "over_budget",
             MediaError::BudgetStale => "budget_stale",
+            MediaError::Stale => "stale",
+            MediaError::Refused(r) => r.as_str(),
         }
     }
 }
@@ -301,6 +320,30 @@ impl Media {
         Ok(self.sign("PUT", key, &[("content-length".into(), len.to_string()), ("if-none-match".into(), "*".into())]))
     }
 
+    /// Presign an OVERWRITE of the hosted object at `key` (`media.hosted`), exactly `len` bytes.
+    ///
+    /// Order: the key's shape, the window, the signature, then the size and the budget, so a
+    /// request its key did not sign never claims headroom. The PUT is signed without
+    /// `if-none-match`: this, and only this, may replace what a key holds.
+    pub fn presign_host(&self, key: &str, len: u64, at: u64, sig: &str, now: u64) -> Result<String, MediaError> {
+        require_valid_key(key)?;
+        if now.abs_diff(at) > HOST_WINDOW_SECS {
+            return Err(MediaError::Stale);
+        }
+        verify_host(key, len, at, sig).map_err(MediaError::Refused)?;
+        if len > self.max_bytes {
+            return Err(MediaError::TooLarge);
+        }
+        if let Some(b) = &self.budget {
+            match b.reserve(len, budget::now_secs()) {
+                Verdict::Ok => {}
+                Verdict::OverBudget => return Err(MediaError::OverBudget),
+                Verdict::Stale => return Err(MediaError::BudgetStale),
+            }
+        }
+        Ok(self.sign("PUT", key, &[("content-length".into(), len.to_string())]))
+    }
+
     /// Presign a download. The relay does not check that the object exists — that
     /// would be an I/O round-trip to answer a question the client finds out anyway,
     /// and a blind relay has no business tracking which keys are live.
@@ -386,6 +429,7 @@ fn env_str(k: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wire::Frame;
 
     fn media() -> Media {
         Media::new(
@@ -429,6 +473,45 @@ mod tests {
     fn an_upload_cannot_overwrite() {
         let put = media().presign_put(&key(), 512).unwrap();
         assert!(put.contains("X-Amz-SignedHeaders=content-length%3Bhost%3Bif-none-match"), "{put}");
+    }
+
+    /// `media.hosted`: an overwrite URL (no `if-none-match`) goes to the key's holder alone.
+    /// Mallory knows the key, as every reader does, and every frame she can build is refused.
+    #[test]
+    fn a_hosted_object_is_overwritten_only_by_its_key() {
+        use crate::wire::address::Address;
+        let now = 1_700_000_000;
+        let owner = Address::from_seed(&[10; 32]);
+        let Frame::MediaHost { key, len, at, sig } = owner.host_frame(512, now) else { unreachable!() };
+        let put = media().presign_host(&key, len, at, &sig, now).unwrap();
+        assert!(put.contains("X-Amz-SignedHeaders=content-length%3Bhost&"), "an overwrite: {put}");
+        let Frame::MediaHost { sig: theirs, .. } = Address::from_seed(&[11; 32]).host_frame(512, now) else { unreachable!() };
+        assert_eq!(media().presign_host(&key, len, at, &theirs, now), Err(MediaError::Refused(PubRefusal::BadSignature)));
+        assert_eq!(media().presign_host(&key, len + 1, at, &sig, now), Err(MediaError::Refused(PubRefusal::BadSignature)), "a larger upload");
+        assert_eq!(media().presign_host(&key, len, at, "", now), Err(MediaError::Refused(PubRefusal::MalformedSig)));
+        assert_eq!(media().presign_host("nothex", len, at, &sig, now), Err(MediaError::BadKey));
+        assert_eq!(MediaError::Refused(PubRefusal::BadSignature).reason(), "bad_signature");
+        // A plain upload to the same key is still create-only.
+        assert!(media().presign_put(&key, 512).unwrap().contains("if-none-match"));
+    }
+
+    /// A captured `MediaHost` is good only inside the window, and claims no headroom unless signed.
+    #[test]
+    fn a_stale_host_is_refused() {
+        use crate::wire::address::Address;
+        let now = 1_700_000_000;
+        let owner = Address::from_seed(&[12; 32]);
+        let Frame::MediaHost { key, len, at, sig } = owner.host_frame(100, now) else { unreachable!() };
+        assert!(media().presign_host(&key, len, at, &sig, now + HOST_WINDOW_SECS).is_ok(), "at the edge");
+        assert_eq!(media().presign_host(&key, len, at, &sig, now + HOST_WINDOW_SECS + 1), Err(MediaError::Stale));
+        assert_eq!(media().presign_host(&key, len, at, &sig, now - HOST_WINDOW_SECS - 1), Err(MediaError::Stale));
+        assert_eq!(MediaError::Stale.reason(), "stale");
+        let b = Arc::new(Budget::new(1000, Duration::from_secs(900)));
+        b.record(900, budget::now_secs());
+        let m = media().with_budget(b);
+        let Frame::MediaHost { sig: theirs, .. } = Address::from_seed(&[13; 32]).host_frame(100, now) else { unreachable!() };
+        assert!(m.presign_host(&key, len, at, &theirs, now).is_err());
+        assert!(m.presign_host(&key, len, at, &sig, now).is_ok(), "the refused request left the headroom");
     }
 
     /// Ruled 9 Nov 2026 (#56): fifteen minutes, which a 25 MiB clip on a slow uplink fits.

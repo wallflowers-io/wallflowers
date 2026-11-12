@@ -186,6 +186,19 @@
       "upload": "create-only: the presigned PUT is signed with if-none-match: *, so a key, once stored, cannot be overwritten",
       "fetch": "by the object key alone, through the relay's presign: a reader needs no group (a carried exterior's photo is read by non-members). A device keeps what it has fetched and never fetches it again",
       "commitment": "XChaCha20-Poly1305 does not commit to its key: one object can open to different bytes under different keys. A digest names an object, never its content; nothing may dedupe, match or report media by digest without a key commitment added here first"
+    },
+    "hosted": {
+      "summary": "One object at a stable key, overwritten in place by its owner's devices (Ralph, 12 Nov 2026): an object's outside, so a change to it reaches every reader on their next fetch and nothing is carried again. The one exception to detached media's create-only upload.",
+      "key": "an address (pacific_wire::address): the Ed25519 verifying key of Address::from_seed(seed), as 64 lowercase hex, so only the seed's holder can sign for it",
+      "seed": "HKDF-SHA256(salt = \"wallflowers/hosted/v1\", ikm = the owner identity's seed, info = \"key\" ‖ the object's id as UTF-8): every owner device and a restore derive the same key, and no op carries a secret. A legacy identity without a seed writes no hosted object",
+      "contentKey": "HKDF-SHA256(salt = \"wallflowers/hosted/v1\", ikm = the owner identity's seed, info = \"content\" ‖ the object's id as UTF-8), keyBytes long: one per hosted object, reused across its versions, which a fresh random nonce (nonceBytes) on every write makes safe",
+      "seal": "as detached: cipher, aad (the key's hex) and layout",
+      "frame": "media_host",
+      "v": 4,
+      "signed": "\"pacific-relay-host:v1\\n\" ‖ key (32 bytes) ‖ len (u64 BE) ‖ at (u64 BE, unix seconds), by the key; the relay checks it against the key itself and holds no table",
+      "windowSecs": 900,
+      "upload": "the relay presigns a PUT of exactly len bytes WITHOUT if-none-match for a MediaHost it has checked; a MediaPut stays create-only. Refused: stale (at outside windowSecs of the relay's clock), malformed_tag, not_a_key, malformed_sig, bad_signature",
+      "fetch": "as detached, by the key alone: a reader needs no group. Unlike detached, a reader fetches again to see a change"
     }
   },
   "conformance": {

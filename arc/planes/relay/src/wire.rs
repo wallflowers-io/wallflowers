@@ -50,6 +50,9 @@ pub use pacific_wire::{
 /// The door's bound (`mls.door.relay`), read from the ICD once, in pacific-wire.
 pub use pacific_wire::{DOOR_CAP, DOOR_MAX_BYTES, DOOR_PER_CONN_PER_HOUR, DOOR_PREFIX, DOOR_TTL_DAYS};
 
+/// The hosted object's window (`media.hosted.windowSecs`), read from the ICD once, in pacific-wire.
+pub use pacific_wire::HOST_WINDOW_SECS;
+
 /// The one write rule — a tag is a key, a `Pub` is its signature — re-exported, not
 /// restated: the relay calls the same `verify_pub` the client's own tests call.
 pub use pacific_wire::address;
@@ -184,7 +187,7 @@ mod wire_spec {
             n.sort();
             n.join(",")
         };
-        assert_eq!(names(&to_relay), "media_get,media_put,pub,sub");
+        assert_eq!(names(&to_relay), "media_get,media_host,media_put,pub,sub");
         assert_eq!(names(&to_client), "ack,eose,evicted,gap,media_err,media_url,msg");
     }
 }

@@ -56,13 +56,18 @@ pub const V_MEDIA: u8 = 2;
 /// Vocabulary level 3: adds [`Frame::Evicted`] — how many knocks a door tag has lost to its
 /// cap (`mls.door.relay`, B3). The ICD names this level; `DOOR_EVICTED_V` is held to it.
 pub const V_DOOR: u8 = 3;
+/// Vocabulary level 4: adds [`Frame::MediaHost`] — an overwrite of a hosted object, asked by its
+/// own key (`media.hosted`). The ICD names this level; `HOST_V` is held to it.
+pub const V_HOST: u8 = 4;
 /// The highest vocabulary level this build knows how to parse. A client may send
 /// this as `Sub.v` to opt into everything; it is NOT the default, because opting in
 /// to a frame means deciding what to DO with it.
-pub const V_MAX: u8 = V_DOOR;
+pub const V_MAX: u8 = V_HOST;
 
 // The door's bound, from the ICD (build.rs).
 include!(concat!(env!("OUT_DIR"), "/icd_door.rs"));
+// The hosted object's bound, from the ICD (build.rs).
+include!(concat!(env!("OUT_DIR"), "/icd_host.rs"));
 
 /// Which way a frame travels. Used to state the contract in one place: a relay
 /// never sends a [`Dir::ToRelay`] frame, and ignores one it receives in reply.
@@ -130,6 +135,7 @@ pub enum Frame {
         ///   v >= 1         — may also receive `Gap`.
         ///   v >= 2         — may also send/receive the media frames.
         ///   v >= 3         — may also receive `Evicted`.
+        ///   v >= 4         — may also send `MediaHost`.
         /// Omitted when 0, so an unchanged client is byte-identical on the wire and
         /// an older relay (which ignores unknown fields) is unaffected either way.
         ///
@@ -194,6 +200,15 @@ pub enum Frame {
     /// The relay does not check existence — a blind relay has no business
     /// tracking which keys are live, and the client finds out on fetch anyway.
     MediaGet { key: String },
+    /// client→relay: presign an OVERWRITE of the hosted object at `key`, exactly `len` bytes
+    /// (`media.hosted`). `key` is an address ([`address`]): an Ed25519 verifying key, and `sig`
+    /// is its signature over [`address::host_payload`]`(key, len, at)`, so only the key's holder
+    /// can ask. `at` is unix seconds; the relay refuses one outside its presign window.
+    ///
+    /// The one exception to create-only media, and why it holds: anyone who reads a hosted
+    /// object knows its key, but only the holder of the key's seed can sign for it. Answered with
+    /// `MediaUrl` or `MediaErr`. Requires `v >= 4`.
+    MediaHost { key: String, len: u64, at: u64, sig: String },
     /// relay→client: a short-lived presigned URL for `key`. `method` is the verb
     /// the URL is signed for ("PUT" or "GET"); using it with any other verb fails
     /// the signature. Only ever sent to a `Sub { v >= 2 }`.
@@ -209,7 +224,8 @@ pub enum Frame {
     /// relay→client: the presign was refused. `reason` is a stable token —
     /// `unconfigured` (relay has no object storage), `bad_key` (not opaque
     /// 32-byte hex), `too_large` (over the relay's cap), `over_budget`,
-    /// `budget_stale` or `rate_limited` (this connection's presigns are paced).
+    /// `budget_stale` or `rate_limited` (this connection's presigns are paced); and for a
+    /// `MediaHost`, `stale` (`at` outside the window) or an [`address::PubRefusal`] token.
     /// Only ever sent to a `Sub { v >= 2 }`.
     MediaErr { key: String, reason: String },
     /// relay→client: after the replay of a door tag (`mls.door.relay`), the number of knocks
@@ -250,6 +266,7 @@ impl Frame {
         "media_url",
         "media_err",
         "evicted",
+        "media_host",
     ];
 
     /// Serialize to the on-wire JSON text.
@@ -279,6 +296,7 @@ impl Frame {
             Frame::MediaUrl { .. } => "media_url",
             Frame::MediaErr { .. } => "media_err",
             Frame::Evicted { .. } => "evicted",
+            Frame::MediaHost { .. } => "media_host",
         }
     }
 
@@ -289,7 +307,8 @@ impl Frame {
             Frame::Pub { .. }
             | Frame::Sub { .. }
             | Frame::MediaPut { .. }
-            | Frame::MediaGet { .. } => Dir::ToRelay,
+            | Frame::MediaGet { .. }
+            | Frame::MediaHost { .. } => Dir::ToRelay,
             Frame::Msg { .. }
             | Frame::Ack { .. }
             | Frame::Gap { .. }
@@ -325,6 +344,7 @@ impl Frame {
             | Frame::MediaUrl { .. }
             | Frame::MediaErr { .. } => V_MEDIA,
             Frame::Evicted { .. } => V_DOOR,
+            Frame::MediaHost { .. } => V_HOST,
         }
     }
 
@@ -798,9 +818,12 @@ mod wire_spec {
     #[test]
     fn the_declared_levels_agree_with_min_v() {
         spec::assert_levels_agree::<Frame>();
-        assert_eq!(V_MAX, V_DOOR, "V_MAX must name the highest level in the spec");
+        assert_eq!(V_MAX, V_HOST, "V_MAX must name the highest level in the spec");
         assert_eq!(DOOR_EVICTED_V, V_DOOR, "the ICD's mls.door.relay.evicted.v is this level");
         assert_eq!(DOOR_EVICTED_FRAME, Frame::Evicted { tag: String::new(), total: 0 }.wire_tag());
+        assert_eq!(HOST_V, V_HOST, "the ICD's media.hosted.v is this level");
+        let host = Frame::MediaHost { key: String::new(), len: 0, at: 0, sig: String::new() };
+        assert_eq!(HOST_FRAME, host.wire_tag());
     }
 }
 

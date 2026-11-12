@@ -254,6 +254,21 @@ def f15_budget_refuses(on_step: Callable | None = None,
     r.check("and the reservation happened BEFORE signing", fresh.committed() == 1024,
             "a URL that exists is a URL that may be redeemed")
 
+    r.step("a hosted object (media.hosted): the key's own signature, or nothing")
+    from .. import address
+    owner, mallory = address.named("f15-owner"), address.named("f15-mallory")
+    hosted = R2Relay(budget=fresh, max_bytes=1024)
+    before = fresh.committed()
+    r.check("a request its key did not sign is refused and reserves nothing",
+            hosted.presign_host(owner.tag_hex, 10, t0, mallory.sign_host(10, t0), now_s=t0)
+            is MediaError.BAD_SIGNATURE and fresh.committed() == before)
+    r.check("a stale one likewise",
+            hosted.presign_host(owner.tag_hex, 10, t0, owner.sign_host(10, t0),
+                                now_s=t0 + 10 ** 6) is MediaError.STALE)
+    over = hosted.presign_host(owner.tag_hex, 10, t0, owner.sign_host(10, t0), now_s=t0)
+    r.check("the key's own is an overwrite: no if-none-match",
+            isinstance(over, str) and "X-Amz-SignedHeaders=content-length%3Bhost&" in over)
+
     r.step("measurement itself is bounded")
     bucket = R2State()
     r.expose(bucket=bucket)

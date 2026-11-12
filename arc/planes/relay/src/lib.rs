@@ -1254,6 +1254,20 @@ async fn handle(
                 bump(&metrics, ok);
                 info!(ok, len, "media presign put");
             }
+            // `media.hosted`: an overwrite, asked by the object's own key. Logged as the
+            // others are: the key and the signature are not.
+            Frame::MediaHost { key, len, at, sig } => {
+                let (reply, ok) = if presigns.take(1.0) {
+                    host_reply(&media, &key, len, at, &sig, budget::now_secs())
+                } else {
+                    (Frame::MediaErr { key, reason: "rate_limited".into() }, false)
+                };
+                if let Some(conn) = hub.lock().await.conns.get(&id) {
+                    let _ = conn.out.send(reply);
+                }
+                bump(&metrics, ok);
+                info!(ok, len, "media presign host");
+            }
             Frame::MediaGet { key } => {
                 let (reply, ok) = if presigns.take(1.0) {
                     presign_reply(&media, &key, None)
@@ -1303,6 +1317,20 @@ fn presign_reply(media: &Option<Arc<Media>>, key: &str, len: Option<u64>) -> (Fr
                 url,
                 expires_in: m.ttl_secs(),
             },
+            true,
+        ),
+        Err(e) => (err_frame(key, e), false),
+    }
+}
+
+/// Mint the reply to a `MediaHost`: an overwrite URL, or the refusal's stable reason.
+fn host_reply(media: &Option<Arc<Media>>, key: &str, len: u64, at: u64, sig: &str, now: u64) -> (Frame, bool) {
+    let Some(m) = media.as_ref() else {
+        return (err_frame(key, MediaError::Unconfigured), false);
+    };
+    match m.presign_host(key, len, at, sig, now) {
+        Ok(url) => (
+            Frame::MediaUrl { key: key.to_string(), method: "PUT".into(), url, expires_in: m.ttl_secs() },
             true,
         ),
         Err(e) => (err_frame(key, e), false),

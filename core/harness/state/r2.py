@@ -13,9 +13,11 @@ permission to keep spending.
 from __future__ import annotations
 
 import hashlib
+import json
 import time
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 from .. import sigv4
 
@@ -50,6 +52,14 @@ class MediaError(str, Enum):
     TOO_LARGE = "too_large"
     OVER_BUDGET = "over_budget"
     BUDGET_STALE = "budget_stale"
+    STALE = "stale"
+    MALFORMED_SIG = "malformed_sig"
+    BAD_SIGNATURE = "bad_signature"
+    NOT_A_KEY = "not_a_key"
+
+#: `media.hosted.windowSecs`, read from the ICD as pacific-wire's build.rs reads it.
+HOST_WINDOW_SECS: int = json.loads((Path(__file__).resolve().parents[2] / "coordination"
+                                    / "delta-graph.icd.json").read_text())["media"]["hosted"]["windowSecs"]
 
 
 def now_secs() -> int:
@@ -304,6 +314,39 @@ class R2Relay:
         # media.rs: an upload only creates (`if-none-match: *`), so a key cannot be overwritten.
         return self._sign("PUT", [self.bucket, key],
                           [("content-length", str(length)), ("if-none-match", "*")], [], now)
+
+    def presign_host(self, key: str, length: int, at: int, sig: str, now_s: int,
+                     now=None) -> str | MediaError:
+        """`media.hosted`: an OVERWRITE, for the key's own signature. Key shape, window,
+        signature, then the cap and the budget; signed without `if-none-match`."""
+        from nacl.exceptions import BadSignatureError
+        from nacl.signing import VerifyKey
+        from .. import address
+        if not is_valid_key(key):
+            return MediaError.BAD_KEY
+        if abs(now_s - at) > HOST_WINDOW_SECS:
+            return MediaError.STALE
+        if len(sig) != 128:
+            return MediaError.MALFORMED_SIG
+        try:
+            vk = VerifyKey(bytes.fromhex(key))
+        except Exception:
+            return MediaError.NOT_A_KEY
+        msg = (address.HOST_SIG_DOMAIN + bytes.fromhex(key) + int(length).to_bytes(8, "big")
+               + int(at).to_bytes(8, "big"))
+        try:
+            vk.verify(msg, bytes.fromhex(sig))
+        except (BadSignatureError, ValueError):
+            return MediaError.BAD_SIGNATURE
+        if length > self.max_bytes:
+            return MediaError.TOO_LARGE
+        if self.budget is not None:
+            verdict = self.budget.reserve(length, now_s)
+            if verdict is Verdict.OVER_BUDGET:
+                return MediaError.OVER_BUDGET
+            if verdict is Verdict.STALE:
+                return MediaError.BUDGET_STALE
+        return self._sign("PUT", [self.bucket, key], [("content-length", str(length))], [], now)
 
     def presign_get(self, key: str, now=None) -> str | MediaError:
         """The relay does NOT check existence: a blind relay has no business

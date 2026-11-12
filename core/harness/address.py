@@ -27,6 +27,10 @@ _SPEC = json.loads((Path(__file__).resolve().parents[1]
 SIG_DOMAIN: bytes = _SPEC["sig_domain"].encode()
 KEY_LABEL: bytes = _SPEC["key_label"].encode()
 VECTORS: list[dict] = _SPEC["vectors"]
+_HOST = json.loads((Path(__file__).resolve().parents[1]
+                    / "pacific-wire" / "wire-spec.v1.json").read_text())["host"]
+HOST_SIG_DOMAIN: bytes = _HOST["sig_domain"].encode()
+HOST_VECTORS: list[dict] = _HOST["vectors"]
 
 #: Every address made here, by its tag — so a caller holding only a tag (which is
 #: all a frame carries) can find the key that signs for it.
@@ -47,6 +51,11 @@ class Address:
     def sign_pub(self, blob_b64: str) -> str:
         """The signature a ``Pub`` of ``blob_b64`` to this address carries, hex."""
         return self._key.sign(SIG_DOMAIN + self.tag + blob_b64.encode()).signature.hex()
+
+    def sign_host(self, length: int, at: int) -> str:
+        """The signature a ``MediaHost`` of this address's object carries (``media.hosted``)."""
+        return self._key.sign(HOST_SIG_DOMAIN + self.tag + int(length).to_bytes(8, "big")
+                              + int(at).to_bytes(8, "big")).signature.hex()
 
 
 def named(label: str) -> Address:

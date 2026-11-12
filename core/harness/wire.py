@@ -34,6 +34,12 @@ def media_put(key: str, length: int) -> Frame:
     return {"t": "media_put", "key": key, "len": int(length)}
 
 
+def media_host(key: str, length: int, at: int, sig: str) -> Frame:
+    """An overwrite of the hosted object at ``key`` (``media.hosted``); ``sig`` is the key's own,
+    over address.host_payload. Level 4."""
+    return {"t": "media_host", "key": key, "len": int(length), "at": int(at), "sig": sig}
+
+
 def media_get(key: str) -> Frame:
     return {"t": "media_get", "key": key}
 
@@ -96,6 +102,7 @@ _ORDER = {
     "gap": ["tag", "floor"],
     "media_put": ["key", "len"],
     "media_get": ["key"],
+    "media_host": ["key", "len", "at", "sig"],
     "media_url": ["key", "method", "url", "expires_in"],
     "media_err": ["key", "reason"],
     "evicted": ["tag", "total"],

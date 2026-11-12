@@ -204,14 +204,16 @@ R2_ENV = {
 }
 
 
-def _reproduce(url: str, *, method: str, key: str | None, length: int | None) -> str:
+def _reproduce(url: str, *, method: str, key: str | None, length: int | None,
+               create: bool = True) -> str:
     """Re-sign the relay's URL in Python, at the instant the relay signed it."""
     q = parse_qs(urlparse(url).query)
     now = datetime.strptime(q["X-Amz-Date"][0], "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
     segs = ["pacific-media"] + ([key] if key else [])
     return presign(method=method, host=R2_ENV["RELAY_R2_ENDPOINT"], path_segments=segs,
                    region="auto", expires_in=int(q["X-Amz-Expires"][0]),
-                   signed_headers=([("content-length", str(length)), ("if-none-match", "*")] if length is not None else []),
+                   signed_headers=([("content-length", str(length))] + ([("if-none-match", "*")] if create else [])
+                                   if length is not None else []),
                    query=[], now=now,
                    access_key_id=R2_ENV["RELAY_R2_ACCESS_KEY_ID"],
                    secret_access_key=R2_ENV["RELAY_R2_SECRET_ACCESS_KEY"])
@@ -273,6 +275,30 @@ async def f15_live(on_step: Callable | None = None) -> CaseResult:
                 and "content-length" not in got_g["url"])
         r.check("and reproduces too",
                 got_g["url"] == _reproduce(got_g["url"], method="GET", key=KEY, length=None))
+        await c.close()
+
+    r.step("a hosted object (media.hosted): overwritten only by its own key")
+    with Relay(_scratch("f15d"), label="f15-hosted",
+               env={**R2_ENV, "RELAY_R2_BUDGET_BYTES": "0"}) as relay:
+        c = await Client.connect(relay.url, "ada")
+        await c.declare(4)   # media_host is level four
+        owner, mallory = address.named("hosted-owner"), address.named("hosted-mallory")
+        key, now = owner.tag_hex, int(datetime.now(timezone.utc).timestamp())
+        got = await c.media_host(key, 1024, now, owner.sign_host(1024, now))
+        r.check("the key's holder gets an OVERWRITE capability",
+                got["t"] == "media_url" and got["method"] == "PUT"
+                and "X-Amz-SignedHeaders=content-length%3Bhost&" in got["url"], str(got)[:160])
+        r.check("which the Python presigner reproduces byte for byte",
+                got["url"] == _reproduce(got["url"], method="PUT", key=key, length=1024, create=False))
+        got = await c.media_host(key, 1024, now, mallory.sign_host(1024, now))
+        r.check("someone who only knows the key is refused",
+                got == wire.media_err(key, "bad_signature"), str(got))
+        got = await c.media_host(key, 1024, now - r2.HOST_WINDOW_SECS - 60,
+                                 owner.sign_host(1024, now - r2.HOST_WINDOW_SECS - 60))
+        r.check("and a request outside the window is stale", got == wire.media_err(key, "stale"), str(got))
+        got = await c.media_put(key, 1024)
+        r.check("a plain upload to the same key stays create-only",
+                got["t"] == "media_url" and "if-none-match" in got["url"])
         await c.close()
 
     r.step("OverBudget, the one leg the binary cannot be driven to")
