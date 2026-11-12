@@ -344,21 +344,27 @@ fn epoch_retention_is_bounded() {
 /// The client half of a door's bound (`mls.door.relay`, B3): knocks go through the Router, the
 /// chokepoint every relay write passes and is counted at, to the door's tag; a drain at v3
 /// hears how many the relay's cap has evicted.
+///
+/// This device knocks its connection's allowance through the Router. The rest, to pass the
+/// cap, are other knockers, each on a connection of its own: since the link (#144) this
+/// device's connections are kept, so it cannot reset the relay's bound by dialling again.
 #[tokio::test]
 async fn a_door_drain_hears_what_the_cap_evicted() {
     let url = spawn_relay().await;
     let door = Address::from_seed(&[9u8; 32]);
     let per = pacific_wire::DOOR_PER_CONN_PER_HOUR;
     let knocks = pacific_wire::DOOR_CAP + 1;
-    for chunk in 0..knocks.div_ceil(per) {
-        let mut r = pacific_core::router::Router::open(&Routes::parse(&url)).await.unwrap();
-        let before = pacific_core::router::published();
-        let n = per.min(knocks - chunk * per);
-        for i in chunk * per..chunk * per + n {
-            r.publish_door(&door, &pacific_wire::blob_b64(format!("knock {i}").as_bytes())).await.unwrap();
+    let mut r = pacific_core::router::Router::open(&Routes::parse(&url)).await.unwrap();
+    let before = pacific_core::router::published();
+    for i in 0..per {
+        r.publish_door(&door, &pacific_wire::blob_b64(format!("knock {i}").as_bytes())).await.unwrap();
+    }
+    assert_eq!(pacific_core::router::published() - before, per, "every knock is counted");
+    for chunk in 1..knocks.div_ceil(per) {
+        let mut other = pacific_core::transport::RelaySession::connect(&url).await.unwrap();
+        for i in chunk * per..(chunk * per + per).min(knocks) {
+            other.publish_door(&door, pacific_wire::blob_b64(format!("knock {i}").as_bytes())).await.unwrap();
         }
-        assert_eq!(pacific_core::router::published() - before, n, "every knock is counted");
-        r.close().await;
     }
     let mut r = pacific_core::router::Router::open(&Routes::parse(&url)).await.unwrap();
     let (got, evicted) = r.drain_doors(&[door.door_tag()], |_, _| Ok(0)).await.unwrap();

@@ -47,9 +47,14 @@ const DIAL: Duration = Duration::from_secs(10);
 /// three of them unanswered.
 const PING_MS: i64 = 25_000;
 const DEAD_MS: i64 = 75_000;
-/// Waits before the one retry: after a socket failure, and after a pacing refusal.
+/// Waits before the one retry: after a socket failure, and after a pacing refusal
+/// (`LINK_PACED_MS` sets the second: a test whose fault must outlast the retry).
 const RETRY_AFTER: Duration = Duration::from_millis(250);
 const PACED_AFTER: Duration = Duration::from_secs(2);
+
+fn paced_after() -> Duration {
+    std::env::var("LINK_PACED_MS").ok().and_then(|s| s.parse().ok()).map(Duration::from_millis).unwrap_or(PACED_AFTER)
+}
 
 /// What a station is asked to do: each one exchange on one session. A publish carries its
 /// frame already signed by the caller, so no key reaches the link and a resend is the same
@@ -200,9 +205,10 @@ impl Station {
         self.set(LinkState::Connected);
     }
 
-    fn session_down(&self) {
+    /// A session lost: with none left up, the station is offline, and says why.
+    fn session_down(&self, why: &str) {
         if self.0.up.fetch_sub(1, Ordering::Relaxed) == 1 {
-            self.set(LinkState::Connecting { attempt: 0 });
+            self.set(LinkState::Offline { since_ms: now_ms(), why: why.to_string() });
         }
     }
 
@@ -228,10 +234,12 @@ fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
-/// A session this worker holds, and its keepalive clocks.
+/// A session this worker holds, its keepalive clocks, and whether it has declared its
+/// vocabulary yet.
 struct Held {
     sess: RelaySession,
     live: Liveness,
+    declared: bool,
 }
 
 async fn dial(url: &str) -> Result<Held, CoreError> {
@@ -239,8 +247,7 @@ async fn dial(url: &str) -> Result<Held, CoreError> {
         .await
         .map_err(|_| CoreError::Transport(format!("connect {url}: no answer in {}s", DIAL.as_secs())))??
         .with_idle(idle());
-    sess.declare(pacific_wire::V_DOOR).await?;
-    Ok(Held { sess, live: Liveness::new(PING_MS, DEAD_MS, now_ms()) })
+    Ok(Held { sess, live: Liveness::new(PING_MS, DEAD_MS, now_ms()), declared: false })
 }
 
 /// How a failed exchange is to be taken.
@@ -265,6 +272,12 @@ fn classify(e: &CoreError) -> Failure {
 }
 
 async fn exchange(h: &mut Held, ask: &Ask) -> Result<Answer, CoreError> {
+    // Declared on the first exchange, not at the dial: being connected means what dialling
+    // meant before the link, a websocket upgrade, and nothing more.
+    if !h.declared && !matches!(ask, Ask::Ready) {
+        h.sess.declare(pacific_wire::V_DOOR).await?;
+        h.declared = true;
+    }
     let s = &mut h.sess;
     let answer = match ask {
         Ask::Ready => Answer::Ready,
@@ -310,13 +323,13 @@ async fn next_job(
         match h.live.due(now_ms()) {
             Due::Dead => {
                 *held = None;
-                st.session_down();
+                st.session_down("the relay went quiet");
                 continue;
             }
             Due::Ping => {
-                if h.sess.ping().await.is_err() {
+                if let Err(e) = h.sess.ping().await {
                     *held = None;
-                    st.session_down();
+                    st.session_down(&e.to_string());
                     continue;
                 }
                 h.live.sent(now_ms());
@@ -327,9 +340,9 @@ async fn next_job(
             job = async { jobs.lock().await.recv().await } => return job,
             heard = h.sess.idle_read() => match heard {
                 Ok(()) => h.live.heard(now_ms()),
-                Err(_) => {
+                Err(e) => {
                     *held = None;
-                    st.session_down();
+                    st.session_down(&e.to_string());
                 }
             },
             _ = tokio::time::sleep(Duration::from_millis(PING_MS as u64)) => {}
@@ -366,13 +379,13 @@ async fn run(st: &Station, held: &mut Option<Held>, ask: &Ask) -> Result<Answer,
                 let failure = classify(&e);
                 if matches!(failure, Failure::Socket) {
                     *held = None;
-                    st.session_down();
+                    st.session_down(&e.to_string());
                 }
                 match failure {
                     Failure::Final => return Err(e),
                     _ if attempt == 1 => return Err(e),
                     Failure::Socket => tokio::time::sleep(RETRY_AFTER).await,
-                    Failure::Paced => tokio::time::sleep(PACED_AFTER).await,
+                    Failure::Paced => tokio::time::sleep(paced_after()).await,
                 }
                 last = Some(e);
             }
