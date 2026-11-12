@@ -1,7 +1,8 @@
 //  ExteriorUITests.swift
-//  THE EXTERIOR AND ITS DOOR (#76), by real taps on two devices. An owner makes a project
-//  that reaches the network, with words for outsiders and a door; a connection who is not in
-//  it sees the card, opens it, and asks to join; the owner is told, and admits them.
+//  THE EXTERIOR AND ITS DOOR (#76), by real taps on two devices. An owner makes an Event that
+//  reaches the network, with words for outsiders and a door; a connection who is not in it
+//  sees the card, opens its outside, whole and hosted (media.hosted), and attends; the owner
+//  is told, and admits them.
 //
 //  ONE DEVICE PER RUN, as the fleet runs (FleetJourneyUITests): `scripts/exterior-e2e.sh`
 //  installs two simulators, pairs them over the dev seam (pairing is not what is tested
@@ -19,7 +20,7 @@ final class ExteriorUITests: XCTestCase {
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
 
     static let configPath = "/tmp/pacific-exterior.env"
-    static let objectName = "Allotment"
+    static let objectName = "Friday Gig"
     static let outsideWords = "Plots by the river"
 
     private var config: [String: String] = [:]
@@ -33,14 +34,14 @@ final class ExteriorUITests: XCTestCase {
 
     // MARK: - The steps, in the order the script runs them
 
-    /// OWNER: a project at Network, with words for outsiders, and "Ask to join".
+    /// OWNER: an Event at Network, with words for outsiders, its area outside, and "Ask to join".
     func test_1_owner_writesAnExterior() throws {
         try runAs("owner")
         app.buttons["shell-note"].tap()
         XCTAssertTrue(element("new-kinds").waitForExistence(timeout: 10), "the creator's dial")
-        element("new-kind-project").tap()
-        let name = page("project").descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
-        XCTAssertTrue(name.waitForExistence(timeout: 5), "the project's NAME")
+        element("new-kind-event").tap()
+        let name = page("event").descendants(matching: .any).matching(identifier: "new-field-name").firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 5), "the event's NAME")
         name.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         app.typeText(Self.objectName)
 
@@ -54,6 +55,8 @@ final class ExteriorUITests: XCTestCase {
         words.tap()
         app.typeText(Self.outsideWords)
         XCTAssertTrue(element("door-review").isSelected, "a door defaults to Ask to join")
+        XCTAssertTrue(element("outside-place-0").isSelected, "the Place shows as its venue's name until said")
+        element("outside-place-5").tap()
         shoot("owner-outside")
 
         // BLUE commits; the creator leaves.
@@ -70,9 +73,10 @@ final class ExteriorUITests: XCTestCase {
         card?.tap()
         XCTAssertTrue(app.staticTexts["detail-title"].waitForExistence(timeout: 10), "the exterior opens")
         XCTAssertEqual(app.staticTexts["detail-title"].label, Self.objectName)
-        XCTAssertTrue(app.staticTexts[Self.outsideWords].exists, "the owner's words for outsiders")
+        XCTAssertTrue(element("detail-row-When").waitForExistence(timeout: 30),
+                      "its when, from the hosted outside: the page is the member's, read-only")
         let blue = app.buttons["shell-life"]
-        XCTAssertEqual(blue.label, "Ask to join")
+        XCTAssertEqual(blue.label, "Attend", "an Event's ask is to attend (D9)")
         shoot("asker-exterior")
         blue.tap()
         XCTAssertTrue(element("detail-surface").waitForNonExistence(timeout: 30), "the ask is sent")
@@ -95,7 +99,7 @@ final class ExteriorUITests: XCTestCase {
         bell.tap()
         let asker = config["name.asker"] ?? ""
         XCTAssertTrue(app.staticTexts[asker].waitForExistence(timeout: 30), "\(asker)'s ask, by name")
-        XCTAssertTrue(app.staticTexts[Self.objectName].exists, "for the project")
+        XCTAssertTrue(app.staticTexts[Self.objectName].exists, "for the event")
         shoot("owner-tray")
         let admit = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'request-admit-'")).firstMatch
         admit.tap()

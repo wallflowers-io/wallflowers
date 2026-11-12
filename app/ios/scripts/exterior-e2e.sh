@@ -2,8 +2,9 @@
 # exterior-e2e.sh — the exterior and its door (#76), by real taps on two simulators and a
 # local relay.
 #
-#   OWNER  makes a project at Network with words for outsiders and "Ask to join"
-#   ASKER  (the owner's connection, not in the project) sees its card, opens it, asks
+#   OWNER  makes an Event at Network with words for outsiders and "Ask to join"
+#   ASKER  (the owner's connection, not in it) sees its card, opens its hosted outside
+#          (media.hosted, through the relay's object storage), and attends
 #   OWNER  finds the ask under the bell and admits
 #   ASKER  is inside: the exterior card is gone
 #
@@ -27,9 +28,10 @@ rm -rf "$LOGS"; mkdir -p "$LOGS"
 step() { STEP="$1"; echo "== $1"; }
 fail() { echo "✗ FAILED at [$STEP]"; exit 1; }
 
-RELAY_PID=""; SIM_O=""; SIM_A=""
+RELAY_PID=""; STORE_PID=""; SIM_O=""; SIM_A=""
 cleanup() {
   [ -n "$RELAY_PID" ] && kill "$RELAY_PID" 2>/dev/null || true
+  [ -n "$STORE_PID" ] && kill "$STORE_PID" 2>/dev/null || true
   for S in "$SIM_O" "$SIM_A"; do
     [ -n "$S" ] || continue
     # The apps' own logs, kept for reading: the simulator goes with them.
@@ -47,7 +49,13 @@ trap cleanup EXIT
 step "relay"
 (cd "$ROOT" && ~/.cargo/bin/cargo build -q -p relay --bin semaphore)
 PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
-RELAY_BIND="127.0.0.1:$PORT" "$ROOT/target/debug/semaphore" > "$LOGS/relay.log" 2>&1 &
+# The relay's object storage, this run's own: where the hosted outside lives.
+SPORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
+python3 scripts/object-store.py "$SPORT" "$LOGS/objects" &
+STORE_PID=$!
+RELAY_BIND="127.0.0.1:$PORT" RELAY_R2_ENDPOINT="http://127.0.0.1:$SPORT" RELAY_R2_BUCKET=pacific-media \
+  RELAY_R2_ACCESS_KEY_ID=k RELAY_R2_SECRET_ACCESS_KEY=s RELAY_R2_BUDGET_BYTES=0 \
+  "$ROOT/target/debug/semaphore" > "$LOGS/relay.log" 2>&1 &
 RELAY_PID=$!
 for _ in $(seq 1 30); do nc -z 127.0.0.1 "$PORT" && break; sleep 0.5; done
 nc -z 127.0.0.1 "$PORT" || fail
