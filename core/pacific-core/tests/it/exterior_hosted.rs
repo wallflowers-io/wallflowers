@@ -39,7 +39,7 @@ fn pointer(h: &Harness, u: usize, obj: &str) -> pacific_core::exterior::Carried 
 
 #[tokio::test]
 async fn the_outside_is_whole_and_a_change_to_it_is_not_carried_again() {
-    let (h, objects) = Harness::with_media(&["Owner", "Cleo", "Sam"]).await;
+    let (h, objects) = Harness::people_with_media(&[("Owner", &["a"]), ("Cleo", &["a"]), ("Sam", &["a"])]).await;
     h.pair(OWNER, CLEO).await;
     h.pair(CLEO, SAM).await;
     let obj = gig(&h).await;
@@ -88,7 +88,7 @@ async fn the_outside_is_whole_and_a_change_to_it_is_not_carried_again() {
 
 #[tokio::test]
 async fn a_posts_body_goes_outside_only_when_its_poster_says() {
-    let (h, _) = Harness::with_media(&["Owner", "Cleo"]).await;
+    let (h, _) = Harness::people_with_media(&[("Owner", &["a"]), ("Cleo", &["a"])]).await;
     h.pair(OWNER, CLEO).await;
     let obj = h.node(OWNER).object_new("post", "Notes").expect("mint");
     h.node(OWNER).edit(&obj, "post.setProfile", text(&[("title", "Notes"), ("body", "the words"), ("excerpt", "a teaser")])).await.expect("the post");

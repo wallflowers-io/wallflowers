@@ -25,6 +25,20 @@ hosts, lineup, media, tickets and how many are going; for a Post its teaser, and
 frame, `media_host` at vocabulary level 4, asks for the overwrite, signed by the object's own key. There is no
 Community API route for it in this release.
 
+## 2.9.0
+
+<!-- generated 2.9.0: icd-changelog.mjs --write; do not edit between the markers -->
+- Draft (the media facet, base.setIcon and base.setBanner, #112), from `493c259`; its ICD `f5bb181cf7f7a2df7f55b1d0a17186b1ecca2b0a47c484eca965df7e2fd4dbfb`, not a release until its icd/* tag
+- Against 2.8.0 (`0eae9b116066add8…`):
+  - added: base.setBanner (facet media, op 4027514881, owner|role:admin, commutative)
+  - added: base.setIcon (facet media, op 4027514880, owner|role:admin, commutative)
+  - model sections changed besides ops: facets
+<!-- end generated 2.9.0 -->
+
+The media facet (#112): `base.setIcon` and `base.setBanner` give every group, event, thing and post an icon and a
+banner, each a detached media reference (`media.detached`). The owner or an admin writes them; the last writer by
+(gen, author) holds. Where written, they win over a kind's own picture, which stays readable for what was made before.
+
 ## 2.8.0
 
 <!-- generated 2.8.0: icd-changelog.mjs --write; do not edit between the markers -->

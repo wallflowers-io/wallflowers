@@ -27,6 +27,8 @@ struct ObjectCard: View {
     /// nil handler or nil route = plain text, never a dead button.
     var onAuthor: ((AuthorRoute) -> Void)? = nil
     @EnvironmentObject private var core: CoreService
+    /// Draws the card again when its detached banner lands.
+    @ObservedObject private var media = MediaCache.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Card.vstackSpacing) {
@@ -60,7 +62,7 @@ struct ObjectCard: View {
 
             // The title's ink depends on its ground: white over media (the scrim
             // guarantees it in both keys), themed ink over the bare card.
-            let banner = BannerCache.shared.image(id: row.id, b64: row.bannerB64)
+            let banner = media.picture(ref: row.bannerRef, b64: row.bannerB64, id: row.id)
             ZStack(alignment: .bottomLeading) {
                 if let ui = banner {
                     Color.clear

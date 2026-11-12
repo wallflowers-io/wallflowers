@@ -237,6 +237,10 @@ fn parse_area(s: &str) -> Result<String, DeltaRejection> {
 /// The compiled read-side state of a Thing.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ThingState {
+    /// The base MEDIA facet's icon and banner (`crate::object_media`), winning over the
+    /// kind's own slots where written.
+    #[serde(default)]
+    pub base_media: crate::object_media::Media,
     /// THE PARTS THIS OBJECT IS MADE OF, keyed by the part's object id — its comments
     /// section is one, a real Forum GroupObject with its own roster and not a field
     /// on this one. See `crate::parts`.
@@ -414,6 +418,20 @@ const OPS: &[OpDecl] = &[
     crate::exterior::SET_EXTERIOR,
     crate::exterior::SET_DOOR,
     crate::exterior::DECIDE_REQUEST,
+    // The base MEDIA facet, spliced (`crate::object_media`, #112): the icon and banner,
+    // detached; `media_ops_are_spliced_verbatim` pins them to `MEDIA_OPS`.
+    OpDecl {
+        op_id: crate::object_media::OP_SET_ICON,
+        name: "base.setIcon",
+        authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
+        commutativity: Commutativity::Commutative,
+    },
+    OpDecl {
+        op_id: crate::object_media::OP_SET_BANNER,
+        name: "base.setBanner",
+        authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
+        commutativity: Commutativity::Commutative,
+    },
 ];
 
 impl ObjectType for ThingType {
@@ -434,6 +452,9 @@ impl ObjectType for ThingType {
             crate::visibility::reduce_visibility(&mut v, op)?;
             state.visibility = Some(v);
             return Ok(());
+        }
+        if crate::object_media::is_media_op(op.op_id) {
+            return crate::object_media::reduce_media(&mut state.base_media, None, op);
         }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);

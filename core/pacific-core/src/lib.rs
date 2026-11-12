@@ -49,6 +49,8 @@ pub mod profiles;
 pub mod about;
 pub mod bundles;
 pub mod questions;
+/// The media facet: an object's icon and banner, detached (#112).
+pub mod object_media;
 pub mod rsvp;
 /// The standing facet: what one member of an object is to it. Any kind may
 /// carry it, which is why a connection no longer needs a Group-typed twin.

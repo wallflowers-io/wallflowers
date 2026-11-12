@@ -475,7 +475,16 @@ pub fn fields_of(ext: &Exterior, state: KindState<'_>, ctx: &FieldsCtx<'_>) -> s
                 let acts: Vec<_> = acts.iter().map(|a| json!({ "performer": a.performer.id(), "role": a.role, "start": a.start, "end": a.end })).collect();
                 f.insert("acts".into(), json!(acts));
             }
-            let banner = st.banner.clone().filter(|m| !m.is_empty()).or_else(|| inline_ref(&st.media.banner_mime, &st.media.banner));
+            if let Some(i) = st.base_media.icon.clone().filter(|m| !m.is_empty()) {
+                f.insert("icon".into(), media_json("icon", &i));
+            }
+            let banner = st
+                .base_media
+                .banner
+                .clone()
+                .filter(|m| !m.is_empty())
+                .or_else(|| st.banner.clone().filter(|m| !m.is_empty()))
+                .or_else(|| inline_ref(&st.media.banner_mime, &st.media.banner));
             if let Some(b) = banner {
                 f.insert("banner".into(), media_json("banner", &b));
             }
@@ -502,9 +511,15 @@ pub fn fields_of(ext: &Exterior, state: KindState<'_>, ctx: &FieldsCtx<'_>) -> s
             text(&mut f, "title", &st.title);
             text(&mut f, "excerpt", &st.excerpt);
             f.insert("form".into(), json!(st.form.as_str()));
-            for (k, v) in [("icon", &st.icon), ("iconMime", &st.icon_mime), ("banner", &st.banner), ("bannerMime", &st.banner_mime), ("bannerAlt", &st.banner_alt)] {
-                text(&mut f, k, v);
+            // The media facet's pictures where written, else the post's own (inline).
+            let icon = st.base_media.icon.clone().filter(|m| !m.is_empty()).or_else(|| inline_ref(&st.icon_mime, &st.icon));
+            let banner = st.base_media.banner.clone().filter(|m| !m.is_empty()).or_else(|| inline_ref(&st.banner_mime, &st.banner));
+            for (k, m) in [("icon", icon), ("banner", banner)] {
+                if let Some(m) = m {
+                    f.insert(k.into(), media_json(k, &m));
+                }
             }
+            text(&mut f, "bannerAlt", &st.banner_alt);
             if st.retracted {
                 f.insert("retracted".into(), json!(1));
             }

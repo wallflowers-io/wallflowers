@@ -10,7 +10,7 @@
  * it. That is the whole reason this file is generated — the audit found four
  * hand-maintained layers between the model and a screen and no two agreed.
  *
- * 148 ops · 145 reachable · 3 not, each with its reason.
+ * 150 ops · 147 reachable · 3 not, each with its reason.
  *
  * AN UNREACHABLE OP IS STILL LISTED. It has no author function, and asking for
  * one throws with the reason. A client that cannot see what it cannot do will
@@ -42,8 +42,10 @@
     "base.publishProfile": {name:"base.publishProfile", prefix:"base", opId:4027187200, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"card",type:"string",required:true}]},
     "base.retireQuestion": {name:"base.retireQuestion", prefix:"base", opId:4027318273, authority:"owner|role:admin", fold:"commutative", reachable:true, why:null, fields:[{name:"target_author",type:"string",required:true}, {name:"target_gen",type:"integer",required:true}]},
     "base.setBacklink": {name:"base.setBacklink", prefix:"base", opId:4027121664, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"object",type:"string",required:true}, {name:"rel",type:"string",required:true}]},
+    "base.setBanner": {name:"base.setBanner", prefix:"base", opId:4027514881, authority:"owner|role:admin", fold:"commutative", reachable:true, why:null, fields:[{name:"banner",type:"string",required:false}, {name:"bannerBytes",type:"integer",required:false}, {name:"bannerDigest",type:"string",required:false}, {name:"bannerH",type:"integer",required:false}, {name:"bannerKey",type:"string",required:false}, {name:"bannerKind",type:"string",required:false}, {name:"bannerMime",type:"string",required:false}, {name:"bannerMs",type:"integer",required:false}, {name:"bannerSecret",type:"string",required:false}, {name:"bannerSession",type:"string",required:false}, {name:"bannerVia",type:"string",required:false}, {name:"bannerW",type:"integer",required:false}]},
     "base.setDoor": {name:"base.setDoor", prefix:"base", opId:4027449345, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"key",type:"string",required:true}, {name:"mode",type:"string",required:true}]},
     "base.setExterior": {name:"base.setExterior", prefix:"base", opId:4027449344, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"description",type:"string",required:false}, {name:"door",type:"string",required:false}, {name:"hostedKey",type:"string",required:false}, {name:"hostedSecret",type:"string",required:false}, {name:"name",type:"string",required:true}, {name:"photo",type:"string",required:false}, {name:"photoBytes",type:"integer",required:false}, {name:"photoDigest",type:"string",required:false}, {name:"photoH",type:"integer",required:false}, {name:"photoKey",type:"string",required:false}, {name:"photoKind",type:"string",required:false}, {name:"photoMime",type:"string",required:false}, {name:"photoMs",type:"integer",required:false}, {name:"photoSecret",type:"string",required:false}, {name:"photoSession",type:"string",required:false}, {name:"photoVia",type:"string",required:false}, {name:"photoW",type:"integer",required:false}, {name:"precision",type:"integer",required:false}, {name:"readableOutside",type:"integer",required:false}]},
+    "base.setIcon": {name:"base.setIcon", prefix:"base", opId:4027514880, authority:"owner|role:admin", fold:"commutative", reachable:true, why:null, fields:[{name:"icon",type:"string",required:false}, {name:"iconBytes",type:"integer",required:false}, {name:"iconDigest",type:"string",required:false}, {name:"iconH",type:"integer",required:false}, {name:"iconKey",type:"string",required:false}, {name:"iconKind",type:"string",required:false}, {name:"iconMime",type:"string",required:false}, {name:"iconMs",type:"integer",required:false}, {name:"iconSecret",type:"string",required:false}, {name:"iconSession",type:"string",required:false}, {name:"iconVia",type:"string",required:false}, {name:"iconW",type:"integer",required:false}]},
     "base.setLocation": {name:"base.setLocation", prefix:"base", opId:4026531840, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"source",type:"string",required:true}]},
     "base.setParent": {name:"base.setParent", prefix:"base", opId:4027056128, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"parent",type:"string",required:true}, {name:"role",type:"string",required:true}]},
     "base.setPart": {name:"base.setPart", prefix:"base", opId:4026925056, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"choice",type:"string",required:false}, {name:"part",type:"string",required:true}, {name:"role",type:"string",required:true}]},
@@ -239,8 +241,10 @@
   api.basePublishProfile = function (a) { return draft("base.publishProfile", a); };
   api.baseRetireQuestion = function (a) { return draft("base.retireQuestion", a); };
   api.baseSetBacklink = function (a) { return draft("base.setBacklink", a); };
+  api.baseSetBanner = function (a) { return draft("base.setBanner", a); };
   api.baseSetDoor = function (a) { return draft("base.setDoor", a); };
   api.baseSetExterior = function (a) { return draft("base.setExterior", a); };
+  api.baseSetIcon = function (a) { return draft("base.setIcon", a); };
   api.baseSetLocation = function (a) { return draft("base.setLocation", a); };
   api.baseSetParent = function (a) { return draft("base.setParent", a); };
   api.baseSetPart = function (a) { return draft("base.setPart", a); };

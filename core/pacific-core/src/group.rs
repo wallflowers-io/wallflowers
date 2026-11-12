@@ -603,6 +603,10 @@ pub struct ClaimPick {
 /// NOTE: member SET is NOT here — that is the MLS roster; this holds the overlay.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GroupState {
+    /// The base MEDIA facet's icon and banner (`crate::object_media`), winning over the
+    /// kind's own slots where written.
+    #[serde(default)]
+    pub base_media: crate::object_media::Media,
     pub display_name: String,
     pub shape: GroupShape,
     pub presence: Presence,
@@ -839,6 +843,8 @@ pub struct GroupView {
     /// The cover banner (base64 + mime); "" when none.
     pub cover: String,
     pub cover_mime: String,
+    /// The media facet's icon and banner (#112), winning over `cover` where written.
+    pub base_media: crate::object_media::Media,
     /// Can we currently reach this identity over MLS? (on-platform.)
     pub can_sync: bool,
 }
@@ -883,6 +889,7 @@ impl GroupState {
             offices,
             cover: self.cover.clone(),
             cover_mime: self.cover_mime.clone(),
+            base_media: self.base_media.clone(),
             can_sync: matches!(self.presence, Presence::OnPlatform(_)),
         }
     }
@@ -1180,6 +1187,20 @@ static GROUP_OPS: &[OpDecl] = &[
     crate::exterior::SET_EXTERIOR,
     crate::exterior::SET_DOOR,
     crate::exterior::DECIDE_REQUEST,
+    // The base MEDIA facet, spliced (`crate::object_media`, #112): the icon and banner,
+    // detached; `media_ops_are_spliced_verbatim` pins them to `MEDIA_OPS`.
+    OpDecl {
+        op_id: crate::object_media::OP_SET_ICON,
+        name: "base.setIcon",
+        authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
+        commutativity: Commutativity::Commutative,
+    },
+    OpDecl {
+        op_id: crate::object_media::OP_SET_BANNER,
+        name: "base.setBanner",
+        authority: Authority::OwnerOrRole(crate::group::GroupRole::Admin),
+        commutativity: Commutativity::Commutative,
+    },
 ];
 
 /// A face document as group.setFace and group.editFace both take it. ONE document,
@@ -1230,6 +1251,9 @@ impl ObjectType for GroupType {
             crate::visibility::reduce_visibility(&mut v, op)?;
             state.visibility = Some(v);
             return Ok(());
+        }
+        if crate::object_media::is_media_op(op.op_id) {
+            return crate::object_media::reduce_media(&mut state.base_media, Some(&state.member_roles), op);
         }
         if crate::parent::is_parent_op(op.op_id) {
             return crate::parent::reduce_parent(&mut state.parent, op);

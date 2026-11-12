@@ -10227,11 +10227,12 @@ impl Node {
     /// * **Invent a name.** An empty draft name is passed through as an empty name. The
     ///   reducers accept it and the UI gates on it; refusing here would put the rule in
     ///   two places and let them drift.
-    /// * **Author anything past op 0.** Posture, tickets, media, venue and location are
-    ///   SEPARATE ops with their own authority and their own fold gates. A mint that
-    ///   quietly authored six deltas would make failure partial and unreportable. The
-    ///   one exception is a Place's location, below, because an unplaced Place is a
-    ///   different object rather than the same object missing a field.
+    /// * **Author what the draft did not declare.** Each `Carriage::Separate` field the
+    ///   kind declares rides its own op after op 0, here: the icon and banner
+    ///   (`base.setIcon` / `base.setBanner`, #112), an Event's venue (`event.setVenue`)
+    ///   and a Place's fix. A Thing's stance is the caller's (`thing.setPosture` takes a
+    ///   reach the draft does not carry). The media is uploaded BEFORE the object exists,
+    ///   so a failed upload refuses the mint and leaves nothing bare.
     /// * **Roll back.** If op 0 fails the object still exists, unnamed — the MLS group
     ///   was created and cannot be un-created. We return the error AND the id would be
     ///   lost, so we surface the error and leave the empty object for the directory to
@@ -10247,6 +10248,27 @@ impl Node {
                 kind.name()
             )));
         }
+        // THE MEDIA, UPLOADED FIRST (#112): sealed and detached (#56), so an upload that
+        // fails refuses the mint before anything exists. A slot the kind does not declare
+        // is refused, not dropped: it would be a picture nobody ever sees.
+        let mut media = Vec::new();
+        for (key, bytes, op_id, prefix) in [
+            (crate::mint::MintKey::Icon, &draft.icon, crate::object_media::OP_SET_ICON, "icon"),
+            (crate::mint::MintKey::Banner, &draft.banner, crate::object_media::OP_SET_BANNER, "banner"),
+        ] {
+            if bytes.is_empty() {
+                continue;
+            }
+            if !crate::mint::fields(kind).iter().any(|f| f.key == key) {
+                return Err(CoreError::Coordinator(format!("a {} has no {prefix}", kind.name())));
+            }
+            let mime = crate::mint::sniff_mime(bytes)
+                .ok_or_else(|| CoreError::Coordinator(format!("the {prefix} is not a jpeg, png, gif or webp")))?;
+            let mut args = coordinator::Args::new();
+            self.media_put(bytes, mime).await?.to_args(prefix, &mut args);
+            media.push((op_id, args));
+        }
+
         let object_id = self.object_new(kind.name(), &draft.name)?;
 
         // Forum returns None here — it is minted NAME-ONLY, and its name already rode
@@ -10284,6 +10306,18 @@ impl Node {
                 },
             )
             .await?;
+        }
+
+        for (op_id, args) in media {
+            self.apply(&object_id, op_id, args).await?;
+        }
+
+        // An Event's WHERE: the `happens_at` edge, named as the Place names itself.
+        if kind == crate::object::ObjectKind::Event && !draft.place.is_empty() {
+            let name = self.place_state(&draft.place)?.name;
+            let at = if draft.start_ms > 0 { draft.start_ms } else { unix_millis() as i64 };
+            let args = crate::event::set_venue_args(Some(&draft.place), &name, at);
+            self.apply(&object_id, crate::event::OP_SET_VENUE, args).await?;
         }
 
         Ok(object_id)
