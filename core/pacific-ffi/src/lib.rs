@@ -874,6 +874,53 @@ impl ExteriorRow {
     }
 }
 
+/// AN OBJECT'S OUTSIDE, whole (`facets.exterior.fields`): what a member's page and a stranger's
+/// both read, from one builder. `json` is the fields; each picture, clip and document is also
+/// here, read back in Rust, so an app never parses a reference itself.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct OutsideRow {
+    pub json: String,
+    pub media: Vec<OutsideMedia>,
+    /// An Event's Place at its owner's precision: the centre of its cell. `placed` false: none.
+    pub placed: bool,
+    pub lat: f64,
+    pub lng: f64,
+}
+
+/// One picture, clip or document of an outside, by where it sits: `photo`, `icon`, `banner`,
+/// `clip`, `document`, `photos:<i>`, `assets:<id>`. Detached (`ref_`, fetched with
+/// `media_get`) or inline (`inline`, base64), never both.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct OutsideMedia {
+    pub field: String,
+    pub mime: String,
+    pub inline: String,
+    pub ref_: Option<MediaRefRow>,
+}
+
+impl OutsideRow {
+    fn of(f: pacific_core::exterior::Fields) -> Self {
+        let media = pacific_core::exterior::media_of(&f)
+            .into_iter()
+            .map(|(field, m)| {
+                let inline = match &m.delivery {
+                    pacific_core::media::Delivery::Inline { data } => data.clone(),
+                    _ => String::new(),
+                };
+                OutsideMedia { field, mime: m.mime.clone(), ref_: ref_row(&Some(m)), inline }
+            })
+            .collect();
+        let at = f.get("point").and_then(|p| p.as_str()).and_then(pacific_core::geo::geohash_centre);
+        OutsideRow {
+            placed: at.is_some(),
+            lat: at.map_or(0.0, |a| a.0),
+            lng: at.map_or(0.0, |a| a.1),
+            media,
+            json: pacific_core::exterior::fields_json(f),
+        }
+    }
+}
+
 /// One of my objects' exteriors, as I wrote it.
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct MyExterior {
@@ -3691,24 +3738,21 @@ impl Core {
     /// THE OUTSIDE OF AN OBJECT THAT REACHED ME, whole (`facets.exterior.fields`), as JSON: from
     /// its hosted document, fetched at most every few minutes and checked against its owner.
     /// None until its owner hosts one, or once it is withdrawn. Call OFF the Swift main thread.
-    pub fn exterior_fields(&self, object_id: String) -> Result<Option<String>, FfiError> {
-        let f = block_on(self.read()?.exterior_fields(&object_id))?;
-        Ok(f.map(pacific_core::exterior::fields_json))
+    pub fn exterior_fields(&self, object_id: String) -> Result<Option<OutsideRow>, FfiError> {
+        Ok(block_on(self.read()?.exterior_fields(&object_id))?.map(OutsideRow::of))
     }
 
     /// [`exterior_fields`](Self::exterior_fields), fetched now: a pull to refresh. Call OFF the
     /// Swift main thread.
-    pub fn refresh_exterior(&self, object_id: String) -> Result<Option<String>, FfiError> {
-        let f = block_on(self.read()?.refresh_exterior(&object_id))?;
-        Ok(f.map(pacific_core::exterior::fields_json))
+    pub fn refresh_exterior(&self, object_id: String) -> Result<Option<OutsideRow>, FfiError> {
+        Ok(block_on(self.read()?.refresh_exterior(&object_id))?.map(OutsideRow::of))
     }
 
     /// THE OUTSIDE OF AN OBJECT I HOLD, from its fold: the same fields, the same builder, so a
     /// member's page and a stranger's read the same thing. None for a kind with no exterior, or
     /// before its owner writes one.
-    pub fn object_fields(&self, object_id: String) -> Result<Option<String>, FfiError> {
-        let f = self.read()?.object_fields(&object_id)?;
-        Ok(f.map(pacific_core::exterior::fields_json))
+    pub fn object_fields(&self, object_id: String) -> Result<Option<OutsideRow>, FfiError> {
+        Ok(self.read()?.object_fields(&object_id)?.map(OutsideRow::of))
     }
 
     /// ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |

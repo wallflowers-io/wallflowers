@@ -212,6 +212,23 @@ pub fn set_location_args(source: &LocationSource) -> Args {
 }
 
 
+/// The centre of a geohash's cell, (lat, lng): where an outside's Place is drawn at its
+/// owner's precision. `None` for a character outside the alphabet.
+pub fn geohash_centre(hash: &str) -> Option<(f64, f64)> {
+    let (mut lat, mut lon) = ((-90.0_f64, 90.0_f64), (-180.0_f64, 180.0_f64));
+    let mut even = true; // longitude first, as `geohash` writes it
+    for c in hash.bytes() {
+        let idx = crate::thing::GEOHASH_ALPHABET.iter().position(|&a| a == c)?;
+        for bit in (0..5).rev() {
+            let r = if even { &mut lon } else { &mut lat };
+            let mid = (r.0 + r.1) / 2.0;
+            if idx >> bit & 1 == 1 { r.0 = mid } else { r.1 = mid }
+            even = !even;
+        }
+    }
+    (!hash.is_empty()).then(|| ((lat.0 + lat.1) / 2.0, (lon.0 + lon.1) / 2.0))
+}
+
 /// A position as a geohash of `p` characters, unclamped: the caller decides how much to show
 /// (a Thing's market area clamps, `thing::geohash`; an Event's outside is its owner's choice).
 pub fn geohash(lat: f64, lon: f64, p: usize) -> String {

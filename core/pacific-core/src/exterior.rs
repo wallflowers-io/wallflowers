@@ -548,6 +548,45 @@ pub fn fields_of(ext: &Exterior, state: KindState<'_>, ctx: &FieldsCtx<'_>) -> s
     f
 }
 
+/// A media field read back: the MediaRef its op flattened under `prefix`.
+pub fn media_in(v: &serde_json::Value, prefix: &str) -> Option<pacific_media::MediaRef> {
+    let args: Args = v
+        .as_object()?
+        .iter()
+        .filter_map(|(k, v)| match v {
+            serde_json::Value::String(t) => Some((k.clone(), ArgVal::Text(t.clone()))),
+            serde_json::Value::Number(n) => n.as_i64().map(|i| (k.clone(), ArgVal::Int(i))),
+            _ => None,
+        })
+        .collect();
+    pacific_media::MediaRef::from_args_by(prefix, |k| args.get(k)).and_then(Result::ok).filter(|m| !m.is_empty())
+}
+
+/// Every picture, clip and document an outside names, by where it sits: `photo`, `icon`,
+/// `banner`, `clip`, `document`, `photos:<i>` and `assets:<id>`.
+pub fn media_of(f: &serde_json::Map<String, serde_json::Value>) -> Vec<(String, pacific_media::MediaRef)> {
+    let mut out = Vec::new();
+    for k in ["photo", "icon", "banner", "clip", "document"] {
+        if let Some(m) = f.get(k).and_then(|v| media_in(v, k)) {
+            out.push((k.to_string(), m));
+        }
+    }
+    for (i, p) in f.get("photos").and_then(|v| v.as_array()).into_iter().flatten().enumerate() {
+        if let Some(m) = media_in(p, "photo") {
+            out.push((format!("photos:{i}"), m));
+        }
+    }
+    for a in f.get("assets").and_then(|v| v.as_array()).into_iter().flatten() {
+        if let (Some(id), Some(m)) = (a["id"].as_str(), media_in(&a["asset"], "asset")) {
+            out.push((format!("assets:{id}"), m));
+        }
+    }
+    out
+}
+
+/// An outside's fields, as `fields_of` builds them.
+pub type Fields = serde_json::Map<String, serde_json::Value>;
+
 /// The fields as the JSON an app reads.
 pub fn fields_json(f: serde_json::Map<String, serde_json::Value>) -> String {
     serde_json::Value::Object(f).to_string()
@@ -789,6 +828,22 @@ mod tests {
         assert!(!shut.contains_key("body") && shut["excerpt"] == "teaser");
         let open = fields_of(&outside(0, true), KindState::Post(&post), &ctx(&[], &name));
         assert_eq!(open["body"], "the words");
+    }
+
+    /// Every media field is read back as the reference the builder wrote.
+    #[test]
+    fn an_outsides_media_reads_back() {
+        let mut ev = crate::event::EventState::default();
+        ev.media.banner = "aGk=".into();
+        ev.media.banner_mime = "image/png".into();
+        ev.media.photos = vec![crate::event::EventPhoto { data: "aGk=".into(), mime: "image/png".into() }];
+        let name = |_: &MemberId| String::new();
+        let f = fields_of(&outside(0, false), KindState::Event(&ev), &ctx(&[], &name));
+        let m = media_of(&f);
+        assert_eq!(m.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(), ["banner", "photos:0"]);
+        assert_eq!(m[0].1, pacific_media::MediaRef::inline("image/png", "aGk=").unwrap());
+        let c = crate::geo::geohash_centre("gcnht").unwrap();
+        assert_eq!(crate::geo::geohash(c.0, c.1, 5), "gcnht", "the centre is inside its own cell");
     }
 
     /// The pointer round-trips: the settings and the hosted key are what a reader parses back.

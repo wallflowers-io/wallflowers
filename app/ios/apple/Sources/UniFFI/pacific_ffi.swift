@@ -808,6 +808,13 @@ public protocol CoreProtocol : AnyObject {
     func exportWrap(prfSecret: Data, host: String) throws  -> Data
     
     /**
+     * THE OUTSIDE OF AN OBJECT THAT REACHED ME, whole (`facets.exterior.fields`), as JSON: from
+     * its hosted document, fetched at most every few minutes and checked against its owner.
+     * None until its owner hosts one, or once it is withdrawn. Call OFF the Swift main thread.
+     */
+    func exteriorFields(objectId: String) throws  -> OutsideRow?
+    
+    /**
      * The exteriors that reached me through my connections: objects I am not in, each with
      * whether I have asked to join.
      */
@@ -1081,6 +1088,13 @@ public protocol CoreProtocol : AnyObject {
      * One object of mine's exterior, as its owner wrote it; None until one is written.
      */
     func objectExterior(objectId: String) throws  -> MyExterior?
+    
+    /**
+     * THE OUTSIDE OF AN OBJECT I HOLD, from its fold: the same fields, the same builder, so a
+     * member's page and a stranger's read the same thing. None for a kind with no exterior, or
+     * before its owner writes one.
+     */
+    func objectFields(objectId: String) throws  -> OutsideRow?
     
     /**
      * Mark every message WE hold from another member of this (forum) object READ —
@@ -1500,6 +1514,12 @@ public protocol CoreProtocol : AnyObject {
     func recoveryKey() throws  -> String
     
     /**
+     * [`exterior_fields`](Self::exterior_fields), fetched now: a pull to refresh. Call OFF the
+     * Swift main thread.
+     */
+    func refreshExterior(objectId: String) throws  -> OutsideRow?
+    
+    /**
      * CLOSE THE FORK after a restore: a fresh-path commit in every group,
      * through the relay's commit slot, so the install the backup came from can
      * no longer read forward. Returns the hex ids rekeyed. Fails the whole call
@@ -1587,11 +1607,12 @@ public protocol CoreProtocol : AnyObject {
     /**
      * ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
      * "connections" | "network") and, when `name` is not empty, the exterior: a description
-     * and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+     * and its door ("" none, "review" or "auto"), an Event's Place precision (a geohash length,
+     * 0 for the venue's name alone) and whether a Post reads outside. Only what changed is written, and sent
      * once. Returns how many ops were written. The exterior's still is by reference only
      * (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
      */
-    func setOutside(objectId: String, visibility: String, name: String, description: String, door: String) throws  -> UInt32
+    func setOutside(objectId: String, visibility: String, name: String, description: String, door: String, precision: UInt8, readableOutside: Bool) throws  -> UInt32
     
     /**
      * Point this device's messaging at a transport set — a comma-separated spec such as
@@ -2244,6 +2265,19 @@ open func exportWrap(prfSecret: Data, host: String)throws  -> Data {
 }
     
     /**
+     * THE OUTSIDE OF AN OBJECT THAT REACHED ME, whole (`facets.exterior.fields`), as JSON: from
+     * its hosted document, fetched at most every few minutes and checked against its owner.
+     * None until its owner hosts one, or once it is withdrawn. Call OFF the Swift main thread.
+     */
+open func exteriorFields(objectId: String)throws  -> OutsideRow? {
+    return try  FfiConverterOptionTypeOutsideRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_exterior_fields(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+})
+}
+    
+    /**
      * The exteriors that reached me through my connections: objects I am not in, each with
      * whether I have asked to join.
      */
@@ -2788,6 +2822,19 @@ open func objectEdit(objectId: String, op: String, changes: [OpArg])throws  -> S
 open func objectExterior(objectId: String)throws  -> MyExterior? {
     return try  FfiConverterOptionTypeMyExterior.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_object_exterior(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+})
+}
+    
+    /**
+     * THE OUTSIDE OF AN OBJECT I HOLD, from its fold: the same fields, the same builder, so a
+     * member's page and a stranger's read the same thing. None for a kind with no exterior, or
+     * before its owner writes one.
+     */
+open func objectFields(objectId: String)throws  -> OutsideRow? {
+    return try  FfiConverterOptionTypeOutsideRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_object_fields(self.uniffiClonePointer(),
         FfiConverterString.lower(objectId),$0
     )
 })
@@ -3581,6 +3628,18 @@ open func recoveryKey()throws  -> String {
 }
     
     /**
+     * [`exterior_fields`](Self::exterior_fields), fetched now: a pull to refresh. Call OFF the
+     * Swift main thread.
+     */
+open func refreshExterior(objectId: String)throws  -> OutsideRow? {
+    return try  FfiConverterOptionTypeOutsideRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_refresh_exterior(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+})
+}
+    
+    /**
      * CLOSE THE FORK after a restore: a fresh-path commit in every group,
      * through the relay's commit slot, so the install the backup came from can
      * no longer read forward. Returns the hex ids rekeyed. Fails the whole call
@@ -3751,18 +3810,21 @@ open func setMyProfile(displayName: String, shape: String, card: ProfileCard)thr
     /**
      * ONE SAVE OF THE OUTSIDE, by its owner: the dial ("" leaves it; else "private" |
      * "connections" | "network") and, when `name` is not empty, the exterior: a description
-     * and its door ("" none, "review" or "auto"). Only what changed is written, and sent
+     * and its door ("" none, "review" or "auto"), an Event's Place precision (a geohash length,
+     * 0 for the venue's name alone) and whether a Post reads outside. Only what changed is written, and sent
      * once. Returns how many ops were written. The exterior's still is by reference only
      * (ICD 2.6.0), and waits on the blob store's client (#56). Call OFF the Swift main thread.
      */
-open func setOutside(objectId: String, visibility: String, name: String, description: String, door: String)throws  -> UInt32 {
+open func setOutside(objectId: String, visibility: String, name: String, description: String, door: String, precision: UInt8, readableOutside: Bool)throws  -> UInt32 {
     return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
     uniffi_pacific_ffi_fn_method_core_set_outside(self.uniffiClonePointer(),
         FfiConverterString.lower(objectId),
         FfiConverterString.lower(visibility),
         FfiConverterString.lower(name),
         FfiConverterString.lower(description),
-        FfiConverterString.lower(door),$0
+        FfiConverterString.lower(door),
+        FfiConverterUInt8.lower(precision),
+        FfiConverterBool.lower(readableOutside),$0
     )
 })
 }
@@ -6699,6 +6761,10 @@ public struct ExteriorRow {
      * Whether I have asked to join and not withdrawn.
      */
     public var requested: Bool
+    /**
+     * Whether its owner hosts a full outside (`media.hosted`): `exterior_fields` reads it.
+     */
+    public var hosted: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -6720,7 +6786,10 @@ public struct ExteriorRow {
          */door: Bool, 
         /**
          * Whether I have asked to join and not withdrawn.
-         */requested: Bool) {
+         */requested: Bool, 
+        /**
+         * Whether its owner hosts a full outside (`media.hosted`): `exterior_fields` reads it.
+         */hosted: Bool) {
         self.object = object
         self.kind = kind
         self.name = name
@@ -6730,6 +6799,7 @@ public struct ExteriorRow {
         self.hops = hops
         self.door = door
         self.requested = requested
+        self.hosted = hosted
     }
 }
 
@@ -6764,6 +6834,9 @@ extension ExteriorRow: Equatable, Hashable {
         if lhs.requested != rhs.requested {
             return false
         }
+        if lhs.hosted != rhs.hosted {
+            return false
+        }
         return true
     }
 
@@ -6777,6 +6850,7 @@ extension ExteriorRow: Equatable, Hashable {
         hasher.combine(hops)
         hasher.combine(door)
         hasher.combine(requested)
+        hasher.combine(hosted)
     }
 }
 
@@ -6796,7 +6870,8 @@ public struct FfiConverterTypeExteriorRow: FfiConverterRustBuffer {
                 via: FfiConverterString.read(from: &buf), 
                 hops: FfiConverterUInt32.read(from: &buf), 
                 door: FfiConverterBool.read(from: &buf), 
-                requested: FfiConverterBool.read(from: &buf)
+                requested: FfiConverterBool.read(from: &buf), 
+                hosted: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -6810,6 +6885,7 @@ public struct FfiConverterTypeExteriorRow: FfiConverterRustBuffer {
         FfiConverterUInt32.write(value.hops, into: &buf)
         FfiConverterBool.write(value.door, into: &buf)
         FfiConverterBool.write(value.requested, into: &buf)
+        FfiConverterBool.write(value.hosted, into: &buf)
     }
 }
 
@@ -9624,6 +9700,14 @@ public struct MyExterior {
      * "private" | "connections" | "network".
      */
     public var visibility: String
+    /**
+     * An Event's Place outside, as a geohash length; 0, the venue's name alone.
+     */
+    public var precision: UInt8
+    /**
+     * A Post's body goes outside.
+     */
+    public var readableOutside: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -9633,11 +9717,19 @@ public struct MyExterior {
          */door: String, 
         /**
          * "private" | "connections" | "network".
-         */visibility: String) {
+         */visibility: String, 
+        /**
+         * An Event's Place outside, as a geohash length; 0, the venue's name alone.
+         */precision: UInt8, 
+        /**
+         * A Post's body goes outside.
+         */readableOutside: Bool) {
         self.name = name
         self.description = description
         self.door = door
         self.visibility = visibility
+        self.precision = precision
+        self.readableOutside = readableOutside
     }
 }
 
@@ -9657,6 +9749,12 @@ extension MyExterior: Equatable, Hashable {
         if lhs.visibility != rhs.visibility {
             return false
         }
+        if lhs.precision != rhs.precision {
+            return false
+        }
+        if lhs.readableOutside != rhs.readableOutside {
+            return false
+        }
         return true
     }
 
@@ -9665,6 +9763,8 @@ extension MyExterior: Equatable, Hashable {
         hasher.combine(description)
         hasher.combine(door)
         hasher.combine(visibility)
+        hasher.combine(precision)
+        hasher.combine(readableOutside)
     }
 }
 
@@ -9679,7 +9779,9 @@ public struct FfiConverterTypeMyExterior: FfiConverterRustBuffer {
                 name: FfiConverterString.read(from: &buf), 
                 description: FfiConverterString.read(from: &buf), 
                 door: FfiConverterString.read(from: &buf), 
-                visibility: FfiConverterString.read(from: &buf)
+                visibility: FfiConverterString.read(from: &buf), 
+                precision: FfiConverterUInt8.read(from: &buf), 
+                readableOutside: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -9688,6 +9790,8 @@ public struct FfiConverterTypeMyExterior: FfiConverterRustBuffer {
         FfiConverterString.write(value.description, into: &buf)
         FfiConverterString.write(value.door, into: &buf)
         FfiConverterString.write(value.visibility, into: &buf)
+        FfiConverterUInt8.write(value.precision, into: &buf)
+        FfiConverterBool.write(value.readableOutside, into: &buf)
     }
 }
 
@@ -10132,6 +10236,194 @@ public func FfiConverterTypeOpArg_lift(_ buf: RustBuffer) throws -> OpArg {
 #endif
 public func FfiConverterTypeOpArg_lower(_ value: OpArg) -> RustBuffer {
     return FfiConverterTypeOpArg.lower(value)
+}
+
+
+/**
+ * One picture, clip or document of an outside, by where it sits: `photo`, `icon`, `banner`,
+ * `clip`, `document`, `photos:<i>`, `assets:<id>`. Detached (`ref_`, fetched with
+ * `media_get`) or inline (`inline`, base64), never both.
+ */
+public struct OutsideMedia {
+    public var field: String
+    public var mime: String
+    public var inline: String
+    public var ref: MediaRefRow?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(field: String, mime: String, inline: String, ref: MediaRefRow?) {
+        self.field = field
+        self.mime = mime
+        self.inline = inline
+        self.ref = ref
+    }
+}
+
+
+
+extension OutsideMedia: Equatable, Hashable {
+    public static func ==(lhs: OutsideMedia, rhs: OutsideMedia) -> Bool {
+        if lhs.field != rhs.field {
+            return false
+        }
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.inline != rhs.inline {
+            return false
+        }
+        if lhs.ref != rhs.ref {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(field)
+        hasher.combine(mime)
+        hasher.combine(inline)
+        hasher.combine(ref)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOutsideMedia: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OutsideMedia {
+        return
+            try OutsideMedia(
+                field: FfiConverterString.read(from: &buf), 
+                mime: FfiConverterString.read(from: &buf), 
+                inline: FfiConverterString.read(from: &buf), 
+                ref: FfiConverterOptionTypeMediaRefRow.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OutsideMedia, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.field, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterString.write(value.inline, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.ref, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOutsideMedia_lift(_ buf: RustBuffer) throws -> OutsideMedia {
+    return try FfiConverterTypeOutsideMedia.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOutsideMedia_lower(_ value: OutsideMedia) -> RustBuffer {
+    return FfiConverterTypeOutsideMedia.lower(value)
+}
+
+
+/**
+ * AN OBJECT'S OUTSIDE, whole (`facets.exterior.fields`): what a member's page and a stranger's
+ * both read, from one builder. `json` is the fields; each picture, clip and document is also
+ * here, read back in Rust, so an app never parses a reference itself.
+ */
+public struct OutsideRow {
+    public var json: String
+    public var media: [OutsideMedia]
+    /**
+     * An Event's Place at its owner's precision: the centre of its cell. `placed` false: none.
+     */
+    public var placed: Bool
+    public var lat: Double
+    public var lng: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(json: String, media: [OutsideMedia], 
+        /**
+         * An Event's Place at its owner's precision: the centre of its cell. `placed` false: none.
+         */placed: Bool, lat: Double, lng: Double) {
+        self.json = json
+        self.media = media
+        self.placed = placed
+        self.lat = lat
+        self.lng = lng
+    }
+}
+
+
+
+extension OutsideRow: Equatable, Hashable {
+    public static func ==(lhs: OutsideRow, rhs: OutsideRow) -> Bool {
+        if lhs.json != rhs.json {
+            return false
+        }
+        if lhs.media != rhs.media {
+            return false
+        }
+        if lhs.placed != rhs.placed {
+            return false
+        }
+        if lhs.lat != rhs.lat {
+            return false
+        }
+        if lhs.lng != rhs.lng {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(json)
+        hasher.combine(media)
+        hasher.combine(placed)
+        hasher.combine(lat)
+        hasher.combine(lng)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOutsideRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OutsideRow {
+        return
+            try OutsideRow(
+                json: FfiConverterString.read(from: &buf), 
+                media: FfiConverterSequenceTypeOutsideMedia.read(from: &buf), 
+                placed: FfiConverterBool.read(from: &buf), 
+                lat: FfiConverterDouble.read(from: &buf), 
+                lng: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OutsideRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.json, into: &buf)
+        FfiConverterSequenceTypeOutsideMedia.write(value.media, into: &buf)
+        FfiConverterBool.write(value.placed, into: &buf)
+        FfiConverterDouble.write(value.lat, into: &buf)
+        FfiConverterDouble.write(value.lng, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOutsideRow_lift(_ buf: RustBuffer) throws -> OutsideRow {
+    return try FfiConverterTypeOutsideRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOutsideRow_lower(_ value: OutsideRow) -> RustBuffer {
+    return FfiConverterTypeOutsideRow.lower(value)
 }
 
 
@@ -13673,6 +13965,30 @@ fileprivate struct FfiConverterOptionTypeMyExterior: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeOutsideRow: FfiConverterRustBuffer {
+    typealias SwiftType = OutsideRow?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeOutsideRow.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeOutsideRow.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypePersonPhoto: FfiConverterRustBuffer {
     typealias SwiftType = PersonPhoto?
 
@@ -14587,6 +14903,31 @@ fileprivate struct FfiConverterSequenceTypeOpArg: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeOpArg.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeOutsideMedia: FfiConverterRustBuffer {
+    typealias SwiftType = [OutsideMedia]
+
+    public static func write(_ value: [OutsideMedia], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOutsideMedia.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OutsideMedia] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OutsideMedia]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOutsideMedia.read(from: &buf))
         }
         return seq
     }
@@ -15669,6 +16010,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_export_wrap() != 27591) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_exterior_fields() != 25608) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_exteriors() != 19829) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15793,6 +16137,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_object_exterior() != 52822) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_object_fields() != 7776) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_object_mark_read() != 14131) {
@@ -15963,6 +16310,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_recovery_key() != 10446) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_refresh_exterior() != 33424) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_rekey_all_groups() != 31666) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15999,7 +16349,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_set_my_profile() != 52976) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_set_outside() != 144) {
+    if (uniffi_pacific_ffi_checksum_method_core_set_outside() != 44728) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_set_routes() != 3390) {
