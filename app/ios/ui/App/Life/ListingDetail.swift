@@ -38,6 +38,8 @@ struct ListingObjectDetailSource: KindSource {
 
     private var row: ThingRow? { core.things.first { $0.id == objectId } }
 
+    func canEdit() async -> Bool { core.isGroupOwner(objectId) }
+
     func headline() async -> KindHeadline? {
         guard let row else { return nil }
         let more = core.thingDetail(objectId)

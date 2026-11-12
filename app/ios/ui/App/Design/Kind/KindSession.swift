@@ -65,6 +65,11 @@ final class KindSession: ObservableObject, Identifiable, ShellSurface {
     /// The share face: GOLD turns the card over to the Space list and back, the
     /// same turn the mint's audience dial makes.
     @Published var sharing = false
+    /// The comments face: the page turns to what was said, and the field to say more.
+    @Published var commenting = false
+    /// Whether this device may write the object, and whether it is writing now (#132).
+    @Published private(set) var canEdit = false
+    @Published var editing = false
 
     @Published private(set) var exit: NewExit?
     /// An owner's write in flight — its row goes still so it cannot be written twice.
@@ -105,10 +110,31 @@ final class KindSession: ObservableObject, Identifiable, ShellSurface {
     }
 
     func setDocument(_ data: Data, name: String) async {
+        await write(.document) { await $0.setDocument(data, name: name) }
+    }
+
+    func setCover(_ data: Data) async { await write(.cover) { await $0.setCover(data) } }
+    func setClip(_ data: Data, mime: String) async { await write(.clip) { await $0.setClip(data, mime: mime) } }
+    func removePicture(_ key: String) async { await write(.picture) { await $0.removePicture(key) } }
+
+    /// One media write at a time, read back from the fold when it lands.
+    private func write(_ slot: KindAdd, _ run: (any KindSource) async -> Bool) async {
         guard saving == nil else { return }
-        saving = KindAdd.document.rawValue
-        if await source.setDocument(data, name: name) { headline = await source.headline() }
+        saving = slot.rawValue
+        if await run(source) { headline = await source.headline() }
         saving = nil
+    }
+
+    /// A section's own write has landed: read the page again.
+    func reload() async { headline = await source.headline() }
+
+    func toggleEditing() {
+        guard canEdit else { return }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { editing.toggle() }
+    }
+
+    func toggleComments() {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { commenting.toggle() }
     }
 
     // MARK: Loading
@@ -122,6 +148,7 @@ final class KindSession: ObservableObject, Identifiable, ShellSurface {
         comments = await source.comments()
         commentsHeld = await source.commentsHeld()
         targets = await source.shareTargets()
+        canEdit = await source.canEdit()
     }
 
     // MARK: ShellSurface

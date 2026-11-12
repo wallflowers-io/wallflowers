@@ -14,10 +14,10 @@
 //  What differs between kinds is only which rows a binder answers, so a kind with
 //  more to say says it in its rows, never in a new slot here.
 //
-//  THE OWNER'S PAGE IS ALSO WHERE THE OBJECT GROWS. The creator takes three fields;
-//  every other field an op carries is written here, by the owner, on the row that
-//  shows it. A row's `edit` is what makes it writable — the binder sets it only for
-//  the owner — and an unset row is shown only to the person who can set it.
+//  VIEW, THEN EDIT (#132). Everyone reads the page as values. Whoever may write it
+//  (`KindSource.canEdit`) gets an Edit control beside the title; in Edit each row that
+//  carries an `edit` becomes its field, and the creator's other fields are written
+//  there. An unset row is a place to write in Edit and absent in View.
 //
 //  Honest-by-default, as everywhere: an unknown value is "", never a fabricated
 //  stand-in. A page whose source cannot answer shows less, never more.
@@ -40,12 +40,16 @@ struct KindHeadline {
     /// A Place's media: the area patch around its own point. Empty = none.
     var area: [ProfileGeoCell] = []
     /// The pictures after the first, in order: an event's photos, a listing's, a
-    /// post's assets.
+    /// post's assets. The hero pages through them after `photo`.
     var gallery: [KindPicture] = []
+    /// A looping clip, the hero's last page.
+    var clip: KindClip? = nil
     /// A document read in place — a Post's PDF.
     var document: KindDocument? = nil
     /// The kind's values, in the order they should read.
     var rows: [KindRow] = []
+    /// A kind with sections of its own reads as these instead of `rows`, in order.
+    var blocks: [KindBlock] = []
     /// What the owner can add here. Empty for everyone else.
     var adds: [KindAdd] = []
     /// A way INTO the object, past its page — a Place's POV.
@@ -64,6 +68,35 @@ struct KindPicture: Identifiable {
     let id: Int
     let data: Data
     var alt: String = ""
+    /// The id its set keys it by, for a removal (`event.removePhoto`). nil = not removable.
+    var key: String? = nil
+}
+
+/// A clip's bytes, played from a file the page writes once.
+struct KindClip {
+    let data: Data
+    let mime: String
+}
+
+/// One part of a kind's page: its rows, or a section the kind draws itself. A section is
+/// handed whether the page is in Edit, and the page's close, for a door that leaves it.
+enum KindBlock: Identifiable {
+    case rows(String, [KindRow])
+    case view(String, (KindContext) -> AnyView)
+
+    var id: String {
+        switch self {
+        case .rows(let id, _), .view(let id, _): id
+        }
+    }
+}
+
+struct KindContext {
+    let editing: Bool
+    /// Close the page, then run what follows it (a route into another page).
+    let leave: (@escaping () -> Void) -> Void
+    /// Read the page again after a section's own write.
+    let reload: () async -> Void
 }
 
 struct KindDocument {
@@ -85,6 +118,8 @@ struct KindRow: Identifiable {
     /// The author wrote it in markdown (`descriptorFormat`, `bodyFormat`).
     var markdown = false
     var edit: KindEdit? = nil
+    /// A setting rather than a value (a format, a kind): on the page in Edit only.
+    var editOnly = false
 
     var id: String { edit.map { "\($0.op).\($0.arg)" } ?? label }
 }
@@ -109,7 +144,8 @@ enum KindInput: Equatable {
 }
 
 enum KindAdd: String, Identifiable {
-    case picture, document
+    /// A picture into the set; the cover replaced; a document set; the clip set.
+    case picture, cover, document, clip
     var id: String { rawValue }
 }
 
@@ -168,11 +204,18 @@ protocol KindSource {
     /// nowhere to go, and the disc stays glyphless and dead rather than lying.
     func shareTargets() async -> [KindShareTarget]
     func share(to target: KindShareTarget) async -> Bool
+    /// Whether this device may write the object: the owner, or a co-host. Decides the
+    /// Edit control, and nothing else.
+    func canEdit() async -> Bool
     /// The owner writes one row. false = it did not land.
     func edit(_ edit: KindEdit, to value: String) async -> Bool
     /// The owner adds a picture, or sets the document.
     func addPicture(_ data: Data) async -> Bool
     func setDocument(_ data: Data, name: String) async -> Bool
+    /// The hero's other writes: the cover replaced, a picture removed by its key, the clip set.
+    func setCover(_ data: Data) async -> Bool
+    func removePicture(_ key: String) async -> Bool
+    func setClip(_ data: Data, mime: String) async -> Bool
 }
 
 /// Somewhere an object can be handed to — a Space you are actually in.
@@ -188,4 +231,8 @@ extension KindSource {
     func edit(_ edit: KindEdit, to value: String) async -> Bool { false }
     func addPicture(_ data: Data) async -> Bool { false }
     func setDocument(_ data: Data, name: String) async -> Bool { false }
+    func canEdit() async -> Bool { false }
+    func setCover(_ data: Data) async -> Bool { false }
+    func removePicture(_ key: String) async -> Bool { false }
+    func setClip(_ data: Data, mime: String) async -> Bool { false }
 }
