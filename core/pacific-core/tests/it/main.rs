@@ -33,6 +33,7 @@ mod icd21_forum_retract;
 mod icd21_row10_gen_is_required;
 mod icd_corpus_folds;
 mod late_arc_passes_a_rooms_whole_history;
+mod link_one_owner;
 mod live_join_between_devices;
 mod m0_conformance;
 mod m10_market_discovery;
