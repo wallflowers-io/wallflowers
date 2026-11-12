@@ -16,7 +16,7 @@
 //  the lane is the one that stays.
 //
 //  A LANE SORTS BY WHAT THE OBJECT IS, not by the edge that reached it. An event
-//  shared into this Space arrives as a `peer` affiliation (EventDetail.share) and
+//  shared into this Space arrives as a `peer` affiliation (EventInterior.share) and
 //  belongs under EVENTS; reading the rel alone once listed it as a Space.
 //
 //  Forums are real `forum`-kind GroupObjects; the group's own log carries the
@@ -830,7 +830,7 @@ struct GroupDetailView: View {
     // MARK: SPACES — the federation edges (this group's half of each affiliation)
 
     @ViewBuilder private func affiliationBars(width: CGFloat) -> some View {
-        // The rel is NOT the lane. `EventDetail.share` writes a `peer` edge for an
+        // The rel is NOT the lane. `EventInterior.share` writes a `peer` edge for an
         // event shared into this Space — deliberately, so the promoter's `created`
         // claim and ours can coexist — and reading rel alone listed that event as a
         // Space. A lane sorts by what the object IS: anything `bucket` can name is
@@ -946,7 +946,7 @@ struct GroupDetailView: View {
 
     private func open(_ row: AffiliationRow) {
         if core.events.contains(where: { $0.id == row.peer }) {
-            EventDetail.open(row.peer, core: core, graph: graph, shell: shell)
+            EventInterior.open(row.peer, core: core, graph: graph, shell: shell)
         } else if let thing = core.things.first(where: { $0.id == row.peer }) {
             editingThing = thing
             thingEditorOpen = true
