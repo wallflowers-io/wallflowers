@@ -9,7 +9,7 @@
 //  between a modal that belongs to this app and one that merely runs in it.
 //
 //  `NewSession` had that privilege alone. This protocol is the same privilege,
-//  named — so the detail modal (`Design/Detail/`) inherits the presentation, the
+//  named — so the detail modal (`Design/Kind/`) inherits the presentation, the
 //  ground, the glass, the exit curves and the disc row without re-rolling any of
 //  it, and without becoming a mint to get them (a `New` is DEFINED BY WHAT IT
 //  MINTS, and a detail modal mints nothing).

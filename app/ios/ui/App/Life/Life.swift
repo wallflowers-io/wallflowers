@@ -814,7 +814,7 @@ struct LifeView: View {
     /// object. Browsing a KIND stays on the rail (10 Aug order).
     ///
     /// The non-egoic kinds MAXIMISE: the card's square grows into the object's page
-    /// (`Design/Detail`). A Space and a person are profiles, pushed onto the stack.
+    /// (`Design/Kind/`). A Space and a person are profiles, pushed onto the stack.
     /// A card with no object id is something this device is not a member of: it opens
     /// its exterior (#76), not a detail.
     private func openObject(_ item: FeedItem) {

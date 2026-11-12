@@ -1584,8 +1584,8 @@ struct RootShell: View {
                 if let session = surface as? NewSession {
                     NewSurface(session: session, onCancel: cancelNew,
                                creator: shell.creator?.sessions[session.kind] === session ? shell.creator : nil)
-                } else if let detail = surface as? DetailSession {
-                    DetailSurface(session: detail, onClose: cancelNew)
+                } else if let detail = surface as? KindSession {
+                    KindPage(session: detail, onClose: cancelNew)
                 }
             }
             .transition(.opacity)

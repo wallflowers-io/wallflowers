@@ -14,29 +14,29 @@ enum ExteriorDetail {
         guard let row = core.exteriors.first(where: { $0.object == objectId }), row.door else { return }
         let name = core.index.name(row.owner) ?? String(row.owner.prefix(8))
         let source = ExteriorDetailSource(row: row, ownerName: name, ownerPhoto: core.index.photo(row.owner))
-        let primary: DetailPrimary = row.requested
+        let primary: KindPrimary = row.requested
             ? .action(label: "Requested") { await core.withdrawRequest(objectId) ? .saved : nil }
             : .action(label: "Ask to join") { await core.requestJoin(objectId) ? .saved : nil }
-        shell.beginNew(DetailSession(noun: "object", source: source, primary: primary))
+        shell.beginNew(KindSession(noun: "object", source: source, primary: primary))
     }
 }
 
 /// The binder for an exterior: what its owner put outside, and nothing from inside. There is
 /// no log here to read or speak into.
 @MainActor
-struct ExteriorDetailSource: DetailSource {
+struct ExteriorDetailSource: KindSource {
     let row: ExteriorRow
     let ownerName: String
     let ownerPhoto: Data?
 
-    func headline() async -> DetailHeadline? {
-        DetailHeadline(title: row.name, rows: [DetailRow(label: "Description", value: row.description)])
+    func headline() async -> KindHeadline? {
+        KindHeadline(title: row.name, rows: [KindRow(label: "Description", value: row.description)])
     }
 
-    func author() async -> DetailAuthor? {
-        DetailAuthor(id: row.owner, name: ownerName, initials: Avatar.initials(ownerName), isSpace: false, photo: ownerPhoto)
+    func author() async -> KindAuthor? {
+        KindAuthor(id: row.owner, name: ownerName, initials: Avatar.initials(ownerName), isSpace: false, photo: ownerPhoto)
     }
 
-    func comments() async -> [DetailComment] { [] }
+    func comments() async -> [KindComment] { [] }
     func post(_ text: String) async -> Bool { false }
 }

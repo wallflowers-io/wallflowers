@@ -2,7 +2,7 @@
 //  The PLACE's maximised detail — what replaced the Place Profile page.
 //
 //  A Place is not a who: it is somewhere, so it takes the page every non-egoic
-//  GroupObject shares (`Design/Detail`) rather than a profile's IA. Its media is
+//  GroupObject shares (`Design/Kind/`) rather than a profile's IA. Its media is
 //  its AREA — the geohash patch around its own point — because Places have no
 //  banner op, and a block of colour standing in for a picture would say less.
 //
@@ -27,7 +27,7 @@ enum PlaceDetail {
     static var tint: Color { LifeFilter.places.color }
 
     static func open(_ objectId: String, core: CoreService, shell: ShellState, origin: CGRect? = nil) {
-        shell.beginNew(DetailSession(noun: "place",
+        shell.beginNew(KindSession(noun: "place",
                                      source: PlaceDetailSource(core: core, objectId: objectId),
                                      origin: origin))
     }
@@ -48,20 +48,20 @@ enum PlaceDetail {
 }
 
 @MainActor
-struct PlaceDetailSource: DetailSource {
+struct PlaceDetailSource: KindSource {
     let core: CoreService
     let objectId: String
 
     private var row: PlaceRow? { core.places.first { $0.id == objectId } }
 
-    func headline() async -> DetailHeadline? {
+    func headline() async -> KindHeadline? {
         guard let row else { return nil }
         var rows = [
-            DetailRow(label: "Describe", value: row.descriptor),
-            DetailRow(label: "Address", value: row.address.isEmpty ? row.label : row.address),
+            KindRow(label: "Describe", value: row.descriptor),
+            KindRow(label: "Address", value: row.address.isEmpty ? row.label : row.address),
             // PUBLIC means auto-admitted at its door, not world-readable.
-            DetailRow(label: "Access", value: row.access == "public" ? "Open door" : ""),
-            DetailRow(label: "Doorbell", value: row.doorbell.isEmpty ? "" : "Doorbell fitted"),
+            KindRow(label: "Access", value: row.access == "public" ? "Open door" : ""),
+            KindRow(label: "Doorbell", value: row.doorbell.isEmpty ? "" : "Doorbell fitted"),
         ]
         // Whose land, and whether they were asked: two claims, shown only when
         // somebody has looked.
@@ -73,26 +73,26 @@ struct PlaceDetailSource: DetailSource {
             default:        "Owner not asked"
             }
             let land = [row.landParcel, row.landProprietor, asked].filter { !$0.isEmpty }
-            rows.append(DetailRow(label: "Land", value: land.joined(separator: " · ")))
+            rows.append(KindRow(label: "Land", value: land.joined(separator: " · ")))
         }
         // The notes published here (`place.post`), newest first.
         for p in core.placePosts(objectId).sorted(by: { $0.at > $1.at }) {
             let who = core.index.name(p.author) ?? String(p.author.prefix(8))
             let words = [p.title, p.text].filter { !$0.isEmpty }.joined(separator: "\n")
-            rows.append(DetailRow(label: "Post \(p.author):\(p.note)", value: "\(who) — \(words)"))
+            rows.append(KindRow(label: "Post \(p.author):\(p.note)", value: "\(who) — \(words)"))
         }
-        return DetailHeadline(title: row.name,
+        return KindHeadline(title: row.name,
                               area: PlaceDetail.areaCells(lat: row.lat, lng: row.lng, placed: row.placed),
                               rows: rows,
                               inside: row.placed ? walkUp(row) : nil)
     }
 
     /// The POV — the pin hand-off's second door, from the page.
-    private func walkUp(_ row: PlaceRow) -> DetailInside {
+    private func walkUp(_ row: PlaceRow) -> KindInside {
         let focus = annotation(row)
         let neighbours = core.places.filter { $0.placed && $0.id != row.id }.map(annotation)
         let color = core.avatarColor
-        return DetailInside(label: "Walk up", glyph: "figure.walk", id: "place-walk-up") { close in
+        return KindInside(label: "Walk up", glyph: "figure.walk", id: "place-walk-up") { close in
             AnyView(PlacePOVView(focus: focus, neighbours: neighbours, avatarColor: color, onExit: close))
         }
     }
@@ -103,13 +103,13 @@ struct PlaceDetailSource: DetailSource {
                         category: row.descriptor.isEmpty ? nil : row.descriptor)
     }
 
-    func author() async -> DetailAuthor? {
-        DetailBind.author(of: objectId, core: core, tint: PlaceDetail.tint)
+    func author() async -> KindAuthor? {
+        KindBind.author(of: objectId, core: core, tint: PlaceDetail.tint)
     }
 
-    func comments() async -> [DetailComment] { DetailBind.comments(of: objectId, core: core) }
+    func comments() async -> [KindComment] { KindBind.comments(of: objectId, core: core) }
 
     func commentsHeld() async -> Bool { core.index.commentsForum(of: objectId) != nil }
 
-    func post(_ text: String) async -> Bool { await DetailBind.post(text, on: objectId, core: core) }
+    func post(_ text: String) async -> Bool { await KindBind.post(text, on: objectId, core: core) }
 }

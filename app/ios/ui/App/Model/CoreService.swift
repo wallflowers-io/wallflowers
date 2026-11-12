@@ -1965,7 +1965,7 @@ final class CoreService: ObservableObject {
     func addPicture(_ objectId: String, op: String, arg: String, _ data: Data,
                     keyed: Bool, alt: String = "") async -> Bool {
         guard let fit = Self.jpegUnderCap(data, capB64: ceiling(op, arg)) else {
-            fail("add the picture", DetailRefusal.tooLarge, object: objectId)
+            fail("add the picture", KindRefusal.tooLarge, object: objectId)
             return false
         }
         var args: [String: OpValue] = [arg: .text(v: fit.base64EncodedString()),

@@ -3,7 +3,7 @@
 //  driven entirely through a `ProfileSource`.
 //
 //  TWO KINDS, ONE STACK: a person and a Space — the EGOIC objects. Anything that
-//  merely happened or was posted goes to `Design/Detail/` instead.
+//  merely happened or was posted goes to `Design/Kind/` instead.
 //
 //  The jewels row moved above the pins (15 Aug): it FILTERS the content below
 //  it, and a filter drawn after its content reads as a footer.
