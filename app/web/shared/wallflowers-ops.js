@@ -10,7 +10,7 @@
  * it. That is the whole reason this file is generated — the audit found four
  * hand-maintained layers between the model and a screen and no two agreed.
  *
- * 148 ops · 145 reachable · 3 not, each with its reason.
+ * 153 ops · 150 reachable · 3 not, each with its reason.
  *
  * AN UNREACHABLE OP IS STILL LISTED. It has no author function, and asking for
  * one throws with the reason. A client that cannot see what it cannot do will
@@ -31,8 +31,10 @@
     "base.clearParent": {name:"base.clearParent", prefix:"base", opId:4027056129, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"parent",type:"string",required:true}]},
     "base.clearPart": {name:"base.clearPart", prefix:"base", opId:4026925057, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"part",type:"string",required:true}]},
     "base.clearRole": {name:"base.clearRole", prefix:"base", opId:4026990593, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"member",type:"string",required:true}]},
+    "base.clearTagged": {name:"base.clearTagged", prefix:"base", opId:4027580420, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"label",type:"string",required:true}, {name:"object",type:"string",required:true}]},
     "base.decideRequest": {name:"base.decideRequest", prefix:"base", opId:4027449346, authority:"owner|role:admitter", fold:"commutative", reachable:true, why:null, fields:[{name:"asker",type:"string",required:true}, {name:"decision",type:"string",required:true}, {name:"request",type:"string",required:true}]},
     "base.defineQuestion": {name:"base.defineQuestion", prefix:"base", opId:4027318272, authority:"owner|role:admin", fold:"commutative", reachable:true, why:null, fields:[{name:"free",type:"integer",required:false}, {name:"hint",type:"string",required:false}, {name:"max",type:"integer",required:false}, {name:"multi",type:"integer",required:false}, {name:"options",type:"string",required:false}, {name:"text",type:"string",required:true}, {name:"textMax",type:"integer",required:false}]},
+    "base.hideTag": {name:"base.hideTag", prefix:"base", opId:4027580418, authority:"owner|role:admin", fold:"commutative", reachable:true, why:null, fields:[{name:"hidden",type:"integer",required:true}, {name:"label",type:"string",required:true}]},
     "base.memberJoined": {name:"base.memberJoined", prefix:"base", opId:4026597376, authority:"anyMember", fold:"commutative", reachable:false, why:"recorded by the MLS doors, never authored as a delta", fields:[{name:"at",type:"integer",required:true}, {name:"member",type:"string",required:true}]},
     "base.memberLeft": {name:"base.memberLeft", prefix:"base", opId:4026597377, authority:"anyMember", fold:"commutative", reachable:false, why:"recorded by the MLS doors, never authored as a delta", fields:[{name:"at",type:"integer",required:true}, {name:"member",type:"string",required:true}, {name:"reason",type:"string",required:false}]},
     "base.offerBundle": {name:"base.offerBundle", prefix:"base", opId:4027383808, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"bundle",type:"string",required:true}, {name:"kp_id",type:"string",required:true}, {name:"not_after",type:"integer",required:true}]},
@@ -48,8 +50,11 @@
     "base.setParent": {name:"base.setParent", prefix:"base", opId:4027056128, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"parent",type:"string",required:true}, {name:"role",type:"string",required:true}]},
     "base.setPart": {name:"base.setPart", prefix:"base", opId:4026925056, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"choice",type:"string",required:false}, {name:"part",type:"string",required:true}, {name:"role",type:"string",required:true}]},
     "base.setRole": {name:"base.setRole", prefix:"base", opId:4026990592, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"member",type:"string",required:true}, {name:"role",type:"string",required:true}]},
+    "base.setTagged": {name:"base.setTagged", prefix:"base", opId:4027580419, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"label",type:"string",required:true}, {name:"object",type:"string",required:true}]},
     "base.setVisibility": {name:"base.setVisibility", prefix:"base", opId:4026662912, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[{name:"visibility",type:"string",required:true}]},
+    "base.tag": {name:"base.tag", prefix:"base", opId:4027580416, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"at",type:"integer",required:true}, {name:"label",type:"string",required:true}, {name:"object",type:"string",required:false}]},
     "base.unpublish": {name:"base.unpublish", prefix:"base", opId:4026728449, authority:"owner", fold:"sequenced", reachable:true, why:null, fields:[]},
+    "base.untag": {name:"base.untag", prefix:"base", opId:4027580417, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"label",type:"string",required:true}]},
     "base.withdrawBundle": {name:"base.withdrawBundle", prefix:"base", opId:4027383809, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"kp_id",type:"string",required:true}]},
     "contact.admitTicket": {name:"contact.admitTicket", prefix:"contact", opId:11, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"admittedMs",type:"integer",required:true}, {name:"ticket",type:"string",required:true}]},
     "contact.deliverTicket": {name:"contact.deliverTicket", prefix:"contact", opId:6, authority:"anyMember", fold:"commutative", reachable:true, why:null, fields:[{name:"listing",type:"string",required:true}, {name:"ticket",type:"string",required:true}, {name:"tickets",type:"string",required:true}]},
@@ -228,8 +233,10 @@
   api.baseClearParent = function (a) { return draft("base.clearParent", a); };
   api.baseClearPart = function (a) { return draft("base.clearPart", a); };
   api.baseClearRole = function (a) { return draft("base.clearRole", a); };
+  api.baseClearTagged = function (a) { return draft("base.clearTagged", a); };
   api.baseDecideRequest = function (a) { return draft("base.decideRequest", a); };
   api.baseDefineQuestion = function (a) { return draft("base.defineQuestion", a); };
+  api.baseHideTag = function (a) { return draft("base.hideTag", a); };
   api.baseMemberJoined = function (a) { return draft("base.memberJoined", a); };
   api.baseMemberLeft = function (a) { return draft("base.memberLeft", a); };
   api.baseOfferBundle = function (a) { return draft("base.offerBundle", a); };
@@ -245,8 +252,11 @@
   api.baseSetParent = function (a) { return draft("base.setParent", a); };
   api.baseSetPart = function (a) { return draft("base.setPart", a); };
   api.baseSetRole = function (a) { return draft("base.setRole", a); };
+  api.baseSetTagged = function (a) { return draft("base.setTagged", a); };
   api.baseSetVisibility = function (a) { return draft("base.setVisibility", a); };
+  api.baseTag = function (a) { return draft("base.tag", a); };
   api.baseUnpublish = function (a) { return draft("base.unpublish", a); };
+  api.baseUntag = function (a) { return draft("base.untag", a); };
   api.baseWithdrawBundle = function (a) { return draft("base.withdrawBundle", a); };
   api.contactAdmitTicket = function (a) { return draft("contact.admitTicket", a); };
   api.contactDeliverTicket = function (a) { return draft("contact.deliverTicket", a); };
