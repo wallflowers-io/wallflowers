@@ -354,6 +354,18 @@
       ],
       "writtenIn": "both",
       "note": "A Site's sale (T-3; ASSURANCE 30 Sep): the Transaction's half names the Site and the Thing (transaction.setSite); the Site's half is its own listing of that Thing (group.publishListing, `site` 1, by the owner or an admin). The WallFlowers system node sells only what the Site listed."
+    },
+    "tagged": {
+      "projected": false,
+      "halves": "both",
+      "declaredBy": [
+        "base.tag",
+        "base.untag",
+        "base.setTagged",
+        "base.clearTagged"
+      ],
+      "writtenIn": "both",
+      "note": "An object tagged with another (Ralph, 12 Nov 2026): the tagged object's half is a member's base.tag naming it; the linked object's half is its own member's base.setTagged, its consent. Not projected yet: the linking ops that walk it come later."
     }
   },
   "facets": {
@@ -1326,6 +1338,198 @@
             "gen": {
               "type": "integer",
               "required": true
+            }
+          }
+        }
+      }
+    },
+    "tags": {
+      "summary": "an object's tags: labels its members put on it, each optionally linking another object",
+      "note": "Ralph, 12 Nov 2026: \"a tags facet on every kind. This will help for a number of linking ops later on.\" A tag is a label plus an optional object; members tag, the owner or an admin hides; the facet is the record of an object's tags, and a #hashtag typed in a body is offered as one, never written without the person's tap (amending the 2 Aug ruling that tags are only derived). Band 0xF010. A linked tag is the `tagged` relation: this object's half is base.tag, the linked object's is base.setTagged; with one half only it is unconfirmed, as an unconfirmed lineup act is.",
+      "on": [
+        "group",
+        "forum",
+        "project",
+        "contact",
+        "conversation",
+        "thing",
+        "place",
+        "event",
+        "post",
+        "system",
+        "treasury",
+        "note",
+        "host",
+        "transaction"
+      ],
+      "ops": {
+        "base.tag": {
+          "op": 4027580416,
+          "ego": "member",
+          "fold": "commutative",
+          "summary": "A member puts a tag on this object. Keyed (author, label), LWW by gen: a second tag of the same label by the same author replaces the first.",
+          "maxLive": 32,
+          "maxPerAuthor": 16,
+          "description": "At most 32 distinct live labels on an object and 16 live tags per author: a new label past either is refused, never evicted. A label several members put on reads once, with their count. Considered and ruled out: base.setBacklink (owner-sequenced, on four kinds, and barred from group); contact.discoverRequest's `tags` (a query, not a fact); ContactCard's tags (a person's vCard categories).",
+          "args": {
+            "label": {
+              "type": "string",
+              "required": true,
+              "maxLength": 64,
+              "grammar": "lowercase letters, digits and `_` (Unicode letters and digits); what Hashtags.extract yields from `#Label`",
+              "summary": "the tag, normalised: refused if not, never rewritten"
+            },
+            "object": {
+              "type": "string",
+              "summary": "an object id, hex: the object this tag links to. Absent, a label alone.",
+              "rel": [
+                {
+                  "name": "tagged",
+                  "dir": "target->arg",
+                  "action": "mint",
+                  "note": "this object's half: it is tagged with the linked object"
+                }
+              ]
+            },
+            "at": {
+              "type": "integer",
+              "required": true,
+              "summary": "unix ms"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this object's log, the Lamport generation; the highest (gen, author) that counts wins"
+            }
+          },
+          "view": {
+            "tags": "[{label, object, count, by, hidden}] by (label, object); a hidden label is listed only for the owner and admins to show again"
+          }
+        },
+        "base.untag": {
+          "op": 4027580417,
+          "ego": "member",
+          "fold": "commutative",
+          "summary": "A member takes their own tag off. The same (author, label) slot as base.tag, so the later gen wins; another member's tag of the label stands.",
+          "args": {
+            "label": {
+              "type": "string",
+              "required": true,
+              "maxLength": 64,
+              "grammar": "lowercase letters, digits and `_` (Unicode letters and digits); what Hashtags.extract yields from `#Label`",
+              "summary": "the tag, normalised: refused if not, never rewritten"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this object's log, the Lamport generation; the highest (gen, author) that counts wins"
+            }
+          },
+          "edges": [
+            {
+              "rel": "tagged",
+              "from": "target",
+              "to": "fold:tag.object",
+              "action": "invalidate",
+              "note": "this author's half; the edge stands while another member's tag names the same object"
+            }
+          ]
+        },
+        "base.hideTag": {
+          "op": 4027580418,
+          "ego": "owner|role:admin",
+          "fold": "commutative",
+          "summary": "The owner or an admin hides a label for everyone, or shows it again. Per label, LWW by (gen, author). A hidden label is in no view a member draws and never reaches the exterior; its members' tags are kept. A kind with no roles facet has the owner as its only curator.",
+          "args": {
+            "label": {
+              "type": "string",
+              "required": true,
+              "maxLength": 64,
+              "grammar": "lowercase letters, digits and `_` (Unicode letters and digits); what Hashtags.extract yields from `#Label`",
+              "summary": "the tag, normalised: refused if not, never rewritten"
+            },
+            "hidden": {
+              "type": "integer",
+              "required": true,
+              "summary": "1 hides; 0 shows again"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this object's log, the Lamport generation; the highest (gen, author) that counts wins"
+            }
+          }
+        },
+        "base.setTagged": {
+          "op": 4027580419,
+          "ego": "member",
+          "fold": "commutative",
+          "summary": "The linked object's half: a member of THIS object states that the object named is tagged with it, under that label. Keyed (object, label), LWW by gen with base.clearTagged.",
+          "args": {
+            "object": {
+              "type": "string",
+              "summary": "the tagged object's id, hex",
+              "required": true,
+              "rel": [
+                {
+                  "name": "tagged",
+                  "dir": "arg->target",
+                  "action": "mint",
+                  "note": "the linked object's half, its consent"
+                }
+              ]
+            },
+            "label": {
+              "type": "string",
+              "required": true,
+              "maxLength": 64,
+              "grammar": "lowercase letters, digits and `_` (Unicode letters and digits); what Hashtags.extract yields from `#Label`",
+              "summary": "the tag, normalised: refused if not, never rewritten"
+            },
+            "at": {
+              "type": "integer",
+              "required": true,
+              "summary": "unix ms"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this object's log, the Lamport generation; the highest (gen, author) that counts wins"
+            }
+          },
+          "view": {
+            "taggedBy": "[{object, label}]: the objects tagged with this one, this object's halves"
+          }
+        },
+        "base.clearTagged": {
+          "op": 4027580420,
+          "ego": "member",
+          "fold": "commutative",
+          "summary": "Withdraw this object's half. The tagged object keeps its own, now unconfirmed.",
+          "args": {
+            "object": {
+              "type": "string",
+              "summary": "the tagged object's id, hex",
+              "required": true,
+              "rel": [
+                {
+                  "name": "tagged",
+                  "dir": "arg->target",
+                  "action": "invalidate"
+                }
+              ]
+            },
+            "label": {
+              "type": "string",
+              "required": true,
+              "maxLength": 64,
+              "grammar": "lowercase letters, digits and `_` (Unicode letters and digits); what Hashtags.extract yields from `#Label`",
+              "summary": "the tag, normalised: refused if not, never rewritten"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this object's log, the Lamport generation; the highest (gen, author) that counts wins"
             }
           }
         }
