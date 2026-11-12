@@ -252,6 +252,8 @@ struct NewDraft: Equatable {
     var audience: Audience = .onlyMe
     var outside = ""                      // the exterior's description
     var door: DoorChoice = .review        // how an outsider gets in
+    var precision: UInt8 = 0              // Event: how much of its Place shows outside
+    var readableOutside = false           // Post: its body reads outside
 
     /// Read/write the slot a declared field binds to. One total switch, so a new
     /// `MintKey` cannot be half-wired.
@@ -957,6 +959,49 @@ struct NewCard: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("door-\(door == .none ? "none" : door.rawValue)")
             .accessibilityAddTraits(session.draft.door == door ? .isSelected : [])
+        }
+        if kind == .event { placeShown }
+        if kind == .post {
+            Toggle("Readable outside", isOn: $session.draft.readableOutside)
+                .font(.body)
+                .tint(tint)
+                .padding(.horizontal, 20)
+                .frame(height: CircleButton.discSize)
+                .accessibilityIdentifier("outside-readable")
+        }
+    }
+
+    /// An Event's Place, outside: how much of where it is shows to someone not in it.
+    @ViewBuilder private var placeShown: some View {
+        Text("WHERE, OUTSIDE")
+            .font(.system(.footnote, design: .monospaced))
+            .tracking(2)
+            .foregroundStyle(Theme.textTertiary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .accessibilityAddTraits(.isHeader)
+        ForEach(PlaceShown.allCases) { shown in
+            Button {
+                session.draft.precision = shown.rawValue
+            } label: {
+                HStack(spacing: 14) {
+                    Circle()
+                        .strokeBorder(session.draft.precision == shown.rawValue ? tint : Theme.hairline,
+                                      lineWidth: session.draft.precision == shown.rawValue ? 6 : 1)
+                        .frame(width: 20, height: 20)
+                    Text(shown.title)
+                        .font(.body)
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 20)
+                .frame(height: CircleButton.discSize)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("outside-place-\(shown.rawValue)")
+            .accessibilityAddTraits(session.draft.precision == shown.rawValue ? .isSelected : [])
         }
     }
 

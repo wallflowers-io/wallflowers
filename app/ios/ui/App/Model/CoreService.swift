@@ -857,7 +857,43 @@ final class CoreService: ObservableObject {
     func refreshExteriors() -> Task<Void, Never> {
         offMain("re-read exteriors", { c in try c.exteriors() }) { s, fresh in
             if fresh != s.exteriors { s.exteriors = fresh }
+            s.refreshOutsides(fresh.filter(\.hosted).map(\.object))
         }
+    }
+
+    /// THE OUTSIDES OF THE EXTERIORS THAT REACHED ME (`media.hosted`), by object: each one's
+    /// hosted document, which core fetches at most every few minutes. Its own read, so a slow
+    /// relay never holds up the exteriors.
+    @Published private(set) var outsides: [String: OutsideRow] = [:]
+
+    @discardableResult
+    func refreshOutsides(_ objects: [String]) -> Task<Void, Never> {
+        offMain("re-read what outsiders see", { c in
+            Dictionary(objects.compactMap { o in (try? c.exteriorFields(objectId: o)).flatMap { $0 }.map { (o, $0) } },
+                       uniquingKeysWith: { a, _ in a })
+        }) { s, fresh in
+            if fresh != s.outsides { s.outsides = fresh }
+        }
+    }
+
+    /// One object's outside, fetched now: a page opening, or a pull to refresh.
+    func refreshOutside(_ objectId: String) async -> OutsideRow? {
+        let c = core
+        do {
+            let row = try await Task.detached { try c.refreshExterior(objectId: objectId) }.value
+            if outsides[objectId] != row { outsides[objectId] = row }
+            return row
+        } catch { readFailed("read what outsiders see", error); return outsides[objectId] }
+    }
+
+    /// The bytes of one picture, clip or document of an outside: inline, or fetched by its
+    /// reference through core (`mediaGet`, which keeps it), off the main thread.
+    func outsideData(_ m: OutsideMedia) async -> Data? {
+        if let ref = m.ref {
+            let c = core
+            return try? await Task.detached(priority: .utility) { try c.mediaGet(r: ref) }.value
+        }
+        return m.inline.isEmpty ? nil : Data(base64Encoded: m.inline)
     }
 
     @discardableResult
@@ -3007,12 +3043,13 @@ final class CoreService: ObservableObject {
 // relay round trip, so each runs off the main thread.
 
 extension CoreService {
-    /// Write an object's visibility and, when it reaches outward, its exterior. The name is the
-    /// object's own. (The exterior's still is by reference only, and waits on the blob store's
-    /// client, #56.)
+    /// Write an object's visibility and, when it reaches outward, its exterior: the words, the
+    /// way in, an Event's Place precision (a geohash length; 0, the venue's name alone) and
+    /// whether a Post reads outside. The name is the object's own.
     @discardableResult
     func setOutside(_ objectId: String, name: String, visibility: String,
-                    description: String, door: DoorChoice) async -> Bool {
+                    description: String, door: DoorChoice,
+                    precision: UInt8 = 0, readableOutside: Bool = false) async -> Bool {
         let c = core
         // At Only Me there is no outside to write: the dial alone.
         let outsideName = visibility == "private" ? "" : name
@@ -3020,7 +3057,8 @@ extension CoreService {
             // One Save: only what changed is written, and sent once.
             _ = try await Task.detached {
                 try c.setOutside(objectId: objectId, visibility: visibility, name: outsideName,
-                                 description: description, door: door.rawValue)
+                                 description: description, door: door.rawValue,
+                                 precision: precision, readableOutside: readableOutside)
             }.value
             return true
         } catch { fail("write what outsiders see", error, object: objectId); return false }
@@ -3031,7 +3069,8 @@ extension CoreService {
     func setOutside(_ objectId: String, from draft: NewDraft) async {
         guard draft.audience == .connections || draft.audience == .network else { return }
         await setOutside(objectId, name: draft.name, visibility: draft.audience.rawValue,
-                         description: draft.outside, door: draft.door)
+                         description: draft.outside, door: draft.door,
+                         precision: draft.precision, readableOutside: draft.readableOutside)
     }
 
     /// Ask to join an object whose exterior reached me.

@@ -20,3 +20,23 @@ enum DoorChoice: String, CaseIterable, Identifiable {
         }
     }
 }
+
+/// How much of an Event's Place its outside shows (`base.setExterior.precision`, a geohash
+/// length; Ralph, 12 Nov). The owner's choice; the venue's name is shown at every step.
+enum PlaceShown: UInt8, CaseIterable, Identifiable {
+    case name = 0
+    case area = 5
+    case street = 7
+    case exact = 9
+
+    var id: UInt8 { rawValue }
+
+    var title: String {
+        switch self {
+        case .name:   return "Venue name only"
+        case .area:   return "The area"
+        case .street: return "The street"
+        case .exact:  return "Exact place"
+        }
+    }
+}

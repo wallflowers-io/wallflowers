@@ -819,11 +819,11 @@ struct LifeView: View {
     /// its exterior (#76), not a detail.
     private func openObject(_ item: FeedItem) {
         // Not held: its exterior, if one reached me (#76). Otherwise nothing is behind it.
+        let origin = CardFrames.shared.frames[item.id]
         guard let oid = item.objectID else {
-            if let ext = item.exterior { ExteriorDetail.open(ext.object, core: core, shell: shell) }
+            if let ext = item.exterior { KindExteriors.open(ext.object, core: core, shell: shell, origin: origin) }
             return
         }
-        let origin = CardFrames.shared.frames[item.id]
         switch item.category {
         case .groups: path.append(GroupLink(id: oid))
         case .events: EventInterior.open(oid, core: core, graph: graph, shell: shell, origin: origin)
