@@ -195,6 +195,14 @@ fn exterior(icd: &serde_json::Value) {
         .iter()
         .map(|k| format!("{:?}", k.as_str().expect("a kind")))
         .collect();
+    let fields = &icd["facets"]["exterior"]["fields"];
+    let list = |v: &serde_json::Value, what: &str| -> String {
+        let w: Vec<String> = v.as_array().unwrap_or_else(|| panic!("the ICD states {what}")).iter().map(|k| format!("{:?}", k.as_str().expect("a field"))).collect();
+        format!("&[{}]", w.join(", "))
+    };
+    // The salt is the quoted string in media.hosted.seed: stated once, in the ICD.
+    let seed = icd["media"]["hosted"]["seed"].as_str().expect("the ICD states media.hosted.seed");
+    let hosted_salt = seed.split("salt = \"").nth(1).and_then(|r| r.split('"').next()).expect("media.hosted.seed names its salt").to_string();
     let door = &icd["mls"]["door"];
     let text = |k: &str| door[k].as_str().unwrap_or_else(|| panic!("the ICD states mls.door.{k}")).to_string();
     let num = |k: &str| door[k].as_u64().unwrap_or_else(|| panic!("the ICD states mls.door.{k}"));
@@ -213,7 +221,12 @@ fn exterior(icd: &serde_json::Value) {
              pub const DOOR_MODES: &[&str] = {};\npub const DECISIONS: &[&str] = {};\n\
              /// `mls.door`.\n\
              pub const DOOR_ADDRESS_DOMAIN: &str = {:?};\npub const DOOR_SEAL_DOMAIN: &str = {:?};\npub const DOOR_SIG_DOMAIN: &str = {:?};\n\
-             pub const DOOR_BUNDLES: usize = {};\npub const DOOR_NOTE_MAX: usize = {};\n",
+             pub const DOOR_BUNDLES: usize = {};\npub const DOOR_NOTE_MAX: usize = {};\n\
+             /// `base.setExterior.precision`'s bounds.\npub const PRECISION_MIN: u8 = {};\npub const PRECISION_MAX: u8 = {};\n\
+             /// `facets.exterior.fields`: what the hosted document may hold, per kind.\n\
+             pub const FIELDS_EVERY: &[&str] = {};\npub const FIELDS_EVENT: &[&str] = {};\n\
+             pub const FIELDS_POST: &[&str] = {};\npub const FIELDS_POST_READABLE: &[&str] = {};\n\
+             /// `media.hosted`.\npub const HOSTED_MAX_BYTES: usize = {};\npub const HOSTED_SALT: &str = {:?};\n",
             on.join(", "),
             op(&facet["base.setExterior"], "base.setExterior"),
             op(&facet["base.setDoor"], "base.setDoor"),
@@ -231,6 +244,14 @@ fn exterior(icd: &serde_json::Value) {
             text("sigDomain"),
             num("bundles"),
             num("noteMax"),
+            facet["base.setExterior"]["args"]["precision"]["min"].as_u64().expect("the ICD states base.setExterior.precision's min"),
+            facet["base.setExterior"]["args"]["precision"]["max"].as_u64().expect("the ICD states base.setExterior.precision's max"),
+            list(&fields["every"], "facets.exterior.fields.every"),
+            list(&fields["event"]["always"], "facets.exterior.fields.event.always"),
+            list(&fields["post"]["always"], "facets.exterior.fields.post.always"),
+            list(&fields["post"]["readable"], "facets.exterior.fields.post.readable"),
+            icd["media"]["hosted"]["maxBytes"].as_u64().expect("the ICD states media.hosted.maxBytes"),
+            hosted_salt,
         ),
     )
     .expect("icd_exterior.rs");

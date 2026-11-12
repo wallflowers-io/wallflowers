@@ -638,7 +638,7 @@ mod tests {
         let ints = move || [1, 0, 2, -1, now].into_iter().map(ArgVal::Int);
         let texts = |named: &[String]| {
             // A 64-hex key or id, a roster member's key (the probe's `other`), then what the
-            // ICD names, then the plain shapes and a 32-byte key in base64url.
+            // ICD names, then the plain shapes and a 32-byte key in base64url and in base64.
             [hex::encode(PROBE_OTHER), hex::encode(PROBE_OWNER)]
                 .into_iter()
                 .chain(named.iter().cloned())
@@ -646,6 +646,8 @@ mod tests {
                 .chain(documents())
                 .chain(["x".into(), String::new(), "[]".into(), "{}".into(), "1".into()])
                 .chain([base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([7u8; 32])])
+                // A content key as a reference carries one: 32 bytes, standard base64 (media.hosted).
+                .chain([base64::engine::general_purpose::STANDARD.encode([7u8; 32])])
                 .map(ArgVal::Text)
                 .collect::<Vec<_>>()
         };

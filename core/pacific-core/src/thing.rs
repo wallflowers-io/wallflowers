@@ -203,7 +203,7 @@ impl Reach {
 }
 
 /// Geohash base-32. Deliberately excludes a, i, l, o — the characters that misread.
-const GEOHASH_ALPHABET: &[u8] = b"0123456789bcdefghjkmnpqrstuvwxyz";
+pub(crate) const GEOHASH_ALPHABET: &[u8] = b"0123456789bcdefghjkmnpqrstuvwxyz";
 
 /// The coarsest and finest areas a listing may publish.
 ///
@@ -219,43 +219,7 @@ pub const AREA_MAX_PRECISION: usize = 5;
 /// averages out across a seller's history, so a network that sees ten of your offers can
 /// triangulate you. Truncation is idempotent — the same cell every time, nothing to average.
 pub fn geohash(lat: f64, lon: f64, precision: usize) -> String {
-    let p = precision.clamp(AREA_MIN_PRECISION, AREA_MAX_PRECISION);
-    let (mut lat_lo, mut lat_hi) = (-90.0_f64, 90.0_f64);
-    let (mut lon_lo, mut lon_hi) = (-180.0_f64, 180.0_f64);
-    let mut out = String::with_capacity(p);
-    let mut bit = 0;
-    let mut idx = 0usize;
-    let mut even = true; // longitude first, per the spec
-
-    while out.len() < p {
-        if even {
-            let mid = (lon_lo + lon_hi) / 2.0;
-            if lon > mid {
-                idx = idx * 2 + 1;
-                lon_lo = mid;
-            } else {
-                idx *= 2;
-                lon_hi = mid;
-            }
-        } else {
-            let mid = (lat_lo + lat_hi) / 2.0;
-            if lat > mid {
-                idx = idx * 2 + 1;
-                lat_lo = mid;
-            } else {
-                idx *= 2;
-                lat_hi = mid;
-            }
-        }
-        even = !even;
-        bit += 1;
-        if bit == 5 {
-            out.push(GEOHASH_ALPHABET[idx] as char);
-            bit = 0;
-            idx = 0;
-        }
-    }
-    out
+    crate::geo::geohash(lat, lon, precision.clamp(AREA_MIN_PRECISION, AREA_MAX_PRECISION))
 }
 
 /// Reject anything that is not a publishable area: wrong charset, or fine enough to be a

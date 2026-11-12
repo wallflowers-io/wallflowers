@@ -198,7 +198,14 @@
       "signed": "\"pacific-relay-host:v1\\n\" ‖ key (32 bytes) ‖ len (u64 BE) ‖ at (u64 BE, unix seconds), by the key; the relay checks it against the key itself and holds no table",
       "windowSecs": 900,
       "upload": "the relay presigns a PUT of exactly len bytes WITHOUT if-none-match for a MediaHost it has checked; a MediaPut stays create-only. Refused: stale (at outside windowSecs of the relay's clock), malformed_tag, not_a_key, malformed_sig, bad_signature",
-      "fetch": "as detached, by the key alone: a reader needs no group. Unlike detached, a reader fetches again to see a change"
+      "fetch": "as detached, by the key alone: a reader needs no group. Unlike detached, a reader fetches again to see a change",
+      "maxBytes": 1048576,
+      "document": {
+        "plaintext": "{\"doc\": D, \"sig\": S}, JSON: D a JSON text, {\"object\": the object's id, \"version\": unix ms, \"kind\": the kind's name, and \"fields\" (facets.exterior.fields) or \"tombstone\": 1}; S the owner identity's Ed25519 signature over \"wallflowers-hosted-exterior:v1\\n\" ‖ D, hex",
+        "version": "the writer's clock in unix ms, and never below the last version it wrote or read: a reader keeps the highest it has opened and refuses one below it, so an old copy cannot be replayed",
+        "check": "a reader opens it with hostedSecret, refuses an object that is not the pointer's, a signature that is not the carried exterior's owner's, a version below the last, or a field its kind does not list",
+        "tombstone": "written when the object narrows to private: the outside is withdrawn where it is read, as the carried copy is"
+      }
     }
   },
   "conformance": {
@@ -1201,6 +1208,70 @@
         "post",
         "note"
       ],
+      "fields": {
+        "summary": "What the hosted exterior document (media.hosted) holds of each kind: everything a non-member reads, so the outside is complete and joining adds only the right to author (Ralph, 12 Nov: \"the forwarded exterior object should be Luma feature complete\"). Built from the fold by one builder (pacific-core exterior::fields_of), so it follows the interior on an owner device's next sync. A media field is an object holding a MediaRef as its op flattens it (MediaRef::to_args) under the field's own prefix: photo, banner, clip, document, asset. A reader refuses a key its kind does not list",
+        "never": "comments, who is going, who reacted, the request queue, sales and redemptions, the ticket account and terms",
+        "every": [
+          "name",
+          "description",
+          "photo"
+        ],
+        "event": {
+          "always": [
+            "title",
+            "startMs",
+            "endMs",
+            "tz",
+            "allDay",
+            "recurrence",
+            "status",
+            "online",
+            "videoUrl",
+            "descriptor",
+            "descriptorFormat",
+            "venue",
+            "point",
+            "hosts",
+            "lineup",
+            "acts",
+            "banner",
+            "clip",
+            "photos",
+            "ticketUrl",
+            "priceCents",
+            "currency",
+            "capacity",
+            "open",
+            "going"
+          ],
+          "point": "the Place's point (the Event's own location, else its venue Place's) truncated to base.setExterior's precision, as a geohash; absent at 0",
+          "hosts": "the owner and each role:admin, as {key, name}: the name a snapshot of what the owner's device knows",
+          "going": "distinct roster identities, less the owner and every role:admin and role:admitter"
+        },
+        "post": {
+          "always": [
+            "title",
+            "excerpt",
+            "form",
+            "icon",
+            "iconMime",
+            "banner",
+            "bannerMime",
+            "bannerAlt",
+            "retracted",
+            "readableOutside"
+          ],
+          "readable": [
+            "body",
+            "bodyFormat",
+            "link",
+            "document",
+            "documentName",
+            "assets"
+          ],
+          "readableSummary": "only when base.setExterior's readableOutside is 1; assets as [{id, asset, alt, at}], removed ids excluded"
+        }
+      },
       "ops": {
         "base.setExterior": {
           "op": 4027449344,
@@ -1285,6 +1356,25 @@
               "type": "string",
               "pattern": "^[0-9a-f]{64}$",
               "summary": "the door's X25519 public key, 64 hex: the half of base.setDoor's key a stranger seals a request to (mls.door). Absent: no door, and the exterior offers no way to ask"
+            },
+            "precision": {
+              "type": "integer",
+              "min": 0,
+              "max": 12,
+              "summary": "an Event's: how much of its Place's point the outside shows, as a geohash length (Ralph, 12 Nov: \"the owner can set the geohash specificity of the Event's Place\"). 0 or absent: the venue's name and no point"
+            },
+            "readableOutside": {
+              "type": "integer",
+              "summary": "a Post's: 1, the outside carries its body, link, document and assets (the poster's option); 0 or absent: the teaser alone"
+            },
+            "hostedKey": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "summary": "the hosted exterior document's key (media.hosted.key): where every reader fetches the outside, overwritten in place. Absent: the outside is this row alone"
+            },
+            "hostedSecret": {
+              "type": "string",
+              "summary": "with hostedKey: the document's content key, base64 (media.hosted.contentKey). An exterior is read outside the roster, so this key travels with it"
             }
           }
         },

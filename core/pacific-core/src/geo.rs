@@ -211,6 +211,48 @@ pub fn set_location_args(source: &LocationSource) -> Args {
     a
 }
 
+
+/// A position as a geohash of `p` characters, unclamped: the caller decides how much to show
+/// (a Thing's market area clamps, `thing::geohash`; an Event's outside is its owner's choice).
+pub fn geohash(lat: f64, lon: f64, p: usize) -> String {
+    let (mut lat_lo, mut lat_hi) = (-90.0_f64, 90.0_f64);
+    let (mut lon_lo, mut lon_hi) = (-180.0_f64, 180.0_f64);
+    let mut out = String::with_capacity(p);
+    let mut bit = 0;
+    let mut idx = 0usize;
+    let mut even = true; // longitude first, per the spec
+
+    while out.len() < p {
+        if even {
+            let mid = (lon_lo + lon_hi) / 2.0;
+            if lon > mid {
+                idx = idx * 2 + 1;
+                lon_lo = mid;
+            } else {
+                idx *= 2;
+                lon_hi = mid;
+            }
+        } else {
+            let mid = (lat_lo + lat_hi) / 2.0;
+            if lat > mid {
+                idx = idx * 2 + 1;
+                lat_lo = mid;
+            } else {
+                idx *= 2;
+                lat_hi = mid;
+            }
+        }
+        even = !even;
+        bit += 1;
+        if bit == 5 {
+            out.push(crate::thing::GEOHASH_ALPHABET[idx] as char);
+            bit = 0;
+            idx = 0;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
