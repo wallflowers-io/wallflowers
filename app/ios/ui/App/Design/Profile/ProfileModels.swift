@@ -9,7 +9,7 @@
 //  type, or the service that feeds it.
 //
 //  Non-egoic GroupObjects — events, listings, posts — are NOT profiles and do not
-//  come through here. They get `Design/Detail/`, a modal that inherits the newitem
+//  come through here. They get `Design/Kind/`, a modal that inherits the newitem
 //  surface, because what you need from a thing that happened is its media, who
 //  made it, and what people said about it — not an identity page.
 //
@@ -32,7 +32,7 @@ import SwiftUI
 /// something with a self that persists between encounters. An event, a listing and
 /// a post are not that: they are things that HAPPEN or are POSTED, they have an
 /// author rather than an identity, and they get the detail modal
-/// (`Design/Detail/`) instead. An event briefly had a case here; it gave a flyer
+/// (`Design/Kind/`) instead. An event briefly had a case here; it gave a flyer
 /// the geometry of a name plate and its stats a card that could only say
 /// "members", which is what a borrowed IA looks like from the inside.
 enum ProfileKind {

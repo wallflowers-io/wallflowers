@@ -1,4 +1,4 @@
-//  DetailModels.swift
+//  KindModels.swift
 //  The maximised detail's data contract — the PIE half of the module.
 //
 //  PURPOSE. One component renders every NON-EGOIC GroupObject a card stands for:
@@ -27,10 +27,10 @@ import SwiftUI
 // MARK: - Page values
 
 /// The media block, the title, and the kind's rows under them.
-struct DetailHeadline {
+struct KindHeadline {
     let title: String
     /// The owner writes the title where it is printed, not in a second copy below it.
-    var titleEdit: DetailEdit? = nil
+    var titleEdit: KindEdit? = nil
     /// The picture's REAL bytes, decoded from the fold. nil = there is none, and
     /// the slot shows the stripes rather than implying one is loading.
     var photo: Data? = nil
@@ -41,32 +41,32 @@ struct DetailHeadline {
     var area: [ProfileGeoCell] = []
     /// The pictures after the first, in order: an event's photos, a listing's, a
     /// post's assets.
-    var gallery: [DetailPicture] = []
+    var gallery: [KindPicture] = []
     /// A document read in place — a Post's PDF.
-    var document: DetailDocument? = nil
+    var document: KindDocument? = nil
     /// The kind's values, in the order they should read.
-    var rows: [DetailRow] = []
+    var rows: [KindRow] = []
     /// What the owner can add here. Empty for everyone else.
-    var adds: [DetailAdd] = []
+    var adds: [KindAdd] = []
     /// A way INTO the object, past its page — a Place's POV.
-    var inside: DetailInside? = nil
+    var inside: KindInside? = nil
 }
 
 /// A screen the page opens over itself; `view` is handed the close.
-struct DetailInside {
+struct KindInside {
     let label: String
     let glyph: String
     let id: String
     let view: (@escaping () -> Void) -> AnyView
 }
 
-struct DetailPicture: Identifiable {
+struct KindPicture: Identifiable {
     let id: Int
     let data: Data
     var alt: String = ""
 }
 
-struct DetailDocument {
+struct KindDocument {
     let name: String
     let data: Data
 }
@@ -75,7 +75,7 @@ struct DetailDocument {
 /// that needs one is the wrong value — and nothing at all when it is empty. The
 /// OWNER sees every row that has an `edit`, labelled, in the creator's row grammar,
 /// so an unset field is a place to write rather than a hole.
-struct DetailRow: Identifiable {
+struct KindRow: Identifiable {
     let label: String
     let value: String
     /// Opens in the browser.
@@ -84,21 +84,21 @@ struct DetailRow: Identifiable {
     var place: String? = nil
     /// The author wrote it in markdown (`descriptorFormat`, `bodyFormat`).
     var markdown = false
-    var edit: DetailEdit? = nil
+    var edit: KindEdit? = nil
 
     var id: String { edit.map { "\($0.op).\($0.arg)" } ?? label }
 }
 
 /// How the owner writes a row: the op that replaces whole, its ICD arg, and the arg's
 /// current wire value, which the editor opens on.
-struct DetailEdit {
+struct KindEdit {
     let op: String
     let arg: String
-    let input: DetailInput
+    let input: KindInput
     let current: String
 }
 
-enum DetailInput: Equatable {
+enum KindInput: Equatable {
     case line
     case multiline
     /// The ICD's words for the arg (`CoreService.vocabulary`).
@@ -108,14 +108,14 @@ enum DetailInput: Equatable {
     case date
 }
 
-enum DetailAdd: String, Identifiable {
+enum KindAdd: String, Identifiable {
     case picture, document
     var id: String { rawValue }
 }
 
 /// Whose it is. A door, not a credit line: tapping it opens their profile, which
 /// is the one place the egoic IA belongs.
-struct DetailAuthor {
+struct KindAuthor {
     let id: String
     let name: String
     let initials: String
@@ -128,7 +128,7 @@ struct DetailAuthor {
 /// One comment on the object's comments section. Flat on purpose: the threaded
 /// projection exists (`ForumThreadRow.depth`) and this page deliberately does not
 /// use it — a nested tree is a room's IA, and this is a detail with comments on it.
-struct DetailComment: Identifiable {
+struct KindComment: Identifiable {
     let id: String
     /// The author's identity hex — their profile's door.
     let authorID: String
@@ -150,15 +150,15 @@ struct DetailComment: Identifiable {
 /// Async because the real binders fold/read off-main; each answer is the CURRENT
 /// truth, nil where the world cannot honestly answer.
 @MainActor
-protocol DetailSource {
+protocol KindSource {
     /// The media block and rows. nil = the object is gone or unreadable, and the
     /// page shows nothing rather than a fabricated shell.
-    func headline() async -> DetailHeadline?
+    func headline() async -> KindHeadline?
     /// Whose it is. nil = the fold does not name an author — no credit line is
     /// better than a guessed one.
-    func author() async -> DetailAuthor?
+    func author() async -> KindAuthor?
     /// What has been said, oldest first.
-    func comments() async -> [DetailComment]
+    func comments() async -> [KindComment]
     /// Whether this device holds the object's comments section — the section is on
     /// the page exactly when it does, said-in or not.
     func commentsHeld() async -> Bool
@@ -166,26 +166,26 @@ protocol DetailSource {
     func post(_ text: String) async -> Bool
     /// Hand this object outward — GOLD. Absent (the default) means this object has
     /// nowhere to go, and the disc stays glyphless and dead rather than lying.
-    func shareTargets() async -> [DetailShareTarget]
-    func share(to target: DetailShareTarget) async -> Bool
+    func shareTargets() async -> [KindShareTarget]
+    func share(to target: KindShareTarget) async -> Bool
     /// The owner writes one row. false = it did not land.
-    func edit(_ edit: DetailEdit, to value: String) async -> Bool
+    func edit(_ edit: KindEdit, to value: String) async -> Bool
     /// The owner adds a picture, or sets the document.
     func addPicture(_ data: Data) async -> Bool
     func setDocument(_ data: Data, name: String) async -> Bool
 }
 
 /// Somewhere an object can be handed to — a Space you are actually in.
-struct DetailShareTarget: Identifiable, Hashable {
+struct KindShareTarget: Identifiable, Hashable {
     let id: String
     let name: String
 }
 
-extension DetailSource {
-    func shareTargets() async -> [DetailShareTarget] { [] }
-    func share(to target: DetailShareTarget) async -> Bool { false }
+extension KindSource {
+    func shareTargets() async -> [KindShareTarget] { [] }
+    func share(to target: KindShareTarget) async -> Bool { false }
     func commentsHeld() async -> Bool { false }
-    func edit(_ edit: DetailEdit, to value: String) async -> Bool { false }
+    func edit(_ edit: KindEdit, to value: String) async -> Bool { false }
     func addPicture(_ data: Data) async -> Bool { false }
     func setDocument(_ data: Data, name: String) async -> Bool { false }
 }

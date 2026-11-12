@@ -1,4 +1,4 @@
-//  DetailSurface.swift
+//  KindPage.swift
 //  The maximised detail — a card, grown to the whole screen.
 //
 //  THE CARD MAXIMISES. Tapping an ObjectCard does not raise a modal over the feed:
@@ -9,7 +9,7 @@
 //
 //  IT IS A ShellSurface, hosted UNDER the disc row, so RED · GOLD · BLUE stay the
 //  page's own buttons — close · share · say something — exactly as on the modal it
-//  replaces (`DetailSession`).
+//  replaces (`KindSession`).
 //
 //  WHAT THE PAGE IS. Media, the title, the kind's rows, its pictures and document,
 //  whose it is, and what people said. A VIEWER sees values only. The OWNER sees
@@ -26,8 +26,8 @@ import PhotosUI
 import PDFKit
 import UniformTypeIdentifiers
 
-struct DetailSurface: View {
-    @ObservedObject var session: DetailSession
+struct KindPage: View {
+    @ObservedObject var session: KindSession
     /// Close without keeping. Routed to the SAME action RED takes, so a swipe and
     /// the disc can never disagree about what closing means.
     var onClose: () -> Void
@@ -196,7 +196,7 @@ struct DetailSurface: View {
     @ViewBuilder private var title: some View {
         Group {
             if let edit = session.headline?.titleEdit {
-                DetailTitleField(edit: edit, busy: session.saving == edit.op + "." + edit.arg) { value in
+                KindTitleField(edit: edit, busy: session.saving == edit.op + "." + edit.arg) { value in
                     await session.edit(edit, to: value)
                 }
             } else {
@@ -219,7 +219,7 @@ struct DetailSurface: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(session.headline?.rows ?? []) { row in
                 if let edit = row.edit {
-                    DetailEditRow(row: row, edit: edit, busy: session.saving == row.id) { value in
+                    KindEditRow(row: row, edit: edit, busy: session.saving == row.id) { value in
                         await session.edit(edit, to: value)
                     }
                 } else if !row.value.isEmpty {
@@ -231,7 +231,7 @@ struct DetailSurface: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    @ViewBuilder private func valueRow(_ row: DetailRow) -> some View {
+    @ViewBuilder private func valueRow(_ row: KindRow) -> some View {
         let text = Text(row.markdown
                         ? (try? AttributedString(markdown: row.value,
                                                  options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
@@ -258,7 +258,7 @@ struct DetailSurface: View {
         .accessibilityIdentifier("detail-row-\(row.id)")
     }
 
-    private func insideBar(_ way: DetailInside) -> some View {
+    private func insideBar(_ way: KindInside) -> some View {
         Button { inside = true } label: {
             HStack(spacing: 12) {
                 Image(systemName: way.glyph)
@@ -345,7 +345,7 @@ struct DetailSurface: View {
                 Text(doc.name)
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
                     .foregroundStyle(Theme.textTertiary)
-                DetailPDF(document: pdf)
+                KindPDF(document: pdf)
                     .frame(height: (width - 36) * 1.3)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
@@ -360,7 +360,7 @@ struct DetailSurface: View {
     /// AUTHOR — a door to their profile, which is where the egoic IA lives. It
     /// closes this page first: the profile is a page in LIFE's stack, and a route
     /// fired into a surface that is still leaving is silently dropped.
-    private func authorBar(_ author: DetailAuthor) -> some View {
+    private func authorBar(_ author: KindAuthor) -> some View {
         Button {
             let id = author.id, isSpace = author.isSpace
             onClose()
@@ -425,7 +425,7 @@ struct DetailSurface: View {
         }
     }
 
-    private func commentRow(_ comment: DetailComment) -> some View {
+    private func commentRow(_ comment: KindComment) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Avatar(initials: comment.initials, tint: Theme.fill, size: 32,
                    photo: comment.photo, color: comment.color)
@@ -520,9 +520,9 @@ struct DetailSurface: View {
 /// SET — and the page reads the value back from the fold. Every commit is a
 /// sequenced write that is kept for good, so a value is sent once: never per step
 /// of a wheel, and never twice for one Return (which also blurs the field).
-private struct DetailEditRow: View {
-    let row: DetailRow
-    let edit: DetailEdit
+private struct KindEditRow: View {
+    let row: KindRow
+    let edit: KindEdit
     let busy: Bool
     /// Whether it landed.
     var commit: (String) async -> Bool
@@ -616,8 +616,8 @@ private struct DetailEditRow: View {
 }
 
 /// The owner's title: the heading itself is the field.
-private struct DetailTitleField: View {
-    let edit: DetailEdit
+private struct KindTitleField: View {
+    let edit: KindEdit
     let busy: Bool
     /// Whether it landed.
     var commit: (String) async -> Bool
@@ -649,7 +649,7 @@ private struct DetailTitleField: View {
 }
 
 /// PDFKit's reader, for a Post's document.
-private struct DetailPDF: UIViewRepresentable {
+private struct KindPDF: UIViewRepresentable {
     let document: PDFDocument
 
     func makeUIView(context: Context) -> PDFView {

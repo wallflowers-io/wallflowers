@@ -16,28 +16,28 @@ enum PostDetail {
     static var tint: Color { PaletteStore.base(4) }
 
     static func open(_ objectId: String, core: CoreService, shell: ShellState, origin: CGRect? = nil) {
-        shell.beginNew(DetailSession(noun: "post",
+        shell.beginNew(KindSession(noun: "post",
                                      source: PostDetailSource(core: core, objectId: objectId),
                                      origin: origin))
     }
 }
 
 @MainActor
-struct PostDetailSource: DetailSource {
+struct PostDetailSource: KindSource {
     let core: CoreService
     let objectId: String
 
     private var row: PostRow? { core.posts.first { $0.id == objectId } }
 
-    func headline() async -> DetailHeadline? {
+    func headline() async -> KindHeadline? {
         guard let row else { return nil }
         if row.retracted {
-            return DetailHeadline(title: row.title, rows: [DetailRow(label: "Retracted", value: "RETRACTED")])
+            return KindHeadline(title: row.title, rows: [KindRow(label: "Retracted", value: "RETRACTED")])
         }
         let more = core.postDetail(objectId)
         let owner = core.isGroupOwner(objectId)
         let profile = "post.setProfile"
-        let r = DetailBind.rows(owner: owner, core: core)
+        let r = KindBind.rows(owner: owner, core: core)
         let markdown = more?.bodyFormat == "markdown"
 
         var rows = [
@@ -50,34 +50,34 @@ struct PostDetailSource: DetailSource {
             rows.append(r.choice("Body format", more?.bodyFormat ?? "", op: profile, arg: "bodyFormat"))
         }
         if row.reactions > 0 {
-            rows.append(DetailRow(label: "Reactions", value: "\(row.reactions) reactions"))
+            rows.append(KindRow(label: "Reactions", value: "\(row.reactions) reactions"))
         }
 
         let document = more?.document.flatMap { d in
-            Data(base64Encoded: d.data).map { DetailDocument(name: d.alt, data: $0) }
+            Data(base64Encoded: d.data).map { KindDocument(name: d.alt, data: $0) }
         }
-        return DetailHeadline(
+        return KindHeadline(
             title: row.title,
-            titleEdit: owner ? DetailEdit(op: profile, arg: "title", input: .line, current: row.title) : nil,
+            titleEdit: owner ? KindEdit(op: profile, arg: "title", input: .line, current: row.title) : nil,
             photo: row.banner.isEmpty ? nil : Data(base64Encoded: row.banner),
-            gallery: DetailBind.pictures(more?.assets ?? []),
+            gallery: KindBind.pictures(more?.assets ?? []),
             document: document,
             rows: rows,
             adds: owner ? [.picture, .document] : [])
     }
 
-    func author() async -> DetailAuthor? {
-        DetailBind.author(of: objectId, core: core, tint: PostDetail.tint)
+    func author() async -> KindAuthor? {
+        KindBind.author(of: objectId, core: core, tint: PostDetail.tint)
     }
 
-    func comments() async -> [DetailComment] { DetailBind.comments(of: objectId, core: core) }
+    func comments() async -> [KindComment] { KindBind.comments(of: objectId, core: core) }
 
     func commentsHeld() async -> Bool { core.index.commentsForum(of: objectId) != nil }
 
-    func post(_ text: String) async -> Bool { await DetailBind.post(text, on: objectId, core: core) }
+    func post(_ text: String) async -> Bool { await KindBind.post(text, on: objectId, core: core) }
 
-    func edit(_ edit: DetailEdit, to value: String) async -> Bool {
-        await DetailBind.edit(edit, to: value, on: objectId, core: core)
+    func edit(_ edit: KindEdit, to value: String) async -> Bool {
+        await KindBind.edit(edit, to: value, on: objectId, core: core)
     }
 
     func addPicture(_ data: Data) async -> Bool {
@@ -88,7 +88,7 @@ struct PostDetailSource: DetailSource {
     func setDocument(_ data: Data, name: String) async -> Bool {
         let b64 = data.base64EncodedString()
         guard b64.count <= core.ceiling("post.setDocument", "document") else {
-            core.fail("attach the document", DetailRefusal.tooLarge, object: objectId)
+            core.fail("attach the document", KindRefusal.tooLarge, object: objectId)
             return false
         }
         return await core.apply(objectId, op: "post.setDocument",
@@ -97,7 +97,7 @@ struct PostDetailSource: DetailSource {
     }
 }
 
-enum DetailRefusal: LocalizedError {
+enum KindRefusal: LocalizedError {
     case tooLarge
     var errorDescription: String? { "it is larger than the ICD's ceiling for it" }
 }

@@ -1,4 +1,4 @@
-//  DetailSession.swift
+//  KindSession.swift
 //  The detail modal's session — a `ShellSurface`, so the three discs become its
 //  buttons exactly as they do for a mint.
 //
@@ -30,19 +30,19 @@ import Combine
 /// thing you typed. `.action` is for a subject with no log to speak into: a world
 /// listing nobody has minted commits by BECOMING one, and there is no comment
 /// field on that surface at all, because there is nowhere for a comment to go.
-enum DetailPrimary {
+enum KindPrimary {
     case comment
     case action(label: String, run: () async -> NewExit?)
 }
 
 @MainActor
-final class DetailSession: ObservableObject, Identifiable, ShellSurface {
+final class KindSession: ObservableObject, Identifiable, ShellSurface {
     let id = UUID()
     /// The word the discard warning names — "event", "listing", "post". Given by
     /// the host, because only the host knows what it opened.
     let noun: String
-    let primary: DetailPrimary
-    private let source: any DetailSource
+    let primary: KindPrimary
+    private let source: any KindSource
 
     /// Whether this surface has anything to type INTO. A `.action` surface has no
     /// log behind it, so it shows no field rather than one that goes nowhere.
@@ -50,12 +50,12 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
 
     /// What the world answered. All nil/empty until the first load lands; the
     /// surface renders what it has and never a placeholder for what it hasn't.
-    @Published private(set) var headline: DetailHeadline?
-    @Published private(set) var author: DetailAuthor?
-    @Published private(set) var comments: [DetailComment] = []
+    @Published private(set) var headline: KindHeadline?
+    @Published private(set) var author: KindAuthor?
+    @Published private(set) var comments: [KindComment] = []
     /// The device holds the comments section, so the page has one.
     @Published private(set) var commentsHeld = false
-    @Published private(set) var targets: [DetailShareTarget] = []
+    @Published private(set) var targets: [KindShareTarget] = []
 
     /// The comment being typed. This is the only thing on the surface a person can
     /// destroy by closing, so it is the only thing the discard warning is about.
@@ -74,7 +74,7 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
     /// into. nil = it was not opened from a card, and it rises in place.
     let origin: CGRect?
 
-    init(noun: String, source: any DetailSource, primary: DetailPrimary = .comment,
+    init(noun: String, source: any KindSource, primary: KindPrimary = .comment,
          origin: CGRect? = nil) {
         self.noun = noun
         self.source = source
@@ -88,7 +88,7 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
     /// the page cannot show a value the log does not hold.
     /// false = it did not land, so the row may send the same value again.
     @discardableResult
-    func edit(_ edit: DetailEdit, to value: String) async -> Bool {
+    func edit(_ edit: KindEdit, to value: String) async -> Bool {
         guard saving == nil, value != edit.current else { return false }
         saving = edit.op + "." + edit.arg
         let landed = await source.edit(edit, to: value)
@@ -99,14 +99,14 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
 
     func addPicture(_ data: Data) async {
         guard saving == nil else { return }
-        saving = DetailAdd.picture.rawValue
+        saving = KindAdd.picture.rawValue
         if await source.addPicture(data) { headline = await source.headline() }
         saving = nil
     }
 
     func setDocument(_ data: Data, name: String) async {
         guard saving == nil else { return }
-        saving = DetailAdd.document.rawValue
+        saving = KindAdd.document.rawValue
         if await source.setDocument(data, name: name) { headline = await source.headline() }
         saving = nil
     }
@@ -203,7 +203,7 @@ final class DetailSession: ObservableObject, Identifiable, ShellSurface {
 
     // MARK: Sharing
 
-    func share(to target: DetailShareTarget) async {
+    func share(to target: KindShareTarget) async {
         guard await source.share(to: target) else { return }
         withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { sharing = false }
     }

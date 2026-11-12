@@ -3,7 +3,7 @@
 //
 //  EVENTS ARE NOT PROFILES. People and Spaces are egoic and get `Design/Profile`.
 //  An event is a thing that HAPPENS — it has an author rather than an identity — so
-//  it gets `Design/Detail`, the page every non-egoic GroupObject shares.
+//  it gets `Design/Kind/`, the page every non-egoic GroupObject shares.
 //
 //  WHAT THE BINDER ANSWERS: the flyer and its photos, when · whether it is still on
 //  · where · how to join online · who is playing · the words, then whose night it
@@ -28,7 +28,7 @@ enum EventDetail {
     static func open(_ objectId: String, core: CoreService, graph: GraphService,
                      shell: ShellState, origin: CGRect? = nil) {
         let source = EventDetailSource(core: core, graph: graph, objectId: objectId)
-        shell.beginNew(DetailSession(noun: "event", source: source, origin: origin))
+        shell.beginNew(KindSession(noun: "event", source: source, origin: origin))
     }
 
     /// Open a WORLD LISTING — an RA or ArtRabbit row nobody has minted. It has no
@@ -44,7 +44,7 @@ enum EventDetail {
             return
         }
         let source = ListingDetailSource(listing: listing)
-        let session = DetailSession(
+        let session = KindSession(
             noun: "listing", source: source,
             primary: .action(label: "Mint") {
                 guard listing.startMs > 0,
@@ -72,47 +72,47 @@ enum EventDetail {
 
 /// The binder for a minted Event GroupObject.
 @MainActor
-struct EventDetailSource: DetailSource {
+struct EventDetailSource: KindSource {
     let core: CoreService
     let graph: GraphService
     let objectId: String
 
     private var row: EventRow? { core.events.first { $0.id == objectId } }
 
-    func headline() async -> DetailHeadline? {
+    func headline() async -> KindHeadline? {
         guard let row else { return nil }
         let more = core.eventDetail(objectId)
         let owner = core.isGroupOwner(objectId)
         let profile = "event.setProfile"
-        let r = DetailBind.rows(owner: owner, core: core)
+        let r = KindBind.rows(owner: owner, core: core)
         let allDay = more?.allDay ?? false
 
-        var rows: [DetailRow] = []
+        var rows: [KindRow] = []
         if owner {
-            rows.append(DetailRow(label: "Starts", value: "",
-                                  edit: DetailEdit(op: profile, arg: "startMs", input: .date,
+            rows.append(KindRow(label: "Starts", value: "",
+                                  edit: KindEdit(op: profile, arg: "startMs", input: .date,
                                                    current: String(row.startMs))))
-            rows.append(DetailRow(label: "Ends", value: "",
-                                  edit: DetailEdit(op: profile, arg: "endMs", input: .date,
+            rows.append(KindRow(label: "Ends", value: "",
+                                  edit: KindEdit(op: profile, arg: "endMs", input: .date,
                                                    current: row.endMs > 0 ? String(row.endMs) : "")))
-            rows.append(DetailRow(label: "All day", value: "",
-                                  edit: DetailEdit(op: profile, arg: "allDay", input: .toggle,
+            rows.append(KindRow(label: "All day", value: "",
+                                  edit: KindEdit(op: profile, arg: "allDay", input: .toggle,
                                                    current: allDay ? "1" : "")))
             rows.append(r.text("Time zone", more?.tz ?? "", op: profile, arg: "tz"))
             rows.append(r.choice("Status", more?.status ?? "", op: profile, arg: "status"))
         } else {
-            rows.append(DetailRow(label: "When", value: EventWhen.label(startMs: row.startMs, endMs: row.endMs,
+            rows.append(KindRow(label: "When", value: EventWhen.label(startMs: row.startMs, endMs: row.endMs,
                                                                         allDay: allDay)))
             // Scheduled is what an event is unless it says otherwise; only the
             // exceptions are news.
             if let s = more?.status, !s.isEmpty, s != "scheduled" {
-                rows.append(DetailRow(label: "Status", value: s.uppercased()))
+                rows.append(KindRow(label: "Status", value: s.uppercased()))
             }
         }
         let series = core.recurrenceLabel(row.recurrence)
-        rows.append(DetailRow(label: "Series", value: series))
+        rows.append(KindRow(label: "Series", value: series))
         if !row.venuePlace.isEmpty, !owner {
-            rows.append(DetailRow(label: "Venue", value: await venueName() ?? row.venuePlaceName,
+            rows.append(KindRow(label: "Venue", value: await venueName() ?? row.venuePlaceName,
                                   place: row.venuePlace))
         } else {
             rows.append(r.text("Venue", row.venue, op: profile, arg: "venue"))
@@ -126,16 +126,16 @@ struct EventDetailSource: DetailSource {
             // The profile's lineup, one name a line on the wire.
             rows.append(owner
                 ? r.text("Lineup", row.lineup.joined(separator: "\n"), op: profile, arg: "lineup", input: .multiline)
-                : DetailRow(label: "Lineup", value: row.lineup.joined(separator: " · ")))
+                : KindRow(label: "Lineup", value: row.lineup.joined(separator: " · ")))
         } else {
-            rows.append(DetailRow(label: "Lineup", value: acts.joined(separator: " · ")))
+            rows.append(KindRow(label: "Lineup", value: acts.joined(separator: " · ")))
         }
         // NOT the MLS roster: an event's members are its organiser and door staff,
         // and calling those attendance would be a confident falsehood. This counts
         // signed `contact.inviteReply` legs, and a night nobody has answered says
         // nothing rather than "0 going".
         let going = core.attendees(of: objectId).count
-        if going > 0 { rows.append(DetailRow(label: "Going", value: "\(going) going")) }
+        if going > 0 { rows.append(KindRow(label: "Going", value: "\(going) going")) }
         rows.append(r.text("Describe", row.descriptor, op: profile, arg: "descriptor", input: .multiline,
                            markdown: more?.descriptorFormat == "markdown"))
         if owner {
@@ -145,11 +145,11 @@ struct EventDetailSource: DetailSource {
         // The flyer: `event.setBanner`, else the list row's still.
         let banner = more?.banner.flatMap { Data(base64Encoded: $0.data) }
             ?? (row.banner.isEmpty ? nil : Data(base64Encoded: row.banner))
-        return DetailHeadline(
+        return KindHeadline(
             title: row.title,
-            titleEdit: owner ? DetailEdit(op: profile, arg: "title", input: .line, current: row.title) : nil,
+            titleEdit: owner ? KindEdit(op: profile, arg: "title", input: .line, current: row.title) : nil,
             photo: banner,
-            gallery: DetailBind.pictures(more?.photos ?? []),
+            gallery: KindBind.pictures(more?.photos ?? []),
             rows: rows,
             adds: owner ? [.picture] : [])
     }
@@ -157,25 +157,25 @@ struct EventDetailSource: DetailSource {
     /// The Space that published the night. The `created` edge already existed on
     /// the host's own log; nothing on the event read it back, so an event used to
     /// be a dead end for its own publisher.
-    func author() async -> DetailAuthor? {
+    func author() async -> KindAuthor? {
         guard let host = core.creatorOfObject(objectId) else { return nil }
         let name = host.name.isEmpty ? "Host" : host.name
-        return DetailAuthor(id: host.id, name: name, initials: Avatar.initials(name),
+        return KindAuthor(id: host.id, name: name, initials: Avatar.initials(name),
                             isSpace: true, color: EventDetail.tint)
     }
 
     /// The event's comments section: the Forum minted with it in the comments role
     /// (ICD `kinds.event.parts`), read flat. None until the device holds it.
-    func comments() async -> [DetailComment] { DetailBind.comments(of: objectId, core: core) }
+    func comments() async -> [KindComment] { KindBind.comments(of: objectId, core: core) }
 
     func commentsHeld() async -> Bool { core.index.commentsForum(of: objectId) != nil }
 
     func post(_ text: String) async -> Bool {
-        await DetailBind.post(text, on: objectId, core: core)
+        await KindBind.post(text, on: objectId, core: core)
     }
 
-    func edit(_ edit: DetailEdit, to value: String) async -> Bool {
-        await DetailBind.edit(edit, to: value, on: objectId, core: core)
+    func edit(_ edit: KindEdit, to value: String) async -> Bool {
+        await KindBind.edit(edit, to: value, on: objectId, core: core)
     }
 
     func addPicture(_ data: Data) async -> Bool {
@@ -184,9 +184,9 @@ struct EventDetailSource: DetailSource {
 
     /// The Spaces this can reach: groups whose roster I am in. A Space I merely
     /// know of is not a place I can speak for.
-    func shareTargets() async -> [DetailShareTarget] {
+    func shareTargets() async -> [KindShareTarget] {
         core.spaces
-            .map { DetailShareTarget(id: $0.id, name: $0.name.isEmpty ? String($0.id.prefix(8)) : $0.name) }
+            .map { KindShareTarget(id: $0.id, name: $0.name.isEmpty ? String($0.id.prefix(8)) : $0.name) }
     }
 
     /// The edge is authored on the SPACE's log, not the event's — `peer`, which the
@@ -194,7 +194,7 @@ struct EventDetailSource: DetailSource {
     /// `created` edge it wrote; ours says only that we are affiliated. Two claims
     /// about the same object, each on its author's own log, neither able to
     /// overwrite the other.
-    func share(to target: DetailShareTarget) async -> Bool {
+    func share(to target: KindShareTarget) async -> Bool {
         guard let row else { return false }
         core.setAffiliation(target.id, peer: objectId, rel: "peer", name: row.title)
         return true
@@ -223,18 +223,18 @@ struct EventDetailSource: DetailSource {
 /// and no log to comment on. What it has is a picture at a URL and the values
 /// printed on it.
 @MainActor
-struct ListingDetailSource: DetailSource {
+struct ListingDetailSource: KindSource {
     let listing: ReferenceListing
 
-    func headline() async -> DetailHeadline? {
-        let rows = [DetailRow(label: "When", value: listing.whenLabel),
-                    DetailRow(label: "Venue", value: listing.venueName ?? ""),
-                    DetailRow(label: "Lineup", value: listing.lineup ?? "")]
-        return DetailHeadline(title: listing.title, photoURL: listing.flyerURL, rows: rows)
+    func headline() async -> KindHeadline? {
+        let rows = [KindRow(label: "When", value: listing.whenLabel),
+                    KindRow(label: "Venue", value: listing.venueName ?? ""),
+                    KindRow(label: "Lineup", value: listing.lineup ?? "")]
+        return KindHeadline(title: listing.title, photoURL: listing.flyerURL, rows: rows)
     }
 
-    func author() async -> DetailAuthor? { nil }
-    func comments() async -> [DetailComment] { [] }
+    func author() async -> KindAuthor? { nil }
+    func comments() async -> [KindComment] { [] }
     func post(_ text: String) async -> Bool { false }
 }
 
