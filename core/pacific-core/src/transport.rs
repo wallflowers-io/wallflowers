@@ -30,6 +30,10 @@ pub fn drains() -> u64 {
 /// A live ws session to the relay. One connection; the caller drives publish/drain.
 pub struct RelaySession {
     ws: WebSocketStream<MaybeTlsStream<TcpStream>>,
+    /// How long an exchange waits for its next frame before the relay counts as silent.
+    /// None: as long as TCP holds (a session for one operation). The link's sessions set
+    /// it, since a session they keep must not hang every operation behind a dead peer.
+    idle: Option<std::time::Duration>,
 }
 
 /// rustls 0.23 panics on the first `wss://` handshake unless a process-level
@@ -53,7 +57,40 @@ impl RelaySession {
         let (ws, _) = connect_async_with_config(url, None, true)  // true: TCP_NODELAY
             .await
             .map_err(|e| CoreError::Transport(format!("connect {url}: {e}")))?;
-        Ok(Self { ws })
+        Ok(Self { ws, idle: None })
+    }
+
+    /// The longest an exchange waits for its next frame (`RelaySession::idle`).
+    pub(crate) fn with_idle(mut self, idle: std::time::Duration) -> Self {
+        self.idle = Some(idle);
+        self
+    }
+
+    /// Declare vocabulary `v` (`pacific_wire::V_*`) once, with an empty `Sub`, so no later
+    /// request on this session is gated. The declared level only rises (the relay keeps the
+    /// highest a connection has declared).
+    pub(crate) async fn declare(&mut self, v: u8) -> Result<(), CoreError> {
+        self.send(&Frame::Sub { tags: vec![], since: 0, v }).await?;
+        while self.next_frame().await? != Frame::Eose {}
+        Ok(())
+    }
+
+    /// A websocket ping: the keepalive of a session held between operations.
+    pub(crate) async fn ping(&mut self) -> Result<(), CoreError> {
+        self.ws
+            .send(Ws::Ping(Vec::new().into()))
+            .await
+            .map_err(|e| CoreError::Transport(e.to_string()))
+    }
+
+    /// Read whatever arrives on a session between operations (a pong, a frame nobody asked
+    /// for): Ok when anything was heard, Err when the socket has ended.
+    pub(crate) async fn idle_read(&mut self) -> Result<(), CoreError> {
+        match self.ws.next().await {
+            Some(Ok(Ws::Close(_))) | None => Err(CoreError::Transport("relay closed".into())),
+            Some(Ok(_)) => Ok(()),
+            Some(Err(e)) => Err(CoreError::Transport(e.to_string())),
+        }
     }
 
     async fn send(&mut self, f: &Frame) -> Result<(), CoreError> {
@@ -65,7 +102,13 @@ impl RelaySession {
 
     async fn next_frame(&mut self) -> Result<Frame, CoreError> {
         loop {
-            match self.ws.next().await {
+            let next = match self.idle {
+                None => self.ws.next().await,
+                Some(d) => tokio::time::timeout(d, self.ws.next())
+                    .await
+                    .map_err(|_| CoreError::Transport(format!("the relay was silent for {} ms", d.as_millis())))?,
+            };
+            match next {
                 Some(Ok(Ws::Text(t))) => {
                     return Frame::from_json(&t)
                         .map_err(|e| CoreError::Transport(format!("bad frame: {e}")))
@@ -88,7 +131,12 @@ impl RelaySession {
     /// publish is never slot-gated, so a rejecting ack here is a protocol
     /// violation — surfaced loudly, never swallowed.
     pub async fn publish(&mut self, addr: &Address, blob_b64: String) -> Result<u64, CoreError> {
-        self.send(&addr.pub_frame(blob_b64, false)).await?;
+        self.publish_frame(&addr.pub_frame(blob_b64, false)).await
+    }
+
+    /// [`RelaySession::publish`] for a `Pub` already built and signed by its caller.
+    pub(crate) async fn publish_frame(&mut self, frame: &Frame) -> Result<u64, CoreError> {
+        self.send(frame).await?;
         loop {
             match self.next_frame().await? {
                 Frame::Ack { seq, ok: true, .. } => return Ok(seq),
@@ -116,7 +164,12 @@ impl RelaySession {
         addr: &Address,
         blob_b64: String,
     ) -> Result<Option<u64>, CoreError> {
-        self.send(&addr.pub_frame(blob_b64, true)).await?;
+        self.publish_commit_frame(&addr.pub_frame(blob_b64, true)).await
+    }
+
+    /// [`RelaySession::publish_commit`] for a commit `Pub` already built and signed.
+    pub(crate) async fn publish_commit_frame(&mut self, frame: &Frame) -> Result<Option<u64>, CoreError> {
+        self.send(frame).await?;
         loop {
             match self.next_frame().await? {
                 Frame::Ack { seq, ok: true, .. } => return Ok(Some(seq)),
@@ -156,6 +209,7 @@ impl RelaySession {
             v: 0,
         })
         .await?;
+        self.send_clear().await?;
         let mut out = Vec::new();
         loop {
             match self.next_frame().await? {
@@ -164,7 +218,24 @@ impl RelaySession {
                 _ => continue,
             }
         }
+        self.read_clear().await?;
         Ok(out)
+    }
+
+    /// AFTER A DRAIN, NO TAG STAYS LIVE. A `Sub` replaces the connection's subscriptions
+    /// (relay lib.rs, `subscribe`), so the drained tags would go on being pushed to a session
+    /// kept for later operations, and a later drain of the same tag would meet its live
+    /// copy beside its replay. An empty `Sub`, pipelined behind the drain's, ends them; its
+    /// `Eose` is the last frame of the exchange.
+    async fn send_clear(&mut self) -> Result<(), CoreError> {
+        self.send(&Frame::Sub { tags: vec![], since: 0, v: 0 }).await
+    }
+
+    /// The clearing `Sub`'s `Eose`, and nothing before it: what arrived between the drain's
+    /// `Eose` and it was pushed live, not asked for.
+    async fn read_clear(&mut self) -> Result<(), CoreError> {
+        while self.next_frame().await? != Frame::Eose {}
+        Ok(())
     }
 
     /// SUB to each `(tag, since)` in turn, all sent before any answer is read, and drain each
@@ -173,10 +244,14 @@ impl RelaySession {
     /// n-th Sub's; a live message for an earlier Sub's tag, pushed after its `Eose`, is not
     /// asked for here and is left to its tag's next drain.
     pub async fn drain_many(&mut self, subs: &[(String, u64)]) -> Result<Vec<Vec<(String, u64, String)>>, CoreError> {
+        if subs.is_empty() {
+            return Ok(vec![]);
+        }
         for (tag, since) in subs {
             DRAINS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             self.send(&Frame::Sub { tags: vec![tag.clone()], since: *since, v: 0 }).await?;
         }
+        self.send_clear().await?;
         let mut out = Vec::with_capacity(subs.len());
         for (tag, _) in subs {
             let mut got = Vec::new();
@@ -189,6 +264,7 @@ impl RelaySession {
             }
             out.push(got);
         }
+        self.read_clear().await?;
         Ok(out)
     }
 
@@ -218,7 +294,12 @@ impl RelaySession {
     /// `mls.door.relay`'s bound; wait for `Ack`. A refusal carries its reason: `too_large`
     /// past the knock cap, `rate_limited` past this connection's knocks an hour.
     pub async fn publish_door(&mut self, door: &Address, blob_b64: String) -> Result<u64, CoreError> {
-        self.send(&door.door_pub_frame(blob_b64)).await?;
+        self.publish_door_frame(&door.door_pub_frame(blob_b64)).await
+    }
+
+    /// [`RelaySession::publish_door`] for a knock already built and signed.
+    pub(crate) async fn publish_door_frame(&mut self, frame: &Frame) -> Result<u64, CoreError> {
+        self.send(frame).await?;
         loop {
             match self.next_frame().await? {
                 Frame::Ack { seq, ok: true, .. } => return Ok(seq),
@@ -240,10 +321,14 @@ impl RelaySession {
         &mut self,
         subs: &[(String, u64)],
     ) -> Result<(Vec<Vec<(String, u64, String)>>, std::collections::BTreeMap<String, u64>), CoreError> {
+        if subs.is_empty() {
+            return Ok((vec![], Default::default()));
+        }
         for (tag, since) in subs {
             DRAINS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             self.send(&Frame::Sub { tags: vec![tag.clone()], since: *since, v: pacific_wire::V_DOOR }).await?;
         }
+        self.send_clear().await?;
         let mut out = Vec::with_capacity(subs.len());
         let mut evicted = std::collections::BTreeMap::new();
         for (tag, _) in subs {
@@ -260,6 +345,7 @@ impl RelaySession {
             }
             out.push(got);
         }
+        self.read_clear().await?;
         Ok((out, evicted))
     }
 
@@ -327,6 +413,25 @@ mod tests {
         }
         let took = started.elapsed();
         assert!(took < std::time::Duration::from_secs(1), "30 drains took {took:?}");
+    }
+
+    /// A session kept after a drain is not left subscribed: a publish to the drained tag
+    /// from someone else pushes nothing onto it (#144).
+    #[tokio::test]
+    async fn after_a_drain_no_tag_stays_live_on_the_session() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { relay::serve(listener).await });
+        let url = format!("ws://{addr}");
+        let at = Address::from_seed(&[0x44u8; 32]);
+
+        let mut kept = RelaySession::connect(&url).await.unwrap();
+        assert!(kept.drain(vec![at.tag_hex()], 0).await.unwrap().is_empty());
+        assert!(kept.drain_many(&[(at.tag_hex(), 0)]).await.unwrap()[0].is_empty());
+        let mut other = RelaySession::connect(&url).await.unwrap();
+        other.publish(&at, blob_b64(b"later")).await.unwrap();
+        let pushed = tokio::time::timeout(std::time::Duration::from_millis(300), kept.next_frame()).await;
+        assert!(pushed.is_err(), "the drained tag was still live: {pushed:?}");
     }
 
     #[tokio::test]
