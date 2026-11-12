@@ -61,6 +61,7 @@ fn main() {
     links(&icd);
     vocabularies(&icd);
     exterior(&icd);
+    tags(&icd);
 }
 
 /// EVERY CLOSED VOCABULARY AND CEILING, into OUT_DIR/icd_vocabularies.rs: `(op, arg, words)`
@@ -234,4 +235,32 @@ fn exterior(icd: &serde_json::Value) {
         ),
     )
     .expect("icd_exterior.rs");
+}
+
+/// `facets.tags`, into OUT_DIR/icd_tags.rs: the op ids, the label's ceiling and the caps.
+fn tags(icd: &serde_json::Value) {
+    let facet = &icd["facets"]["tags"]["ops"];
+    let op = |o: &str| facet[o]["op"].as_u64().unwrap_or_else(|| panic!("the ICD states {o}'s op"));
+    let tag = &facet["base.tag"];
+    let num = |k: &str| tag[k].as_u64().unwrap_or_else(|| panic!("the ICD states base.tag's {k}"));
+    let label_max = tag["args"]["label"]["maxLength"].as_u64().expect("the ICD states base.tag's label.maxLength");
+    let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_tags.rs");
+    std::fs::write(
+        out,
+        format!(
+            "/// `facets.tags` op ids.\n\
+             pub const OP_TAG: u32 = {};\npub const OP_UNTAG: u32 = {};\npub const OP_HIDE_TAG: u32 = {};\n\
+             pub const OP_SET_TAGGED: u32 = {};\npub const OP_CLEAR_TAGGED: u32 = {};\n\
+             /// `base.tag`'s `label.maxLength`, `maxLive` and `maxPerAuthor`.\n\
+             pub const LABEL_MAX: usize = {label_max};\npub const MAX_LIVE: usize = {};\npub const MAX_PER_AUTHOR: usize = {};\n",
+            op("base.tag"),
+            op("base.untag"),
+            op("base.hideTag"),
+            op("base.setTagged"),
+            op("base.clearTagged"),
+            num("maxLive"),
+            num("maxPerAuthor"),
+        ),
+    )
+    .expect("icd_tags.rs");
 }
