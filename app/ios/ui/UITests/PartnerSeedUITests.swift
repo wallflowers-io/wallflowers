@@ -67,11 +67,15 @@ final class PartnerSeedUITests: XCTestCase {
         app.openLifeSearch()
         app.buttons["jewel-groups"].tap()
         XCTAssertTrue(poll(30) { self.listRows().count > 0 }, "GROUPS lists Spaces")
+        // Partner by partner, the seed mints each Space before its items: on a fresh sim the
+        // last is minutes in (#112's uploads), so the seed's allowance is shared, as on the feed.
+        let seeded = Date().addingTimeInterval(240)
         for p in pack.partners {
             let row = app.descendants(matching: .any)
                 .matching(NSPredicate(format: "identifier BEGINSWITH 'list-row-' AND label CONTAINS %@", p.name))
                 .firstMatch
-            XCTAssertTrue(row.waitForExistence(timeout: 10), "\(p.name) is a Space")
+            XCTAssertTrue(row.waitForExistence(timeout: max(seeded.timeIntervalSinceNow, 10)),
+                          "\(p.name) is a Space")
         }
         shoot("partner-spaces")
     }
@@ -127,11 +131,13 @@ final class PartnerSeedUITests: XCTestCase {
             for j in 1...7 {
                 let x = cg.width * (15 + i * 10) / 100, y = cg.height * (15 + j * 10) / 100
                 let o = y * stride + x * bpp
-                // 3 bits a channel: enough to tell a photo from a fill and its anti-aliasing.
-                seen.insert(Int(px[o] >> 5) << 6 | Int(px[o + 1] >> 5) << 3 | Int(px[o + 2] >> 5))
+                // Every bit: a dark or greyscale photo has few hues but many values, where a
+                // 3-bit count read it as a fill (Abyss, Story Hole: 4-5 of 8 needed). The pack's
+                // 30 banners give 28-49 of 49; a fill and its title's anti-aliasing a handful.
+                seen.insert(Int(px[o]) << 16 | Int(px[o + 1]) << 8 | Int(px[o + 2]))
             }
         }
-        return seen.count >= 8
+        return seen.count >= 20
     }
 
     private func poll(_ timeout: TimeInterval, _ ok: () -> Bool) -> Bool {
