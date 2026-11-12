@@ -1038,6 +1038,18 @@ public protocol CoreProtocol : AnyObject {
     func listings() throws  -> [ListingRow]
     
     /**
+     * Fetch and open a reference's bytes. Needs only the reference: a device holding no group
+     * for the object reads it as a member does.
+     */
+    func mediaGet(r: MediaRefRow) throws  -> Data
+    
+    /**
+     * Seal `bytes`, upload them to this device's relay's object storage, and return the
+     * reference a Delta carries (O-79, #56). Nothing is written to any object here.
+     */
+    func mediaPut(bytes: Data, mime: String) throws  -> MediaRefRow
+    
+    /**
      * How the membership RECORDS and the MLS tree disagree (§10.3), or `None` when
      * they agree. Group-typed objects only.
      */
@@ -1100,10 +1112,9 @@ public protocol CoreProtocol : AnyObject {
      * includes the kinds that exist but are not minted from a draft — `contact` is
      * formed by PAIRING and `conversation` by consuming a Contact's prekeys.
      *
-     * Mints the object and authors its op-0 profile delta, nothing more. Posture,
-     * tickets, media and venue are separate ops with their own authority; the caller
-     * authors them after, so a failure is reportable against the step that failed
-     * rather than leaving a half-configured object behind one opaque error.
+     * Mints the object, its op-0 profile delta, and the Separate fields the draft carries:
+     * the icon and banner (uploaded first, so a failed upload creates nothing), an Event's
+     * venue and a Place's fix (`Node::mint`). Posture and tickets are the caller's.
      */
     func objectMint(kind: String, draft: MintDraft) throws  -> String
     
@@ -2692,6 +2703,31 @@ open func listings()throws  -> [ListingRow] {
 }
     
     /**
+     * Fetch and open a reference's bytes. Needs only the reference: a device holding no group
+     * for the object reads it as a member does.
+     */
+open func mediaGet(r: MediaRefRow)throws  -> Data {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_media_get(self.uniffiClonePointer(),
+        FfiConverterTypeMediaRefRow.lower(r),$0
+    )
+})
+}
+    
+    /**
+     * Seal `bytes`, upload them to this device's relay's object storage, and return the
+     * reference a Delta carries (O-79, #56). Nothing is written to any object here.
+     */
+open func mediaPut(bytes: Data, mime: String)throws  -> MediaRefRow {
+    return try  FfiConverterTypeMediaRefRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_media_put(self.uniffiClonePointer(),
+        FfiConverterData.lower(bytes),
+        FfiConverterString.lower(mime),$0
+    )
+})
+}
+    
+    /**
      * How the membership RECORDS and the MLS tree disagree (§10.3), or `None` when
      * they agree. Group-typed objects only.
      */
@@ -2805,10 +2841,9 @@ open func objectMessages(objectId: String)throws  -> [ChatMsg] {
      * includes the kinds that exist but are not minted from a draft — `contact` is
      * formed by PAIRING and `conversation` by consuming a Contact's prekeys.
      *
-     * Mints the object and authors its op-0 profile delta, nothing more. Posture,
-     * tickets, media and venue are separate ops with their own authority; the caller
-     * authors them after, so a failure is reportable against the step that failed
-     * rather than leaving a half-configured object behind one opaque error.
+     * Mints the object, its op-0 profile delta, and the Separate fields the draft carries:
+     * the icon and banner (uploaded first, so a failed upload creates nothing), an Event's
+     * venue and a Place's fix (`Node::mint`). Posture and tickets are the caller's.
      */
 open func objectMint(kind: String, draft: MintDraft)throws  -> String {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
@@ -6352,6 +6387,12 @@ public struct EventRow {
      * for what it needs, which are already here and already tested.
      */
     public var recurrence: String
+    /**
+     * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+     * where present they win over this row's inline picture, which stays for older objects.
+     */
+    public var iconRef: MediaRefRow?
+    public var bannerRef: MediaRefRow?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -6381,7 +6422,11 @@ public struct EventRow {
          * a window, so a stored next-occurrence would be stale the moment it was
          * written — the reader asks `recurrence_summary` / `recurrence_occurrences`
          * for what it needs, which are already here and already tested.
-         */recurrence: String) {
+         */recurrence: String, 
+        /**
+         * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+         * where present they win over this row's inline picture, which stays for older objects.
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.id = id
         self.title = title
         self.descriptor = descriptor
@@ -6408,6 +6453,8 @@ public struct EventRow {
         self.hasClip = hasClip
         self.lineup = lineup
         self.recurrence = recurrence
+        self.iconRef = iconRef
+        self.bannerRef = bannerRef
     }
 }
 
@@ -6493,6 +6540,12 @@ extension EventRow: Equatable, Hashable {
         if lhs.recurrence != rhs.recurrence {
             return false
         }
+        if lhs.iconRef != rhs.iconRef {
+            return false
+        }
+        if lhs.bannerRef != rhs.bannerRef {
+            return false
+        }
         return true
     }
 
@@ -6523,6 +6576,8 @@ extension EventRow: Equatable, Hashable {
         hasher.combine(hasClip)
         hasher.combine(lineup)
         hasher.combine(recurrence)
+        hasher.combine(iconRef)
+        hasher.combine(bannerRef)
     }
 }
 
@@ -6559,7 +6614,9 @@ public struct FfiConverterTypeEventRow: FfiConverterRustBuffer {
                 photoCount: FfiConverterInt64.read(from: &buf), 
                 hasClip: FfiConverterBool.read(from: &buf), 
                 lineup: FfiConverterSequenceString.read(from: &buf), 
-                recurrence: FfiConverterString.read(from: &buf)
+                recurrence: FfiConverterString.read(from: &buf), 
+                iconRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf), 
+                bannerRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf)
         )
     }
 
@@ -6590,6 +6647,8 @@ public struct FfiConverterTypeEventRow: FfiConverterRustBuffer {
         FfiConverterBool.write(value.hasClip, into: &buf)
         FfiConverterSequenceString.write(value.lineup, into: &buf)
         FfiConverterString.write(value.recurrence, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.iconRef, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.bannerRef, into: &buf)
     }
 }
 
@@ -7419,6 +7478,12 @@ public struct GroupRow {
      */
     public var cover: String
     public var coverMime: String
+    /**
+     * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+     * where present they win over this row's inline picture, which stays for older objects.
+     */
+    public var iconRef: MediaRefRow?
+    public var bannerRef: MediaRefRow?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -7436,7 +7501,11 @@ public struct GroupRow {
         /**
          * The COVER banner (base64 + mime, "" = none): a still, an animated gif, or a
          * short mp4 — the group page's wall, beside the avatar's face.
-         */cover: String, coverMime: String) {
+         */cover: String, coverMime: String, 
+        /**
+         * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+         * where present they win over this row's inline picture, which stays for older objects.
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.displayName = displayName
         self.shape = shape
         self.presence = presence
@@ -7460,6 +7529,8 @@ public struct GroupRow {
         self.avatarColor = avatarColor
         self.cover = cover
         self.coverMime = coverMime
+        self.iconRef = iconRef
+        self.bannerRef = bannerRef
     }
 }
 
@@ -7536,6 +7607,12 @@ extension GroupRow: Equatable, Hashable {
         if lhs.coverMime != rhs.coverMime {
             return false
         }
+        if lhs.iconRef != rhs.iconRef {
+            return false
+        }
+        if lhs.bannerRef != rhs.bannerRef {
+            return false
+        }
         return true
     }
 
@@ -7563,6 +7640,8 @@ extension GroupRow: Equatable, Hashable {
         hasher.combine(avatarColor)
         hasher.combine(cover)
         hasher.combine(coverMime)
+        hasher.combine(iconRef)
+        hasher.combine(bannerRef)
     }
 }
 
@@ -7596,7 +7675,9 @@ public struct FfiConverterTypeGroupRow: FfiConverterRustBuffer {
                 capturedAt: FfiConverterUInt64.read(from: &buf), 
                 avatarColor: FfiConverterString.read(from: &buf), 
                 cover: FfiConverterString.read(from: &buf), 
-                coverMime: FfiConverterString.read(from: &buf)
+                coverMime: FfiConverterString.read(from: &buf), 
+                iconRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf), 
+                bannerRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf)
         )
     }
 
@@ -7624,6 +7705,8 @@ public struct FfiConverterTypeGroupRow: FfiConverterRustBuffer {
         FfiConverterString.write(value.avatarColor, into: &buf)
         FfiConverterString.write(value.cover, into: &buf)
         FfiConverterString.write(value.coverMime, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.iconRef, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.bannerRef, into: &buf)
     }
 }
 
@@ -8725,6 +8808,100 @@ public func FfiConverterTypeMediaInput_lift(_ buf: RustBuffer) throws -> MediaIn
 #endif
 public func FfiConverterTypeMediaInput_lower(_ value: MediaInput) -> RustBuffer {
     return FfiConverterTypeMediaInput.lower(value)
+}
+
+
+/**
+ * A detached, sealed media reference (O-79, `media.detached`, #56): what a Delta carries in
+ * place of the bytes. `digest` is hex.
+ */
+public struct MediaRefRow {
+    public var mime: String
+    public var digest: String
+    public var bytes: UInt64
+    public var key: String
+    public var secret: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(mime: String, digest: String, bytes: UInt64, key: String, secret: String) {
+        self.mime = mime
+        self.digest = digest
+        self.bytes = bytes
+        self.key = key
+        self.secret = secret
+    }
+}
+
+
+
+extension MediaRefRow: Equatable, Hashable {
+    public static func ==(lhs: MediaRefRow, rhs: MediaRefRow) -> Bool {
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.digest != rhs.digest {
+            return false
+        }
+        if lhs.bytes != rhs.bytes {
+            return false
+        }
+        if lhs.key != rhs.key {
+            return false
+        }
+        if lhs.secret != rhs.secret {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(mime)
+        hasher.combine(digest)
+        hasher.combine(bytes)
+        hasher.combine(key)
+        hasher.combine(secret)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaRefRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaRefRow {
+        return
+            try MediaRefRow(
+                mime: FfiConverterString.read(from: &buf), 
+                digest: FfiConverterString.read(from: &buf), 
+                bytes: FfiConverterUInt64.read(from: &buf), 
+                key: FfiConverterString.read(from: &buf), 
+                secret: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MediaRefRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterString.write(value.digest, into: &buf)
+        FfiConverterUInt64.write(value.bytes, into: &buf)
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterString.write(value.secret, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRefRow_lift(_ buf: RustBuffer) throws -> MediaRefRow {
+    return try FfiConverterTypeMediaRefRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRefRow_lower(_ value: MediaRefRow) -> RustBuffer {
+    return FfiConverterTypeMediaRefRow.lower(value)
 }
 
 
@@ -10766,6 +10943,12 @@ public struct PostRow {
     public var retracted: Bool
     public var reactions: UInt32
     public var comments: UInt32
+    /**
+     * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+     * where present they win over this row's inline picture, which stays for older objects.
+     */
+    public var iconRef: MediaRefRow?
+    public var bannerRef: MediaRefRow?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -10776,7 +10959,11 @@ public struct PostRow {
         /**
          * The author took it down. The words are still in the log; the surface shows the
          * tombstone instead of them.
-         */retracted: Bool, reactions: UInt32, comments: UInt32) {
+         */retracted: Bool, reactions: UInt32, comments: UInt32, 
+        /**
+         * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+         * where present they win over this row's inline picture, which stays for older objects.
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.id = id
         self.title = title
         self.body = body
@@ -10785,6 +10972,8 @@ public struct PostRow {
         self.retracted = retracted
         self.reactions = reactions
         self.comments = comments
+        self.iconRef = iconRef
+        self.bannerRef = bannerRef
     }
 }
 
@@ -10816,6 +11005,12 @@ extension PostRow: Equatable, Hashable {
         if lhs.comments != rhs.comments {
             return false
         }
+        if lhs.iconRef != rhs.iconRef {
+            return false
+        }
+        if lhs.bannerRef != rhs.bannerRef {
+            return false
+        }
         return true
     }
 
@@ -10828,6 +11023,8 @@ extension PostRow: Equatable, Hashable {
         hasher.combine(retracted)
         hasher.combine(reactions)
         hasher.combine(comments)
+        hasher.combine(iconRef)
+        hasher.combine(bannerRef)
     }
 }
 
@@ -10846,7 +11043,9 @@ public struct FfiConverterTypePostRow: FfiConverterRustBuffer {
                 banner: FfiConverterString.read(from: &buf), 
                 retracted: FfiConverterBool.read(from: &buf), 
                 reactions: FfiConverterUInt32.read(from: &buf), 
-                comments: FfiConverterUInt32.read(from: &buf)
+                comments: FfiConverterUInt32.read(from: &buf), 
+                iconRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf), 
+                bannerRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf)
         )
     }
 
@@ -10859,6 +11058,8 @@ public struct FfiConverterTypePostRow: FfiConverterRustBuffer {
         FfiConverterBool.write(value.retracted, into: &buf)
         FfiConverterUInt32.write(value.reactions, into: &buf)
         FfiConverterUInt32.write(value.comments, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.iconRef, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.bannerRef, into: &buf)
     }
 }
 
@@ -12119,6 +12320,12 @@ public struct ThingRow {
      */
     public var photo: String
     public var photoMime: String
+    /**
+     * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+     * where present they win over this row's inline picture, which stays for older objects.
+     */
+    public var iconRef: MediaRefRow?
+    public var bannerRef: MediaRefRow?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -12141,7 +12348,11 @@ public struct ThingRow {
          */area: String, 
         /**
          * The listing's FACE — one still, base64 ("" = none; the card renders stripes).
-         */photo: String, photoMime: String) {
+         */photo: String, photoMime: String, 
+        /**
+         * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+         * where present they win over this row's inline picture, which stays for older objects.
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.id = id
         self.name = name
         self.descriptor = descriptor
@@ -12153,6 +12364,8 @@ public struct ThingRow {
         self.area = area
         self.photo = photo
         self.photoMime = photoMime
+        self.iconRef = iconRef
+        self.bannerRef = bannerRef
     }
 }
 
@@ -12193,6 +12406,12 @@ extension ThingRow: Equatable, Hashable {
         if lhs.photoMime != rhs.photoMime {
             return false
         }
+        if lhs.iconRef != rhs.iconRef {
+            return false
+        }
+        if lhs.bannerRef != rhs.bannerRef {
+            return false
+        }
         return true
     }
 
@@ -12208,6 +12427,8 @@ extension ThingRow: Equatable, Hashable {
         hasher.combine(area)
         hasher.combine(photo)
         hasher.combine(photoMime)
+        hasher.combine(iconRef)
+        hasher.combine(bannerRef)
     }
 }
 
@@ -12229,7 +12450,9 @@ public struct FfiConverterTypeThingRow: FfiConverterRustBuffer {
                 reach: FfiConverterString.read(from: &buf), 
                 area: FfiConverterString.read(from: &buf), 
                 photo: FfiConverterString.read(from: &buf), 
-                photoMime: FfiConverterString.read(from: &buf)
+                photoMime: FfiConverterString.read(from: &buf), 
+                iconRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf), 
+                bannerRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf)
         )
     }
 
@@ -12245,6 +12468,8 @@ public struct FfiConverterTypeThingRow: FfiConverterRustBuffer {
         FfiConverterString.write(value.area, into: &buf)
         FfiConverterString.write(value.photo, into: &buf)
         FfiConverterString.write(value.photoMime, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.iconRef, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.bannerRef, into: &buf)
     }
 }
 
@@ -13330,6 +13555,30 @@ fileprivate struct FfiConverterOptionTypeMediaInput: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeMediaInput.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeMediaRefRow: FfiConverterRustBuffer {
+    typealias SwiftType = MediaRefRow?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMediaRefRow.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMediaRefRow.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -15511,6 +15760,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_listings() != 8380) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_media_get() != 53770) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_media_put() != 34334) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_membership_divergence() != 7125) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15535,7 +15790,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_object_messages() != 61362) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_object_mint() != 2153) {
+    if (uniffi_pacific_ffi_checksum_method_core_object_mint() != 45018) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_object_new() != 13290) {

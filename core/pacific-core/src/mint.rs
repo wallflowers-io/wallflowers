@@ -248,10 +248,23 @@ const fn later(key: MintKey, label: &'static str, input: MintInput) -> MintField
     MintField { key, label, input, required: false, carriage: Carriage::Deferred }
 }
 
+/// A picture's mime, from its first bytes: the stills and animations an icon or banner slot
+/// takes (`pacific_media::Slot::accepts`). `None` for anything else, which the mint refuses.
+pub fn sniff_mime(bytes: &[u8]) -> Option<&'static str> {
+    match bytes {
+        [0xFF, 0xD8, 0xFF, ..] => Some("image/jpeg"),
+        [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, ..] => Some("image/png"),
+        [b'G', b'I', b'F', b'8', b'7' | b'9', b'a', ..] => Some("image/gif"),
+        [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => Some("image/webp"),
+        _ => None,
+    }
+}
+
 /// The MEDIA row: a round face and a wide wall, side by side.
 ///
-/// `Separate` — each rides its kind's OWN media op, authored by `Node::mint` after op 0:
-/// `group.setCover` (9), `event.setMedia` (4), `thing.setPhoto` (3), `post.setMedia` (1).
+/// `Separate` — each rides the base media facet's op, authored by `Node::mint` after op 0
+/// from a detached upload made before the object exists: `base.setIcon`, `base.setBanner`
+/// (#112).
 ///
 /// It is NOT declared on Place, Project or Forum, because those three have no media op —
 /// there is nowhere to put it. Showing the row there anyway would be the exact bug this
@@ -923,11 +936,15 @@ mod tests {
     }
 
     /// `Separate` is the escape hatch from `fields_carry_to_the_wire`, so it is closed by
-    /// hand: every field that claims to ride its own delta must be one something actually
-    /// authors. Adding a `Separate` field without delivering it fails here, which is the
-    /// only thing stopping the carriage flag from becoming a way to silence the test above.
+    /// hand: this pins the list, and `tests/it/o112_mint_delivers.rs` mints every kind with
+    /// every field and reads each Separate one back from the fold, on the minting device and
+    /// on another. This list alone could not catch a field that was declared and never
+    /// authored: every icon and banner folded bare under it (#112).
     ///
-    /// The two that exist, and who delivers them:
+    /// Who delivers them:
+    ///   Icon · Banner → `Node::mint` uploads them first, then authors `base.setIcon` /
+    ///                   `base.setBanner` with the detached refs
+    ///   Event · Place → `Node::mint` authors `event.setVenue`
     ///   Place · Fix   → `Node::mint` authors `base.setLocation` when `placed`
     ///   Forum · Name  → `object_new` writes it into the MLS GroupContext (no delta at all)
     ///   Thing · Stance → the caller authors `thing.setPosture` (op 1) with it as the
@@ -942,7 +959,7 @@ mod tests {
             }
         }
         separate.sort_by_key(|(k, _)| k.type_id());
-        // Delivered by, in order: the kind's own media op after op 0; `object_new`'s
+        // Delivered by, in order: `base.setIcon` / `base.setBanner` after op 0; `object_new`'s
         // GroupContext; `thing.setPosture` (1); `base.setLocation`; `event.setVenue` (7).
         let mut expected = vec![
             (ObjectKind::Group, MintKey::Icon), (ObjectKind::Group, MintKey::Banner),
@@ -971,9 +988,9 @@ mod tests {
     /// act and removing one (by landing its op) is a test failure that reminds you to.
     ///
     /// Why each is deferred:
-    ///   Icon · Banner — the media ops exist on only three kinds (`group.setCover` 9,
-    ///                   `event.setMedia` 4, `thing.setPhoto` 3); Place, Project and Forum
-    ///                   have none. The ROW is universal by design; persistence is not.
+    ///   Icon · Banner — the media facet (`base.setIcon` / `base.setBanner`, #112) is on
+    ///                   Group, Event, Thing and Post; Place, Project and Forum gain the row
+    ///                   when the ICD puts the facet on them.
     ///   Price         — `thing.setPosture` (1) refuses a price on a standing intent, and
     ///                   the mint collects no posture, so a price has nothing to ride.
     ///   Place         — the PLACE row is a placeholder by instruction (18 Aug).

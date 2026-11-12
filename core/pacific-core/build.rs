@@ -109,6 +109,9 @@ fn w98(icd: &serde_json::Value) {
     let max_len = |kind: &str, o: &str, arg: &str| {
         op(kind, o)["args"][arg]["maxLength"].as_u64().unwrap_or_else(|| panic!("the ICD states {o}.{arg}'s maxLength"))
     };
+    let facet_max = |o: &str, arg: &str| {
+        icd["facets"]["media"]["ops"][o]["args"][arg]["maxLength"].as_u64().unwrap_or_else(|| panic!("the ICD states {o}.{arg}'s maxLength"))
+    };
     let words = |v: &serde_json::Value, what: &str| -> String {
         let w: Vec<String> = v.as_object().unwrap_or_else(|| panic!("the ICD states {what}'s vocabulary")).keys().map(|k| format!("{k:?}")).collect();
         format!("&[{}]", w.join(", "))
@@ -130,6 +133,7 @@ fn w98(icd: &serde_json::Value) {
              /// Inline ceilings, base64 characters: each arg's `maxLength`.\n\
              pub const EVENT_BANNER_MAX: usize = {};\npub const EVENT_PHOTO_MAX: usize = {};\npub const EVENT_CLIP_MAX: usize = {};\n\
              pub const POST_DOCUMENT_MAX: usize = {};\npub const POST_ASSET_MAX: usize = {};\n\
+             pub const MEDIA_ICON_MAX: usize = {};\npub const MEDIA_BANNER_MAX: usize = {};\n\
              /// `event.setLineup` acts: `maxItems`.\npub const EVENT_ACTS_MAX: usize = {};\n\
              /// Live members of a keyed set: the op's `maxLive`.\npub const EVENT_PHOTOS_LIVE: usize = {};\npub const POST_ASSETS_LIVE: usize = {};\n\
              /// Text ceilings, characters: each arg's `maxLength`.\n\
@@ -144,6 +148,8 @@ fn w98(icd: &serde_json::Value) {
             max_len("event", "event.setClip", "clip"),
             max_len("post", "post.setDocument", "document"),
             max_len("post", "post.addAsset", "asset"),
+            facet_max("base.setIcon", "icon"),
+            facet_max("base.setBanner", "banner"),
             acts["maxItems"].as_u64().expect("the ICD states setLineup's acts maxItems"),
             live("event", "event.addPhoto"),
             live("post", "post.addAsset"),
