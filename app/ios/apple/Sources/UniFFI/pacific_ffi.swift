@@ -1038,6 +1038,18 @@ public protocol CoreProtocol : AnyObject {
     func listings() throws  -> [ListingRow]
     
     /**
+     * Fetch and open a reference's bytes. Needs only the reference: a device holding no group
+     * for the object reads it as a member does.
+     */
+    func mediaGet(r: MediaRefRow) throws  -> Data
+    
+    /**
+     * Seal `bytes`, upload them to this device's relay's object storage, and return the
+     * reference a Delta carries (O-79, #56). Nothing is written to any object here.
+     */
+    func mediaPut(bytes: Data, mime: String) throws  -> MediaRefRow
+    
+    /**
      * How the membership RECORDS and the MLS tree disagree (§10.3), or `None` when
      * they agree. Group-typed objects only.
      */
@@ -1100,10 +1112,9 @@ public protocol CoreProtocol : AnyObject {
      * includes the kinds that exist but are not minted from a draft — `contact` is
      * formed by PAIRING and `conversation` by consuming a Contact's prekeys.
      *
-     * Mints the object and authors its op-0 profile delta, nothing more. Posture,
-     * tickets, media and venue are separate ops with their own authority; the caller
-     * authors them after, so a failure is reportable against the step that failed
-     * rather than leaving a half-configured object behind one opaque error.
+     * Mints the object, its op-0 profile delta, and the Separate fields the draft carries:
+     * the icon and banner (uploaded first, so a failed upload creates nothing), an Event's
+     * venue and a Place's fix (`Node::mint`). Posture and tickets are the caller's.
      */
     func objectMint(kind: String, draft: MintDraft) throws  -> String
     
@@ -2692,6 +2703,31 @@ open func listings()throws  -> [ListingRow] {
 }
     
     /**
+     * Fetch and open a reference's bytes. Needs only the reference: a device holding no group
+     * for the object reads it as a member does.
+     */
+open func mediaGet(r: MediaRefRow)throws  -> Data {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_media_get(self.uniffiClonePointer(),
+        FfiConverterTypeMediaRefRow.lower(r),$0
+    )
+})
+}
+    
+    /**
+     * Seal `bytes`, upload them to this device's relay's object storage, and return the
+     * reference a Delta carries (O-79, #56). Nothing is written to any object here.
+     */
+open func mediaPut(bytes: Data, mime: String)throws  -> MediaRefRow {
+    return try  FfiConverterTypeMediaRefRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_media_put(self.uniffiClonePointer(),
+        FfiConverterData.lower(bytes),
+        FfiConverterString.lower(mime),$0
+    )
+})
+}
+    
+    /**
      * How the membership RECORDS and the MLS tree disagree (§10.3), or `None` when
      * they agree. Group-typed objects only.
      */
@@ -2805,10 +2841,9 @@ open func objectMessages(objectId: String)throws  -> [ChatMsg] {
      * includes the kinds that exist but are not minted from a draft — `contact` is
      * formed by PAIRING and `conversation` by consuming a Contact's prekeys.
      *
-     * Mints the object and authors its op-0 profile delta, nothing more. Posture,
-     * tickets, media and venue are separate ops with their own authority; the caller
-     * authors them after, so a failure is reportable against the step that failed
-     * rather than leaving a half-configured object behind one opaque error.
+     * Mints the object, its op-0 profile delta, and the Separate fields the draft carries:
+     * the icon and banner (uploaded first, so a failed upload creates nothing), an Event's
+     * venue and a Place's fix (`Node::mint`). Posture and tickets are the caller's.
      */
 open func objectMint(kind: String, draft: MintDraft)throws  -> String {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
@@ -5538,8 +5573,8 @@ public func FfiConverterTypeDeliverableRow_lower(_ value: DeliverableRow) -> Rus
 
 
 /**
- * A delta ready to encode: which op, and its args. Produced by the typed
- * constructors below (or hand-built for a generic path).
+ * A delta ready to author: which op, and its args. Produced by the constructors
+ * below, or built by hand for a generic path (`CoreService.groupAuthor`).
  */
 public struct DeltaDraft {
     public var kind: Kind
@@ -5939,103 +5974,6 @@ public func FfiConverterTypeDoorCheckRow_lift(_ buf: RustBuffer) throws -> DoorC
 #endif
 public func FfiConverterTypeDoorCheckRow_lower(_ value: DoorCheckRow) -> RustBuffer {
     return FfiConverterTypeDoorCheckRow.lower(value)
-}
-
-
-/**
- * A canonically-encoded delta: content address + the bytes that get stored/sent.
- */
-public struct EncodedDelta {
-    /**
-     * SHA-256 of the canonical bytes (hex) — the DeltaId / hash-chain target.
-     */
-    public var deltaId: String
-    public var typeId: UInt32
-    public var opId: UInt32
-    /**
-     * The canonical CBOR envelope, base64-encoded.
-     */
-    public var cborBase64: String
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(
-        /**
-         * SHA-256 of the canonical bytes (hex) — the DeltaId / hash-chain target.
-         */deltaId: String, typeId: UInt32, opId: UInt32, 
-        /**
-         * The canonical CBOR envelope, base64-encoded.
-         */cborBase64: String) {
-        self.deltaId = deltaId
-        self.typeId = typeId
-        self.opId = opId
-        self.cborBase64 = cborBase64
-    }
-}
-
-
-
-extension EncodedDelta: Equatable, Hashable {
-    public static func ==(lhs: EncodedDelta, rhs: EncodedDelta) -> Bool {
-        if lhs.deltaId != rhs.deltaId {
-            return false
-        }
-        if lhs.typeId != rhs.typeId {
-            return false
-        }
-        if lhs.opId != rhs.opId {
-            return false
-        }
-        if lhs.cborBase64 != rhs.cborBase64 {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(deltaId)
-        hasher.combine(typeId)
-        hasher.combine(opId)
-        hasher.combine(cborBase64)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeEncodedDelta: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncodedDelta {
-        return
-            try EncodedDelta(
-                deltaId: FfiConverterString.read(from: &buf), 
-                typeId: FfiConverterUInt32.read(from: &buf), 
-                opId: FfiConverterUInt32.read(from: &buf), 
-                cborBase64: FfiConverterString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: EncodedDelta, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.deltaId, into: &buf)
-        FfiConverterUInt32.write(value.typeId, into: &buf)
-        FfiConverterUInt32.write(value.opId, into: &buf)
-        FfiConverterString.write(value.cborBase64, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeEncodedDelta_lift(_ buf: RustBuffer) throws -> EncodedDelta {
-    return try FfiConverterTypeEncodedDelta.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeEncodedDelta_lower(_ value: EncodedDelta) -> RustBuffer {
-    return FfiConverterTypeEncodedDelta.lower(value)
 }
 
 
@@ -6449,6 +6387,12 @@ public struct EventRow {
      * for what it needs, which are already here and already tested.
      */
     public var recurrence: String
+    /**
+     * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+     * where present they win over this row's inline picture, which stays for older objects.
+     */
+    public var iconRef: MediaRefRow?
+    public var bannerRef: MediaRefRow?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -6478,7 +6422,11 @@ public struct EventRow {
          * a window, so a stored next-occurrence would be stale the moment it was
          * written — the reader asks `recurrence_summary` / `recurrence_occurrences`
          * for what it needs, which are already here and already tested.
-         */recurrence: String) {
+         */recurrence: String, 
+        /**
+         * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+         * where present they win over this row's inline picture, which stays for older objects.
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.id = id
         self.title = title
         self.descriptor = descriptor
@@ -6505,6 +6453,8 @@ public struct EventRow {
         self.hasClip = hasClip
         self.lineup = lineup
         self.recurrence = recurrence
+        self.iconRef = iconRef
+        self.bannerRef = bannerRef
     }
 }
 
@@ -6590,6 +6540,12 @@ extension EventRow: Equatable, Hashable {
         if lhs.recurrence != rhs.recurrence {
             return false
         }
+        if lhs.iconRef != rhs.iconRef {
+            return false
+        }
+        if lhs.bannerRef != rhs.bannerRef {
+            return false
+        }
         return true
     }
 
@@ -6620,6 +6576,8 @@ extension EventRow: Equatable, Hashable {
         hasher.combine(hasClip)
         hasher.combine(lineup)
         hasher.combine(recurrence)
+        hasher.combine(iconRef)
+        hasher.combine(bannerRef)
     }
 }
 
@@ -6656,7 +6614,9 @@ public struct FfiConverterTypeEventRow: FfiConverterRustBuffer {
                 photoCount: FfiConverterInt64.read(from: &buf), 
                 hasClip: FfiConverterBool.read(from: &buf), 
                 lineup: FfiConverterSequenceString.read(from: &buf), 
-                recurrence: FfiConverterString.read(from: &buf)
+                recurrence: FfiConverterString.read(from: &buf), 
+                iconRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf), 
+                bannerRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf)
         )
     }
 
@@ -6687,6 +6647,8 @@ public struct FfiConverterTypeEventRow: FfiConverterRustBuffer {
         FfiConverterBool.write(value.hasClip, into: &buf)
         FfiConverterSequenceString.write(value.lineup, into: &buf)
         FfiConverterString.write(value.recurrence, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.iconRef, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.bannerRef, into: &buf)
     }
 }
 
@@ -7516,6 +7478,12 @@ public struct GroupRow {
      */
     public var cover: String
     public var coverMime: String
+    /**
+     * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+     * where present they win over this row's inline picture, which stays for older objects.
+     */
+    public var iconRef: MediaRefRow?
+    public var bannerRef: MediaRefRow?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -7533,7 +7501,11 @@ public struct GroupRow {
         /**
          * The COVER banner (base64 + mime, "" = none): a still, an animated gif, or a
          * short mp4 — the group page's wall, beside the avatar's face.
-         */cover: String, coverMime: String) {
+         */cover: String, coverMime: String, 
+        /**
+         * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+         * where present they win over this row's inline picture, which stays for older objects.
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.displayName = displayName
         self.shape = shape
         self.presence = presence
@@ -7557,6 +7529,8 @@ public struct GroupRow {
         self.avatarColor = avatarColor
         self.cover = cover
         self.coverMime = coverMime
+        self.iconRef = iconRef
+        self.bannerRef = bannerRef
     }
 }
 
@@ -7633,6 +7607,12 @@ extension GroupRow: Equatable, Hashable {
         if lhs.coverMime != rhs.coverMime {
             return false
         }
+        if lhs.iconRef != rhs.iconRef {
+            return false
+        }
+        if lhs.bannerRef != rhs.bannerRef {
+            return false
+        }
         return true
     }
 
@@ -7660,6 +7640,8 @@ extension GroupRow: Equatable, Hashable {
         hasher.combine(avatarColor)
         hasher.combine(cover)
         hasher.combine(coverMime)
+        hasher.combine(iconRef)
+        hasher.combine(bannerRef)
     }
 }
 
@@ -7693,7 +7675,9 @@ public struct FfiConverterTypeGroupRow: FfiConverterRustBuffer {
                 capturedAt: FfiConverterUInt64.read(from: &buf), 
                 avatarColor: FfiConverterString.read(from: &buf), 
                 cover: FfiConverterString.read(from: &buf), 
-                coverMime: FfiConverterString.read(from: &buf)
+                coverMime: FfiConverterString.read(from: &buf), 
+                iconRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf), 
+                bannerRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf)
         )
     }
 
@@ -7721,6 +7705,8 @@ public struct FfiConverterTypeGroupRow: FfiConverterRustBuffer {
         FfiConverterString.write(value.avatarColor, into: &buf)
         FfiConverterString.write(value.cover, into: &buf)
         FfiConverterString.write(value.coverMime, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.iconRef, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.bannerRef, into: &buf)
     }
 }
 
@@ -8826,6 +8812,100 @@ public func FfiConverterTypeMediaInput_lower(_ value: MediaInput) -> RustBuffer 
 
 
 /**
+ * A detached, sealed media reference (O-79, `media.detached`, #56): what a Delta carries in
+ * place of the bytes. `digest` is hex.
+ */
+public struct MediaRefRow {
+    public var mime: String
+    public var digest: String
+    public var bytes: UInt64
+    public var key: String
+    public var secret: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(mime: String, digest: String, bytes: UInt64, key: String, secret: String) {
+        self.mime = mime
+        self.digest = digest
+        self.bytes = bytes
+        self.key = key
+        self.secret = secret
+    }
+}
+
+
+
+extension MediaRefRow: Equatable, Hashable {
+    public static func ==(lhs: MediaRefRow, rhs: MediaRefRow) -> Bool {
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.digest != rhs.digest {
+            return false
+        }
+        if lhs.bytes != rhs.bytes {
+            return false
+        }
+        if lhs.key != rhs.key {
+            return false
+        }
+        if lhs.secret != rhs.secret {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(mime)
+        hasher.combine(digest)
+        hasher.combine(bytes)
+        hasher.combine(key)
+        hasher.combine(secret)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaRefRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaRefRow {
+        return
+            try MediaRefRow(
+                mime: FfiConverterString.read(from: &buf), 
+                digest: FfiConverterString.read(from: &buf), 
+                bytes: FfiConverterUInt64.read(from: &buf), 
+                key: FfiConverterString.read(from: &buf), 
+                secret: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MediaRefRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterString.write(value.digest, into: &buf)
+        FfiConverterUInt64.write(value.bytes, into: &buf)
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterString.write(value.secret, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRefRow_lift(_ buf: RustBuffer) throws -> MediaRefRow {
+    return try FfiConverterTypeMediaRefRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRefRow_lower(_ value: MediaRefRow) -> RustBuffer {
+    return FfiConverterTypeMediaRefRow.lower(value)
+}
+
+
+/**
  * One picture, clip or document on a maximised detail. INLINE ONLY: a detached or
  * sealed ref (O-79) has no fetch path at this boundary yet (#56), so it does not cross —
  * a row with no bytes would render as a promise the reader cannot keep.
@@ -9626,6 +9706,10 @@ public struct ObjectRow {
      * Who made it: the group's first owner. A handover never changes it.
      */
     public var creator: String
+    /**
+     * When it was made, unix ms (the GroupContext's `createdAt`); `None` before it existed.
+     */
+    public var createdAt: Int64?
     public var members: [String]
     /**
      * The object it is a part of (`base.setParent`), and in what role (`comments`, `room`, …).
@@ -9643,7 +9727,10 @@ public struct ObjectRow {
     public init(id: String, kind: String, name: String, owner: String, 
         /**
          * Who made it: the group's first owner. A handover never changes it.
-         */creator: String, members: [String], 
+         */creator: String, 
+        /**
+         * When it was made, unix ms (the GroupContext's `createdAt`); `None` before it existed.
+         */createdAt: Int64?, members: [String], 
         /**
          * The object it is a part of (`base.setParent`), and in what role (`comments`, `room`, …).
          */parent: String, parentRole: String, 
@@ -9655,6 +9742,7 @@ public struct ObjectRow {
         self.name = name
         self.owner = owner
         self.creator = creator
+        self.createdAt = createdAt
         self.members = members
         self.parent = parent
         self.parentRole = parentRole
@@ -9682,6 +9770,9 @@ extension ObjectRow: Equatable, Hashable {
         if lhs.creator != rhs.creator {
             return false
         }
+        if lhs.createdAt != rhs.createdAt {
+            return false
+        }
         if lhs.members != rhs.members {
             return false
         }
@@ -9706,6 +9797,7 @@ extension ObjectRow: Equatable, Hashable {
         hasher.combine(name)
         hasher.combine(owner)
         hasher.combine(creator)
+        hasher.combine(createdAt)
         hasher.combine(members)
         hasher.combine(parent)
         hasher.combine(parentRole)
@@ -9727,6 +9819,7 @@ public struct FfiConverterTypeObjectRow: FfiConverterRustBuffer {
                 name: FfiConverterString.read(from: &buf), 
                 owner: FfiConverterString.read(from: &buf), 
                 creator: FfiConverterString.read(from: &buf), 
+                createdAt: FfiConverterOptionInt64.read(from: &buf), 
                 members: FfiConverterSequenceString.read(from: &buf), 
                 parent: FfiConverterString.read(from: &buf), 
                 parentRole: FfiConverterString.read(from: &buf), 
@@ -9741,6 +9834,7 @@ public struct FfiConverterTypeObjectRow: FfiConverterRustBuffer {
         FfiConverterString.write(value.name, into: &buf)
         FfiConverterString.write(value.owner, into: &buf)
         FfiConverterString.write(value.creator, into: &buf)
+        FfiConverterOptionInt64.write(value.createdAt, into: &buf)
         FfiConverterSequenceString.write(value.members, into: &buf)
         FfiConverterString.write(value.parent, into: &buf)
         FfiConverterString.write(value.parentRole, into: &buf)
@@ -10024,155 +10118,6 @@ public func FfiConverterTypeOpArg_lift(_ buf: RustBuffer) throws -> OpArg {
 #endif
 public func FfiConverterTypeOpArg_lower(_ value: OpArg) -> RustBuffer {
     return FfiConverterTypeOpArg.lower(value)
-}
-
-
-/**
- * One op's declaration — the metadata the app can enumerate.
- */
-public struct OpSpec {
-    public var kind: Kind
-    public var typeId: UInt32
-    public var opId: UInt32
-    /**
-     * Fully-qualified op name, e.g. "group.setProfile", "forum.poll.vote".
-     */
-    public var name: String
-    public var authority: Authority
-    public var fold: Fold
-    /**
-     * True iff a reducer folds this op today (only forum.post).
-     */
-    public var built: Bool
-    /**
-     * The arg keys this op expects (see the constructors for types/encoding).
-     */
-    public var argKeys: [String]
-    /**
-     * Encoding + status notes (JSON-encoded complex args, cutover caveats, …).
-     */
-    public var note: String
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(kind: Kind, typeId: UInt32, opId: UInt32, 
-        /**
-         * Fully-qualified op name, e.g. "group.setProfile", "forum.poll.vote".
-         */name: String, authority: Authority, fold: Fold, 
-        /**
-         * True iff a reducer folds this op today (only forum.post).
-         */built: Bool, 
-        /**
-         * The arg keys this op expects (see the constructors for types/encoding).
-         */argKeys: [String], 
-        /**
-         * Encoding + status notes (JSON-encoded complex args, cutover caveats, …).
-         */note: String) {
-        self.kind = kind
-        self.typeId = typeId
-        self.opId = opId
-        self.name = name
-        self.authority = authority
-        self.fold = fold
-        self.built = built
-        self.argKeys = argKeys
-        self.note = note
-    }
-}
-
-
-
-extension OpSpec: Equatable, Hashable {
-    public static func ==(lhs: OpSpec, rhs: OpSpec) -> Bool {
-        if lhs.kind != rhs.kind {
-            return false
-        }
-        if lhs.typeId != rhs.typeId {
-            return false
-        }
-        if lhs.opId != rhs.opId {
-            return false
-        }
-        if lhs.name != rhs.name {
-            return false
-        }
-        if lhs.authority != rhs.authority {
-            return false
-        }
-        if lhs.fold != rhs.fold {
-            return false
-        }
-        if lhs.built != rhs.built {
-            return false
-        }
-        if lhs.argKeys != rhs.argKeys {
-            return false
-        }
-        if lhs.note != rhs.note {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(kind)
-        hasher.combine(typeId)
-        hasher.combine(opId)
-        hasher.combine(name)
-        hasher.combine(authority)
-        hasher.combine(fold)
-        hasher.combine(built)
-        hasher.combine(argKeys)
-        hasher.combine(note)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeOpSpec: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OpSpec {
-        return
-            try OpSpec(
-                kind: FfiConverterTypeKind.read(from: &buf), 
-                typeId: FfiConverterUInt32.read(from: &buf), 
-                opId: FfiConverterUInt32.read(from: &buf), 
-                name: FfiConverterString.read(from: &buf), 
-                authority: FfiConverterTypeAuthority.read(from: &buf), 
-                fold: FfiConverterTypeFold.read(from: &buf), 
-                built: FfiConverterBool.read(from: &buf), 
-                argKeys: FfiConverterSequenceString.read(from: &buf), 
-                note: FfiConverterString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: OpSpec, into buf: inout [UInt8]) {
-        FfiConverterTypeKind.write(value.kind, into: &buf)
-        FfiConverterUInt32.write(value.typeId, into: &buf)
-        FfiConverterUInt32.write(value.opId, into: &buf)
-        FfiConverterString.write(value.name, into: &buf)
-        FfiConverterTypeAuthority.write(value.authority, into: &buf)
-        FfiConverterTypeFold.write(value.fold, into: &buf)
-        FfiConverterBool.write(value.built, into: &buf)
-        FfiConverterSequenceString.write(value.argKeys, into: &buf)
-        FfiConverterString.write(value.note, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOpSpec_lift(_ buf: RustBuffer) throws -> OpSpec {
-    return try FfiConverterTypeOpSpec.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOpSpec_lower(_ value: OpSpec) -> RustBuffer {
-    return FfiConverterTypeOpSpec.lower(value)
 }
 
 
@@ -10998,6 +10943,12 @@ public struct PostRow {
     public var retracted: Bool
     public var reactions: UInt32
     public var comments: UInt32
+    /**
+     * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+     * where present they win over this row's inline picture, which stays for older objects.
+     */
+    public var iconRef: MediaRefRow?
+    public var bannerRef: MediaRefRow?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -11008,7 +10959,11 @@ public struct PostRow {
         /**
          * The author took it down. The words are still in the log; the surface shows the
          * tombstone instead of them.
-         */retracted: Bool, reactions: UInt32, comments: UInt32) {
+         */retracted: Bool, reactions: UInt32, comments: UInt32, 
+        /**
+         * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+         * where present they win over this row's inline picture, which stays for older objects.
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.id = id
         self.title = title
         self.body = body
@@ -11017,6 +10972,8 @@ public struct PostRow {
         self.retracted = retracted
         self.reactions = reactions
         self.comments = comments
+        self.iconRef = iconRef
+        self.bannerRef = bannerRef
     }
 }
 
@@ -11048,6 +11005,12 @@ extension PostRow: Equatable, Hashable {
         if lhs.comments != rhs.comments {
             return false
         }
+        if lhs.iconRef != rhs.iconRef {
+            return false
+        }
+        if lhs.bannerRef != rhs.bannerRef {
+            return false
+        }
         return true
     }
 
@@ -11060,6 +11023,8 @@ extension PostRow: Equatable, Hashable {
         hasher.combine(retracted)
         hasher.combine(reactions)
         hasher.combine(comments)
+        hasher.combine(iconRef)
+        hasher.combine(bannerRef)
     }
 }
 
@@ -11078,7 +11043,9 @@ public struct FfiConverterTypePostRow: FfiConverterRustBuffer {
                 banner: FfiConverterString.read(from: &buf), 
                 retracted: FfiConverterBool.read(from: &buf), 
                 reactions: FfiConverterUInt32.read(from: &buf), 
-                comments: FfiConverterUInt32.read(from: &buf)
+                comments: FfiConverterUInt32.read(from: &buf), 
+                iconRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf), 
+                bannerRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf)
         )
     }
 
@@ -11091,6 +11058,8 @@ public struct FfiConverterTypePostRow: FfiConverterRustBuffer {
         FfiConverterBool.write(value.retracted, into: &buf)
         FfiConverterUInt32.write(value.reactions, into: &buf)
         FfiConverterUInt32.write(value.comments, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.iconRef, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.bannerRef, into: &buf)
     }
 }
 
@@ -12351,6 +12320,12 @@ public struct ThingRow {
      */
     public var photo: String
     public var photoMime: String
+    /**
+     * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+     * where present they win over this row's inline picture, which stays for older objects.
+     */
+    public var iconRef: MediaRefRow?
+    public var bannerRef: MediaRefRow?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -12373,7 +12348,11 @@ public struct ThingRow {
          */area: String, 
         /**
          * The listing's FACE — one still, base64 ("" = none; the card renders stripes).
-         */photo: String, photoMime: String) {
+         */photo: String, photoMime: String, 
+        /**
+         * The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+         * where present they win over this row's inline picture, which stays for older objects.
+         */iconRef: MediaRefRow? = nil, bannerRef: MediaRefRow? = nil) {
         self.id = id
         self.name = name
         self.descriptor = descriptor
@@ -12385,6 +12364,8 @@ public struct ThingRow {
         self.area = area
         self.photo = photo
         self.photoMime = photoMime
+        self.iconRef = iconRef
+        self.bannerRef = bannerRef
     }
 }
 
@@ -12425,6 +12406,12 @@ extension ThingRow: Equatable, Hashable {
         if lhs.photoMime != rhs.photoMime {
             return false
         }
+        if lhs.iconRef != rhs.iconRef {
+            return false
+        }
+        if lhs.bannerRef != rhs.bannerRef {
+            return false
+        }
         return true
     }
 
@@ -12440,6 +12427,8 @@ extension ThingRow: Equatable, Hashable {
         hasher.combine(area)
         hasher.combine(photo)
         hasher.combine(photoMime)
+        hasher.combine(iconRef)
+        hasher.combine(bannerRef)
     }
 }
 
@@ -12461,7 +12450,9 @@ public struct FfiConverterTypeThingRow: FfiConverterRustBuffer {
                 reach: FfiConverterString.read(from: &buf), 
                 area: FfiConverterString.read(from: &buf), 
                 photo: FfiConverterString.read(from: &buf), 
-                photoMime: FfiConverterString.read(from: &buf)
+                photoMime: FfiConverterString.read(from: &buf), 
+                iconRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf), 
+                bannerRef: FfiConverterOptionTypeMediaRefRow.read(from: &buf)
         )
     }
 
@@ -12477,6 +12468,8 @@ public struct FfiConverterTypeThingRow: FfiConverterRustBuffer {
         FfiConverterString.write(value.area, into: &buf)
         FfiConverterString.write(value.photo, into: &buf)
         FfiConverterString.write(value.photoMime, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.iconRef, into: &buf)
+        FfiConverterOptionTypeMediaRefRow.write(value.bannerRef, into: &buf)
     }
 }
 
@@ -12796,93 +12789,6 @@ extension ArgValue: Equatable, Hashable {}
 
 
 
-// Note that we don't yet support `indirect` for enums.
-// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-/**
- * Who may author an op.
- */
-
-public enum Authority {
-    
-    case anyMember
-    case owner
-    /**
-     * The owner, or a member holding admin in the object's own roles (ICD 2.1.0 row 10).
-     */
-    case ownerOrAdmin
-    /**
-     * The owner, or a member holding admitter in the object's own roles (NC-135).
-     */
-    case ownerOrAdmitter
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeAuthority: FfiConverterRustBuffer {
-    typealias SwiftType = Authority
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Authority {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-        
-        case 1: return .anyMember
-        
-        case 2: return .owner
-        
-        case 3: return .ownerOrAdmin
-        
-        case 4: return .ownerOrAdmitter
-        
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: Authority, into buf: inout [UInt8]) {
-        switch value {
-        
-        
-        case .anyMember:
-            writeInt(&buf, Int32(1))
-        
-        
-        case .owner:
-            writeInt(&buf, Int32(2))
-        
-        
-        case .ownerOrAdmin:
-            writeInt(&buf, Int32(3))
-        
-        
-        case .ownerOrAdmitter:
-            writeInt(&buf, Int32(4))
-        
-        }
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAuthority_lift(_ buf: RustBuffer) throws -> Authority {
-    return try FfiConverterTypeAuthority.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAuthority_lower(_ value: Authority) -> RustBuffer {
-    return FfiConverterTypeAuthority.lower(value)
-}
-
-
-
-extension Authority: Equatable, Hashable {}
-
-
-
 
 /**
  * One loud FFI error. pacific-core's typed `CoreError` is flattened to a message
@@ -12945,84 +12851,13 @@ extension FfiError: Foundation.LocalizedError {
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
- * How an op folds.
- */
-
-public enum Fold {
-    
-    case sequenced
-    case commutative
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeFold: FfiConverterRustBuffer {
-    typealias SwiftType = Fold
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Fold {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-        
-        case 1: return .sequenced
-        
-        case 2: return .commutative
-        
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: Fold, into buf: inout [UInt8]) {
-        switch value {
-        
-        
-        case .sequenced:
-            writeInt(&buf, Int32(1))
-        
-        
-        case .commutative:
-            writeInt(&buf, Int32(2))
-        
-        }
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeFold_lift(_ buf: RustBuffer) throws -> Fold {
-    return try FfiConverterTypeFold.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeFold_lower(_ value: Fold) -> RustBuffer {
-    return FfiConverterTypeFold.lower(value)
-}
-
-
-
-extension Fold: Equatable, Hashable {}
-
-
-
-// Note that we don't yet support `indirect` for enums.
-// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-/**
- * The six GroupObject kinds (mirrors `pacific_core::object::ObjectKind`).
+ * The kinds a draft can name (mirrors `pacific_core::object::ObjectKind`).
  */
 
 public enum Kind {
     
     case group
-    case forum
-    case field
-    case system
     case project
-    case topic
 }
 
 
@@ -13038,15 +12873,7 @@ public struct FfiConverterTypeKind: FfiConverterRustBuffer {
         
         case 1: return .group
         
-        case 2: return .forum
-        
-        case 3: return .field
-        
-        case 4: return .system
-        
-        case 5: return .project
-        
-        case 6: return .topic
+        case 2: return .project
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -13060,24 +12887,8 @@ public struct FfiConverterTypeKind: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case .forum:
-            writeInt(&buf, Int32(2))
-        
-        
-        case .field:
-            writeInt(&buf, Int32(3))
-        
-        
-        case .system:
-            writeInt(&buf, Int32(4))
-        
-        
         case .project:
-            writeInt(&buf, Int32(5))
-        
-        
-        case .topic:
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(2))
         
         }
     }
@@ -13744,6 +13555,30 @@ fileprivate struct FfiConverterOptionTypeMediaInput: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeMediaInput.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeMediaRefRow: FfiConverterRustBuffer {
+    typealias SwiftType = MediaRefRow?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMediaRefRow.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMediaRefRow.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -14746,31 +14581,6 @@ fileprivate struct FfiConverterSequenceTypeOpArg: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeOpSpec: FfiConverterRustBuffer {
-    typealias SwiftType = [OpSpec]
-
-    public static func write(_ value: [OpSpec], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeOpSpec.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OpSpec] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [OpSpec]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeOpSpec.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
 fileprivate struct FfiConverterSequenceTypeParticipantRow: FfiConverterRustBuffer {
     typealias SwiftType = [ParticipantRow]
 
@@ -15287,245 +15097,6 @@ public func defaultRelayUrl() -> String {
     )
 })
 }
-/**
- * The complete delta catalogue: every op `pacific-core` folds on the four kinds
- * this facade surfaces, plus the two reserved vocabularies (Field, Topic) and the
- * System connector band that core reserves and nothing folds yet.
- *
- * `built` is not a comment. `catalogue_pin` asserts that a `built: true` spec
- * appears in that kind's `ObjectType::ops()` with the same id, name, authority and
- * fold, that every core op appears here, and that no `built: false` spec squats on
- * an id or a name core is using. Adding an op to a reducer without adding it here
- * now fails; so does adding one here that no reducer folds.
- */
-public func deltaCatalog() -> [OpSpec] {
-    return try!  FfiConverterSequenceTypeOpSpec.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_delta_catalog($0
-    )
-})
-}
-/**
- * Build the canonical envelope for a draft. `gen` is read from the draft's own
- * `gen` arg when present (commutative ops carry it), else the delta is sequenced.
- */
-public func encodeDelta(draft: DeltaDraft)throws  -> EncodedDelta {
-    return try  FfiConverterTypeEncodedDelta.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
-    uniffi_pacific_ffi_fn_func_encode_delta(
-        FfiConverterTypeDeltaDraft.lower(draft),$0
-    )
-})
-}
-public func fieldDefineDeepLink(system: String, endpoint: String, addressJson: String, credentialOwner: String, credentialEntry: String, direction: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_field_define_deep_link(
-        FfiConverterString.lower(system),
-        FfiConverterString.lower(endpoint),
-        FfiConverterString.lower(addressJson),
-        FfiConverterString.lower(credentialOwner),
-        FfiConverterString.lower(credentialEntry),
-        FfiConverterString.lower(direction),$0
-    )
-})
-}
-public func fieldDefineExpression(exprJson: String, selfId: String, knownEdgesJson: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_field_define_expression(
-        FfiConverterString.lower(exprJson),
-        FfiConverterString.lower(selfId),
-        FfiConverterString.lower(knownEdgesJson),$0
-    )
-})
-}
-public func fieldRecordResolution(gen: Int64, at: Int64, status: String, qtyJson: String?, reason: String?) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_field_record_resolution(
-        FfiConverterInt64.lower(gen),
-        FfiConverterInt64.lower(at),
-        FfiConverterString.lower(status),
-        FfiConverterOptionString.lower(qtyJson),
-        FfiConverterOptionString.lower(reason),$0
-    )
-})
-}
-public func fieldSetKeyIndex(key: String, indexJson: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_field_set_key_index(
-        FfiConverterString.lower(key),
-        FfiConverterString.lower(indexJson),$0
-    )
-})
-}
-public func fieldSetLiteral(gen: Int64, qtyJson: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_field_set_literal(
-        FfiConverterInt64.lower(gen),
-        FfiConverterString.lower(qtyJson),$0
-    )
-})
-}
-public func fieldSetRole(target: String, role: Int64) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_field_set_role(
-        FfiConverterString.lower(target),
-        FfiConverterInt64.lower(role),$0
-    )
-})
-}
-public func fieldSuppress() -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_field_suppress($0
-    )
-})
-}
-public func fieldUnsuppress() -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_field_unsuppress($0
-    )
-})
-}
-/**
- * Detach a room. The room object, its log and its roster are untouched.
- */
-public func forumClearPart(part: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_forum_clear_part(
-        FfiConverterString.lower(part),$0
-    )
-})
-}
-public func forumPost(textBody: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_forum_post(
-        FfiConverterString.lower(textBody),$0
-    )
-})
-}
-/**
- * React to a message. `target_*` is the `(author, gen)` MsgRef of the message
- * reacted to; `active: false` (or an empty emoji) takes the reaction back.
- */
-public func forumReact(targetAuthor: String, targetGen: Int64, emoji: String, active: Bool, gen: Int64) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_forum_react(
-        FfiConverterString.lower(targetAuthor),
-        FfiConverterInt64.lower(targetGen),
-        FfiConverterString.lower(emoji),
-        FfiConverterBool.lower(active),
-        FfiConverterInt64.lower(gen),$0
-    )
-})
-}
-/**
- * Acknowledge a BATCH of messages at one status (1 = delivered, 2 = read).
- * `refs` is `"<authorHex>:<gen>"` joined by commas — the wire form the reducer
- * parses, and one delta for a screenful rather than one per message.
- */
-public func forumReceipt(status: Int64, refs: String, gen: Int64) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_forum_receipt(
-        FfiConverterInt64.lower(status),
-        FfiConverterString.lower(refs),
-        FfiConverterInt64.lower(gen),$0
-    )
-})
-}
-/**
- * Withdraw a message (its author) or hide it (the owner): `target_*` is its MsgRef.
- */
-public func forumRetract(targetAuthor: String, targetGen: Int64, gen: Int64) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_forum_retract(
-        FfiConverterString.lower(targetAuthor),
-        FfiConverterInt64.lower(targetGen),
-        FfiConverterInt64.lower(gen),$0
-    )
-})
-}
-/**
- * Name a room this Channel is made of — the parts facet, as a Group's. Who is IN
- * the room stays the room's own MLS roster.
- */
-public func forumSetPart(part: String, role: String, at: Int64) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_forum_set_part(
-        FfiConverterString.lower(part),
-        FfiConverterString.lower(role),
-        FfiConverterInt64.lower(at),$0
-    )
-})
-}
-/**
- * Vote a message up or down. `dir` is -1, 0 or +1; 0 clears, and anything else
- * is malformed and drops the whole delta at fold.
- */
-public func forumVote(targetAuthor: String, targetGen: Int64, dir: Int64, gen: Int64) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_forum_vote(
-        FfiConverterString.lower(targetAuthor),
-        FfiConverterInt64.lower(targetGen),
-        FfiConverterInt64.lower(dir),
-        FfiConverterInt64.lower(gen),$0
-    )
-})
-}
-public func groupClearAffiliation(peer: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_clear_affiliation(
-        FfiConverterString.lower(peer),$0
-    )
-})
-}
-public func groupClearPart(part: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_clear_part(
-        FfiConverterString.lower(part),$0
-    )
-})
-}
-/**
- * Edit the shared face (owner or admin): a JSON document, as group.setFace takes it.
- */
-public func groupEditFace(face: String, gen: Int64) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_edit_face(
-        FfiConverterString.lower(face),
-        FfiConverterInt64.lower(gen),$0
-    )
-})
-}
-/**
- * GIVE A GROUP A PUBLIC ADDRESS — the op behind "an account owns a site".
- *
- * `publisher` is the member that ANSWERS for the object, hex-encoded, and it must
- * already be on the roster: `reduce_publication` refuses otherwise, because an
- * address recorded against someone who cannot fold the object is an address that
- * can never answer. Both args are validated before either is assigned, so a
- * rejected publish leaves no half-published object behind.
- *
- * A ONE-WAY DOOR, and the catalogue says so in the same words: once a projection
- * has been served over HTTP it is cached outside the protocol, and `group_unpublish`
- * stops future reads without retracting past ones.
- *
- * ADDED 15 Sep 2026. The op has been in the ICD and in this catalogue as
- * `built: true` since the publication facet landed — both of which are accurate
- * about the REDUCER and said nothing about a caller, and there was none on either
- * platform. `base.publish` could be folded and could not be authored.
- */
-public func groupPublish(slug: String, publisher: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_publish(
-        FfiConverterString.lower(slug),
-        FfiConverterString.lower(publisher),$0
-    )
-})
-}
-public func groupRevokeCredential(id: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_revoke_credential(
-        FfiConverterString.lower(id),$0
-    )
-})
-}
 public func groupSetAffiliation(peer: String, rel: String, name: String, tether: String?, at: Int64) -> DeltaDraft {
     return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
     uniffi_pacific_ffi_fn_func_group_set_affiliation(
@@ -15534,65 +15105,6 @@ public func groupSetAffiliation(peer: String, rel: String, name: String, tether:
         FfiConverterString.lower(name),
         FfiConverterOptionString.lower(tether),
         FfiConverterInt64.lower(at),$0
-    )
-})
-}
-/**
- * `space` is the member's key (hex), carried as `member` (NC-38); the name stays, as
- * the Swift signature's.
- */
-public func groupSetMemberRole(space: String, role: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_set_member_role(
-        FfiConverterString.lower(space),
-        FfiConverterString.lower(role),$0
-    )
-})
-}
-public func groupSetPart(part: String, role: String, at: Int64) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_set_part(
-        FfiConverterString.lower(part),
-        FfiConverterString.lower(role),
-        FfiConverterInt64.lower(at),$0
-    )
-})
-}
-public func groupSetPresence(kind: String, identityKey: String?, inviteHint: String?) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_set_presence(
-        FfiConverterString.lower(kind),
-        FfiConverterOptionString.lower(identityKey),
-        FfiConverterOptionString.lower(inviteHint),$0
-    )
-})
-}
-public func groupSetProfile(displayName: String, shape: String, card: String?) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_set_profile(
-        FfiConverterString.lower(displayName),
-        FfiConverterString.lower(shape),
-        FfiConverterOptionString.lower(card),$0
-    )
-})
-}
-public func groupStoreCredential(id: String, kind: String, label: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_store_credential(
-        FfiConverterString.lower(id),
-        FfiConverterString.lower(kind),
-        FfiConverterString.lower(label),$0
-    )
-})
-}
-/**
- * Stop serving the public address. Takes no args — the reducer clears BOTH the
- * slug and the publisher, so a later publisher cannot silently inherit a name the
- * owner did not re-choose.
- */
-public func groupUnpublish() -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_group_unpublish($0
     )
 })
 }
@@ -15811,14 +15323,6 @@ public func projectSetObjective(headline: String, goal: String) -> DeltaDraft {
     )
 })
 }
-public func projectSetRole(member: String, role: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_project_set_role(
-        FfiConverterString.lower(member),
-        FfiConverterString.lower(role),$0
-    )
-})
-}
 public func projectSubscribe(subId: String, target: String, kind: String, disclosure: String, originItem: String?) -> DeltaDraft {
     return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
     uniffi_pacific_ffi_fn_func_project_subscribe(
@@ -15835,15 +15339,6 @@ public func projectSuppressItem(itemId: String, suppressed: Bool) -> DeltaDraft 
     uniffi_pacific_ffi_fn_func_project_suppress_item(
         FfiConverterString.lower(itemId),
         FfiConverterBool.lower(suppressed),$0
-    )
-})
-}
-public func projectTouchSubscription(subId: String, at: Int64, gen: Int64) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_project_touch_subscription(
-        FfiConverterString.lower(subId),
-        FfiConverterInt64.lower(at),
-        FfiConverterInt64.lower(gen),$0
     )
 })
 }
@@ -15902,93 +15397,6 @@ public func setLogSink(sink: LogSink) {try! rustCall() {
         FfiConverterTypeLogSink.lower(sink),$0
     )
 }
-}
-/**
- * What this System is. `connector` is the dispatch key ("music.ra") and is how
- * `system_for_connector` finds where to hydrate into; `scope` is free text the
- * connector owns and the core never parses.
- */
-public func systemDefine(name: String, connector: String, scope: String?) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_system_define(
-        FfiConverterString.lower(name),
-        FfiConverterString.lower(connector),
-        FfiConverterOptionString.lower(scope),$0
-    )
-})
-}
-/**
- * One fetched item, as its source produced it. `key` is the source's stable id
- * (the dedup key), `rev` the source's monotone revision (the LWW key), and
- * `withdrawn` a tombstone rather than a deletion — the news that a listing was
- * cancelled has to travel the paths the listing did.
- */
-public func systemHydrate(key: String, payload: String, fetchedAt: Int64, rev: Int64, withdrawn: Bool) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_system_hydrate(
-        FfiConverterString.lower(key),
-        FfiConverterString.lower(payload),
-        FfiConverterInt64.lower(fetchedAt),
-        FfiConverterInt64.lower(rev),
-        FfiConverterBool.lower(withdrawn),$0
-    )
-})
-}
-public func topicAddFinding(findingJson: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_topic_add_finding(
-        FfiConverterString.lower(findingJson),$0
-    )
-})
-}
-public func topicCharter(brief: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_topic_charter(
-        FfiConverterString.lower(brief),$0
-    )
-})
-}
-public func topicConnect(connectionJson: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_topic_connect(
-        FfiConverterString.lower(connectionJson),$0
-    )
-})
-}
-public func topicDisconnect(connectionId: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_topic_disconnect(
-        FfiConverterString.lower(connectionId),$0
-    )
-})
-}
-public func topicPoseQuestion(question: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_topic_pose_question(
-        FfiConverterString.lower(question),$0
-    )
-})
-}
-public func topicResolveQuestion(question: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_topic_resolve_question(
-        FfiConverterString.lower(question),$0
-    )
-})
-}
-public func topicRetractFinding(findingId: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_topic_retract_finding(
-        FfiConverterString.lower(findingId),$0
-    )
-})
-}
-public func topicSetCadence(cadenceJson: String) -> DeltaDraft {
-    return try!  FfiConverterTypeDeltaDraft.lift(try! rustCall() {
-    uniffi_pacific_ffi_fn_func_topic_set_cadence(
-        FfiConverterString.lower(cadenceJson),$0
-    )
-})
 }
 /**
  * A passkey PRF output as the 32 bytes every derivation takes — loud on any
@@ -16070,91 +15478,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_func_default_relay_url() != 16682) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_func_delta_catalog() != 61363) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_encode_delta() != 30378) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_field_define_deep_link() != 59497) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_field_define_expression() != 60341) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_field_record_resolution() != 21418) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_field_set_key_index() != 40958) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_field_set_literal() != 51070) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_field_set_role() != 59407) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_field_suppress() != 39472) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_field_unsuppress() != 58102) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_forum_clear_part() != 7659) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_forum_post() != 36348) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_forum_react() != 29528) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_forum_receipt() != 58478) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_forum_retract() != 39975) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_forum_set_part() != 51465) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_forum_vote() != 8402) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_clear_affiliation() != 4588) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_clear_part() != 49136) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_edit_face() != 63180) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_publish() != 54307) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_revoke_credential() != 40262) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_pacific_ffi_checksum_func_group_set_affiliation() != 44) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_set_member_role() != 4002) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_set_part() != 40152) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_set_presence() != 49103) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_set_profile() != 8127) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_store_credential() != 8726) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_group_unpublish() != 39569) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_func_is_retired_relay_url() != 28416) {
@@ -16223,16 +15547,10 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_func_project_set_objective() != 36585) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_func_project_set_role() != 53693) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_pacific_ffi_checksum_func_project_subscribe() != 17022) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_func_project_suppress_item() != 44106) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_project_touch_subscription() != 37221) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_func_project_unsubscribe() != 2809) {
@@ -16248,36 +15566,6 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_func_set_log_sink() != 62064) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_system_define() != 16217) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_system_hydrate() != 34245) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_topic_add_finding() != 56821) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_topic_charter() != 37837) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_topic_connect() != 18660) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_topic_disconnect() != 44729) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_topic_pose_question() != 48399) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_topic_resolve_question() != 47591) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_topic_retract_finding() != 12226) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_pacific_ffi_checksum_func_topic_set_cadence() != 18250) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_func_words_key() != 32306) {
@@ -16472,6 +15760,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_listings() != 8380) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_media_get() != 53770) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_media_put() != 34334) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_membership_divergence() != 7125) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -16496,7 +15790,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_object_messages() != 61362) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pacific_ffi_checksum_method_core_object_mint() != 2153) {
+    if (uniffi_pacific_ffi_checksum_method_core_object_mint() != 45018) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_object_new() != 13290) {

@@ -48,7 +48,7 @@ struct InviteToEventSheet: View {
                         } label: {
                             HStack(spacing: 14) {
                                 Avatar(initials: Avatar.initials(row.displayName),
-                                       tint: EventsPage.accent, size: 36)
+                                       tint: EventsChannel.accent, size: 36)
                                 Text(row.displayName.isEmpty ? String(row.peerId.prefix(8)) : row.displayName)
                                     .font(.system(size: 17))
                                     .foregroundStyle(Theme.textPrimary)
@@ -57,7 +57,7 @@ struct InviteToEventSheet: View {
                                 if sent.contains(row.peerId) {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(EventsPage.accentSoft)
+                                        .foregroundStyle(EventsChannel.accentSoft)
                                 } else if busy == row.peerId {
                                     ProgressView().controlSize(.small)
                                 }
@@ -126,7 +126,7 @@ struct InviteCard: View {
                     .font(.system(size: 11, weight: .heavy))
                     .tracking(1.2)
             }
-            .foregroundStyle(EventsPage.accentSoft)
+            .foregroundStyle(EventsChannel.accentSoft)
 
             Text(invite.title)
                 .font(.system(size: 19, weight: .bold))
@@ -149,14 +149,14 @@ struct InviteCard: View {
                 // Your own invitation: show what came back, or that it is outstanding.
                 Text(answered ? (going ? "Going" : "Not going") : "No answer yet")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(answered && going ? EventsPage.accentSoft : Theme.textTertiary)
+                    .foregroundStyle(answered && going ? EventsChannel.accentSoft : Theme.textTertiary)
             } else {
                 answerButtons
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .composeGlass(tint: EventsPage.accent)
+        .composeGlass(tint: EventsChannel.accent)
         .accessibilityIdentifier("invite-card-\(invite.event.prefix(12))")
     }
 
@@ -178,7 +178,7 @@ struct InviteCard: View {
                 .foregroundStyle(on ? Theme.onAccent : Theme.textPrimary)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 8)
-                .background(Capsule().fill(on ? EventsPage.accent : Theme.fill))
+                .background(Capsule().fill(on ? EventsChannel.accent : Theme.fill))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("invite-\(value ? "going" : "decline")-\(invite.event.prefix(12))")

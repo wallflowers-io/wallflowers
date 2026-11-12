@@ -383,7 +383,7 @@ struct LifeView: View {
     @StateObject private var pendingTickets = PendingTicketStore.shared
 
     /// The capsule contract for every LISTED minted event, keyed by VM id ("obj:<id>").
-    /// State in, intents out — EventsPage stays a skin.
+    /// No reader since the events page went (#119).
     private var eventTicketing: EventTicketing {
         var byId: [String: TicketVM] = [:]
         for row in core.events where row.listed {
@@ -790,7 +790,7 @@ struct LifeView: View {
     /// the whole of the map consolidation. Unlocked, the map is places alone.
     private var eventPinsOnMap: [PlaceAnnotation] {
         guard lifeQuery.isLocked(.events) else { return [] }
-        return EventsPage.venuePins(
+        return EventsChannel.venuePins(
             for: eventsSource.events(matching: lifeQuery.terms, window: .upcoming),
             places: placeAnnotations)
     }
@@ -846,7 +846,7 @@ struct LifeView: View {
         // type's own declaration. That is what closes the 1970 bug — a required field is
         // never unanswered behind a control that looks filled in.
         return NewSession(kind: kind) { draft in
-            guard let id = core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
+            guard let id = await core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
             else { return nil }          // core surfaced the error; the surface stays up
             await core.setOutside(id, from: draft)
             await afterMint(kind, id: id, draft: draft)

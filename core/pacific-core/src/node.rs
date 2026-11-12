@@ -856,7 +856,7 @@ impl Node {
         // Whoever creates the object determines its governing Arc: stamp OUR default.
         let my_arc = self.my_default_arc();
         self.dir
-            .put_group(&group_id, kind, &self.id.identity_pk(), Some(&my_arc))?;
+            .put_group(&group_id, kind, &self.id.identity_pk(), Some(&my_arc), mls::group_created_at(&group))?;
         self.dir
             .set_group_members(&group_id, &mls::roster_identities(&group)?)?;
         // The owner from epoch 0, and this leaf's freshness (§10.2, §11).
@@ -2827,6 +2827,7 @@ impl Node {
             kind,
             &self.id.identity_pk(),
             Some(&self.my_default_arc()),
+            mls::group_created_at(&group),
         )?;
         self.dir
             .set_group_members(&group_id, &mls::roster_identities(&group)?)?;
@@ -3720,12 +3721,13 @@ impl Node {
         let owner = mls::group_owner(&group)?;
         let roster = mls::roster_identities(&group)?;
         let epoch = group.current_epoch();
+        let created_at = mls::group_created_at(&group);
         drop(group);
 
         self.dir.record_owner(gid, epoch, &owner)?;
         if self.dir.group_kind(gid)?.is_none() {
             let arc = (!way.arc.is_empty()).then_some(way.arc.as_str());
-            self.dir.put_group(gid, &way.kind, &owner, arc)?;
+            self.dir.put_group(gid, &way.kind, &owner, arc, created_at)?;
         }
         self.dir.set_group_members(gid, &roster)?;
         // THE GEN FLOOR. The pool leaf is the same author as the person's other
@@ -5470,6 +5472,30 @@ impl Node {
     /// This device's transport set.
     pub fn routes(&self) -> &crate::router::Routes {
         &self.routes
+    }
+
+    /// Seal `bytes` and put them in this device's relay's object storage (O-79, #56): the
+    /// reference a media op carries. The one entry point for media: which relay, where this
+    /// device keeps objects, and what an upload is paid with are this method's to decide.
+    #[cfg(feature = "transport")]
+    pub async fn media_put(&self, bytes: &[u8], mime: &str) -> Result<crate::media::MediaRef, CoreError> {
+        crate::media_store::put(&self.media_relay()?, Some(&crate::paths::state_dir().join("media")), bytes, mime).await
+    }
+
+    /// A reference's bytes: kept on this device, or fetched once and kept (O-79, #56).
+    #[cfg(feature = "transport")]
+    pub async fn media_get(&self, r: &crate::media::MediaRef) -> Result<Vec<u8>, CoreError> {
+        crate::media_store::get(&self.media_relay()?, Some(&crate::paths::state_dir().join("media")), r).await
+    }
+
+    /// The relay media goes through: this device's first ws/wss route.
+    #[cfg(feature = "transport")]
+    fn media_relay(&self) -> Result<String, CoreError> {
+        self.routes
+            .urls()
+            .find(|u| u.starts_with("ws://") || u.starts_with("wss://"))
+            .map(str::to_string)
+            .ok_or_else(|| CoreError::Transport("media needs a relay, and this device has no relay route".into()))
     }
 
     /// Point this device's messaging at a new transport set, and persist it. The ONE way transport
@@ -10201,11 +10227,12 @@ impl Node {
     /// * **Invent a name.** An empty draft name is passed through as an empty name. The
     ///   reducers accept it and the UI gates on it; refusing here would put the rule in
     ///   two places and let them drift.
-    /// * **Author anything past op 0.** Posture, tickets, media, venue and location are
-    ///   SEPARATE ops with their own authority and their own fold gates. A mint that
-    ///   quietly authored six deltas would make failure partial and unreportable. The
-    ///   one exception is a Place's location, below, because an unplaced Place is a
-    ///   different object rather than the same object missing a field.
+    /// * **Author what the draft did not declare.** Each `Carriage::Separate` field the
+    ///   kind declares rides its own op after op 0, here: the icon and banner
+    ///   (`base.setIcon` / `base.setBanner`, #112), an Event's venue (`event.setVenue`)
+    ///   and a Place's fix. A Thing's stance is the caller's (`thing.setPosture` takes a
+    ///   reach the draft does not carry). The media is uploaded BEFORE the object exists,
+    ///   so a failed upload refuses the mint and leaves nothing bare.
     /// * **Roll back.** If op 0 fails the object still exists, unnamed — the MLS group
     ///   was created and cannot be un-created. We return the error AND the id would be
     ///   lost, so we surface the error and leave the empty object for the directory to
@@ -10221,6 +10248,27 @@ impl Node {
                 kind.name()
             )));
         }
+        // THE MEDIA, UPLOADED FIRST (#112): sealed and detached (#56), so an upload that
+        // fails refuses the mint before anything exists. A slot the kind does not declare
+        // is refused, not dropped: it would be a picture nobody ever sees.
+        let mut media = Vec::new();
+        for (key, bytes, op_id, prefix) in [
+            (crate::mint::MintKey::Icon, &draft.icon, crate::object_media::OP_SET_ICON, "icon"),
+            (crate::mint::MintKey::Banner, &draft.banner, crate::object_media::OP_SET_BANNER, "banner"),
+        ] {
+            if bytes.is_empty() {
+                continue;
+            }
+            if !crate::mint::fields(kind).iter().any(|f| f.key == key) {
+                return Err(CoreError::Coordinator(format!("a {} has no {prefix}", kind.name())));
+            }
+            let mime = crate::mint::sniff_mime(bytes)
+                .ok_or_else(|| CoreError::Coordinator(format!("the {prefix} is not a jpeg, png, gif or webp")))?;
+            let mut args = coordinator::Args::new();
+            self.media_put(bytes, mime).await?.to_args(prefix, &mut args);
+            media.push((op_id, args));
+        }
+
         let object_id = self.object_new(kind.name(), &draft.name)?;
 
         // Forum returns None here — it is minted NAME-ONLY, and its name already rode
@@ -10258,6 +10306,18 @@ impl Node {
                 },
             )
             .await?;
+        }
+
+        for (op_id, args) in media {
+            self.apply(&object_id, op_id, args).await?;
+        }
+
+        // An Event's WHERE: the `happens_at` edge, named as the Place names itself.
+        if kind == crate::object::ObjectKind::Event && !draft.place.is_empty() {
+            let name = self.place_state(&draft.place)?.name;
+            let at = if draft.start_ms > 0 { draft.start_ms } else { unix_millis() as i64 };
+            let args = crate::event::set_venue_args(Some(&draft.place), &name, at);
+            self.apply(&object_id, crate::event::OP_SET_VENUE, args).await?;
         }
 
         Ok(object_id)
@@ -11636,7 +11696,7 @@ impl Node {
         }
         if self.dir.group_kind(&group_id)?.is_none() {
             self.dir
-                .put_group(&group_id, &kind, &owner_pk, payload.arc.as_deref())?;
+                .put_group(&group_id, &kind, &owner_pk, payload.arc.as_deref(), mls::group_created_at(&group))?;
             self.dir
                 .set_group_members(&group_id, &mls::roster_identities(&group)?)?;
             if kind == "connection" {

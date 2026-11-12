@@ -1,6 +1,6 @@
 {
   "model": "wallflowers/delta-graph",
-  "version": "2.6.0",
+  "version": "2.9.0",
   "summary": "The interface between a GroupObject's delta log and its projection into the",
   "glossary": {
     "kind": "what an object is: group, forum, post, …",
@@ -35,6 +35,12 @@
         "type": 61443,
         "bytes": "u16-be",
         "setBy": "creation; raised only, by the owner"
+      },
+      "createdAt": {
+        "type": 61444,
+        "bytes": "u64-be unix ms",
+        "setBy": "creation; never changed",
+        "summary": "When the object was made, by its creator's own clock: MLS authenticates who set it, not that it is true. In the context rather than a delta because a joiner holds no log from before it joined (RFC 9750 §6.7) and does hold the context (RFC 9420 §12.4.3, §13.4). Absent on a group made before it existed, and never added later."
       }
     },
     "legacyOwner": "leaf 0 while the owner extension is absent; remove and handover refused until it is set",
@@ -163,6 +169,23 @@
           "summary": "After a Sub's replay of a door: tag, a Sub with v >= 3 receives one {t:\"evicted\", tag, total}: the number of knocks ever evicted from that tag, monotonic. The client keeps the last total it saw and shows the difference. Below v 3 it is never sent."
         }
       }
+    }
+  },
+  "media": {
+    "summary": "Media bytes outside the Delta (O-79, #56, ruled 9 Nov 2026): every new media's bytes are an object in the relay's object storage, and the Delta carries only its reference (<p>Via = detached, <p>Digest, <p>Bytes, <p>Key, <p>Secret). Inline media already written stays readable.",
+    "detached": {
+      "summary": "How an object is made and opened, so that any implementation can read what another wrote.",
+      "cipher": "XChaCha20-Poly1305",
+      "keyBytes": 32,
+      "nonceBytes": 24,
+      "contentKey": "keyBytes random bytes, fresh for every object, never reused; the reference carries it as <p>Secret, base64",
+      "objectKey": "32 random bytes, as 64 lowercase hex: the only name the relay presigns; the reference carries it as <p>Key",
+      "aad": "the object key's 64 lowercase hex characters, as ASCII bytes: an object cannot be passed off under another name",
+      "layout": "nonce (nonceBytes, random) ‖ ciphertext with its 16-byte tag",
+      "digest": "SHA-256 of the object as stored (the ciphertext), hex, as <p>Digest; with its length (<p>Bytes) checked before the object is opened, so anyone can check a fetch without the content key",
+      "upload": "create-only: the presigned PUT is signed with if-none-match: *, so a key, once stored, cannot be overwritten",
+      "fetch": "by the object key alone, through the relay's presign: a reader needs no group (a carried exterior's photo is read by non-members). A device keeps what it has fetched and never fetches it again",
+      "commitment": "XChaCha20-Poly1305 does not commit to its key: one object can open to different bytes under different keys. A digest names an object, never its content; nothing may dedupe, match or report media by digest without a key commitment added here first"
     }
   },
   "conformance": {
@@ -1307,6 +1330,174 @@
           }
         }
       }
+    },
+    "media": {
+      "summary": "an object's icon and banner: its face in a list and its wall on its page",
+      "note": "Band 0xF00F. Ruled 9 Nov 2026 (#112): every kind's media is detached (#56), and none of the per-kind slots can carry a reference (post.setMedia, group.setCover, thing.setPhoto and group.setProfile's card take inline base64 only), so the mint writes here. Where a slot of this facet has been written it wins over the kind's own slot, which stays readable for objects made before it. Considered and ruled out: a MediaRef added to each kind's own op (five shapes, four readers); event.setBanner on every kind (one kind's op); host.setMedia (a Host's named slots); base.setExterior's photo (what a non-member holds, replaced wholesale with the exterior, by the owner alone).",
+      "on": [
+        "group",
+        "event",
+        "thing",
+        "post"
+      ],
+      "ops": {
+        "base.setIcon": {
+          "op": 4027514880,
+          "ego": "owner|role:admin",
+          "fold": "commutative",
+          "summary": "The object's icon, one still, as its own Delta: one register, LWW by (gen, author); an empty ref clears it. Counts from the owner, or from a roster member holding admin in this object's own roles.",
+          "description": "Where written, this is the object's icon and wins over the kind's own: group.setProfile's card photo on a Group; none on an Event, Thing or Post until now. The kind's slot stays readable for an object made before this facet, and is not written for a new one: the mint writes here (#112). Considered and ruled out: a MediaRef added to each kind's own op (five shapes, four readers); host.setMedia (a Host's named slots); base.setExterior's photo (what a non-member holds, replaced wholesale with the exterior, by the owner alone).",
+          "args": {
+            "icon": {
+              "type": "string",
+              "summary": "a still (image mimes), square: a MediaRef flattened under the prefix `icon` (MediaRef::to_args); present and broken is refused; empty clears. Inline data at most 150000 base64 characters: the item's own Delta must fit the carriage ceiling (MAX_DELTA_ENVELOPE_BYTES); detached (O-79) for more: the Delta then carries the digest and keys, not the bytes",
+              "maxLength": 150000,
+              "mediaRef": {
+                "prefix": "icon",
+                "suffixes": [
+                  "",
+                  "Mime",
+                  "Via",
+                  "Kind",
+                  "Digest",
+                  "Bytes",
+                  "Session",
+                  "W",
+                  "H",
+                  "Ms",
+                  "Key",
+                  "Secret"
+                ],
+                "source": "pacific-media MediaRef::to_args, as forum.post's `media`"
+              }
+            },
+            "iconMime": {
+              "type": "string"
+            },
+            "iconVia": {
+              "type": "string",
+              "vocabulary": {
+                "inline": "the bytes ride in the Delta",
+                "detached": "the Delta carries a digest, the object key and the content key; the bytes are fetched from the relay's blob store (O-79)"
+              }
+            },
+            "iconKind": {
+              "type": "string"
+            },
+            "iconDigest": {
+              "type": "string"
+            },
+            "iconBytes": {
+              "type": "integer"
+            },
+            "iconSession": {
+              "type": "string"
+            },
+            "iconW": {
+              "type": "integer"
+            },
+            "iconH": {
+              "type": "integer"
+            },
+            "iconMs": {
+              "type": "integer"
+            },
+            "iconKey": {
+              "type": "string",
+              "summary": "with via=detached: the bytes' object key in the relay's blob store (O-79); absent inline"
+            },
+            "iconSecret": {
+              "type": "string",
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this object's log, the Lamport generation; the highest (gen, author) that counts wins"
+            }
+          }
+        },
+        "base.setBanner": {
+          "op": 4027514881,
+          "ego": "owner|role:admin",
+          "fold": "commutative",
+          "summary": "The object's banner, one still, as its own Delta: one register, LWW by (gen, author); an empty ref clears it. Counts from the owner, or from a roster member holding admin in this object's own roles.",
+          "description": "Where written, this is the object's banner and wins over the kind's own: event.setBanner and event.setMedia's banner on an Event, group.setCover on a Group, thing.setPhoto on a Thing, post.setMedia's banner on a Post. Those slots stay readable for an object made before this facet, and are not written for a new one: the mint writes here (#112). event.setBanner already carried a detached ref and was considered for every kind, and ruled out: one kind's op, with an Event's authority. Also ruled out: a MediaRef added to each kind's own op (five shapes, four readers); host.setMedia (a Host's named slots); base.setExterior's photo (what a non-member holds).",
+          "args": {
+            "banner": {
+              "type": "string",
+              "summary": "a still (image mimes), wide: a MediaRef flattened under the prefix `banner` (MediaRef::to_args); present and broken is refused; empty clears. Inline data at most 150000 base64 characters: the item's own Delta must fit the carriage ceiling (MAX_DELTA_ENVELOPE_BYTES); detached (O-79) for more: the Delta then carries the digest and keys, not the bytes",
+              "maxLength": 150000,
+              "mediaRef": {
+                "prefix": "banner",
+                "suffixes": [
+                  "",
+                  "Mime",
+                  "Via",
+                  "Kind",
+                  "Digest",
+                  "Bytes",
+                  "Session",
+                  "W",
+                  "H",
+                  "Ms",
+                  "Key",
+                  "Secret"
+                ],
+                "source": "pacific-media MediaRef::to_args, as forum.post's `media`"
+              }
+            },
+            "bannerMime": {
+              "type": "string"
+            },
+            "bannerVia": {
+              "type": "string",
+              "vocabulary": {
+                "inline": "the bytes ride in the Delta",
+                "detached": "the Delta carries a digest, the object key and the content key; the bytes are fetched from the relay's blob store (O-79)"
+              }
+            },
+            "bannerKind": {
+              "type": "string"
+            },
+            "bannerDigest": {
+              "type": "string"
+            },
+            "bannerBytes": {
+              "type": "integer"
+            },
+            "bannerSession": {
+              "type": "string"
+            },
+            "bannerW": {
+              "type": "integer"
+            },
+            "bannerH": {
+              "type": "integer"
+            },
+            "bannerMs": {
+              "type": "integer"
+            },
+            "bannerKey": {
+              "type": "string",
+              "summary": "with via=detached: the bytes' object key in the relay's blob store (O-79); absent inline"
+            },
+            "bannerSecret": {
+              "type": "string",
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
+            },
+            "gen": {
+              "type": "integer",
+              "required": true,
+              "summary": "per this object's log, the Lamport generation; the highest (gen, author) that counts wins"
+            }
+          }
+        }
+      },
+      "view": {
+        "icon": "the icon's MediaRef view (event::media_view), or absent",
+        "banner": "the banner's MediaRef view, or absent"
+      }
     }
   },
   "kinds": {
@@ -1934,13 +2125,17 @@
             "photoMime": {
               "type": "string"
             },
+            "createdAt": {
+              "type": "integer",
+              "summary": "the Thing's mls.groupContextExtensions.createdAt, unix ms; absent when the Thing has none"
+            },
             "site": {
               "type": "integer",
               "summary": "1: the Site's own listing, the Site sells it (the owner or an admin only; a plain member's is refused at write and at fold); absent or 0: the member sells their own"
             }
           },
           "view": {
-            "listings": "[{author, thingId, posture, title, descriptor, price, deadline, area, photo, photoMime, gen}] live, not withdrawn or removed"
+            "listings": "[{author, thingId, posture, title, descriptor, price, deadline, area, photo, photoMime, createdAt, gen}] live, not withdrawn or removed"
           }
         },
         "group.removeListing": {
@@ -2090,7 +2285,7 @@
             },
             "mediaSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             }
           },
           "episode": true
@@ -3201,7 +3396,7 @@
             },
             "mediaSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             }
           },
           "episode": true
@@ -3497,7 +3692,7 @@
             },
             "photoSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             }
           },
           "maxLive": 20,
@@ -4072,7 +4267,7 @@
             },
             "bannerSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             },
             "gen": {
               "type": "integer",
@@ -4162,7 +4357,7 @@
             },
             "photoSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             },
             "gen": {
               "type": "integer",
@@ -4265,7 +4460,7 @@
             },
             "clipSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             },
             "gen": {
               "type": "integer",
@@ -4601,7 +4796,7 @@
             },
             "documentSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             }
           },
           "view": {
@@ -4696,7 +4891,7 @@
             },
             "assetSecret": {
               "type": "string",
-              "summary": "with via=detached: the content key the bytes are sealed with, base64 (O-79); inside a Delta it is read only by the object's roster; absent inline"
+              "summary": "with via=detached: the content key the bytes are sealed with, base64, as media.detached says (O-79); inside a Delta it is read only by the object's roster; absent inline"
             }
           },
           "view": {

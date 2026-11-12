@@ -27,6 +27,31 @@ final class FeedModelTests: XCTestCase {
                    via: "", photo: "", photoMime: "")
     }
 
+    func testEachRowCarriesWhenItsObjectWasMade() {
+        let rows = FeedAssembler.rows(
+            events: [event("soon", start: now + hour), event("old", start: now + 2 * hour)],
+            listings: [listing("amp")],
+            nowMs: now,
+            createdOf: { $0 == "soon" ? now - hour : nil })
+        let made = Dictionary(uniqueKeysWithValues: rows.map { ($0.title, $0.createdAt) })
+        XCTAssertEqual(made["soon"], now - hour)
+        XCTAssertEqual(made["amp"], .some(nil), "a pairwise listing carries no time (#88's exterior will)")
+        XCTAssertEqual(made["old"], .some(nil), "made before the time was kept: none")
+    }
+
+    func testRecencyReadsShortThenAsADate() {
+        let minute: Int64 = 60_000
+        XCTAssertEqual(FeedAssembler.recency(now - 20_000, nowMs: now), "now")
+        XCTAssertEqual(FeedAssembler.recency(now - 5 * minute, nowMs: now), "5m")
+        XCTAssertEqual(FeedAssembler.recency(now - 2 * hour, nowMs: now), "2h")
+        XCTAssertEqual(FeedAssembler.recency(now - 3 * 24 * hour, nowMs: now), "3d")
+        XCTAssertEqual(FeedAssembler.recency(now + minute, nowMs: now), "now", "a clock ahead of ours is not the future")
+        let f = DateFormatter()
+        f.dateFormat = "d MMM"
+        let then = now - 30 * 24 * hour
+        XCTAssertEqual(FeedAssembler.recency(then, nowMs: now), f.string(from: Date(timeIntervalSince1970: Double(then) / 1000)))
+    }
+
     private func exterior(_ object: String, kind: String = "project", door: Bool = true) -> ExteriorRow {
         ExteriorRow(object: object, kind: kind, name: object, description: "",
                     owner: "o", via: "v", hops: 1, door: door, requested: false)

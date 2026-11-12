@@ -24,6 +24,7 @@ from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
 from .. import address, wire
+from ..state import r2
 from ..cases.framework import CaseResult, Run
 from ..sigv4 import presign
 from ..state import Budget, MediaError, R2Relay, RelayHub, Retention, Verdict
@@ -210,7 +211,7 @@ def _reproduce(url: str, *, method: str, key: str | None, length: int | None) ->
     segs = ["pacific-media"] + ([key] if key else [])
     return presign(method=method, host=R2_ENV["RELAY_R2_ENDPOINT"], path_segments=segs,
                    region="auto", expires_in=int(q["X-Amz-Expires"][0]),
-                   signed_headers=([("content-length", str(length))] if length is not None else []),
+                   signed_headers=([("content-length", str(length)), ("if-none-match", "*")] if length is not None else []),
                    query=[], now=now,
                    access_key_id=R2_ENV["RELAY_R2_ACCESS_KEY_ID"],
                    secret_access_key=R2_ENV["RELAY_R2_SECRET_ACCESS_KEY"])
@@ -262,7 +263,7 @@ async def f15_live(on_step: Callable | None = None) -> CaseResult:
         r.check("Ok — the relay mints a capability", got["t"] == "media_url", str(got)[:160])
         r.check("bound to exactly that length",
                 "X-Amz-SignedHeaders=content-length%3Bhost" in got["url"])
-        r.check("and TTL'd", got["expires_in"] == 300 and got["method"] == "PUT")
+        r.check("and TTL'd", got["expires_in"] == r2.DEFAULT_TTL_SECS and got["method"] == "PUT")
         r.check("the Python presigner reproduces the URL BYTE FOR BYTE",
                 got["url"] == _reproduce(got["url"], method="PUT", key=KEY, length=1024),
                 "botocore, sigv4.rs and harness.sigv4 now agree on a hand-rolled signature")

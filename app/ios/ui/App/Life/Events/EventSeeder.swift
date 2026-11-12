@@ -46,7 +46,7 @@ enum EventSeeder {
 
         let beach = "BEACHCRIMES — Rooftop Day Party"
         if !existing.contains(beach) {
-            if let id = core.mint(kind: "event", draft: draft(
+            if let id = await core.mint(kind: "event", draft: draft(
                     beach, descriptor: "City Graffiti · Truthlive · All Day All Night",
                     startMs: fromNow(-1), endMs: fromNow(4), venue: "Hotel VIA Rooftop, SF",
                     banner: poster("beachcrimes"))) {
@@ -91,7 +91,7 @@ enum EventSeeder {
 
         let upward = "Monroe presents UPWARD"
         if !existing.contains(upward) {
-            if let id = core.mint(kind: "event", draft: draft(
+            if let id = await core.mint(kind: "event", draft: draft(
                     upward, descriptor: "Apex Martin · Cloopez · Joey Trip · 21+",
                     startMs: fromNow(2), endMs: fromNow(7), venue: "Monroe, 473 Broadway, SF",
                     banner: poster("upward"))) {

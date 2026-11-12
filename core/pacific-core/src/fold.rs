@@ -201,7 +201,7 @@ fn parts_view(parts: &std::collections::BTreeMap<String, crate::object::PartRef>
 fn thing_view(st: &crate::thing::ThingState) -> String {
     let mut photos: Vec<&crate::thing::ThingPhoto> = st.photos.values().collect();
     photos.sort_by_key(|p| (p.at, p.id.clone()));
-    serde_json::json!({
+    let mut v = serde_json::json!({
         "name": st.name,
         "descriptor": st.descriptor,
         "category": st.category.as_str(),
@@ -216,8 +216,9 @@ fn thing_view(st: &crate::thing::ThingState) -> String {
         "area": st.area,
         "parts": parts_view(&st.parts),
         "backlinks": crate::backlink::listed(&st.backlinks),
-    })
-    .to_string()
+    });
+    st.base_media.view_into(&mut v);
+    v.to_string()
 }
 
 /// A pairing channel's view: the prekeys it carries, the cards it has been told, and the
@@ -522,6 +523,7 @@ fn event_view(st: &EventState) -> String {
         }
         None => m.photos.iter().map(|p| serde_json::json!({ "id": "", "mime": p.mime, "data": p.data, "width": 0, "height": 0, "at": 0 })).collect::<Vec<_>>().into(),
     };
+    st.base_media.view_into(&mut v);
     v.to_string()
 }
 
@@ -602,6 +604,7 @@ pub fn view_of(
             // `view` lines for group.rsvp, setRegistration and rsvpDecide), and the about and
             // questions facets, from roster members only.
             let (rsvps, rsvp_counts, registration) = crate::rsvp::view(&st.rsvps);
+            st.base_media.view_into(&mut v);
             v["rsvps"] = rsvps;
             v["rsvp_counts"] = rsvp_counts;
             v["registration"] = registration;
@@ -691,6 +694,10 @@ pub fn view_of(
             v["document"] = document;
             v["assets"] = assets;
             v["visibility"] = st.visibility().as_str().into();
+            if let Some(o) = v.as_object_mut() {
+                o.remove("base_media");
+            }
+            st.base_media.view_into(&mut v);
             if st.body_format.is_empty() {
                 v["body_format"] = "plain".into();
             }

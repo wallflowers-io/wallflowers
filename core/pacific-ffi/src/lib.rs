@@ -358,6 +358,8 @@ pub struct ObjectRow {
     pub owner: String,
     /// Who made it: the group's first owner. A handover never changes it.
     pub creator: String,
+    /// When it was made, unix ms (the GroupContext's `createdAt`); `None` before it existed.
+    pub created_at: Option<i64>,
     pub members: Vec<String>,
     /// The object it is a part of (`base.setParent`), and in what role (`comments`, `room`, …).
     pub parent: String,
@@ -559,6 +561,12 @@ pub struct PostRow {
     pub retracted: bool,
     pub reactions: u32,
     pub comments: u32,
+    /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+    /// where present they win over this row's inline picture, which stays for older objects.
+    #[uniffi(default = None)]
+    pub icon_ref: Option<MediaRefRow>,
+    #[uniffi(default = None)]
+    pub banner_ref: Option<MediaRefRow>,
 }
 
 /// The draft behind every `+` — what the UI has collected when the user commits.
@@ -938,6 +946,12 @@ pub struct ThingRow {
     /// The listing's FACE — one still, base64 ("" = none; the card renders stripes).
     pub photo: String,
     pub photo_mime: String,
+    /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+    /// where present they win over this row's inline picture, which stays for older objects.
+    #[uniffi(default = None)]
+    pub icon_ref: Option<MediaRefRow>,
+    #[uniffi(default = None)]
+    pub banner_ref: Option<MediaRefRow>,
 }
 
 /// One row of the hops-aware place listing: a Place I hold (`holder == ""`, hops 0)
@@ -1112,6 +1126,12 @@ pub struct EventRow {
     /// written — the reader asks `recurrence_summary` / `recurrence_occurrences`
     /// for what it needs, which are already here and already tested.
     pub recurrence: String,
+    /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+    /// where present they win over this row's inline picture, which stays for older objects.
+    #[uniffi(default = None)]
+    pub icon_ref: Option<MediaRefRow>,
+    #[uniffi(default = None)]
+    pub banner_ref: Option<MediaRefRow>,
 }
 
 /// One event photo crossing the FFI.
@@ -1119,6 +1139,32 @@ pub struct EventRow {
 pub struct EventPhotoRow {
     pub data: String,
     pub mime: String,
+}
+
+/// A folded media slot as a row: its sealed reference, or `None` for an empty, unwritten or
+/// inline slot (an inline picture rides the row's own base64 field).
+fn ref_row(m: &Option<pacific_core::media::MediaRef>) -> Option<MediaRefRow> {
+    match m.as_ref().map(|m| (&m.mime, &m.delivery)) {
+        Some((mime, pacific_core::media::Delivery::Sealed { digest, bytes, key, secret })) => Some(MediaRefRow {
+            mime: mime.clone(),
+            digest: hex::encode(digest),
+            bytes: *bytes,
+            key: key.clone(),
+            secret: secret.clone(),
+        }),
+        _ => None,
+    }
+}
+
+/// A detached, sealed media reference (O-79, `media.detached`, #56): what a Delta carries in
+/// place of the bytes. `digest` is hex.
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct MediaRefRow {
+    pub mime: String,
+    pub digest: String,
+    pub bytes: u64,
+    pub key: String,
+    pub secret: String,
 }
 
 /// The full media facet of one event — the detail page's read.
@@ -1624,6 +1670,12 @@ pub struct GroupRow {
     /// short mp4 — the group page's wall, beside the avatar's face.
     pub cover: String,
     pub cover_mime: String,
+    /// The media facet's icon and banner (`base.setIcon` / `base.setBanner`, #112), detached:
+    /// where present they win over this row's inline picture, which stays for older objects.
+    #[uniffi(default = None)]
+    pub icon_ref: Option<MediaRefRow>,
+    #[uniffi(default = None)]
+    pub banner_ref: Option<MediaRefRow>,
 }
 
 /// One row of the LIFE ▸ GROUPS listing: a Group identity record, folded — the
@@ -1837,6 +1889,8 @@ fn group_row(v: pacific_core::group::GroupView) -> GroupRow {
         avatar_color: v.card.avatar_color,
         cover: v.cover,
         cover_mime: v.cover_mime,
+        icon_ref: ref_row(&v.base_media.icon),
+        banner_ref: ref_row(&v.base_media.banner),
         emails: labeled_rows(v.card.emails),
         phones: labeled_rows(v.card.phones),
         urls: labeled_rows(v.card.urls),
@@ -2256,6 +2310,7 @@ impl Core {
             .map(|o| ObjectRow {
                 owner: hex_or_empty(o.owner),
                 creator: hex_or_empty(o.creator),
+                created_at: o.created_at,
                 members: o.members.iter().map(hex::encode).collect(),
                 parent: o.parent.as_ref().map(|p| p.parent.clone()).unwrap_or_default(),
                 parent_role: o.parent.map(|p| p.role).unwrap_or_default(),
@@ -2307,10 +2362,9 @@ impl Core {
     /// includes the kinds that exist but are not minted from a draft — `contact` is
     /// formed by PAIRING and `conversation` by consuming a Contact's prekeys.
     ///
-    /// Mints the object and authors its op-0 profile delta, nothing more. Posture,
-    /// tickets, media and venue are separate ops with their own authority; the caller
-    /// authors them after, so a failure is reportable against the step that failed
-    /// rather than leaving a half-configured object behind one opaque error.
+    /// Mints the object, its op-0 profile delta, and the Separate fields the draft carries:
+    /// the icon and banner (uploaded first, so a failed upload creates nothing), an Event's
+    /// venue and a Place's fix (`Node::mint`). Posture and tickets are the caller's.
     pub fn object_mint(&self, kind: String, draft: MintDraft) -> Result<String, FfiError> {
         let k = pacific_core::mint::kind_from_name(&kind)
             .ok_or_else(|| FfiError::Core(format!("unknown object kind '{kind}'")))?;
@@ -2517,6 +2571,8 @@ impl Core {
                 area: st.area.unwrap_or_default(),
                 photo: st.photo,
                 photo_mime: st.photo_mime,
+                icon_ref: ref_row(&st.base_media.icon),
+                banner_ref: ref_row(&st.base_media.banner),
             })
             .collect())
     }
@@ -2650,6 +2706,8 @@ impl Core {
                 // A Post's comments live in the Forum it hosts (m34), so the
                 // count is that room's, not a field here. `forums` names it.
                 comments: 0,
+                icon_ref: ref_row(&st.base_media.icon),
+                banner_ref: ref_row(&st.base_media.banner),
             })
             .collect())
     }
@@ -2701,6 +2759,9 @@ impl Core {
                 has_clip: !st.media.clip.is_empty(),
                 lineup: st.lineup.clone(),
                 recurrence: st.recurrence.clone(),
+                icon_ref: ref_row(&st.base_media.icon),
+                // The facet's, else `event.setBanner`'s where it is detached.
+                banner_ref: ref_row(&st.base_media.banner).or_else(|| ref_row(&st.banner)),
             });
         }
         Ok(out)
@@ -2736,6 +2797,30 @@ impl Core {
             pacific_core::event::OP_SET_MEDIA,
             args,
         ))?)
+    }
+
+    /// Seal `bytes`, upload them to this device's relay's object storage, and return the
+    /// reference a Delta carries (O-79, #56). Nothing is written to any object here.
+    pub fn media_put(&self, bytes: Vec<u8>, mime: String) -> Result<MediaRefRow, FfiError> {
+        let r = block_on(self.read()?.media_put(&bytes, &mime))?;
+        match r.delivery {
+            pacific_core::media::Delivery::Sealed { digest, bytes, key, secret } => {
+                Ok(MediaRefRow { mime: r.mime, digest: hex::encode(digest), bytes, key, secret })
+            }
+            _ => Err(FfiError::Core("media: the upload did not make a sealed reference".into())),
+        }
+    }
+
+    /// Fetch and open a reference's bytes. Needs only the reference: a device holding no group
+    /// for the object reads it as a member does.
+    pub fn media_get(&self, r: MediaRefRow) -> Result<Vec<u8>, FfiError> {
+        let digest: [u8; 32] = hex::decode(&r.digest)
+            .ok()
+            .and_then(|d| d.try_into().ok())
+            .ok_or_else(|| FfiError::Core("media: the digest is not 32 bytes of hex".into()))?;
+        let reference = pacific_core::media::MediaRef::sealed(&r.mime, digest, r.bytes, r.key, r.secret)
+            .map_err(|e| FfiError::Core(format!("media: {e}")))?;
+        Ok(block_on(self.read()?.media_get(&reference))?)
     }
 
     /// The full media facet of one event — the detail page's read.
@@ -5013,6 +5098,101 @@ mod held_node_tests {
     }
 }
 
+/// The media round trip as the app makes it (O-79, #56): `media_put` from one device, and
+/// `media_get` of its reference from a device that has never seen the object's group.
+#[cfg(test)]
+mod media_tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+
+    /// Object storage on this machine: PUT keeps the body at its path, GET returns it.
+    async fn object_store() -> String {
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let at = l.local_addr().unwrap().to_string();
+        let held: Arc<Mutex<HashMap<String, Vec<u8>>>> = Default::default();
+        tokio::spawn(async move {
+            loop {
+                let (sock, _) = l.accept().await.unwrap();
+                let held = held.clone();
+                tokio::spawn(async move {
+                    let mut r = BufReader::new(sock);
+                    let mut line = String::new();
+                    r.read_line(&mut line).await.unwrap();
+                    let mut it = line.split_whitespace();
+                    let (method, path) = (it.next().unwrap_or("").to_string(), it.next().unwrap_or("").split('?').next().unwrap().to_string());
+                    let mut len = 0usize;
+                    loop {
+                        let mut h = String::new();
+                        r.read_line(&mut h).await.unwrap();
+                        if h == "\r\n" || h.is_empty() {
+                            break;
+                        }
+                        if let Some(v) = h.to_ascii_lowercase().strip_prefix("content-length:") {
+                            len = v.trim().parse().unwrap();
+                        }
+                    }
+                    let body = if method == "PUT" {
+                        let mut b = vec![0u8; len];
+                        r.read_exact(&mut b).await.unwrap();
+                        held.lock().unwrap().entry(path).or_insert(b);
+                        Vec::new()
+                    } else {
+                        held.lock().unwrap().get(&path).cloned().unwrap_or_default()
+                    };
+                    let mut sock = r.into_inner();
+                    let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                    sock.write_all(head.as_bytes()).await.unwrap();
+                    sock.write_all(&body).await.unwrap();
+                });
+            }
+        });
+        at
+    }
+
+    #[test]
+    fn a_reference_made_on_one_device_opens_on_another() {
+        let _held = STATE_DIR.lock().unwrap_or_else(|e| e.into_inner());
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let relay = rt.block_on(async {
+            let media = relay::media::Media::new(
+                object_store().await,
+                "pacific-media",
+                relay::sigv4::Credentials { access_key_id: "k".into(), secret_access_key: "s".into() },
+                25 * 1024 * 1024,
+                std::time::Duration::from_secs(900),
+            )
+            .plain_on_loopback();
+            let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("ws://{}", l.local_addr().unwrap());
+            let store = Box::new(relay::store::Store::open_in_memory().unwrap());
+            tokio::spawn(relay::serve_with_media(l, store, relay::Retention::default(), relay::Limits::default(), None, Some(media)));
+            url
+        });
+        let device = |name: &str| {
+            let dir = std::env::temp_dir().join(format!("pacific-media-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::env::set_var("PACIFIC_STATE_DIR", &dir);
+            pacific_core::node::set_default_arc(&relay).unwrap();
+            let core = Core::new(dir.to_string_lossy().to_string());
+            core.init_identity(name.into()).unwrap();
+            core
+        };
+
+        let photo = b"an exterior photo, downscaled".repeat(3000);
+        let r = device("maker").media_put(photo.clone(), "image/jpeg".into()).unwrap();
+        assert_eq!((r.mime.as_str(), r.key.len(), r.digest.len()), ("image/jpeg", 64, 64));
+        assert_eq!(device("passer-by").media_get(r.clone()).unwrap(), photo);
+
+        let mut wrong = r;
+        wrong.secret = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, [0u8; 32]);
+        assert!(device("guesser").media_get(wrong).is_err(), "another key opens nothing");
+    }
+}
+
+
 #[cfg(test)]
 mod detail_tests {
     use super::*;
@@ -5165,3 +5345,4 @@ mod detail_tests {
         }
     }
 }
+

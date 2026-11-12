@@ -92,7 +92,7 @@
   "carriage": {
     "summary": "Every declared field states how it reaches the object. This is the promise the contract exists to keep.",
     "op0": "Lands in the kind's op-0 profile delta. `fields_carry_to_the_wire` proves each one arrives.",
-    "separate": "Rides its own delta after the mint — the media ops, a Place's fix, an Event's venue. Named in `every_separate_field_is_actually_delivered`, so the flag cannot become a way to silence the first test.",
+    "separate": "Rides its own delta after the mint — the media ops, a Place's fix, an Event's venue. Named in `every_separate_field_is_actually_delivered` and read back from the fold in `o112_mint_delivers`, so the flag cannot become a way to silence the first test.",
     "deferred": "SHOWN AND NOT YET SAVED. A stated fact, never a silent drop; enumerated in `deferred_fields_are_the_known_placeholders`. A required field may never be deferred — that would gate the commit on something that cannot be kept.",
     "dependent": "A field whose delivery depends on ANOTHER field's value is only honest while the surface can actually produce that value. `thing.price` is refused by `thing.setPosture` unless the stance is ACTIVE (buying|selling), and the offered stance vocabulary is deliberately offers|wants|has — so no choice a person can make would let a price be kept. It is therefore declared `deferred`, not `separate`: the row is the design, the claim that it saves would be false. When an active stance becomes offerable it becomes `separate` and nothing else changes."
   },

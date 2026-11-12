@@ -709,7 +709,7 @@ struct GroupDetailView: View {
             // into one call would make a failure to attach indistinguishable from a
             // failure to mint. An object that exists but did not attach is visible and
             // recoverable; a silent half-mint is not.
-            guard let id = core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
+            guard let id = await core.mint(kind: kind.rawValue, draft: draft.mint(for: kind))
             else { return nil }
             await core.setOutside(id, from: draft)
             attach(id, name: draft.name)
@@ -892,7 +892,8 @@ struct GroupDetailView: View {
     /// events that Space carries, and a night that already happened still happened.
     private func eventCard(_ row: AffiliationRow) -> FeedItem? {
         guard let event = core.events.first(where: { $0.id == row.peer }) else { return nil }
-        return FeedAssembler.item(for: event, maker: core.index.maker(of: event.id))
+        return FeedAssembler.item(for: event, maker: core.index.maker(of: event.id),
+                                  createdAt: core.index.createdAt(of: event.id))
     }
 
     private func createdBar(_ row: AffiliationRow, width: CGFloat) -> some View {

@@ -62,7 +62,7 @@ enum PartnerSeeder {
             var d = draft(p.name)
             d.shape = p.shape
             d.banner = cover
-            guard let id = core.mint(kind: "group", draft: d) else { return }
+            guard let id = await core.mint(kind: "group", draft: d) else { return }
             space = id
         }
 
@@ -78,7 +78,7 @@ enum PartnerSeeder {
             d.form = post.body.isEmpty ? "image" : "article"
             d.icon = icon
             d.banner = banner
-            guard let id = core.mint(kind: "post", draft: d) else { continue }
+            guard let id = await core.mint(kind: "post", draft: d) else { continue }
             _ = core.setAffiliation(space, peer: id, rel: "created", name: post.title)
         }
 
@@ -98,7 +98,7 @@ enum PartnerSeeder {
             d.startMs = Int64(start.timeIntervalSince1970 * 1000)
             d.endMs = d.startMs + Int64(e.hours) * 3_600_000
             d.banner = banner
-            guard let id = core.mint(kind: "event", draft: d) else { continue }
+            guard let id = await core.mint(kind: "event", draft: d) else { continue }
             _ = core.setAffiliation(space, peer: id, rel: "created", name: e.title)
         }
         core.refreshEvents()

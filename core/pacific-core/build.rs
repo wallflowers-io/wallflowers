@@ -26,6 +26,19 @@ fn main() {
     let slot = &icd["mls"]["sequencing"]["slot"];
     let slot_label = slot["label"].as_str().expect("the ICD states mls.sequencing.slot.label");
     let slot_rounds = slot["rounds"].as_u64().expect("the ICD states mls.sequencing.slot.rounds");
+    // The GroupContext extensions Pacific writes, by their ICD names.
+    let ext = |name: &str| {
+        icd["mls"]["groupContextExtensions"][name]["type"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("the ICD states mls.groupContextExtensions.{name}.type"))
+    };
+    let (ext_name, ext_owner, ext_floor, ext_created_at) = (ext("name"), ext("owner"), ext("floor"), ext("createdAt"));
+    // How a detached media object is sealed (media.detached, #56): the construction is seal.rs's,
+    // so the ICD's cipher must be the one the code runs.
+    let media = &icd["media"]["detached"];
+    assert_eq!(media["cipher"].as_str(), Some("XChaCha20-Poly1305"), "media.detached.cipher is seal.rs's");
+    let media_key = media["keyBytes"].as_u64().expect("the ICD states media.detached.keyBytes");
+    let media_nonce = media["nonceBytes"].as_u64().expect("the ICD states media.detached.nonceBytes");
     let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("icd_consts.rs");
     std::fs::write(
         out,
@@ -35,7 +48,12 @@ fn main() {
              /// `kinds.forum.ops.\"forum.editDescription\".op`, from the ICD at build.\npub const FORUM_EDIT_DESCRIPTION: u32 = {describe_op};\n\
              /// `kinds.forum.ops.\"forum.editDescription\".args.description.maxBytes`, from the ICD at build.\npub const FORUM_DESCRIPTION_MAX: usize = {describe_max};\n\
              /// `mls.sequencing.slot.label`, from the ICD at build.\npub const SEQ_SLOT_LABEL: &str = {slot_label:?};\n\
-             /// `mls.sequencing.slot.rounds`, from the ICD at build.\npub const SEQ_SLOT_ROUNDS: usize = {slot_rounds};\n"
+             /// `mls.sequencing.slot.rounds`, from the ICD at build.\npub const SEQ_SLOT_ROUNDS: usize = {slot_rounds};\n\
+             /// `mls.groupContextExtensions.*.type`, from the ICD at build.\n\
+             pub const EXT_NAME: u16 = {ext_name};\npub const EXT_OWNER: u16 = {ext_owner};\n\
+             pub const EXT_FLOOR: u16 = {ext_floor};\npub const EXT_CREATED_AT: u16 = {ext_created_at};\n\
+             /// `media.detached.keyBytes`, from the ICD at build.\npub const MEDIA_KEY_BYTES: usize = {media_key};\n\
+             /// `media.detached.nonceBytes`, from the ICD at build.\npub const MEDIA_NONCE_BYTES: usize = {media_nonce};\n"
         ),
     )
     .expect("icd_consts.rs");
@@ -91,6 +109,9 @@ fn w98(icd: &serde_json::Value) {
     let max_len = |kind: &str, o: &str, arg: &str| {
         op(kind, o)["args"][arg]["maxLength"].as_u64().unwrap_or_else(|| panic!("the ICD states {o}.{arg}'s maxLength"))
     };
+    let facet_max = |o: &str, arg: &str| {
+        icd["facets"]["media"]["ops"][o]["args"][arg]["maxLength"].as_u64().unwrap_or_else(|| panic!("the ICD states {o}.{arg}'s maxLength"))
+    };
     let words = |v: &serde_json::Value, what: &str| -> String {
         let w: Vec<String> = v.as_object().unwrap_or_else(|| panic!("the ICD states {what}'s vocabulary")).keys().map(|k| format!("{k:?}")).collect();
         format!("&[{}]", w.join(", "))
@@ -112,6 +133,7 @@ fn w98(icd: &serde_json::Value) {
              /// Inline ceilings, base64 characters: each arg's `maxLength`.\n\
              pub const EVENT_BANNER_MAX: usize = {};\npub const EVENT_PHOTO_MAX: usize = {};\npub const EVENT_CLIP_MAX: usize = {};\n\
              pub const POST_DOCUMENT_MAX: usize = {};\npub const POST_ASSET_MAX: usize = {};\n\
+             pub const MEDIA_ICON_MAX: usize = {};\npub const MEDIA_BANNER_MAX: usize = {};\n\
              /// `event.setLineup` acts: `maxItems`.\npub const EVENT_ACTS_MAX: usize = {};\n\
              /// Live members of a keyed set: the op's `maxLive`.\npub const EVENT_PHOTOS_LIVE: usize = {};\npub const POST_ASSETS_LIVE: usize = {};\n\
              /// Text ceilings, characters: each arg's `maxLength`.\n\
@@ -126,6 +148,8 @@ fn w98(icd: &serde_json::Value) {
             max_len("event", "event.setClip", "clip"),
             max_len("post", "post.setDocument", "document"),
             max_len("post", "post.addAsset", "asset"),
+            facet_max("base.setIcon", "icon"),
+            facet_max("base.setBanner", "banner"),
             acts["maxItems"].as_u64().expect("the ICD states setLineup's acts maxItems"),
             live("event", "event.addPhoto"),
             live("post", "post.addAsset"),
