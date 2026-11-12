@@ -369,6 +369,28 @@ pub struct ObjectRow {
     pub link: String,
 }
 
+/// One tag on an object (`facets.tags`), as a surface draws it: by (label, linked object).
+#[derive(uniffi::Record)]
+pub struct TagRow {
+    pub label: String,
+    /// The linked object's id, hex; "" for a label alone.
+    pub object: String,
+    /// How many members put it on.
+    pub count: u32,
+    /// Whether one of them is this account.
+    pub mine: bool,
+    /// Hidden by the owner or an admin: drawn only for them.
+    pub hidden: bool,
+    /// The linked object's half is held here: both ends say so.
+    pub confirmed: bool,
+}
+
+impl From<pacific_core::node::TagRow> for TagRow {
+    fn from(r: pacific_core::node::TagRow) -> Self {
+        Self { label: r.label, object: r.object, count: r.count, mine: r.mine, hidden: r.hidden, confirmed: r.confirmed }
+    }
+}
+
 /// One person: this device's identity (`is_me`), or a connection.
 #[derive(uniffi::Record)]
 pub struct PersonRow {
@@ -2343,6 +2365,24 @@ impl Core {
             .ok_or_else(|| FfiError::Core(format!("a {kind} has no op '{op}'")))?;
         let args = args.into_iter().map(|a| (a.key, a.value.into())).collect::<pacific_media::Args>();
         Ok(block_on(node.apply(&object_id, d.op_id, args))?)
+    }
+
+    /// An object's tags, from its fold (`facets.tags`).
+    pub fn object_tags(&self, object_id: String) -> Result<Vec<TagRow>, FfiError> {
+        Ok(self.read()?.tags_of(&object_id)?.into_iter().map(Into::into).collect())
+    }
+
+    /// Tag an object with `label`, linking `target` if given: both halves in one call, and a
+    /// target not held here is refused before anything is written. Reaches the relay → call OFF
+    /// the main thread.
+    pub fn object_tag(&self, object_id: String, label: String, target: Option<String>) -> Result<(), FfiError> {
+        Ok(block_on(self.write()?.tag(&object_id, &label, target.as_deref()))?)
+    }
+
+    /// Take this account's own tag off an object, and the linked object's half with the last
+    /// tag naming it. Reaches the relay → call OFF the main thread.
+    pub fn object_untag(&self, object_id: String, label: String) -> Result<(), FfiError> {
+        Ok(block_on(self.write()?.untag(&object_id, &label))?)
     }
 
     /// The ICD's words for `op`'s `arg` — what a choice row offers. Empty when the arg is

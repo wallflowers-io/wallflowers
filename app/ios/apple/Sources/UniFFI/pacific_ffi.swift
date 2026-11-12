@@ -1038,6 +1038,18 @@ public protocol CoreProtocol : AnyObject {
     func listings() throws  -> [ListingRow]
     
     /**
+     * Fetch and open a reference's bytes. Needs only the reference: a device holding no group
+     * for the object reads it as a member does.
+     */
+    func mediaGet(r: MediaRefRow) throws  -> Data
+    
+    /**
+     * Seal `bytes`, upload them to this device's relay's object storage, and return the
+     * reference a Delta carries (O-79, #56). Nothing is written to any object here.
+     */
+    func mediaPut(bytes: Data, mime: String) throws  -> MediaRefRow
+    
+    /**
      * How the membership RECORDS and the MLS tree disagree (§10.3), or `None` when
      * they agree. Group-typed objects only.
      */
@@ -1154,6 +1166,18 @@ public protocol CoreProtocol : AnyObject {
     func objectReply(objectId: String, text: String, replyToAuthor: String, replyToGen: UInt64, media: MediaInput?) throws  -> String
     
     /**
+     * Tag an object with `label`, linking `target` if given: both halves in one call, and a
+     * target not held here is refused before anything is written. Reaches the relay → call OFF
+     * the main thread.
+     */
+    func objectTag(objectId: String, label: String, target: String?) throws 
+    
+    /**
+     * An object's tags, from its fold (`facets.tags`).
+     */
+    func objectTags(objectId: String) throws  -> [TagRow]
+    
+    /**
      * The THREADED projection of a Forum (ChatRoom) object — Reddit-style nesting:
      * each post with its `depth` and `reply_count`, pre-order flattened. The tree
      * twin of `object_messages`; the ChatRoom UI binds to this. Reply/react target
@@ -1172,6 +1196,12 @@ public protocol CoreProtocol : AnyObject {
      * The folded transcript of a local Forum object (deterministic order).
      */
     func objectTranscript(objectId: String) throws  -> [String]
+    
+    /**
+     * Take this account's own tag off an object, and the linked object's half with the last
+     * tag naming it. Reaches the relay → call OFF the main thread.
+     */
+    func objectUntag(objectId: String, label: String) throws 
     
     /**
      * Up/downvote a message in a Forum object: `dir` 1 (up), -1 (down), 0
@@ -2692,6 +2722,31 @@ open func listings()throws  -> [ListingRow] {
 }
     
     /**
+     * Fetch and open a reference's bytes. Needs only the reference: a device holding no group
+     * for the object reads it as a member does.
+     */
+open func mediaGet(r: MediaRefRow)throws  -> Data {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_media_get(self.uniffiClonePointer(),
+        FfiConverterTypeMediaRefRow.lower(r),$0
+    )
+})
+}
+    
+    /**
+     * Seal `bytes`, upload them to this device's relay's object storage, and return the
+     * reference a Delta carries (O-79, #56). Nothing is written to any object here.
+     */
+open func mediaPut(bytes: Data, mime: String)throws  -> MediaRefRow {
+    return try  FfiConverterTypeMediaRefRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_media_put(self.uniffiClonePointer(),
+        FfiConverterData.lower(bytes),
+        FfiConverterString.lower(mime),$0
+    )
+})
+}
+    
+    /**
      * How the membership RECORDS and the MLS tree disagree (§10.3), or `None` when
      * they agree. Group-typed objects only.
      */
@@ -2912,6 +2967,31 @@ open func objectReply(objectId: String, text: String, replyToAuthor: String, rep
 }
     
     /**
+     * Tag an object with `label`, linking `target` if given: both halves in one call, and a
+     * target not held here is refused before anything is written. Reaches the relay → call OFF
+     * the main thread.
+     */
+open func objectTag(objectId: String, label: String, target: String?)throws  {try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_object_tag(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(label),
+        FfiConverterOptionString.lower(target),$0
+    )
+}
+}
+    
+    /**
+     * An object's tags, from its fold (`facets.tags`).
+     */
+open func objectTags(objectId: String)throws  -> [TagRow] {
+    return try  FfiConverterSequenceTypeTagRow.lift(try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_object_tags(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),$0
+    )
+})
+}
+    
+    /**
      * The THREADED projection of a Forum (ChatRoom) object — Reddit-style nesting:
      * each post with its `depth` and `reply_count`, pre-order flattened. The tree
      * twin of `object_messages`; the ChatRoom UI binds to this. Reply/react target
@@ -2947,6 +3027,18 @@ open func objectTranscript(objectId: String)throws  -> [String] {
         FfiConverterString.lower(objectId),$0
     )
 })
+}
+    
+    /**
+     * Take this account's own tag off an object, and the linked object's half with the last
+     * tag naming it. Reaches the relay → call OFF the main thread.
+     */
+open func objectUntag(objectId: String, label: String)throws  {try rustCallWithError(FfiConverterTypeFfiError.lift) {
+    uniffi_pacific_ffi_fn_method_core_object_untag(self.uniffiClonePointer(),
+        FfiConverterString.lower(objectId),
+        FfiConverterString.lower(label),$0
+    )
+}
 }
     
     /**
@@ -8729,6 +8821,100 @@ public func FfiConverterTypeMediaInput_lower(_ value: MediaInput) -> RustBuffer 
 
 
 /**
+ * A detached, sealed media reference (O-79, `media.detached`, #56): what a Delta carries in
+ * place of the bytes. `digest` is hex.
+ */
+public struct MediaRefRow {
+    public var mime: String
+    public var digest: String
+    public var bytes: UInt64
+    public var key: String
+    public var secret: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(mime: String, digest: String, bytes: UInt64, key: String, secret: String) {
+        self.mime = mime
+        self.digest = digest
+        self.bytes = bytes
+        self.key = key
+        self.secret = secret
+    }
+}
+
+
+
+extension MediaRefRow: Equatable, Hashable {
+    public static func ==(lhs: MediaRefRow, rhs: MediaRefRow) -> Bool {
+        if lhs.mime != rhs.mime {
+            return false
+        }
+        if lhs.digest != rhs.digest {
+            return false
+        }
+        if lhs.bytes != rhs.bytes {
+            return false
+        }
+        if lhs.key != rhs.key {
+            return false
+        }
+        if lhs.secret != rhs.secret {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(mime)
+        hasher.combine(digest)
+        hasher.combine(bytes)
+        hasher.combine(key)
+        hasher.combine(secret)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaRefRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaRefRow {
+        return
+            try MediaRefRow(
+                mime: FfiConverterString.read(from: &buf), 
+                digest: FfiConverterString.read(from: &buf), 
+                bytes: FfiConverterUInt64.read(from: &buf), 
+                key: FfiConverterString.read(from: &buf), 
+                secret: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MediaRefRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterString.write(value.digest, into: &buf)
+        FfiConverterUInt64.write(value.bytes, into: &buf)
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterString.write(value.secret, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRefRow_lift(_ buf: RustBuffer) throws -> MediaRefRow {
+    return try FfiConverterTypeMediaRefRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaRefRow_lower(_ value: MediaRefRow) -> RustBuffer {
+    return FfiConverterTypeMediaRefRow.lower(value)
+}
+
+
+/**
  * One picture, clip or document on a maximised detail. INLINE ONLY: a detached or
  * sealed ref (O-79) has no fetch path at this boundary yet (#56), so it does not cross —
  * a row with no bytes would render as a promise the reader cannot keep.
@@ -11953,6 +12139,137 @@ public func FfiConverterTypeSystemRow_lower(_ value: SystemRow) -> RustBuffer {
 
 
 /**
+ * One tag on an object (`facets.tags`), as a surface draws it: by (label, linked object).
+ */
+public struct TagRow {
+    public var label: String
+    /**
+     * The linked object's id, hex; "" for a label alone.
+     */
+    public var object: String
+    /**
+     * How many members put it on.
+     */
+    public var count: UInt32
+    /**
+     * Whether one of them is this account.
+     */
+    public var mine: Bool
+    /**
+     * Hidden by the owner or an admin: drawn only for them.
+     */
+    public var hidden: Bool
+    /**
+     * The linked object's half is held here: both ends say so.
+     */
+    public var confirmed: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(label: String, 
+        /**
+         * The linked object's id, hex; "" for a label alone.
+         */object: String, 
+        /**
+         * How many members put it on.
+         */count: UInt32, 
+        /**
+         * Whether one of them is this account.
+         */mine: Bool, 
+        /**
+         * Hidden by the owner or an admin: drawn only for them.
+         */hidden: Bool, 
+        /**
+         * The linked object's half is held here: both ends say so.
+         */confirmed: Bool) {
+        self.label = label
+        self.object = object
+        self.count = count
+        self.mine = mine
+        self.hidden = hidden
+        self.confirmed = confirmed
+    }
+}
+
+
+
+extension TagRow: Equatable, Hashable {
+    public static func ==(lhs: TagRow, rhs: TagRow) -> Bool {
+        if lhs.label != rhs.label {
+            return false
+        }
+        if lhs.object != rhs.object {
+            return false
+        }
+        if lhs.count != rhs.count {
+            return false
+        }
+        if lhs.mine != rhs.mine {
+            return false
+        }
+        if lhs.hidden != rhs.hidden {
+            return false
+        }
+        if lhs.confirmed != rhs.confirmed {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(label)
+        hasher.combine(object)
+        hasher.combine(count)
+        hasher.combine(mine)
+        hasher.combine(hidden)
+        hasher.combine(confirmed)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTagRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TagRow {
+        return
+            try TagRow(
+                label: FfiConverterString.read(from: &buf), 
+                object: FfiConverterString.read(from: &buf), 
+                count: FfiConverterUInt32.read(from: &buf), 
+                mine: FfiConverterBool.read(from: &buf), 
+                hidden: FfiConverterBool.read(from: &buf), 
+                confirmed: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TagRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterString.write(value.object, into: &buf)
+        FfiConverterUInt32.write(value.count, into: &buf)
+        FfiConverterBool.write(value.mine, into: &buf)
+        FfiConverterBool.write(value.hidden, into: &buf)
+        FfiConverterBool.write(value.confirmed, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTagRow_lift(_ buf: RustBuffer) throws -> TagRow {
+    return try FfiConverterTypeTagRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTagRow_lower(_ value: TagRow) -> RustBuffer {
+    return FfiConverterTypeTagRow.lower(value)
+}
+
+
+/**
  * What `ThingRow` leaves out — the rest of a Thing's ops, for its maximised detail.
  */
 public struct ThingDetailRow {
@@ -14607,6 +14924,31 @@ fileprivate struct FfiConverterSequenceTypeSystemRow: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeTagRow: FfiConverterRustBuffer {
+    typealias SwiftType = [TagRow]
+
+    public static func write(_ value: [TagRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTagRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TagRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TagRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeTagRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeThingRow: FfiConverterRustBuffer {
     typealias SwiftType = [ThingRow]
 
@@ -15511,6 +15853,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_listings() != 8380) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_media_get() != 53770) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_media_put() != 34334) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_membership_divergence() != 7125) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15556,6 +15904,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_pacific_ffi_checksum_method_core_object_reply() != 17222) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pacific_ffi_checksum_method_core_object_tag() != 19248) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_object_tags() != 33367) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pacific_ffi_checksum_method_core_object_thread() != 50701) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15563,6 +15917,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_object_transcript() != 61817) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pacific_ffi_checksum_method_core_object_untag() != 58992) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pacific_ffi_checksum_method_core_object_vote_post() != 53653) {

@@ -68,6 +68,18 @@ async fn members_tag_the_owner_hides_a_link_has_two_halves_and_a_fresh_device_fo
     h.settle().await;
     assert_eq!(view(&h, ada, &place, "taggedBy"), serde_json::json!([{ "object": post, "label": "venue" }]));
 
+    // Node::tag writes both halves in one call, and only for a linked object held here;
+    // Node::untag takes the half back with the last tag naming it.
+    assert!(h.node(bo).tag(&post, "elsewhere", Some(&place)).await.is_err(), "bo holds no Place: no half, no write");
+    assert!(row(&view(&h, ada, &post, "tags"), "elsewhere").is_none(), "nothing was written");
+    h.node(ada).tag(&post, "plot", Some(&place)).await.expect("ada holds both");
+    h.settle().await;
+    let plot = h.with_sync(ada, |n| n.tags_of(&post)).unwrap().into_iter().find(|r| r.label == "plot").unwrap();
+    assert!(plot.mine && plot.confirmed && plot.object == place, "{plot:?}");
+    h.node(ada).untag(&post, "plot").await.expect("ada untags");
+    h.settle().await;
+    assert_eq!(view(&h, ada, &place, "taggedBy"), serde_json::json!([{ "object": post, "label": "venue" }]), "the half went with it");
+
     // The caps, as the ICD states them: per author, then per object. Refused, never evicted.
     assert!(2 * MAX_PER_AUTHOR >= MAX_LIVE, "two authors reach the object's cap");
     let held = |u: usize| {

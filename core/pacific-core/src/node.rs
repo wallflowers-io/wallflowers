@@ -18,6 +18,10 @@ use crate::{coordinator, handshake, mls, paths, router::Router, seal, CoreError}
 mod exteriors;
 pub use exteriors::{DoorRequest, ExteriorDraft, HeldExterior};
 
+/// The tags on a Node: reading them, and tagging with both halves of a link (`facets.tags`).
+mod tags;
+pub use tags::TagRow;
+
 /// One row of a (forum) object's folded RATIFY projection — a proposal with its
 /// deferred payload, passing rule, DERIVED outcome, ballot tallies, and this device's
 /// own ballot. The read model the ratify UI binds to.
