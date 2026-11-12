@@ -53,7 +53,7 @@ enum KindExteriors {
     }
 
     /// An outside's fields, parsed once.
-    static func fields(_ outside: OutsideRow?) -> [String: Any] {
+    nonisolated static func fields(_ outside: OutsideRow?) -> [String: Any] {
         guard let json = outside?.json.data(using: .utf8),
               let f = try? JSONSerialization.jsonObject(with: json) as? [String: Any] else { return [:] }
         return f

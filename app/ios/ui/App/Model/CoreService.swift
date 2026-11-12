@@ -1655,8 +1655,11 @@ final class CoreService: ObservableObject {
     /// emits before its property is set, so this delivers on the next main-queue turn,
     /// when the new values are readable.
     lazy var feedInputsChanged: AnyPublisher<Void, Never> =
-        Publishers.Merge5($events.map { _ in () }, $posts.map { _ in () },
-                          $listings.map { _ in () }, $things.map { _ in () }, $index.map { _ in () })
+        Publishers.Merge(
+            Publishers.Merge5($events.map { _ in () }, $posts.map { _ in () },
+                              $listings.map { _ in () }, $things.map { _ in () }, $index.map { _ in () }),
+            // The exteriors, and the outsides they host, land on their own reads.
+            Publishers.Merge($exteriors.map { _ in () }, $outsides.map { _ in () }))
             .receive(on: DispatchQueue.main)
             .eraseToAnyPublisher()
 

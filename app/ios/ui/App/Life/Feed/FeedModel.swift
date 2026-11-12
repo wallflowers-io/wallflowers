@@ -135,7 +135,8 @@ enum FeedAssembler {
     }
 
     static func rows(events: [PacificCore.EventRow], listings: [ListingRow],
-                     things: [ThingRow] = [], posts: [PostRow] = [], exteriors: [ExteriorRow] = [], nowMs: Int64,
+                     things: [ThingRow] = [], posts: [PostRow] = [], exteriors: [ExteriorRow] = [],
+                     outsides: [String: OutsideRow] = [:], nowMs: Int64,
                      makerOf: (String) -> Maker? = { _ in nil },
                      createdOf: (String) -> Int64? = { _ in nil },
                      nameFor: (String) -> String = { String($0.prefix(8)) }) -> [FeedItem] {
@@ -217,18 +218,25 @@ enum FeedAssembler {
                 authorID: l.origin,
                 exterior: outside[l.thingId].flatMap { $0.door ? ExteriorRef(object: $0.object) : nil }))
         }
-        // EXTERIORS (#76): objects I am not in, carried to me by their members.
+        // EXTERIORS (#76): objects I am not in, carried to me by their members. The card is
+        // KindExterior's, drawn from the hosted outside where its owner hosts one: its banner,
+        // an Event's when and venue; else the carried words.
         for e in exteriors where !shown.contains(e.object) {
+            let f = KindExteriors.fields(outsides[e.object])
+            let banner = outsides[e.object]?.media.first { $0.field == "banner" }
+            let start = (f["startMs"] as? NSNumber)?.int64Value ?? 0
             out.append(FeedItem(
                 id: "exterior:\(e.object)",
                 category: Self.category(ofKind: e.kind),
-                title: e.name,
+                title: (f["title"] as? String) ?? e.name,
                 author: nameFor(e.owner),
-                location: "",
-                footer: e.requested ? "REQUESTED" : "",
-                whenMs: nowMs,
+                location: (f["venue"] as? String) ?? "",
+                footer: e.requested ? "REQUESTED" : (start > 0 ? Self.stamp(start) : ""),
+                whenMs: start > 0 ? start : nowMs,
                 provenance: .hops(e.hops),
                 objectID: nil,
+                bannerB64: banner?.inline ?? "",
+                bannerRef: banner?.ref,
                 authorRoute: .person(e.owner),
                 authorID: e.owner,
                 // No door, nothing to ask: the card is seen and not opened.

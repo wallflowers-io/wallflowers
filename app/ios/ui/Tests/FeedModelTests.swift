@@ -54,7 +54,27 @@ final class FeedModelTests: XCTestCase {
 
     private func exterior(_ object: String, kind: String = "project", door: Bool = true) -> ExteriorRow {
         ExteriorRow(object: object, kind: kind, name: object, description: "",
-                    owner: "o", via: "v", hops: 1, door: door, requested: false)
+                    owner: "o", via: "v", hops: 1, door: door, requested: false, hosted: false)
+    }
+
+    /// The card is KindExterior's: where its owner hosts an outside, an Event's card is drawn
+    /// from it — its title, venue, when and banner — not from the carried words alone.
+    func testAHostedExteriorsCardIsDrawnFromItsOutside() {
+        var gig = exterior("gig", kind: "event")
+        gig.hosted = true
+        let start: Int64 = now + 86_400_000
+        let outside = OutsideRow(json: #"{"title":"Friday Gig","venue":"The Lantern","startMs":\#(start)}"#,
+                                 media: [OutsideMedia(field: "banner", mime: "image/png", inline: "aGk=", ref: nil)],
+                                 placed: false, lat: 0, lng: 0)
+        let card = FeedAssembler.rows(events: [], listings: [], exteriors: [gig],
+                                      outsides: ["gig": outside], nowMs: now).first
+        XCTAssertEqual(card?.title, "Friday Gig")
+        XCTAssertEqual(card?.location, "The Lantern")
+        XCTAssertEqual(card?.whenMs, start)
+        XCTAssertEqual(card?.bannerB64, "aGk=")
+        XCTAssertEqual(card?.exterior, ExteriorRef(object: "gig"), "and it still opens to the outside")
+        let bare = FeedAssembler.rows(events: [], listings: [], exteriors: [gig], nowMs: now).first
+        XCTAssertEqual(bare?.title, "gig", "before the outside is read, the carried name")
     }
 
     /// #76: an object I am not in is a card that opens to its exterior, when it has a door.
